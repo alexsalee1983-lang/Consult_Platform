@@ -15,6 +15,22 @@ function Icon({ name }) {
   );
 }
 
+function statusText(v) {
+  const s = String(v);
+  if (s === "ok") return "正常";
+  if (s === "configured") return "已接入";
+  if (s.startsWith("demo")) return "演示模式";
+  if (s.startsWith("not enabled")) return "M1 启用";
+  return "异常";
+}
+
+function statusColor(v) {
+  const s = String(v);
+  if (s === "ok" || s === "configured") return "var(--ok)";
+  if (s.startsWith("down")) return "var(--crim)";
+  return "var(--tx3)";
+}
+
 export default function Sidebar({ page, code }) {
   const [health, setHealth] = useState(null);
   useEffect(() => {
@@ -61,7 +77,7 @@ export default function Sidebar({ page, code }) {
           Object.entries(health.checks || {}).map(([k, v]) => (
             <div key={k} className="sb sub">
               <span>{{ database: "数据库", redis: "缓存", object_storage: "对象存储", llm: "大模型" }[k] || k}</span>
-              <span style={{ color: String(v).startsWith("ok") || v === "configured" ? "var(--ok)" : "var(--amber)" }}>{String(v).split(" ")[0]}</span>
+              <span style={{ color: statusColor(v) }}>{statusText(v)}</span>
             </div>
           ))}
       </section>

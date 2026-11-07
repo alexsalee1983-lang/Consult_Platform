@@ -1,7 +1,8 @@
 name: consult-platform
 
 # 一期单机部署：2 台服务器中的应用服务器。所有端口默认只开放 Web 入口 8080，
-# 数据库、缓存、对象存储只在内部网络可达；调试端口绑定在 127.0.0.1。
+# 数据库、缓存只在内部网络可达；调试端口绑定在 127.0.0.1。
+# 对象存储（项目区 / 知识区文件）在 M1 文档上传时加入，见 README“待决定”。
 
 services:
   postgres:
@@ -31,40 +32,6 @@ services:
       timeout: 3s
       retries: 20
 
-  minio:
-    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-consult}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-change-me-minio}
-    volumes:
-      - miniodata:/data
-    ports:
-      - "127.0.0.1:9001:9001"   # 管理控制台，只在本机访问
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  minio-init:
-    image: minio/mc:RELEASE.2024-11-21T17-21-54Z
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
-      mc mb --ignore-existing local/project-area &&
-      mc mb --ignore-existing local/knowledge-area &&
-      mc anonymous set none local/project-area &&
-      mc anonymous set none local/knowledge-area"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-consult}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-change-me-minio}
-    restart: "no"
-
   backend:
     build:
       context: ./backend
@@ -75,13 +42,10 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://consult:${POSTGRES_PASSWORD:-consult}@postgres:5432/consult
       REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      minio:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"   # 接口调试端口，只在本机访问；正式访问走 8080
@@ -101,4 +65,3 @@ services:
 volumes:
   pgdata:
   redisdata:
-  miniodata:

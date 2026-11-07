@@ -29,6 +29,8 @@ def _redis() -> str:
 
 def _minio() -> str:
     s = get_settings()
+    if not s.minio_endpoint:
+        return "not enabled (M1)"
     scheme = "https" if s.minio_secure else "http"
     try:
         resp = httpx.get(f"{scheme}://{s.minio_endpoint}/minio/health/live", timeout=2)

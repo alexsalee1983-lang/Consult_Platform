@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://consult:consult@postgres:5432/consult"
     redis_url: str = "redis://redis:6379/0"
 
-    minio_endpoint: str = "minio:9000"
+    # 对象存储 M1 启用；留空表示未启用
+    minio_endpoint: str = ""
     minio_access_key: str = "consult"
     minio_secret_key: str = "change-me-minio"
     minio_bucket: str = "project-area"
