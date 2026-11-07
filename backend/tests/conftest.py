@@ -42,21 +42,47 @@ def login(client, username: str = TEST_USER, password: str = TEST_PASSWORD, secr
                                                 "totp": totp_code(secret, step_offset)})
 
 
+def create_user(roles=(), projects=None, username: str | None = None):
+    """在库里直接建一个用户，返回 (用户名, 口令, TOTP 密钥)。
+
+    roles：系统角色代码；projects：{项目代号: "manager" / "member"}。
+    """
+    from sqlalchemy import select
+
+    from app.core.db import SessionLocal
+    from app.core.permissions import set_roles
+    from app.core.security import hash_password
+    from app.models import Project, ProjectMember, User
+
+    username = username or "u_" + secrets.token_hex(4)
+    password = "Aa1!" + secrets.token_urlsafe(16)
+    secret = pyotp.random_base32()
+    with SessionLocal() as db:
+        user = User(username=username, display_name=username, password_hash=hash_password(password),
+                    totp_secret=secret)
+        db.add(user)
+        db.commit()
+        if roles:
+            set_roles(db, user, roles, granted_by="test")
+        for code, role in (projects or {}).items():
+            p = db.scalar(select(Project).where(Project.code == code))
+            db.add(ProjectMember(project_id=p.id, user_id=user.id, project_role=role, added_by="test"))
+        db.commit()
+    return username, password, secret
+
+
 @pytest.fixture()
 def make_user():
-    """在库里直接建一个用户，返回 (用户名, 口令, TOTP 密钥)。"""
-    from app.core.db import SessionLocal
-    from app.core.security import hash_password
-    from app.models import User
+    return create_user
 
-    def _make(username: str | None = None):
-        username = username or "u_" + secrets.token_hex(4)
-        password = "Aa1!" + secrets.token_urlsafe(16)
-        secret = pyotp.random_base32()
-        with SessionLocal() as db:
-            db.add(User(username=username, display_name=username, password_hash=hash_password(password),
-                        totp_secret=secret))
-            db.commit()
-        return username, password, secret
 
-    return _make
+def logged_in_client(app, user):
+    """登录后的 TestClient（已带 CSRF 头）。调用方负责 close。"""
+    from fastapi.testclient import TestClient
+
+    c = TestClient(app)
+    c.__enter__()
+    r = login(c, *user)
+    assert r.status_code == 200, r.text
+    c.headers["X-CSRF-Token"] = r.json()["csrf_token"]
+    return c

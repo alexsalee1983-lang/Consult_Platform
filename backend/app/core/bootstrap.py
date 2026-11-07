@@ -14,9 +14,10 @@ import logging
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import User
+from ..models import Project, ProjectMember, User
 from . import audit
 from .config import Settings
+from .permissions import CONSULTANT, PROJECT_MANAGER, PROJECT_MEMBER, SYS_ADMIN, roles_of, set_roles
 from .security import check_password_policy, hash_password, is_valid_totp_secret, verify_password
 
 log = logging.getLogger(__name__)
@@ -52,12 +53,14 @@ def ensure_initial_users(db: Session, s: Settings) -> None:
     if (s.bootstrap_admin_username or s.bootstrap_admin_password) and db.scalar(select(func.count(User.id))) == 0:
         _validate(s, "BOOTSTRAP_ADMIN", s.bootstrap_admin_username, s.bootstrap_admin_password,
                   s.bootstrap_admin_totp_secret)
-        db.add(User(username=s.bootstrap_admin_username, display_name=s.bootstrap_admin_username,
-                    password_hash=hash_password(s.bootstrap_admin_password),
-                    totp_secret=s.bootstrap_admin_totp_secret))
+        admin = User(username=s.bootstrap_admin_username, display_name=s.bootstrap_admin_username,
+                     password_hash=hash_password(s.bootstrap_admin_password),
+                     totp_secret=s.bootstrap_admin_totp_secret)
+        db.add(admin)
         db.commit()
+        set_roles(db, admin, {SYS_ADMIN}, granted_by="system")
         audit.record(db, actor="system", action="user.bootstrap", result="allowed",
-                     username=s.bootstrap_admin_username)
+                     username=s.bootstrap_admin_username, role=SYS_ADMIN)
         log.warning("已创建第一个管理员 %s，请从 .env 删除 BOOTSTRAP_ADMIN_PASSWORD", s.bootstrap_admin_username)
 
     if s.test_account_username or s.test_account_password:
@@ -66,12 +69,14 @@ def ensure_initial_users(db: Session, s: Settings) -> None:
         _validate(s, "TEST_ACCOUNT", s.test_account_username, s.test_account_password, s.test_account_totp_secret)
         user = db.scalar(select(User).where(User.username == s.test_account_username))
         if user is None:
-            db.add(User(username=s.test_account_username, display_name="测试账号",
+            user = User(username=s.test_account_username, display_name="测试账号",
                         password_hash=hash_password(s.test_account_password),
-                        totp_secret=s.test_account_totp_secret))
+                        totp_secret=s.test_account_totp_secret)
+            db.add(user)
             db.commit()
+            set_roles(db, user, {CONSULTANT}, granted_by="system")
             audit.record(db, actor="system", action="user.test_account", result="allowed",
-                         username=s.test_account_username)
+                         username=s.test_account_username, role=CONSULTANT)
         elif not verify_password(user.password_hash, s.test_account_password) or \
                 user.totp_secret != s.test_account_totp_secret:
             # 测试机改了 .env 里的测试账号口令或密钥时同步过来
@@ -79,3 +84,23 @@ def ensure_initial_users(db: Session, s: Settings) -> None:
             user.totp_secret = s.test_account_totp_secret
             user.totp_last_step = 0
             db.commit()
+        if not roles_of(db, user.id):  # 登录 PR 时期建的测试账号还没有角色
+            set_roles(db, user, {CONSULTANT}, granted_by="system")
+
+
+# 测试账号在演示项目中的身份：BANK-A 项目经理、MFG-C 项目成员，故意不加入 GRID-B，
+# 冒烟测试用它验证“非项目成员访问返回 404”。
+TEST_MEMBERSHIPS = {"BANK-A": PROJECT_MANAGER, "MFG-C": PROJECT_MEMBER}
+
+
+def ensure_test_memberships(db: Session, s: Settings) -> None:
+    if s.is_prod or not s.test_account_username:
+        return
+    user = db.scalar(select(User).where(User.username == s.test_account_username))
+    if user is None:
+        return
+    for code, role in TEST_MEMBERSHIPS.items():
+        project = db.scalar(select(Project).where(Project.code == code))
+        if project is not None and db.get(ProjectMember, (project.id, user.id)) is None:
+            db.add(ProjectMember(project_id=project.id, user_id=user.id, project_role=role, added_by="system"))
+    db.commit()

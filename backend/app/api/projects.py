@@ -1,14 +1,24 @@
+"""项目、待确认事项、项目成员。全部要求业务角色；项目数据只对项目成员可见，非成员一律 404。"""
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..core import audit
 from ..core.auth import current_user
 from ..core.db import get_db
-from ..models import Confirmation, Project, User
+from ..core.permissions import (
+    BUSINESS_ROLES,
+    PROJECT_MANAGER,
+    membership,
+    project_for_member,
+    require_business,
+    roles_of,
+)
+from ..models import Confirmation, Project, ProjectMember, User
 from ..schemas import PHASES, ConfirmationOut, ProjectDetail, ProjectOut, ResolveIn
 
-router = APIRouter(prefix="/api", tags=["projects"])
+router = APIRouter(prefix="/api", tags=["projects"], dependencies=[Depends(require_business)])
 
 
 def _out(p: Project, cls=ProjectOut):
@@ -24,18 +34,20 @@ def _conf_out(c: Confirmation) -> ConfirmationOut:
     return o
 
 
+def _my_projects(user: User):
+    return select(Project).join(ProjectMember, ProjectMember.project_id == Project.id) \
+        .where(ProjectMember.user_id == user.id)
+
+
 @router.get("/projects", response_model=list[ProjectOut])
-def list_projects(db: Session = Depends(get_db)):
-    rows = db.scalars(select(Project).options(selectinload(Project.confirmations)).order_by(Project.code)).all()
+def list_projects(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    rows = db.scalars(_my_projects(user).options(selectinload(Project.confirmations)).order_by(Project.code)).all()
     return [_out(p) for p in rows]
 
 
 @router.get("/projects/{code}", response_model=ProjectDetail)
-def get_project(code: str, db: Session = Depends(get_db)):
-    p = db.scalar(select(Project).where(Project.code == code)
-                  .options(selectinload(Project.deliverables), selectinload(Project.confirmations)))
-    if p is None:
-        raise HTTPException(404, "项目不存在")
+def get_project(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    p = project_for_member(db, code, user, selectinload(Project.deliverables), selectinload(Project.confirmations))
     detail = ProjectDetail.model_validate(p, from_attributes=True)
     detail.phase_name = PHASES[p.phase] if 0 <= p.phase < len(PHASES) else ""
     detail.open_confirmations = sum(1 for c in p.confirmations if c.status == "open")
@@ -44,8 +56,9 @@ def get_project(code: str, db: Session = Depends(get_db)):
 
 
 @router.get("/confirmations", response_model=list[ConfirmationOut])
-def list_confirmations(db: Session = Depends(get_db)):
-    rows = db.scalars(select(Confirmation).where(Confirmation.status == "open")
+def list_confirmations(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    rows = db.scalars(select(Confirmation).join(ProjectMember, ProjectMember.project_id == Confirmation.project_id)
+                      .where(Confirmation.status == "open", ProjectMember.user_id == user.id)
                       .options(selectinload(Confirmation.project)).order_by(Confirmation.id)).all()
     return [_conf_out(c) for c in rows]
 
@@ -53,7 +66,7 @@ def list_confirmations(db: Session = Depends(get_db)):
 @router.post("/confirmations/{cid}/resolve", response_model=ConfirmationOut)
 def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     c = db.get(Confirmation, cid)
-    if c is None:
+    if c is None or membership(db, c.project_id, user.id) is None:
         raise HTTPException(404, "待确认事项不存在")
     c.status = "resolved"
     c.resolution = body.resolution
@@ -61,3 +74,81 @@ def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db), user: User
     audit.record(db, actor=user.username, action="confirmation.resolve", result="allowed",
                  project_code=c.project.code, confirmation_id=cid)
     return _conf_out(c)
+
+
+# ---- 项目成员：成员可查看；只有本项目的项目经理能增删改 ----
+
+class MemberOut(BaseModel):
+    username: str
+    display_name: str
+    project_role: str
+
+
+class MemberIn(BaseModel):
+    project_role: str = Field(pattern="^(manager|member)$")
+
+
+def _members(db: Session, p: Project) -> list[MemberOut]:
+    rows = db.execute(select(User, ProjectMember.project_role).join(ProjectMember, ProjectMember.user_id == User.id)
+                      .where(ProjectMember.project_id == p.id).order_by(User.username)).all()
+    return [MemberOut(username=u.username, display_name=u.display_name or u.username, project_role=r) for u, r in rows]
+
+
+def _require_manager(db: Session, p: Project, user: User) -> None:
+    m = membership(db, p.id, user.id)
+    if m is None or m.project_role != PROJECT_MANAGER:
+        audit.record(db, actor=user.username, action="project.member", result="blocked", project_code=p.code,
+                     reason="not_manager")
+        raise HTTPException(403, "只有本项目的项目经理能调整成员")
+
+
+def _managers(db: Session, p: Project) -> int:
+    return db.scalar(select(func.count()).select_from(ProjectMember)
+                     .where(ProjectMember.project_id == p.id, ProjectMember.project_role == PROJECT_MANAGER))
+
+
+@router.get("/projects/{code}/members", response_model=list[MemberOut])
+def list_members(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return _members(db, project_for_member(db, code, user))
+
+
+@router.put("/projects/{code}/members/{username}", response_model=list[MemberOut])
+def put_member(code: str, username: str, body: MemberIn, db: Session = Depends(get_db),
+               user: User = Depends(current_user)):
+    p = project_for_member(db, code, user)
+    _require_manager(db, p, user)
+    target = db.scalar(select(User).where(User.username == username))
+    if target is None or not target.is_active:
+        raise HTTPException(404, "用户不存在或已停用")
+    if not roles_of(db, target.id) & BUSINESS_ROLES:
+        raise HTTPException(422, "只有持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户能加入项目")
+    m = membership(db, p.id, target.id)
+    if m is not None and m.project_role == PROJECT_MANAGER and body.project_role != PROJECT_MANAGER \
+            and _managers(db, p) == 1:
+        raise HTTPException(422, "项目至少要保留一名项目经理")
+    if m is None:
+        db.add(ProjectMember(project_id=p.id, user_id=target.id, project_role=body.project_role,
+                             added_by=user.username))
+    else:
+        m.project_role = body.project_role
+    db.commit()
+    audit.record(db, actor=user.username, action="project.member", result="allowed", project_code=p.code,
+                 target=username, project_role=body.project_role)
+    return _members(db, p)
+
+
+@router.delete("/projects/{code}/members/{username}", response_model=list[MemberOut])
+def delete_member(code: str, username: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    p = project_for_member(db, code, user)
+    _require_manager(db, p, user)
+    target = db.scalar(select(User).where(User.username == username))
+    m = membership(db, p.id, target.id) if target else None
+    if m is None:
+        raise HTTPException(404, "该用户不是本项目成员")
+    if m.project_role == PROJECT_MANAGER and _managers(db, p) == 1:
+        raise HTTPException(422, "项目至少要保留一名项目经理")
+    db.delete(m)
+    db.commit()
+    audit.record(db, actor=user.username, action="project.member_remove", result="allowed", project_code=p.code,
+                 target=username)
+    return _members(db, p)

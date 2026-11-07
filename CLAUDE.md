@@ -79,9 +79,13 @@ docker compose logs --no-color backend | tail -100
 docker compose exec backend python -m app.cli create-user --username <名字> --display-name <姓名>
 docker compose exec backend python -m app.cli unlock --username <名字>
 docker compose exec backend python -m app.cli reset-totp --username <名字>
+docker compose exec backend python -m app.cli grant-role --username <名字> --role consultant   # 审计员只能这样授予
+docker compose exec backend python -m app.cli list-users
 ```
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求要带 `X-CSRF-Token`。
+
+权限约定（规则全文在 `app/core/permissions.py` 文件头）：业务接口在路由上挂 `require_business`；按项目取数据一律用 `project_for_member`（非成员 404）；系统管理员、安全审计员与其他角色互斥且看不到业务数据；审计员只能用命令行授予。新增或改动接口权限，必须同步更新 `tests/test_permissions.py` 的权限矩阵。
 
 ## 分支、提交与 PR
 

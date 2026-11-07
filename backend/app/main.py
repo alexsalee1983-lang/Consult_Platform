@@ -2,9 +2,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 
-from .api import auth, chat, health, projects
+from .api import admin, audit, auth, chat, health, projects
 from .core.auth import authenticate
-from .core.bootstrap import check_settings, ensure_initial_users
+from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .core.migrate import upgrade_to_head
@@ -21,10 +21,12 @@ async def lifespan(app: FastAPI):
         ensure_initial_users(db, _settings)
         if _settings.seed_demo_data:
             seed(db)
+        ensure_test_memberships(db, _settings)
     yield
 
 
-# 默认所有接口都要登录（authenticate 内有公开接口白名单）；生产环境不开放接口文档
+# 默认所有接口都要登录（authenticate 内有公开接口白名单），各路由再按角色和项目成员检查；
+# 生产环境不开放接口文档
 app = FastAPI(
     title="安全咨询 Agent 平台", version="0.1.0", lifespan=lifespan,
     dependencies=[Depends(authenticate)],
@@ -36,3 +38,5 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(chat.router)
+app.include_router(audit.router)
+app.include_router(admin.router)

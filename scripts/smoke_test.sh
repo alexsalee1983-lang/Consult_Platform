@@ -79,6 +79,10 @@ C="X-CSRF-Token: $CSRF"
 check "项目列表"                     200 "$BASE/api/projects"
 check "项目详情 BANK-A"              200 "$BASE/api/projects/BANK-A"
 check "不存在的项目返回 404"          404 "$BASE/api/projects/NOPE"
+# 测试账号故意不是 GRID-B 的成员（app/core/bootstrap.py TEST_MEMBERSHIPS）
+check "非项目成员访问 GRID-B 返回 404" 404 "$BASE/api/projects/GRID-B"
+check "顾问不能查看审计日志"          403 "$BASE/api/audit"
+check "顾问不能管理账号"              403 "$BASE/api/admin/users"
 check "缺少 CSRF 令牌的提问被拒绝"    403 -X POST "$BASE/api/chat" -H "$J" \
       -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'
 check "正常提问可以通过"              200 -X POST "$BASE/api/chat" -H "$J" -H "$C" \
