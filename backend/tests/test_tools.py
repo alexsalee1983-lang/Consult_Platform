@@ -22,7 +22,7 @@ EXPECTED = {
     "delivery-pm":        (1, 0, 1, 1, 0, 0),
     "research-interview": (1, 0, 1, 1, 0, 0),
     "compliance-basis":   (1, 1, 1, 0, 0, 0),
-    "solution-design":    (1, 1, 1, 0, 0, 0),
+    "solution-designer":  (1, 1, 1, 0, 0, 0),
     "policy-drafter":     (1, 1, 1, 1, 0, 0),
     "report-writer":      (1, 0, 1, 1, 0, 0),
     "qa-reviewer":        (1, 1, 1, 0, 1, 0),

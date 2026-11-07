@@ -1,6 +1,7 @@
 """M1：Agent、工具与 Agent × 工具授权（agents、tools、agent_tool_grants）。
 
-授权清单照搬《架构设计》第五节“Agent × 工具授权”表；方案设计 Agent 按决策记录新增（md 待补）；
+授权清单照搬《架构设计》第五节“Agent × 工具授权”表；方案设计 Agent 按决策记录新增
+（agents/roles/solution-designer.md，tools 字段为知识检索、依据查询、读项目区，与本表一致）；
 新人带教、售前方案为预留 Agent，登记但停用、不授予任何工具。
 以后调整授权：新写一个迁移，在 PR 里说明依据，并同步 tests/test_tools.py 的授权矩阵。
 
@@ -24,7 +25,7 @@ AGENTS = [  # code, 名称, 侧, 阶段, 启用
     ("delivery-pm", "项目交付管理", "delivery", "一期", True),
     ("research-interview", "调研访谈", "delivery", "一期", True),
     ("compliance-basis", "依据与差距分析", "delivery", "一期", True),
-    ("solution-design", "方案设计", "delivery", "一期", True),
+    ("solution-designer", "方案设计", "delivery", "一期", True),
     ("policy-drafter", "制度起草", "delivery", "一期", True),
     ("report-writer", "报告与汇报", "delivery", "一期", True),
     ("qa-reviewer", "质量评审", "delivery", "一期", True),
@@ -46,7 +47,7 @@ GRANTS = {
     "delivery-pm": ["kb.search", "project.read", "doc.generate"],
     "research-interview": ["kb.search", "project.read", "doc.generate"],
     "compliance-basis": ["kb.search", "basis.lookup", "project.read"],
-    "solution-design": ["kb.search", "basis.lookup", "project.read"],
+    "solution-designer": ["kb.search", "basis.lookup", "project.read"],
     "policy-drafter": ["kb.search", "basis.lookup", "project.read", "doc.generate"],
     "report-writer": ["kb.search", "project.read", "doc.generate"],
     "qa-reviewer": ["kb.search", "basis.lookup", "project.read", "quality.check"],
