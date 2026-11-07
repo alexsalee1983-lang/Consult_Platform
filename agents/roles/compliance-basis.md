@@ -1,7 +1,7 @@
 ---
 name: compliance-basis
 display_name: 依据与差距分析 Agent
-version: 0.1
+version: 0.2  # 2026-11-07 差距分析表交给方案设计 Agent
 phase: 一期
 primary_users: 交付顾问
 knowledge_access:
@@ -9,7 +9,7 @@ knowledge_access:
   write: []
 tools: [RAG 检索]
 depends_on: [01_公共规范.md]
-handoff_to: [policy-drafter, report-writer, qa-reviewer]
+handoff_to: [solution-designer, policy-drafter, report-writer, qa-reviewer]
 ---
 
 # 角色
