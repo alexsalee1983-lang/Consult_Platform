@@ -106,20 +106,32 @@ def model_for(level: str) -> str:
     return {"reasoning": s.llm_model_reasoning, "light": s.llm_model_light}.get(level, s.llm_model_standard)
 
 
-def build_messages(message: str, tier: str, project_code: str) -> list[dict]:
-    system = SYSTEM_BASE + (SYSTEM_STRICT if tier == "strict" else "") + f"当前项目代号：{project_code}。"
-    return [{"role": "system", "content": system}, {"role": "user", "content": message}]
+def build_messages(message: str, tier: str, project_code: str, system: str | None = None,
+                   history: list[dict] | None = None) -> list[dict]:
+    """system 为 Agent 运行时组装的系统提示（公共规范 + 角色 md + 项目卡）；不传时用平台默认提示。
+    严格档的占位符要求无论用哪种系统提示都追加一次。history 为之前的 user / assistant 消息。"""
+    base = system if system is not None else SYSTEM_BASE + f"当前项目代号：{project_code}。"
+    if tier == "strict":
+        base += "\n\n" + SYSTEM_STRICT
+    msgs = [{"role": "system", "content": base}]
+    msgs += [{"role": m["role"], "content": m["content"]} for m in (history or [])]
+    msgs.append({"role": "user", "content": message})
+    return msgs
 
 
 def _prepare(message: str, tier: str, project_code: str, level: str, terms: dict[str, str] | None,
-             stream: bool) -> _Prepared:
+             stream: bool, system: str | None = None, history: list[dict] | None = None) -> _Prepared:
     result = check(message)
     if result.blocked:
         raise BlockedError(result)
     pseudo = Pseudonymizer.from_terms(terms) if get_settings().llm_pseudonymize and terms else None
     text = pseudo.apply(message) if pseudo else message
+    if pseudo:
+        history = [{**m, "content": pseudo.apply(m["content"])} for m in (history or [])]
+        system = pseudo.apply(system) if system else system
     model = model_for(level)
-    payload = {"model": model, "messages": build_messages(text, tier, project_code), "temperature": 0.3}
+    payload = {"model": model, "messages": build_messages(text, tier, project_code, system, history),
+               "temperature": 0.3}
     if stream:
         payload["stream"] = True
         payload["stream_options"] = {"include_usage": True}
@@ -174,8 +186,9 @@ def _elapsed_ms(p: _Prepared) -> int:
 
 
 def complete(message: str, *, tier: str, project_code: str, level: str = "standard",
-             terms: dict[str, str] | None = None) -> Completion:
-    p = _prepare(message, tier, project_code, level, terms, stream=False)
+             terms: dict[str, str] | None = None, system: str | None = None,
+             history: list[dict] | None = None) -> Completion:
+    p = _prepare(message, tier, project_code, level, terms, stream=False, system=system, history=history)
     if not get_settings().llm_base_url:
         return Completion(text=DEMO_TEXT, model=p.model, demo=True)
     with _client() as client:
@@ -192,12 +205,13 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
 
 
 def stream(message: str, *, tier: str, project_code: str, level: str = "standard",
-           terms: dict[str, str] | None = None) -> Iterator[str | Completion]:
+           terms: dict[str, str] | None = None, system: str | None = None,
+           history: list[dict] | None = None) -> Iterator[str | Completion]:
     """逐段产出回复文本（str），最后产出一个 Completion（text 为完整回复，带用量）。
 
     机密级拦截在第一次迭代时就会抛出 BlockedError；开始输出前的连接问题抛出 GatewayError。
     """
-    p = _prepare(message, tier, project_code, level, terms, stream=True)
+    p = _prepare(message, tier, project_code, level, terms, stream=True, system=system, history=history)
     if not get_settings().llm_base_url:
         for i in range(0, len(DEMO_TEXT), 12):
             yield DEMO_TEXT[i:i + 12]

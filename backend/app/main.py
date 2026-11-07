@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 
-from .api import admin, agents, audit, auth, chat, health, projects
+from .api import admin, agents, audit, auth, chat, conversations, health, projects
 from .core.auth import authenticate
 from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
@@ -41,3 +41,4 @@ app.include_router(chat.router)
 app.include_router(audit.router)
 app.include_router(admin.router)
 app.include_router(agents.router)
+app.include_router(conversations.router)

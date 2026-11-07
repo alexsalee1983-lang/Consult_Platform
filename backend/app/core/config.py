@@ -36,6 +36,11 @@ class Settings(BaseSettings):
 
     seed_demo_data: bool = True
 
+    # Agent md 目录（01_公共规范.md、roles/*.md）。留空时依次找 /srv/agents（镜像内）和仓库根目录的 agents/。
+    # 测试机可把仓库的 agents/ 只读挂载到容器里，md 改了不用重建镜像，运行时会自动重新加载。
+    agents_dir: str = ""
+    agent_history_chars: int = 24_000   # 多轮对话时随请求带上的历史消息总字数上限（从最近往前取）
+
     # ---- 登录与会话 ----
     session_backend: str = "redis"          # redis；memory 只用于单元测试，生产环境拒绝启动
     session_idle_minutes: int = 30          # 无操作超时

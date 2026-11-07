@@ -34,7 +34,8 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .                      # 仓库根目录：带上 agents/ 的 md（见 backend/Dockerfile、.dockerignore）
+      dockerfile: backend/Dockerfile
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     restart: unless-stopped
@@ -49,6 +50,10 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"   # 接口调试端口，只在本机访问；正式访问走 8080
+    # 测试机在 Agent 冲刺期间想让 md 改了立刻生效，可在 docker-compose.override.yml 里加：
+    #   volumes:
+    #     - ./agents:/srv/agents:ro
+    # 运行时按文件修改时间自动重新加载，git pull 后不用重建镜像。生产环境不要挂载，md 随镜像发版。
 
   frontend:
     build:

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..agents import tools
+from ..agents import runtime, tools
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
@@ -23,6 +23,10 @@ class AgentOut(BaseModel):
     name: str
     side: str
     tools: list[str]
+    ready: bool = False          # 能否在项目里发起对话
+    reason: str = ""             # 不可用的原因
+    level: str = "standard"      # 模型能力档（md 的 model_tier）
+    prompt_version: str = ""     # 当前提示词版本（公共规范 + 角色 md 的内容哈希）
 
 
 class ToolCallIn(BaseModel):
@@ -33,7 +37,12 @@ class ToolCallIn(BaseModel):
 @router.get("", response_model=list[AgentOut])
 def list_agents(db: Session = Depends(get_db)):
     agents = db.scalars(select(Agent).where(Agent.enabled.is_(True)).order_by(Agent.side, Agent.code))
-    return [AgentOut(code=a.code, name=a.name, side=a.side, tools=tools.granted_tools(db, a.code)) for a in agents]
+    out = []
+    for a in agents:
+        i = runtime.agent_info(db, a)
+        out.append(AgentOut(code=i.code, name=i.name, side=i.side, tools=i.tools, ready=i.ready, reason=i.reason,
+                            level=i.level, prompt_version=i.prompt_version))
+    return out
 
 
 @router.post("/{agent}/tools/{tool}")

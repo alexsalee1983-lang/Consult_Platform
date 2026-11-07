@@ -34,27 +34,34 @@ def _meta(body: ChatIn) -> dict:
     return {"length": len(body.message), "sha": audit.digest(body.message), "level": body.level}
 
 
-def _blocked(db: Session, username: str, project_code: str, body: ChatIn, e: BlockedError, stream: bool):
+# 下面三个函数也供 Agent 对话（api/conversations.py）使用：agent 为 Agent 代号，extra 为附加审计字段
+# （对话编号、提示词版本），都不含原文。
+
+def _blocked(db: Session, username: str, project_code: str, body: ChatIn, e: BlockedError, stream: bool,
+             agent: str = "", extra: dict | None = None):
     audit.record(db, actor=username, action="llm.chat", result="blocked", project_code=project_code,
-                 kinds=sorted({f.kind for f in e.result.findings}), stream=stream, **_meta(body))
-    usage.record(db, username=username, project_code=project_code, level=body.level,
+                 kinds=sorted({f.kind for f in e.result.findings}), stream=stream, agent=agent,
+                 **(extra or {}), **_meta(body))
+    usage.record(db, username=username, project_code=project_code, level=body.level, agent_code=agent,
                  model=gateway.model_for(body.level), status="blocked", stream=stream)
     raise HTTPException(422, detail=_guard_out(e.result).model_dump()) from e
 
 
-def _failed(db: Session, username: str, project_code: str, body: ChatIn, e: GatewayError, stream: bool) -> None:
+def _failed(db: Session, username: str, project_code: str, body: ChatIn, e: GatewayError, stream: bool,
+            agent: str = "", extra: dict | None = None) -> None:
     audit.record(db, actor=username, action="llm.chat", result="error", project_code=project_code,
-                 error=str(e), attempts=e.attempts, stream=stream, **_meta(body))
-    usage.record(db, username=username, project_code=project_code, level=body.level,
+                 error=str(e), attempts=e.attempts, stream=stream, agent=agent, **(extra or {}), **_meta(body))
+    usage.record(db, username=username, project_code=project_code, level=body.level, agent_code=agent,
                  model=gateway.model_for(body.level), status="error", stream=stream, attempts=e.attempts)
 
 
-def _succeeded(db: Session, username: str, project_code: str, body: ChatIn, out: Completion, stream: bool) -> None:
+def _succeeded(db: Session, username: str, project_code: str, body: ChatIn, out: Completion, stream: bool,
+               agent: str = "", extra: dict | None = None) -> None:
     audit.record(db, actor=username, action="llm.chat", result="allowed", project_code=project_code,
                  model=out.model, demo=out.demo, stream=stream, attempts=out.attempts,
-                 pseudonymized=out.pseudonymized, **_meta(body))
+                 pseudonymized=out.pseudonymized, agent=agent, **(extra or {}), **_meta(body))
     usage.record(db, username=username, project_code=project_code, level=body.level, model=out.model,
-                 status="ok", stream=stream, completion=out)
+                 status="ok", stream=stream, completion=out, agent_code=agent)
 
 
 @router.post("/gateway/check", response_model=GuardOut)

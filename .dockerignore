@@ -1,0 +1,13 @@
+# 后端镜像以仓库根目录为构建范围，只需要 backend/ 的代码和 agents/ 的 md，其余一律排除。
+# （前端、模拟模型各自以子目录为构建范围，不受本文件影响。）
+**
+!backend/requirements.txt
+!backend/alembic.ini
+!backend/alembic
+!backend/alembic/**
+!backend/app
+!backend/app/**
+!agents
+!agents/**
+**/__pycache__
+**/*.pyc

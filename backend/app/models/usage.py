@@ -16,6 +16,7 @@ class LlmUsage(Base):
     username: Mapped[str] = mapped_column(String(64), index=True)
     project_code: Mapped[str] = mapped_column(String(32), default="", index=True)
     level: Mapped[str] = mapped_column(String(16))            # reasoning / standard / light
+    agent_code: Mapped[str] = mapped_column(String(32), default="", index=True)  # 经 Agent 对话时为 Agent 代号
     model: Mapped[str] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(16))           # ok / error / blocked
     demo: Mapped[bool] = mapped_column(Boolean, default=False)
