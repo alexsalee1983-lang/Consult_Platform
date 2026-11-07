@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # 自动假名化：把项目卡中登记的客户名、人名、系统名替换成占位符再发给模型，回复里再换回来。
     # 模型为公司私有化部署，默认关闭；以后接入云端模型时，标准档必须开启（决策记录 2026-11-07）。
     llm_pseudonymize: bool = False
+    # 外部模型（公司外部的云端服务，如 DeepSeek 官方 API）。决策记录 2026-11-08：只允许在开发和测试环境、
+    # 只处理虚拟客户数据时使用。开启后：严格档项目一律拒绝调用；自动假名化强制开启；审计标记 external；
+    # 界面提示“勿输入真实客户信息”；生产环境（APP_ENV=prod）开启则拒绝启动。
+    llm_external: bool = False
 
     seed_demo_data: bool = True
 

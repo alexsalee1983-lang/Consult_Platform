@@ -17,7 +17,7 @@ from ..core.permissions import project_for_member, require_business
 from ..models import User
 from ..schemas import ChatIn, ChatOut, FindingOut, GuardIn, GuardOut
 from ..services import gateway, usage
-from ..services.gateway import BlockedError, Completion, GatewayError
+from ..services.gateway import BlockedError, Completion, ExternalModelForbidden, GatewayError
 from ..services.guard import check
 
 router = APIRouter(prefix="/api", tags=["gateway"], dependencies=[Depends(require_business)])
@@ -47,6 +47,15 @@ def _blocked(db: Session, username: str, project_code: str, body: ChatIn, e: Blo
     raise HTTPException(422, detail=_guard_out(e.result).model_dump()) from e
 
 
+def _external_forbidden(db: Session, username: str, project_code: str, body: ChatIn, e: ExternalModelForbidden,
+                        stream: bool, agent: str = "", extra: dict | None = None):
+    audit.record(db, actor=username, action="llm.chat", result="blocked", project_code=project_code,
+                 reason="external_model_strict", stream=stream, agent=agent, **(extra or {}), **_meta(body))
+    usage.record(db, username=username, project_code=project_code, level=body.level, agent_code=agent,
+                 model=gateway.model_for(body.level), status="blocked", stream=stream)
+    raise HTTPException(403, str(e)) from e
+
+
 def _failed(db: Session, username: str, project_code: str, body: ChatIn, e: GatewayError, stream: bool,
             agent: str = "", extra: dict | None = None) -> None:
     audit.record(db, actor=username, action="llm.chat", result="error", project_code=project_code,
@@ -59,7 +68,7 @@ def _succeeded(db: Session, username: str, project_code: str, body: ChatIn, out:
                agent: str = "", extra: dict | None = None) -> None:
     audit.record(db, actor=username, action="llm.chat", result="allowed", project_code=project_code,
                  model=out.model, demo=out.demo, stream=stream, attempts=out.attempts,
-                 pseudonymized=out.pseudonymized, agent=agent, **(extra or {}), **_meta(body))
+                 pseudonymized=out.pseudonymized, external=out.external, agent=agent, **(extra or {}), **_meta(body))
     usage.record(db, username=username, project_code=project_code, level=body.level, model=out.model,
                  status="ok", stream=stream, completion=out, agent_code=agent)
 
@@ -79,6 +88,8 @@ def chat(body: ChatIn, db: Session = Depends(get_db), user: User = Depends(curre
     username, code = user.username, project.code
     try:
         out = gateway.complete(body.message, tier=project.tier, project_code=code, level=body.level)
+    except ExternalModelForbidden as e:
+        _external_forbidden(db, username, code, body, e, stream=False)
     except BlockedError as e:
         _blocked(db, username, code, body, e, stream=False)
     except GatewayError as e:
@@ -100,6 +111,8 @@ def chat_stream(body: ChatIn, db: Session = Depends(get_db), user: User = Depend
     # 先取第一段：机密级拦截（422）和开始输出前的连接失败（502）在这里以普通 HTTP 错误返回
     try:
         first = next(gen)
+    except ExternalModelForbidden as e:
+        _external_forbidden(db, username, code, body, e, stream=True)
     except BlockedError as e:
         _blocked(db, username, code, body, e, stream=True)
     except GatewayError as e:

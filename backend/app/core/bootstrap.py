@@ -36,6 +36,8 @@ def check_settings(s: Settings) -> None:
         raise BootstrapError("生产环境不得配置测试账号（TEST_ACCOUNT_*），请从 .env 删除")
     if s.is_prod and not s.cookie_secure:
         raise BootstrapError("生产环境必须开启 COOKIE_SECURE（只经 HTTPS 发送会话 Cookie）")
+    if s.is_prod and s.llm_external:
+        raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
 
 
 def _validate(s: Settings, label: str, username: str, password: str, totp_secret: str) -> None:
