@@ -56,6 +56,13 @@ jobs:
           done
           exit 1
       - run: bash scripts/smoke_test.sh http://localhost:8080
+      - name: 审计哈希链：多进程并发写入后校验（PostgreSQL）
+        run: bash scripts/audit_chain_check.sh 4 50
+      - name: 审计表只能追加（数据库触发器）
+        run: |
+          out=$(docker compose exec -T postgres psql -U consult -d consult -c "DELETE FROM audit_logs WHERE id = 1" 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q "append-only"
       - if: failure()
         run: docker compose logs --no-color | tail -200
       - if: always()

@@ -143,6 +143,19 @@ def list_users(args: argparse.Namespace) -> int:
     return 0
 
 
+def verify_audit(args: argparse.Namespace) -> int:
+    with SessionLocal() as db:
+        r = audit.verify_chain(db, args.expect_head)
+        audit.record(db, actor="cli", action="audit.verify", result="allowed" if r.ok else "error",
+                     checked=r.checked, head_id=r.head_id, error_id=r.error_id)
+    print(f"结果：{'完整' if r.ok else '发现问题'}")
+    print(f"链上记录：{r.checked} 条；链前旧记录：{r.legacy} 条")
+    print(f"链头：id={r.head_id}  hash={r.head_hash}")
+    if not r.ok:
+        print(f"问题：{r.error}" + (f"（id={r.error_id}）" if r.error_id else ""))
+    return 0 if r.ok else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.cli", description="安全咨询平台运维命令")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -166,6 +179,9 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--role", required=True, choices=sorted(ROLE_NAMES), help=role_help)
     v.set_defaults(func=revoke_role)
     sub.add_parser("list-users", help="列出用户和角色").set_defaults(func=list_users)
+    a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
+    a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
+    a.set_defaults(func=verify_audit)
     args = p.parse_args(argv)
     upgrade_to_head()
     return args.func(args)

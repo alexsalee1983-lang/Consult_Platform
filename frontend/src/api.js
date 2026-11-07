@@ -47,6 +47,10 @@ export const api = {
     request(`/api/confirmations/${id}/resolve`, { method: "POST", body: JSON.stringify({ resolution }) }),
   chat: (project_code, message) =>
     request("/api/chat", { method: "POST", body: JSON.stringify({ project_code, message }) }),
+  audit: (params) => request(`/api/audit?${new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v !== "" && v != null))}`),
+  verifyAudit: (expectHead) =>
+    request(`/api/audit/verify${expectHead ? `?expect_head=${encodeURIComponent(expectHead)}` : ""}`),
 };
 
 export const PHASES = ["启动", "调研", "分析", "设计", "汇报", "验收"];

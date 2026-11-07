@@ -82,6 +82,7 @@ check "不存在的项目返回 404"          404 "$BASE/api/projects/NOPE"
 # 测试账号故意不是 GRID-B 的成员（app/core/bootstrap.py TEST_MEMBERSHIPS）
 check "非项目成员访问 GRID-B 返回 404" 404 "$BASE/api/projects/GRID-B"
 check "顾问不能查看审计日志"          403 "$BASE/api/audit"
+check "顾问不能校验审计链"            403 "$BASE/api/audit/verify"
 check "顾问不能管理账号"              403 "$BASE/api/admin/users"
 check "缺少 CSRF 令牌的提问被拒绝"    403 -X POST "$BASE/api/chat" -H "$J" \
       -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'

@@ -22,6 +22,7 @@ PROTECTED = [
     ("POST", "/api/chat"),
     ("POST", "/api/gateway/check"),
     ("GET", "/api/audit"),
+    ("GET", "/api/audit/verify"),
     ("GET", "/api/auth/me"),
     ("POST", "/api/auth/logout"),
     ("GET", "/api/projects/BANK-A/members"),

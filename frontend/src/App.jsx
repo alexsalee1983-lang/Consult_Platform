@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
-import { RequireAuth, RequireBusiness } from "./auth.jsx";
+import { HomeRedirect, RequireAuditor, RequireAuth, RequireBusiness } from "./auth.jsx";
 import Sidebar from "./components/Sidebar.jsx";
+import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
 import Login from "./pages/Login.jsx";
 import Overview from "./pages/Overview.jsx";
@@ -11,10 +12,15 @@ function Shell() {
     <RequireAuth>
       <div className="layout">
         <Sidebar />
-        <main className="content"><RequireBusiness><Outlet /></RequireBusiness></main>
+        <main className="content"><Outlet /></main>
       </div>
     </RequireAuth>
   );
+}
+
+// 业务页面：只有业务角色能看（三权分立）
+function Business() {
+  return <RequireBusiness><Outlet /></RequireBusiness>;
 }
 
 function OverviewPage() {
@@ -32,11 +38,15 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route element={<Shell />}>
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/project/:code" element={<OverviewPage />} />
-        <Route path="/chat/:code" element={<ChatPage />} />
+        <Route index element={<HomeRedirect />} />
+        <Route element={<Business />}>
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/project/:code" element={<OverviewPage />} />
+          <Route path="/chat/:code" element={<ChatPage />} />
+        </Route>
+        <Route path="/audit" element={<RequireAuditor><Audit /></RequireAuditor>} />
       </Route>
-      <Route path="*" element={<Navigate to="/projects" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

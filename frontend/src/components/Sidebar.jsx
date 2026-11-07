@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { api } from "../api.js";
-import { ROLE_NAMES, useAuth } from "../auth.jsx";
+import { hasBusinessRole, isAuditor, ROLE_NAMES, useAuth } from "../auth.jsx";
 
 const ICONS = {
   chat: <path d="M4 5h16v11H8l-4 4z" />,
   proj: <><path d="M3 7h18v13H3z" /><path d="M8 7V4h8v3" /></>,
   dash: <><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></>,
+  audit: <><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z" /><path d="M9 12h6M9 8h6M9 16h4" /></>,
 };
 
 function Icon({ name }) {
@@ -48,10 +49,14 @@ export default function Sidebar() {
     api.health().then(setHealth).catch(() => setHealth({ status: "down", checks: {} }));
   }, []);
 
+  // 导航按角色显示：业务角色看交付页面，安全审计员只看审计日志
   const items = [
-    { to: "/projects", icon: "proj", label: "我的项目" },
-    { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱" },
-    { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
+    ...(hasBusinessRole(user) ? [
+      { to: "/projects", icon: "proj", label: "我的项目" },
+      { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱" },
+      { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
+    ] : []),
+    ...(isAuditor(user) ? [{ to: "/audit", icon: "audit", label: "审计日志" }] : []),
   ];
   const name = user?.displayName || user?.username || "";
   const ok = health?.status === "ok";

@@ -81,7 +81,11 @@ docker compose exec backend python -m app.cli unlock --username <名字>
 docker compose exec backend python -m app.cli reset-totp --username <名字>
 docker compose exec backend python -m app.cli grant-role --username <名字> --role consultant   # 审计员只能这样授予
 docker compose exec backend python -m app.cli list-users
+docker compose exec backend python -m app.cli verify-audit          # 校验审计哈希链（问题时退出码 2）
+bash scripts/audit_chain_check.sh                                    # 测试机：多进程并发写审计后校验（生产拒绝执行）
 ```
+
+审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求要带 `X-CSRF-Token`。
 
