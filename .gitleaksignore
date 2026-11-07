@@ -1,5 +1,8 @@
 # gitleaks 误报忽略清单：一行一个指纹（提交:文件:规则:行号），只忽略这一处，不按目录放行。
-# 新增条目必须在 PR 里说明为什么是误报。见 docs/安全扫描.md。
+# 新增条目必须在 PR 里说明为什么是误报。注释里不要写出被忽略的值本身。见 docs/安全扫描.md。
 
-# backend/tests/test_guard.py 第 23 行：机密级检测规则的测试样例 AKIAABCDEFGHIJKLMNOP（虚构，非真实密钥）
+# backend/tests/test_guard.py 第 23 行：机密级检测规则的测试样例（虚构的云密钥格式，非真实密钥）
 2eab99aa2187dec5fac4555da2858181c86ffac7:backend/tests/test_guard.py:aws-access-token:23
+
+# 本文件旧版本的注释里引用了上面那个虚构样例，已删除；历史提交中的这一处同样是误报
+abb47f10ff8fdb68a0a46895a1c268029f9d426f:.gitleaksignore:aws-access-token:4
