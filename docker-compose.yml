@@ -49,7 +49,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8000:8000"   # 接口调试端口，只在本机访问；正式访问走 8080
+      - "127.0.0.1:${BACKEND_DEBUG_PORT:-8000}:8000"   # 接口调试端口，只在本机访问；正式访问走 WEB_PORT
     # 测试机在 Agent 冲刺期间想让 md 改了立刻生效，可在 docker-compose.override.yml 里加：
     #   volumes:
     #     - ./agents:/srv/agents:ro
