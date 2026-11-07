@@ -20,6 +20,8 @@ PROTECTED = [
     ("GET", "/api/confirmations"),
     ("POST", "/api/confirmations/1/resolve"),
     ("POST", "/api/chat"),
+    ("POST", "/api/chat/stream"),
+    ("GET", "/api/admin/usage"),
     ("POST", "/api/gateway/check"),
     ("GET", "/api/audit"),
     ("GET", "/api/audit/verify"),

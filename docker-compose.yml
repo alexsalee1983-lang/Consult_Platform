@@ -62,6 +62,17 @@ services:
     ports:
       - "${WEB_PORT:-8080}:80"
 
+  # 模拟大模型（OpenAI 兼容），只在 CI 和测试机上按需启动，不对外开放端口：
+  #   docker compose --profile mock-llm up -d --build
+  # 并在 .env 设 LLM_BASE_URL=http://mock-llm:8000/v1。生产环境不要启用这个 profile。
+  mock-llm:
+    profiles: ["mock-llm"]
+    build:
+      context: ./tools/mock_llm
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:

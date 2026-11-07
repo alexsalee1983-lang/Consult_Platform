@@ -156,6 +156,23 @@ def verify_audit(args: argparse.Namespace) -> int:
     return 0 if r.ok else 2
 
 
+def usage_report(args: argparse.Namespace) -> int:
+    from .services import usage
+
+    group = tuple(g.strip() for g in args.by.split(",") if g.strip())
+    if not group or set(group) - {"username", "project_code", "model"}:
+        print("--by 只能是 username、project_code、model 的组合", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        rows = usage.summary(db, args.days, group)
+    print(f"最近 {args.days} 天大模型用量（按 {'、'.join(group)}）：")
+    for r in rows:
+        keys = "  ".join(f"{r[g] or '-':<16}" for g in group)
+        print(f"{keys}  调用 {r['calls']:>5}  输入 {r['prompt_tokens']:>9}  输出 {r['completion_tokens']:>9}  "
+              f"失败 {r['errors']:>3}  拦截 {r['blocked']:>3}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.cli", description="安全咨询平台运维命令")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -182,6 +199,11 @@ def main(argv: list[str] | None = None) -> int:
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
     a.set_defaults(func=verify_audit)
+    us = sub.add_parser("usage-report", help="大模型用量汇总")
+    us.add_argument("--days", type=int, default=30)
+    us.add_argument("--by", default="username,project_code,model",
+                    help="汇总维度，逗号分隔：username / project_code / model")
+    us.set_defaults(func=usage_report)
     args = p.parse_args(argv)
     upgrade_to_head()
     return args.func(args)

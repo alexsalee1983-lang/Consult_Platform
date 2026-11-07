@@ -83,7 +83,14 @@ docker compose exec backend python -m app.cli grant-role --username <名字> --r
 docker compose exec backend python -m app.cli list-users
 docker compose exec backend python -m app.cli verify-audit          # 校验审计哈希链（问题时退出码 2）
 bash scripts/audit_chain_check.sh                                    # 测试机：多进程并发写审计后校验（生产拒绝执行）
+docker compose exec backend python -m app.cli usage-report --days 30 # 大模型用量（按人、项目、模型）
+
+# 没有公司模型时，用模拟模型跑通网关真实路径（.env 设 LLM_BASE_URL=http://mock-llm:8000/v1）
+docker compose --profile mock-llm up -d --build
+SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 ```
+
+网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。测试里用 `gateway.set_transport(httpx.MockTransport(...))` 模拟模型，不要连真实地址。
 
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 

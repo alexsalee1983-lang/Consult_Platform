@@ -47,7 +47,9 @@ jobs:
           print("TEST_ACCOUNT_PASSWORD=Ci1!" + secrets.token_urlsafe(18))
           print("TEST_ACCOUNT_TOTP_SECRET=" + base64.b32encode(secrets.token_bytes(20)).decode())
           PY
-      - run: docker compose up -d --build
+          # 接模拟模型（OpenAI 兼容），走网关的真实 HTTP 路径：重试、流式、可用性检查、用量计量
+          sed -i 's|^LLM_BASE_URL=.*|LLM_BASE_URL=http://mock-llm:8000/v1|' .env
+      - run: docker compose --profile mock-llm up -d --build
       - name: 等待服务就绪
         run: |
           for i in $(seq 1 60); do
@@ -56,6 +58,17 @@ jobs:
           done
           exit 1
       - run: bash scripts/smoke_test.sh http://localhost:8080
+        env:
+          SMOKE_EXPECT_LLM: ok
+      - name: 网关重试（模拟模型第一次返回 503）
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          import time
+          from app.services import gateway
+          out = gateway.complete(f"重试检查 [mock-503-once] {time.time()}", tier="standard", project_code="CI")
+          assert out.attempts == 2 and not out.demo, out
+          print("重试成功，尝试次数", out.attempts)
+          PY
       - name: 审计哈希链：多进程并发写入后校验（PostgreSQL）
         run: bash scripts/audit_chain_check.sh 4 50
       - name: 审计表只能追加（数据库触发器）
@@ -64,6 +77,6 @@ jobs:
           echo "$out"
           echo "$out" | grep -q "append-only"
       - if: failure()
-        run: docker compose logs --no-color | tail -200
+        run: docker compose --profile mock-llm logs --no-color | tail -200
       - if: always()
-        run: docker compose down -v
+        run: docker compose --profile mock-llm down -v

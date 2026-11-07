@@ -18,12 +18,21 @@ class Settings(BaseSettings):
     minio_secure: bool = False
 
     # 公司私有化部署的白名单大模型，OpenAI 兼容接口。留空时平台用演示回复，便于先跑通流程。
+    # 一期测试用公司内部离线部署的 DeepSeek V4.1 Flash，三个能力档先都指向它；
+    # 模型 ID 以模型平台接口说明为准，拿到后只改 .env。
     llm_base_url: str = ""
     llm_api_key: str = ""
-    llm_model_reasoning: str = "deepseek-r1"
-    llm_model_standard: str = "qwen2.5-72b-instruct"
-    llm_model_light: str = "qwen2.5-14b-instruct"
-    llm_timeout_seconds: int = 120
+    llm_model_reasoning: str = "deepseek-v4.1-flash"
+    llm_model_standard: str = "deepseek-v4.1-flash"
+    llm_model_light: str = "deepseek-v4.1-flash"
+    llm_connect_timeout_seconds: float = 5        # 建立连接超时
+    llm_timeout_seconds: int = 120                # 等待模型回复（非流式整体 / 流式两段输出之间）的超时
+    llm_max_retries: int = 2                      # 连接失败、超时、429、5xx 时重试次数（流式只在开始输出前重试）
+    llm_retry_backoff_seconds: float = 1.0        # 指数退避基数：1s、2s、4s……
+    llm_health_ttl_seconds: int = 30              # 模型可用性检查结果缓存时间
+    # 自动假名化：把项目卡中登记的客户名、人名、系统名替换成占位符再发给模型，回复里再换回来。
+    # 模型为公司私有化部署，默认关闭；以后接入云端模型时，标准档必须开启（决策记录 2026-11-07）。
+    llm_pseudonymize: bool = False
 
     seed_demo_data: bool = True
 

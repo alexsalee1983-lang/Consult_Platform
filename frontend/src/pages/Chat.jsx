@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, TIER } from "../api.js";
+import { api, chatStream, TIER } from "../api.js";
 import { TopBar } from "../components/common.jsx";
 
 const SUGGESTIONS = ["一期人力模型怎么选？给出推荐和理由", "列出事件响应能力的主要差距，并给整改建议", "把整改建议写成四要素表格"];
@@ -32,10 +32,21 @@ export default function Chat({ code }) {
     setText("");
     setMessages((m) => [...m, { role: "user", content }]);
     setSending(true);
+    let started = false;
+    // 更新最后一条 AI 消息（流式输出时逐段追加）
+    const patchLast = (fn) => setMessages((m) => [...m.slice(0, -1), fn(m[m.length - 1])]);
     try {
-      const r = await api.chat(code, content);
-      setMessages((m) => [...m, { role: "ai", content: r.reply, model: r.model, demo: r.demo }]);
+      const done = await chatStream(code, content, (delta) => {
+        if (!started) {
+          started = true;
+          setMessages((m) => [...m, { role: "ai", content: delta, streaming: true }]);
+        } else {
+          patchLast((last) => ({ ...last, content: last.content + delta }));
+        }
+      });
+      if (started) patchLast((last) => ({ ...last, streaming: false, model: done.model, demo: done.demo }));
     } catch (e) {
+      if (started) patchLast((last) => ({ ...last, streaming: false, interrupted: true }));
       if (e.status === 422 && e.detail?.findings) setMessages((m) => [...m, { role: "blocked", detail: e.detail }]);
       else setMessages((m) => [...m, { role: "error", content: e.message }]);
     } finally {
@@ -64,13 +75,16 @@ export default function Chat({ code }) {
               <div key={i} className="msg-ai">
                 <div className="av" aria-hidden="true">AI</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-                  <div className="sub">咨询师 Agent · {m.model}{m.demo ? " · 演示模式" : ""}</div>
+                  <div className="sub">
+                    咨询师 Agent{m.model ? ` · ${m.model}` : ""}{m.demo ? " · 演示模式" : ""}
+                    {m.streaming ? " · 输出中……" : ""}{m.interrupted ? " · 输出中断，内容不完整" : ""}
+                  </div>
                   <div className="body">{m.content}</div>
                 </div>
               </div>
             );
           })}
-          {sending && <div className="sub">Agent 正在思考……</div>}
+          {sending && messages[messages.length - 1]?.role === "user" && <div className="sub">Agent 正在思考……</div>}
           <div ref={endRef} />
         </div>
         <form style={{ padding: "12px 20px 14px", borderTop: "1px solid var(--ln)", display: "flex", flexDirection: "column", gap: 8 }}

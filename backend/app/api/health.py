@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from ..core.config import get_settings
 from ..core.db import engine
+from ..services.gateway import availability
 
 router = APIRouter(tags=["health"])
 
@@ -41,11 +42,10 @@ def _minio() -> str:
 
 @router.get("/api/health")
 def health() -> dict:
-    s = get_settings()
     checks = {
         "database": _db(),
         "redis": _redis(),
         "object_storage": _minio(),
-        "llm": "configured" if s.llm_base_url else "demo (LLM_BASE_URL 未配置)",
+        "llm": availability(),
     }
     return {"status": "ok" if checks["database"] == "ok" else "degraded", "checks": checks}
