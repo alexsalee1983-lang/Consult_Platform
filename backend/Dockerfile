@@ -10,6 +10,8 @@ COPY requirements.txt .
 ARG PIP_INDEX_URL=https://pypi.org/simple
 RUN pip install -i ${PIP_INDEX_URL} -r requirements.txt
 
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY app ./app
 RUN useradd -r -u 10001 app && chown -R app /srv
 USER app

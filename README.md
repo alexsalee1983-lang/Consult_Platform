@@ -61,7 +61,8 @@ docker compose down -v               # 停止并清空所有数据（慎用）
 ## 目录
 
 ```
-backend/      FastAPI 后端：app/guard.py 机密级检测，app/gateway.py 模型网关，app/routers 接口
+backend/      FastAPI 后端：app/core 配置、数据库、迁移、审计；app/api 接口；app/models 数据表；
+              app/services 机密级检测（guard）和模型网关（gateway）；alembic/ 数据库迁移脚本
 frontend/     React + Vite 前端，暗色版设计规范在 src/theme.css
 scripts/      冒烟测试
 .github/      CI：后端测试、前端构建、整套 Docker 启动后跑冒烟测试

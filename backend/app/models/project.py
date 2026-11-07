@@ -1,13 +1,9 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .db import Base
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+from ..core.db import Base, utcnow as _now
 
 
 class Project(Base):
@@ -61,17 +57,3 @@ class Confirmation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     project: Mapped[Project] = relationship(back_populates="confirmations")
-
-
-class AuditLog(Base):
-    """审计日志。只记元数据（长度、摘要哈希、命中类别），不记客户原文。"""
-
-    __tablename__ = "audit_logs"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
-    actor: Mapped[str] = mapped_column(String(64))
-    project_code: Mapped[str] = mapped_column(String(32), default="")
-    action: Mapped[str] = mapped_column(String(32))
-    result: Mapped[str] = mapped_column(String(16))   # allowed / blocked / error
-    detail: Mapped[str] = mapped_column(Text, default="")
