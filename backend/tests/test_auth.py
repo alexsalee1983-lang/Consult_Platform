@@ -22,6 +22,9 @@ PROTECTED = [
     ("POST", "/api/chat"),
     ("POST", "/api/chat/stream"),
     ("GET", "/api/admin/usage"),
+    ("GET", "/api/admin/agent-grants"),
+    ("GET", "/api/agents"),
+    ("POST", "/api/agents/x/tools/y"),
     ("POST", "/api/gateway/check"),
     ("GET", "/api/audit"),
     ("GET", "/api/audit/verify"),
@@ -64,7 +67,8 @@ def test_every_api_route_is_protected_or_public(client):
     for route in app.routes:
         path = getattr(route, "path", "")
         if path.startswith("/api") and path not in PUBLIC_PATHS:
-            concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x")
+            concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x") \
+                .replace("{agent}", "x").replace("{tool}", "y")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 
