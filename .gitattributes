@@ -1,0 +1,7 @@
+# 开发在 Windows、测试在 Ubuntu：仓库内统一用 LF 换行，避免 .sh 脚本在测试机上因 CRLF 无法运行
+* text=auto eol=lf
+*.sh text eol=lf
+*.png binary
+*.jpg binary
+*.docx binary
+*.pdf binary
