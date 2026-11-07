@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>交付件审阅 · 暗色版</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap">
+<style>
+:root{--obs:#0A0D12;--s1:#10151C;--s2:#161D27;--s3:#1D2633;--ln:#232D3B;--ln2:#2E3A4B;--tx:#E6EBF2;--tx2:#A3AEBE;--tx3:#6B7789;--amber:#F5A524;--amber-d:rgba(245,165,36,.12);--crim:#F0454F;--crim-d:rgba(240,69,79,.13);--cyan:#22D3EE;--cyan-d:rgba(34,211,238,.10);--ok:#3DD68C;--ok-d:rgba(61,214,140,.12);--vio:#B49CFF;--vio-d:rgba(180,156,255,.12)}
+body{margin:0;background:var(--obs)}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.cap{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);font-weight:600}
+.pnl{background:var(--s1);border:1px solid var(--ln);border-radius:10px;min-width:0}
+.pad{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.h2{margin:0;font-size:13.5px;font-weight:700}
+.row{display:flex;align-items:center;gap:8px}
+.sb{display:flex;justify-content:space-between;align-items:center;gap:8px}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap}
+.c-a{background:var(--amber-d);color:var(--amber)}.c-r{background:var(--crim-d);color:var(--crim)}.c-c{background:var(--cyan-d);color:var(--cyan)}.c-g{background:var(--ok-d);color:var(--ok)}.c-v{background:var(--vio-d);color:var(--vio)}.c-n{background:var(--s3);color:var(--tx2)}
+.btn{height:32px;padding:0 12px;border:1px solid var(--ln2);border-radius:6px;background:var(--s2);color:var(--tx);font-size:12.5px}
+.btnp{height:32px;padding:0 14px;border:0;border-radius:6px;background:var(--amber);color:#0A0D12;font-size:12.5px;font-weight:700}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--tx2);text-decoration:none;font-size:13px}
+.nav a.on{background:var(--s3);color:var(--tx);box-shadow:inset 2px 0 0 var(--amber)}
+.nav a .n{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--amber)}
+.bar{height:4px;border-radius:2px;background:var(--s3);overflow:hidden}.bar i{display:block;height:100%}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;padding:7px 12px;color:var(--tx3);font-weight:600}
+.tbl td{padding:6px 12px;border-top:1px solid var(--ln);color:var(--tx)}
+.lst{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.lst>li{padding:9px 0;border-top:1px solid var(--ln)}
+.sub{font-size:11.5px;color:var(--tx3)}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:1600px;height:900px;box-sizing:border-box;background:radial-gradient(1200px 600px at 60% -10%,#122030 0%,var(--obs) 55%);color:var(--tx);font-family:'Inter','Noto Sans SC','PingFang SC',system-ui,sans-serif;font-size:13px;line-height:1.55;display:grid;grid-template-columns:248px minmax(0,1fr);gap:14px;padding:14px;overflow:hidden">
+<aside aria-label="导航" class="pnl" style="display:flex;flex-direction:column;gap:16px;padding:16px 14px;min-height:0">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 4px">
+    <div style="width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--amber),#C9781A);display:flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A0D12" stroke-width="2.4" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke-linecap="round"/></svg></div>
+    <div style="line-height:1.2"><div style="font-weight:700;font-size:14px">安全咨询专家平台</div><div style="font-size:10px;letter-spacing:.16em;color:var(--tx3)">ADVISORY · 内部</div></div>
+  </div>
+  <nav aria-label="模式" style="display:flex;padding:3px;border-radius:7px;background:var(--obs);border:1px solid var(--ln)"><a href="02-我的项目.html" style="flex:1;text-align:center;padding:5px 0;border-radius:5px;text-decoration:none;font-size:12.5px;background:var(--s3);color:var(--tx);font-weight:600">交付</a><a href="05-知识审批队列.html" style="flex:1;text-align:center;padding:5px 0;border-radius:5px;text-decoration:none;font-size:12.5px;color:var(--tx3)">知识</a></nav>
+  <nav class="nav" aria-label="交付导航"><a href="01-顾问对话.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"/></svg>顾问对话</a><a href="02-我的项目.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7h18v13H3z"/><path d="M8 7V4h8v3"/></svg>我的项目</a><a href="03-项目驾驶舱.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>项目驾驶舱</a><a href="04-交付件审阅.html" class="on" aria-current="page"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>交付件审阅<span class="n">2</span></a><a href="02-我的项目.html#confirm"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M5 12l5 5L19 7"/></svg>待我确认<span class="n">5</span></a></nav>
+  <section aria-label="当前项目" style="padding:12px;border-radius:8px;background:var(--s2);border:1px solid var(--ln);display:flex;flex-direction:column;gap:10px">
+    <div class="cap">当前项目</div>
+    <div class="row" style="gap:12px">
+      <svg aria-hidden="true" width="56" height="56" viewBox="0 0 74 74"><circle cx="37" cy="37" r="31" fill="none" stroke="#1D2633" stroke-width="8"/><circle cx="37" cy="37" r="31" fill="none" stroke="#F5A524" stroke-width="8" stroke-linecap="round" stroke-dasharray="132.4 194.8" transform="rotate(-90 37 37)"/><text x="37" y="43" text-anchor="middle" fill="#E6EBF2" font-family="JetBrains Mono" font-weight="700" font-size="20">68</text></svg>
+      <div style="line-height:1.4;min-width:0"><div style="font-weight:700">BANK-A</div><div class="sub">SOC 运营体系设计</div><div class="mono" style="font-size:11px;color:var(--ok)">态势 ▲ +6</div></div>
+    </div>
+    <div class="sb" style="font-size:11.5px"><span class="chip c-c">标准档</span><span class="sub">第 7 / 12 周</span></div>
+  </section>
+  <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 4px 0;border-top:1px solid var(--ln)">
+    <div style="width:30px;height:30px;border-radius:50%;background:var(--s3);border:1px solid var(--ln2);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--amber)">李</div>
+    <div style="line-height:1.3"><div>李明</div><div class="sub">高级顾问 · CISP</div></div>
+  </div>
+</aside>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-rows:auto minmax(0,1fr);gap:14px;min-width:0;min-height:0">
+
+<div class="sb" style="grid-column:1/-1;padding:2px 2px 0">
+  <div style="line-height:1.3;min-width:0"><div class="cap">BANK-A · D5 · v3 · 咨询师 Agent 起草于 11-18 14:20</div><h1 style="margin:0;font-size:20px;font-weight:700">SOC 运营体系设计方案</h1></div>
+  <div class="row"><span class="chip c-c">标准档 · 资料不出公司</span><span class="chip c-a">草稿 · 待顾问审核</span><button class="btn">版本对比</button><button class="btn">导出 Word</button></div>
+</div>
+<div style="display:grid;grid-template-columns:200px minmax(0,1fr);gap:14px;min-width:0;min-height:0">
+  <aside aria-label="目录" style="display:flex;flex-direction:column;gap:14px">
+    <div class="pnl pad" style="gap:6px"><div class="cap">目录</div>
+      <ol class="lst" style="font-size:12.5px;gap:2px"><li style="padding:6px 10px;border-radius:4px;color:var(--tx2)"><span class="mono" style="color:var(--tx3);margin-right:8px">1</span>设计原则</li><li style="padding:6px 10px;border-radius:4px;color:var(--tx2)"><span class="mono" style="color:var(--tx3);margin-right:8px">2</span>组织架构</li><li style="padding:6px 10px;border-radius:4px;color:var(--tx);font-weight:700;box-shadow:inset 2px 0 0 var(--amber);background:var(--s2)"><span class="mono" style="color:var(--tx3);margin-right:8px">3</span>人员与值班模型</li><li style="padding:6px 10px;border-radius:4px;color:var(--tx2)"><span class="mono" style="color:var(--tx3);margin-right:8px">4</span>运营流程</li><li style="padding:6px 10px;border-radius:4px;color:var(--tx2)"><span class="mono" style="color:var(--tx3);margin-right:8px">5</span>告警分级</li><li style="padding:6px 10px;border-radius:4px;color:var(--tx2)"><span class="mono" style="color:var(--tx3);margin-right:8px">6</span>平台与数据源</li><li style="padding:6px 10px;border-radius:4px;color:var(--tx2)"><span class="mono" style="color:var(--tx3);margin-right:8px">7</span>度量指标</li></ol>
+    </div>
+    <div class="pnl pad" style="gap:8px"><div class="cap">本章来源构成</div>
+      <div aria-hidden="true" style="display:flex;height:6px;gap:2px;border-radius:3px;overflow:hidden"><span style="flex:6;background:var(--ok)"></span><span style="flex:3;background:var(--cyan)"></span><span style="flex:2;background:#4C8DA0"></span><span style="flex:1;background:var(--vio)"></span></div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:3px 8px;font-size:12px"><span style="color:var(--ok)">客户证据</span><span class="mono">6</span><span style="color:var(--cyan)">公司实践</span><span class="mono">3</span><span style="color:#7FB3C2">业界框架</span><span class="mono">2</span><span style="color:var(--vio)">模型推断</span><span class="mono">1</span></div>
+    </div>
+    <div class="pnl pad" style="gap:8px"><div class="cap">质量门禁</div><div class="row" style="flex-wrap:wrap;gap:6px"><span class="chip c-g">阻断 0</span><span class="chip c-a">重要 2</span><span class="chip c-n">建议 5</span></div></div>
+  </aside>
+  <main class="pnl" style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+    <div class="sb sub" style="padding:9px 28px;border-bottom:1px solid var(--ln)"><span class="mono">BANK-A / D5 / v3</span><span style="color:var(--amber);font-weight:600;letter-spacing:.06em">【草稿 · 待顾问审核】</span><span>第 14 / 46 页</span></div>
+    <article style="padding:16px 40px 18px;max-width:780px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;line-height:1.65">
+      <div class="cap" style="color:var(--amber)">第三章</div>
+      <h2 style="margin:-6px 0 2px;font-size:22px;font-weight:700">人员与值班模型</h2>
+      <h3 style="margin:4px 0 0;font-size:14.5px;font-weight:700">3.1　现状</h3>
+      <p style="margin:0;color:var(--tx2)">SOC 现有 6 人，全部为白班（8:30–19:00），夜间无人值守<sup class="mono" style="font-size:9.5px;color:var(--ok);margin-left:1px">[I-02-05]</sup>。2026 年第三季度的 4 起一级告警中，有 3 起在次日才启动处置<sup class="mono" style="font-size:9.5px;color:var(--ok);margin-left:1px">[D-12]</sup>。</p>
+      <h3 style="margin:6px 0 0;font-size:14.5px;font-weight:700">3.2　目标模型（一期）</h3>
+      <p style="margin:0;color:var(--tx2)">一期保持 6 人白班编制，夜间由托管服务商做告警初筛；一级事件由托管方电话升级至当周轮值负责人<sup class="mono" style="font-size:9.5px;color:var(--cyan);margin-left:1px">[L4-OPS-012]</sup>。这一安排不需要扩编，可在本期预算内覆盖夜间一级事件的响应要求<sup class="mono" style="font-size:9.5px;color:var(--cyan);margin-left:1px">[P-03]</sup>。</p>
+      <section aria-label="整改建议 R-3.2" style="border:1px solid var(--ln2);border-radius:8px;overflow:hidden">
+        <div class="sb" style="padding:8px 14px;background:var(--s2);border-bottom:1px solid var(--ln)"><span style="font-weight:700"><span class="mono" style="color:var(--amber);margin-right:8px">R-3.2</span>建立夜间托管初筛与电话升级机制</span><span class="chip c-a">待确认</span></div>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));font-size:12.5px">
+          <div style="padding:8px 14px;border-right:1px solid var(--ln)"><div class="cap">优先级</div><b style="color:var(--crim)">高</b></div>
+          <div style="padding:8px 14px;border-right:1px solid var(--ln)"><div class="cap">责任部门</div><b>信息科技部</b></div>
+          <div style="padding:8px 14px;border-right:1px solid var(--ln)"><div class="cap">周期</div><b class="mono">0–3 月</b></div>
+          <div style="padding:8px 14px"><div class="cap">验收标准</div><b>一级事件 30 分钟内启动处置</b></div>
+        </div>
+      </section>
+      <table class="tbl" style="font-size:12.5px"><caption style="caption-side:top;text-align:left;font-weight:700;font-size:12px;color:var(--tx2);padding-bottom:4px">表 3-1　一期岗位与班次</caption>
+        <thead><tr><th>岗位</th><th>人数</th><th>主要职责</th><th>班次</th></tr></thead>
+        <tbody><tr><td>SOC 负责人</td><td class="mono">1</td><td style="color:var(--tx2)">运营管理、一级事件决策</td><td style="color:var(--tx2)">白班 + 夜间电话轮值</td></tr>
+        <tr><td>一线分析员</td><td class="mono">3</td><td style="color:var(--tx2)">告警研判、工单流转</td><td style="color:var(--tx2)">白班</td></tr>
+        <tr><td>二线分析与响应</td><td class="mono">1</td><td style="color:var(--tx2)">事件调查、处置协调</td><td style="color:var(--tx2)">白班 + 夜间电话轮值</td></tr>
+        <tr><td>平台运维</td><td class="mono">1</td><td style="color:var(--tx2)">SIEM 维护、规则调优</td><td style="color:var(--tx2)">白班</td></tr></tbody></table>
+      <h3 style="margin:6px 0 0;font-size:14.5px;font-weight:700">3.3　二期演进</h3>
+      <p style="margin:0;color:var(--tx2);padding:6px 12px;border-radius:4px;background:var(--vio-d);border-left:2px solid var(--vio)">当日均有效告警持续超过一线人均处理能力，或监管提出 7×24 值守要求时，启动扩编评估<sup class="mono" style="font-size:9.5px;color:var(--vio);margin-left:1px">[推断]</sup>。</p>
+      <footer style="padding-top:10px;border-top:1px solid var(--ln);display:grid;grid-template-columns:90px 1fr;gap:2px 12px;font-size:11.5px;color:var(--tx3)">
+        <span class="mono" style="color:var(--ok)">I-02-05</span><span>访谈纪要 · 运维负责人 · 11 月 4 日</span>
+        <span class="mono" style="color:var(--ok)">D-12</span><span>客户资料 · 第三季度值班与事件记录</span>
+        <span class="mono" style="color:var(--cyan)">L4-OPS-012</span><span>业界框架 · SOC 分层响应模型（依据库）</span>
+        <span class="mono" style="color:var(--cyan)">P-03</span><span>公司实践 · 中小型 SOC 托管初筛做法（已脱敏）</span>
+      </footer>
+    </article>
+  </main>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;min-height:0">
+  <div class="sb" style="padding:0 2px"><h2 class="h2" style="font-size:15px">专家审阅</h2><span class="sub">3 项需你判断</span></div>
+  <section class="pnl" style="padding:12px 14px;display:flex;flex-direction:column;gap:7px;border-left:2px solid var(--amber)">
+  <div class="sb"><span class="chip c-a">方案取舍</span><span class="sub">方案设计 Agent</span></div>
+  <div style="font-weight:700">一期人力模型选哪一种？</div>
+  <div style="font-size:12.5px;color:var(--tx2)"><div style="display:flex;flex-direction:column;gap:5px;margin-bottom:4px"><div style="padding:6px 10px;border-radius:6px;border:1px solid var(--amber);background:var(--amber-d);color:var(--tx)"><b>A</b>　6 人白班 + 托管夜间初筛 <span style="color:var(--amber);font-size:11px;font-weight:700">推荐</span></div><div style="padding:6px 10px;border-radius:6px;border:1px solid var(--ln2)"><b>B</b>　扩编到 10 人，自建 7×24</div></div>理由：本期预算不含扩编；托管初筛可覆盖夜间一级事件。</div>
+  <div class="row" style="flex-wrap:wrap;gap:6px"><button class="btnp">采纳 A</button><button class="btn">选 B</button><button class="btn">我来改写</button></div>
+</section>
+  <section class="pnl" style="padding:12px 14px;display:flex;flex-direction:column;gap:7px;border-left:2px solid var(--vio)">
+  <div class="sb"><span class="chip c-v">来源冲突</span><span class="sub">依据与差距分析 Agent</span></div>
+  <div style="font-weight:700">一级事件响应时限不一致</div>
+  <div style="font-size:12.5px;color:var(--tx2)">业界框架 15 分钟；公司实践 30 分钟（适用于无夜班）。建议并存并注明适用条件。</div>
+  <div class="row" style="flex-wrap:wrap;gap:6px"><button class="btnp">采纳建议</button><button class="btn">以业界框架为准</button></div>
+</section>
+  <section class="pnl" style="padding:12px 14px;display:flex;flex-direction:column;gap:7px;border-left:2px solid var(--crim)">
+  <div class="sb"><span class="chip c-r">证据不足</span><span class="sub">质量评审 Agent</span></div>
+  <div style="font-weight:700">3.3 节只有推断</div>
+  <div style="font-size:12.5px;color:var(--tx2)">“人均处理能力”阈值未给数值，客户无法据此决策。</div>
+  <div class="row" style="flex-wrap:wrap;gap:6px"><button class="btnp">请 Agent 补测算</button><button class="btn">标注为假设</button></div>
+</section>
+  <section class="pnl pad" aria-label="签署流程" style="margin-top:auto">
+    <div class="cap">签署流程</div>
+    <ol class="lst" style="gap:6px;font-size:12.5px">
+      <li class="row" style="gap:10px;padding:2px 0;border-top:0"><span style="flex:none"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;background:var(--ok);color:#0A0D12;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</span></span><span style="flex:1;">咨询师 Agent 起草</span><span style="font-size:11px;color:var(--tx3)">11-18</span></li>
+      <li class="row" style="gap:10px;padding:2px 0;border-top:0"><span style="flex:none"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;background:var(--ok);color:#0A0D12;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</span></span><span style="flex:1;">质量评审 Agent</span><span style="font-size:11px;color:var(--tx3)">阻断 0</span></li>
+      <li class="row" style="gap:10px;padding:2px 0;border-top:0"><span style="flex:none"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--amber);box-sizing:border-box;display:block;box-shadow:0 0 8px rgba(245,165,36,.5)"></span></span><span style="flex:1;font-weight:700">顾问审核 · 李明</span><span style="font-size:11px;color:var(--amber)">进行中</span></li>
+      <li class="row" style="gap:10px;padding:2px 0;border-top:0"><span style="flex:none"><span aria-hidden="true" style="width:16px;height:16px;border-radius:50%;border:1.5px solid var(--ln2);box-sizing:border-box;display:block"></span></span><span style="flex:1;">项目负责人签署 · 王立</span><span style="font-size:11px;color:var(--tx3)">待</span></li>
+    </ol>
+    <button class="btnp" style="height:38px;width:100%">完成审核，提交签署</button>
+  </section>
+</div>
+
+</div>
+</div>
+
+</body>
+</html>

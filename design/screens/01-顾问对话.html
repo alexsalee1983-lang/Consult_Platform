@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>暗色版 · 咨询顾问工作台</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap">
+<style>
+:root{--obs:#0A0D12;--s1:#10151C;--s2:#161D27;--s3:#1D2633;--ln:#232D3B;--ln2:#2E3A4B;--tx:#E6EBF2;--tx2:#A3AEBE;--tx3:#6B7789;--amber:#F5A524;--amber-d:rgba(245,165,36,.12);--crim:#F0454F;--crim-d:rgba(240,69,79,.13);--cyan:#22D3EE;--cyan-d:rgba(34,211,238,.10);--ok:#3DD68C}
+body{margin:0;background:var(--obs)}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.cap{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);font-weight:600}
+.pnl{background:var(--s1);border:1px solid var(--ln);border-radius:10px}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.nav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--tx2);text-decoration:none;font-size:13px}
+.bar{height:4px;border-radius:2px;background:var(--s3);overflow:hidden}
+.bar i{display:block;height:100%}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:1600px;height:900px;box-sizing:border-box;background:radial-gradient(1200px 600px at 60% -10%,#122030 0%,var(--obs) 55%);color:var(--tx);font-family:'Inter','Noto Sans SC','PingFang SC',system-ui,sans-serif;font-size:13px;line-height:1.55;display:grid;grid-template-columns:268px minmax(0,1fr) 352px;gap:14px;padding:14px">
+
+<!-- ===== 左侧栏 ===== -->
+<aside aria-label="导航" class="pnl" style="display:flex;flex-direction:column;gap:16px;padding:16px 14px;min-height:0">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 4px">
+    <div style="width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--amber),#C9781A);display:flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A0D12" stroke-width="2.4" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke-linecap="round"/></svg></div>
+    <div style="line-height:1.2"><div style="font-weight:700;font-size:14px">安全咨询专家平台</div><div style="font-size:10px;letter-spacing:.16em;color:var(--tx3)">ADVISORY · 内部</div></div>
+  </div>
+
+  <nav class="nav" aria-label="主导航" style="display:flex;flex-direction:column;gap:2px">
+    <a href="#" aria-current="page" style="background:var(--s3);color:var(--tx);box-shadow:inset 2px 0 0 var(--amber)"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H8l-4 4z"/></svg>顾问对话</a>
+    <a href="03-项目驾驶舱.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>项目驾驶舱</a>
+    <a href="02-我的项目.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18v13H3z"/><path d="M8 7V4h8v3"/></svg>我的项目</a>
+    <a href="04-交付件审阅.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>交付件<span class="mono" style="margin-left:auto;font-size:11px;color:var(--amber)">2</span></a>
+    <a href="05-知识审批队列.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2z"/></svg>知识库</a>
+  </nav>
+
+  <section aria-label="安全态势评分" style="padding:14px;border-radius:8px;background:var(--s2);border:1px solid var(--ln);display:flex;align-items:center;gap:14px">
+    <svg aria-hidden="true" width="74" height="74" viewBox="0 0 74 74"><circle cx="37" cy="37" r="31" fill="none" stroke="#1D2633" stroke-width="7"/><circle cx="37" cy="37" r="31" fill="none" stroke="var(--amber)" stroke-width="7" stroke-linecap="round" stroke-dasharray="132.4 194.8" transform="rotate(-90 37 37)"/><text x="37" y="42" text-anchor="middle" fill="#E6EBF2" font-family="JetBrains Mono" font-weight="700" font-size="19">68</text></svg>
+    <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+      <div class="cap">安全态势评分</div>
+      <div style="font-size:12px;color:var(--tx2)">BANK-A · 满分 100</div>
+      <div class="mono" style="font-size:11.5px;color:var(--ok)">▲ +6　较上次评估</div>
+    </div>
+  </section>
+
+  <section aria-label="合规框架" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;justify-content:space-between"><span class="cap">合规框架覆盖</span><span class="cap" style="color:var(--tx3)">控制项</span></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between"><span>等保 2.0 · 第三级</span><span class="mono" style="color:var(--tx2)">72%</span></div><div class="bar"><i style="width:72%;background:var(--cyan)"></i></div></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between"><span>ISO/IEC 27001:2022</span><span class="mono" style="color:var(--tx2)">64%</span></div><div class="bar"><i style="width:64%;background:var(--cyan)"></i></div></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between"><span>NIST CSF 2.0</span><span class="mono" style="color:var(--tx2)">58%</span></div><div class="bar"><i style="width:58%;background:var(--amber)"></i></div></div>
+    <div style="display:flex;flex-direction:column;gap:4px"><div style="display:flex;justify-content:space-between"><span>NIS2 指令</span><span class="mono" style="color:var(--tx2)">41%</span></div><div class="bar"><i style="width:41%;background:var(--crim)"></i></div></div>
+  </section>
+
+  <section aria-label="威胁情报" style="display:flex;flex-direction:column;gap:8px;min-height:0">
+    <div style="display:flex;justify-content:space-between;align-items:center"><span class="cap">威胁情报</span><span style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--cyan)"><span aria-hidden="true" style="width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)"></span>实时</span></div>
+    <div style="display:flex;gap:9px;padding:8px 10px;border-radius:6px;background:var(--s2);border-left:2px solid var(--crim)"><div style="min-width:0"><div style="font-size:12px">针对银行业的勒索软件投放活动升温</div><div class="mono" style="font-size:10.5px;color:var(--tx3)">金融行业 · 12 分钟前</div></div></div>
+    <div style="display:flex;gap:9px;padding:8px 10px;border-radius:6px;background:var(--s2);border-left:2px solid var(--amber)"><div style="min-width:0"><div style="font-size:12px">VPN 网关高危漏洞公告，已有在野利用</div><div class="mono" style="font-size:10.5px;color:var(--tx3)">CVSS 9.1 · 1 小时前</div></div></div>
+    <div style="display:flex;gap:9px;padding:8px 10px;border-radius:6px;background:var(--s2);border-left:2px solid var(--cyan)"><div style="min-width:0"><div style="font-size:12px">监管发布数据安全检查重点</div><div class="mono" style="font-size:10.5px;color:var(--tx3)">监管动态 · 今天 07:40</div></div></div>
+  </section>
+
+  <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 4px 0;border-top:1px solid var(--ln)">
+    <div style="width:30px;height:30px;border-radius:50%;background:var(--s3);border:1px solid var(--ln2);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--amber)">李</div>
+    <div style="line-height:1.3"><div>李明</div><div style="font-size:11px;color:var(--tx3)">高级顾问 · CISP</div></div>
+  </div>
+</aside>
+
+<!-- ===== 中间：AI 咨询对话 ===== -->
+<main class="pnl" style="display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden">
+  <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--ln)">
+    <div style="display:flex;flex-direction:column;line-height:1.3">
+      <div class="cap">BANK-A · SOC 运营体系设计 · 阶段 Ⅳ 设计</div>
+      <h1 style="margin:0;font-size:16px;font-weight:700">事件响应差距分析与一期整改方案</h1>
+    </div>
+    <span class="chip" style="margin-left:auto;background:var(--cyan-d);color:var(--cyan)">标准档 · 资料不出公司</span>
+    <span class="chip" style="background:var(--amber-d);color:var(--amber)">草稿 · 待顾问审核</span>
+  </div>
+
+  <div style="flex:1;min-height:0;overflow:hidden;padding:16px 20px;display:flex;flex-direction:column;gap:14px">
+    <div style="align-self:flex-end;max-width:70%;padding:9px 14px;border-radius:10px 10px 2px 10px;background:var(--s3);border:1px solid var(--ln2)">BANK-A 的事件响应能力主要差距在哪？按优先级给出一期整改方案，附证据。</div>
+
+    <div style="display:flex;gap:12px;min-height:0">
+      <div aria-hidden="true" style="flex:none;width:28px;height:28px;border-radius:7px;background:var(--amber-d);border:1px solid rgba(245,165,36,.4);display:flex;align-items:center;justify-content:center;color:var(--amber);font-weight:700;font-size:12px">AI</div>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--tx3)"><span style="color:var(--tx2);font-weight:600">咨询师 Agent</span>·<span>调用 依据与差距分析、方案设计 2 个 Agent</span>·<span class="mono">引用 9 条</span></div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 232px;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h2 style="margin:0;font-size:14.5px;font-weight:700">结论摘要</h2>
+            <p style="margin:0;color:var(--tx2)">事件响应是 BANK-A 最薄弱的能力域（成熟度 <span class="mono" style="color:var(--crim)">1.5</span> / 5）。三项高风险发现都与<span style="color:var(--tx)">夜间无人值守</span>和<span style="color:var(--tx)">预案未演练</span>有关；在不扩编的前提下，托管初筛加电话升级可以在 3 个月内把一级事件的启动处置时间压到 30 分钟以内。</p>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <span class="chip mono" style="background:var(--s2);color:var(--ok);border:1px solid var(--ln2)">客户证据 6</span>
+              <span class="chip mono" style="background:var(--s2);color:var(--cyan);border:1px solid var(--ln2)">业界框架 2</span>
+              <span class="chip mono" style="background:var(--s2);color:var(--cyan);border:1px solid var(--ln2)">公司实践 1</span>
+              <span class="chip mono" style="background:var(--s2);color:#B49CFF;border:1px solid var(--ln2)">推断 0</span>
+            </div>
+          </div>
+          <figure aria-label="风险矩阵" style="margin:0;padding:10px;border-radius:8px;background:var(--s2);border:1px solid var(--ln)">
+            <figcaption style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="cap">风险矩阵</span><span class="cap">影响 × 可能性</span></figcaption>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px;font-size:9.5px" class="mono">
+              <div style="height:24px;background:rgba(245,165,36,.18)"></div><div style="height:24px;background:rgba(245,165,36,.28)"></div><div style="height:24px;background:rgba(240,69,79,.38);display:flex;align-items:center;justify-content:center;color:#fff">F11</div><div style="height:24px;background:rgba(240,69,79,.58);display:flex;align-items:center;justify-content:center;color:#fff">F03</div><div style="height:24px;background:rgba(240,69,79,.82);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">F07</div>
+              <div style="height:24px;background:rgba(34,211,238,.10)"></div><div style="height:24px;background:rgba(245,165,36,.18)"></div><div style="height:24px;background:rgba(245,165,36,.28);display:flex;align-items:center;justify-content:center;color:var(--amber)">2</div><div style="height:24px;background:rgba(240,69,79,.38);display:flex;align-items:center;justify-content:center;color:#fff">2</div><div style="height:24px;background:rgba(240,69,79,.58)"></div>
+              <div style="height:24px;background:rgba(34,211,238,.07)"></div><div style="height:24px;background:rgba(34,211,238,.10);display:flex;align-items:center;justify-content:center;color:var(--cyan)">3</div><div style="height:24px;background:rgba(245,165,36,.18);display:flex;align-items:center;justify-content:center;color:var(--amber)">4</div><div style="height:24px;background:rgba(245,165,36,.28);display:flex;align-items:center;justify-content:center;color:var(--amber)">2</div><div style="height:24px;background:rgba(240,69,79,.38)"></div>
+              <div style="height:24px;background:rgba(34,211,238,.05)"></div><div style="height:24px;background:rgba(34,211,238,.07);display:flex;align-items:center;justify-content:center;color:var(--cyan)">3</div><div style="height:24px;background:rgba(34,211,238,.10);display:flex;align-items:center;justify-content:center;color:var(--cyan)">2</div><div style="height:24px;background:rgba(245,165,36,.18)"></div><div style="height:24px;background:rgba(245,165,36,.28)"></div>
+            </div>
+          </figure>
+        </div>
+
+        <section aria-label="整改行动手册" style="border-radius:8px;border:1px solid var(--ln);overflow:hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--s2);border-bottom:1px solid var(--ln)"><h2 style="margin:0;font-size:13.5px;font-weight:700">整改行动手册 · 一期</h2><span class="cap">四要素齐全 3 / 3</span></div>
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+            <thead><tr style="text-align:left;color:var(--tx3)"><th style="padding:7px 12px;font-weight:600">#</th><th style="padding:7px 12px;font-weight:600">行动</th><th style="padding:7px 12px;font-weight:600">优先级</th><th style="padding:7px 12px;font-weight:600">责任部门</th><th style="padding:7px 12px;font-weight:600">周期</th><th style="padding:7px 12px;font-weight:600">验收标准</th></tr></thead>
+            <tbody>
+              <tr style="border-top:1px solid var(--ln)"><td class="mono" style="padding:7px 12px;color:var(--tx3)">R-01</td><td style="padding:7px 12px">引入托管夜间初筛，一级事件电话升级到轮值负责人</td><td style="padding:7px 12px"><span class="chip" style="background:var(--crim-d);color:var(--crim)">高</span></td><td style="padding:7px 12px;color:var(--tx2)">信息科技部</td><td class="mono" style="padding:7px 12px;color:var(--tx2)">0–3 月</td><td style="padding:7px 12px;color:var(--tx2)">一级事件 30 分钟内启动处置</td></tr>
+              <tr style="border-top:1px solid var(--ln)"><td class="mono" style="padding:7px 12px;color:var(--tx3)">R-02</td><td style="padding:7px 12px">清理并重调 Top 50 告警规则</td><td style="padding:7px 12px"><span class="chip" style="background:var(--crim-d);color:var(--crim)">高</span></td><td style="padding:7px 12px;color:var(--tx2)">SOC</td><td class="mono" style="padding:7px 12px;color:var(--tx2)">0–2 月</td><td style="padding:7px 12px;color:var(--tx2)">误报率降到 40% 以下</td></tr>
+              <tr style="border-top:1px solid var(--ln)"><td class="mono" style="padding:7px 12px;color:var(--tx3)">R-03</td><td style="padding:7px 12px">完成勒索场景桌面推演，修订事件响应预案</td><td style="padding:7px 12px"><span class="chip" style="background:var(--amber-d);color:var(--amber)">中</span></td><td style="padding:7px 12px;color:var(--tx2)">安全管理部</td><td class="mono" style="padding:7px 12px;color:var(--tx2)">3–6 月</td><td style="padding:7px 12px;color:var(--tx2)">推演报告与预案 v2 签发</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section aria-label="审计证据" style="display:flex;flex-direction:column;gap:6px">
+          <div class="cap">审计证据</div>
+          <details open style="border-radius:8px;border:1px solid var(--ln2);background:var(--s2)">
+            <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:8px 12px"><span class="mono" style="color:var(--ok);font-weight:700">I-02-05</span><span>访谈纪要 · 运维负责人 · 11 月 4 日</span><span class="chip" style="margin-left:auto;background:var(--s3);color:var(--tx2)">支撑 F-03 · R-01</span><span aria-hidden="true" style="color:var(--tx3)">▾</span></summary>
+            <div style="padding:0 12px 10px 12px;color:var(--tx2);font-size:12.5px;border-top:1px solid var(--ln);padding-top:8px">“夜里的一级告警基本要等第二天上班才有人看。”——与值班记录 D-12 交叉印证：第三季度 4 起一级告警中 3 起在次日启动处置。</div>
+          </details>
+          <details style="border-radius:8px;border:1px solid var(--ln);background:var(--s1)"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:8px 12px"><span class="mono" style="color:var(--ok);font-weight:700">D-12</span><span>客户资料 · 2026 年第三季度值班与事件记录</span><span class="chip" style="margin-left:auto;background:var(--s3);color:var(--tx2)">支撑 F-03</span><span aria-hidden="true" style="color:var(--tx3)">▸</span></summary></details>
+          <details style="border-radius:8px;border:1px solid var(--ln);background:var(--s1)"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:8px 12px"><span class="mono" style="color:var(--cyan);font-weight:700">L4-OPS-012</span><span>业界框架 · SOC 分层响应模型（依据库，2026 年 9 月复审）</span><span class="chip" style="margin-left:auto;background:var(--s3);color:var(--tx2)">支撑 R-01</span><span aria-hidden="true" style="color:var(--tx3)">▸</span></summary></details>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <form style="padding:12px 20px 14px;border-top:1px solid var(--ln);display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button type="button" class="chip" style="border:1px solid var(--ln2);background:var(--s2);color:var(--tx2)">写成 D5 第四章</button>
+      <button type="button" class="chip" style="border:1px solid var(--ln2);background:var(--s2);color:var(--tx2)">补充投资估算</button>
+      <button type="button" class="chip" style="border:1px solid var(--ln2);background:var(--s2);color:var(--tx2)">生成高层汇报页</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;padding:6px 6px 6px 14px;border-radius:8px;border:1px solid var(--ln2);background:var(--s2)">
+      <label style="flex:1;min-width:0;display:flex"><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">给 Agent 的指令</span><textarea rows="1" placeholder="继续追问，或让 Agent 把结论写进交付件……" style="flex:1;min-width:0;resize:none;border:0;background:transparent;color:var(--tx);font:inherit;outline:none"></textarea></label>
+      <button aria-label="发送" style="flex:none;width:34px;height:34px;border:0;border-radius:6px;background:var(--amber);color:#0A0D12;display:flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </div>
+  </form>
+</main>
+
+<!-- ===== 右侧：高管视图 ===== -->
+<aside aria-label="高管视图" style="display:flex;flex-direction:column;gap:14px;min-height:0">
+  <section class="pnl" aria-label="风险雷达" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:13.5px;font-weight:700">高管风险雷达</h2><span class="cap">NIST CSF 2.0 六大职能</span></div>
+    <svg role="img" aria-label="六大职能现状与目标对比" viewBox="-24 0 308 240" style="width:100%;height:auto">
+      <g fill="none" stroke="#232D3B" stroke-width="1">
+        <polygon points="130,25 212.3,72.5 212.3,167.5 130,215 47.7,167.5 47.7,72.5"/>
+        <polygon points="130,44 195.8,82 195.8,158 130,196 64.2,158 64.2,82"/>
+        <polygon points="130,63 179.4,91.5 179.4,148.5 130,177 80.6,148.5 80.6,91.5"/>
+        <polygon points="130,82 162.9,101 162.9,139 130,158 97.1,139 97.1,101"/>
+        <polygon points="130,101 146.5,110.5 146.5,129.5 130,139 113.5,129.5 113.5,110.5"/>
+        <path d="M130 120L130 25M130 120L212.3 72.5M130 120L212.3 167.5M130 120L130 215M130 120L47.7 167.5M130 120L47.7 72.5"/>
+      </g>
+      <polygon points="130,53.5 187.6,86.75 192.5,156.1 130,186.5 80.6,148.5 80.6,91.5" fill="rgba(34,211,238,.08)" stroke="#22D3EE" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <polygon points="130,72.5 179.4,91.5 182.6,150.4 130,158 105.3,134.3 93.8,99.1" fill="rgba(245,165,36,.22)" stroke="#F5A524" stroke-width="2"/>
+      <g fill="#F5A524"><circle cx="130" cy="72.5" r="2.6"/><circle cx="179.4" cy="91.5" r="2.6"/><circle cx="182.6" cy="150.4" r="2.6"/><circle cx="130" cy="158" r="2.6"/><circle cx="105.3" cy="134.3" r="3.4" fill="#F0454F"/><circle cx="93.8" cy="99.1" r="2.6"/></g>
+      <g font-family="Inter,Noto Sans SC,sans-serif" font-size="11" fill="#A3AEBE">
+        <text x="130" y="16" text-anchor="middle">治理 GV <tspan fill="#E6EBF2" font-family="JetBrains Mono">2.5</tspan></text>
+        <text x="218" y="66">识别 ID <tspan fill="#E6EBF2" font-family="JetBrains Mono">3.0</tspan></text>
+        <text x="218" y="180">防护 PR <tspan fill="#E6EBF2" font-family="JetBrains Mono">3.2</tspan></text>
+        <text x="130" y="234" text-anchor="middle">检测 DE <tspan fill="#E6EBF2" font-family="JetBrains Mono">2.0</tspan></text>
+        <text x="42" y="180" text-anchor="end">响应 RS <tspan fill="#F0454F" font-family="JetBrains Mono">1.5</tspan></text>
+        <text x="42" y="66" text-anchor="end">恢复 RC <tspan fill="#E6EBF2" font-family="JetBrains Mono">2.2</tspan></text>
+      </g>
+    </svg>
+    <div style="display:flex;gap:14px;font-size:11.5px;color:var(--tx2)"><span style="display:flex;align-items:center;gap:6px"><span aria-hidden="true" style="width:12px;height:3px;background:var(--amber)"></span>现状</span><span style="display:flex;align-items:center;gap:6px"><span aria-hidden="true" style="width:12px;height:0;border-top:2px dashed var(--cyan)"></span>一期目标</span><span style="margin-left:auto;color:var(--crim)">最大差距：响应 −1.5</span></div>
+  </section>
+
+  <section class="pnl" aria-label="漏洞严重度" style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:13.5px;font-weight:700">漏洞严重度</h2><span class="cap">CVSS v3.1 · 加权均值</span></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <svg role="img" aria-label="CVSS 加权均值 7.8，高危" viewBox="0 0 220 120" style="width:190px;height:auto;flex:none">
+        <defs><linearGradient id="cv" x1="0" x2="1"><stop offset="0" stop-color="#22D3EE"/><stop offset=".55" stop-color="#F5A524"/><stop offset="1" stop-color="#F0454F"/></linearGradient></defs>
+        <path d="M30 100 A80 80 0 0 1 190 100" fill="none" stroke="#1D2633" stroke-width="14" stroke-linecap="round"/>
+        <path d="M30 100 A80 80 0 0 1 190 100" fill="none" stroke="url(#cv)" stroke-width="14" stroke-linecap="round" stroke-dasharray="196 252"/>
+        <line x1="110" y1="100" x2="160.8" y2="58" stroke="#E6EBF2" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="110" cy="100" r="5" fill="#E6EBF2"/>
+        <text x="110" y="86" text-anchor="middle" font-family="JetBrains Mono" font-weight="700" font-size="24" fill="#E6EBF2">7.8</text>
+        <text x="30" y="118" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#6B7789">0</text>
+        <text x="190" y="118" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#6B7789">10</text>
+      </svg>
+      <div style="flex:1;display:grid;grid-template-columns:auto 1fr auto;gap:5px 8px;align-items:center;font-size:11.5px">
+        <span style="color:var(--crim)">严重</span><div class="bar"><i style="width:22%;background:var(--crim)"></i></div><span class="mono">4</span>
+        <span style="color:var(--amber)">高危</span><div class="bar"><i style="width:61%;background:var(--amber)"></i></div><span class="mono">11</span>
+        <span style="color:var(--cyan)">中危</span><div class="bar"><i style="width:100%;background:var(--cyan)"></i></div><span class="mono">18</span>
+        <span style="color:var(--tx3)">低危</span><div class="bar"><i style="width:39%;background:var(--tx3)"></i></div><span class="mono">7</span>
+      </div>
+    </div>
+    <div style="font-size:11.5px;color:var(--tx3)">来源：客户提供的最近一次扫描报告摘要（不含漏洞细节）</div>
+  </section>
+
+  <section class="pnl" aria-label="审计报告导出" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;margin-top:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="margin:0;font-size:13.5px;font-weight:700">审计报告</h2><span class="mono" style="font-size:11px;color:var(--tx3)">D4 + D5 · 46 页</span></div>
+    <div style="display:flex;gap:6px">
+      <span class="chip" style="border:1px solid var(--amber);color:var(--amber)">PDF</span>
+      <span class="chip" style="border:1px solid var(--ln2);color:var(--tx2)">Word</span>
+      <span class="chip" style="border:1px solid var(--ln2);color:var(--tx2)">含证据附录</span>
+    </div>
+    <button style="height:42px;border:0;border-radius:8px;background:linear-gradient(90deg,#F5A524,#E08A12);color:#0A0D12;font-weight:700;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 24px -8px rgba(245,165,36,.6)"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>离线导出审计报告</button>
+    <div style="font-size:11px;color:var(--tx3);line-height:1.5">在本机生成并加密，不经任何外部服务。导出记录写入审计日志。</div>
+  </section>
+</aside>
+</div>
+
+</body>
+</html>
