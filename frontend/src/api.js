@@ -1,5 +1,15 @@
-// 一期还没接 SSO，用 X-User 头标识操作人，写入审计日志
-const USER = "李明";
+// 登录后服务端用 HttpOnly Cookie 维持会话；修改类请求另带 CSRF 令牌（登录和 /api/auth/me 返回）。
+// 令牌只放在内存里，刷新页面后由 /api/auth/me 重新取回。
+let csrfToken = "";
+let onUnauthorized = () => {};
+
+export function setCsrfToken(token) {
+  csrfToken = token || "";
+}
+
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = fn;
+}
 
 export class ApiError extends Error {
   constructor(status, detail) {
@@ -9,17 +19,26 @@ export class ApiError extends Error {
   }
 }
 
+const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 async function request(path, options = {}) {
-  const res = await fetch(path, {
-    ...options,
-    headers: { "Content-Type": "application/json", "X-User": encodeURIComponent(USER), ...(options.headers || {}) },
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(res.status, data?.detail ?? data);
+  const method = (options.method || "GET").toUpperCase();
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (UNSAFE.has(method) && csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  const res = await fetch(path, { ...options, method, headers, credentials: "same-origin" });
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  if (!res.ok) {
+    if (res.status === 401 && !options.skipAuthRedirect) onUnauthorized();
+    throw new ApiError(res.status, data?.detail ?? data);
+  }
   return data;
 }
 
 export const api = {
+  login: (username, password, totp) =>
+    request("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password, totp }), skipAuthRedirect: true }),
+  logout: () => request("/api/auth/logout", { method: "POST", skipAuthRedirect: true }),
+  me: () => request("/api/auth/me", { skipAuthRedirect: true }),
   health: () => request("/api/health"),
   projects: () => request("/api/projects"),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),

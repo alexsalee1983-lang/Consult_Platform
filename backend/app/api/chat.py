@@ -1,11 +1,12 @@
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit
+from ..core.auth import current_user
 from ..core.db import get_db
-from ..models import AuditLog, Project
+from ..models import AuditLog, Project, User
 from ..services.gateway import BlockedError, complete
 from ..services.guard import check
 from ..schemas import AuditOut, ChatIn, ChatOut, FindingOut, GuardIn, GuardOut
@@ -19,18 +20,17 @@ def _guard_out(result) -> GuardOut:
 
 
 @router.post("/gateway/check", response_model=GuardOut)
-def gateway_check(body: GuardIn, db: Session = Depends(get_db),
-                  x_user: str = Header(default="dev", alias="X-User")):
+def gateway_check(body: GuardIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     result = check(body.text)
-    audit.record(db, actor=x_user, action="guard.check", result="blocked" if result.blocked else "allowed",
+    audit.record(db, actor=user.username, action="guard.check", result="blocked" if result.blocked else "allowed",
                  length=len(body.text), sha=audit.digest(body.text),
                  kinds=sorted({f.kind for f in result.findings}))
     return _guard_out(result)
 
 
 @router.post("/chat", response_model=ChatOut)
-def chat(body: ChatIn, db: Session = Depends(get_db),
-         x_user: str = Header(default="dev", alias="X-User")):
+def chat(body: ChatIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    x_user = user.username
     project = db.scalar(select(Project).where(Project.code == body.project_code))
     if project is None:
         raise HTTPException(404, "项目不存在")

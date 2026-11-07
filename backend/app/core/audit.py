@@ -1,7 +1,5 @@
 import hashlib
 import json
-from urllib.parse import unquote
-
 from sqlalchemy.orm import Session
 
 from ..models import AuditLog
@@ -13,7 +11,7 @@ def digest(text: str) -> str:
 
 def record(db: Session, *, actor: str, action: str, result: str,
            project_code: str = "", **detail) -> None:
-    actor = unquote(actor)[:64]  # 前端把中文用户名做了 URL 编码
+    actor = actor[:64]  # 操作人取自服务端会话中的用户名，不再信任客户端传来的值
     db.add(AuditLog(actor=actor, project_code=project_code, action=action, result=result,
                     detail=json.dumps(detail, ensure_ascii=False)))
     db.commit()

@@ -10,6 +10,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 backend/tests/test.db
+backend/*.db
 
 # Node
 node_modules/
