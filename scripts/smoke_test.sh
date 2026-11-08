@@ -63,7 +63,6 @@ login_body() {
     "$USER_NAME" "$USER_PASS" "$(totp)"
 }
 
-echo "测试地址：$BASE"
 if [ -z "$USER_NAME" ] || [ -z "$USER_PASS" ] || [ -z "$TOTP_SECRET" ]; then
   echo "  失败  未配置测试账号（TEST_ACCOUNT_USERNAME / PASSWORD / TOTP_SECRET），无法测试登录后的接口"
   exit 1
