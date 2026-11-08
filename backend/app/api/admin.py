@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit, sessions
-from ..services import usage
+from ..services import jobs, usage
 from ..core.auth import current_user
 from ..core.db import get_db, utcnow
 from ..core.permissions import (
@@ -120,6 +120,46 @@ def agent_grants(db: Session = Depends(get_db)) -> list[dict]:
 def usage_report(days: int = Query(30, ge=1, le=366), db: Session = Depends(get_db)) -> list[dict]:
     """大模型用量，按人、模型汇总。三权分立：系统管理员看不到项目维度（项目维度用命令行 usage-report）。"""
     return usage.summary(db, days, ("username", "model"))
+
+
+class JobOut(BaseModel):
+    """不含任务参数和项目代号：系统管理员看不到业务数据，只看运行状态。"""
+    id: int
+    kind: str
+    status: str
+    attempts: int
+    max_attempts: int
+    last_error: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
+@router.get("/jobs")
+def list_jobs(db: Session = Depends(get_db)) -> dict:
+    from ..models import Job
+
+    recent = db.scalars(select(Job).order_by(Job.id.desc()).limit(50))
+    return {"summary": jobs.summary(db),
+            "recent": [JobOut.model_validate(j, from_attributes=True).model_dump(mode="json") for j in recent]}
+
+
+@router.post("/jobs/selfcheck", status_code=202)
+def enqueue_selfcheck(db: Session = Depends(get_db), admin: User = Depends(current_user)) -> dict:
+    """排一个 worker 自检任务（连数据库、在项目区写读删一个测试对象），用于部署后确认后台任务链路。"""
+    job_id = jobs.enqueue(db, "system.selfcheck", created_by=admin.username, max_attempts=1)
+    audit.record(db, actor=admin.username, action="job.enqueue", result="allowed", job_id=job_id,
+                 kind="system.selfcheck")
+    return {"job_id": job_id}
+
+
+@router.post("/jobs/{job_id}/retry", response_model=JobOut)
+def retry_job(job_id: int, db: Session = Depends(get_db), admin: User = Depends(current_user)):
+    job = jobs.retry(db, job_id)
+    if job is None:
+        raise HTTPException(404, "任务不存在或不是失败状态")
+    audit.record(db, actor=admin.username, action="job.retry", result="allowed", job_id=job_id, kind=job.kind)
+    return JobOut.model_validate(job, from_attributes=True)
 
 
 @router.get("/users", response_model=list[UserOut])

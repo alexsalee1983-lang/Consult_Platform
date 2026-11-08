@@ -3,7 +3,7 @@
 # 测试地址：第一个参数 > 环境变量 SMOKE_BASE > 默认 http://localhost:8080，例如
 #   ./scripts/smoke_test.sh http://127.0.0.1:18080
 #   SMOKE_BASE=http://127.0.0.1:18080 ./scripts/smoke_test.sh
-# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 23 项，否则 22 项）。
+# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 24 项，否则 23 项）。
 #
 # 需要测试账号（只在 APP_ENV=dev/test 时由后端创建）：从环境变量读取，没有就读仓库根目录的 .env：
 #   TEST_ACCOUNT_USERNAME / TEST_ACCOUNT_PASSWORD / TEST_ACCOUNT_TOTP_SECRET
@@ -74,6 +74,13 @@ check "健康检查不需要登录"            200 "$BASE/api/health"
 storage="$(curl -s "$BASE/api/health" | python3 -c "import json,sys; print(json.load(sys.stdin)['checks'].get('object_storage', ''))")"
 if [ "$storage" = "ok" ]; then echo "  通过  对象存储可用（两区分桶、服务端加密）"; pass=$((pass+1)); else
   echo "  失败  对象存储状态：$storage"; fail=$((fail+1)); fi
+# worker 刚启动时心跳可能还没写入，最多等 30 秒
+for i in $(seq 1 10); do
+  worker="$(curl -s "$BASE/api/health" | python3 -c "import json,sys; print(json.load(sys.stdin)['checks'].get('worker', ''))")"
+  [ "$worker" = "ok" ] && break; sleep 3
+done
+if [ "$worker" = "ok" ]; then echo "  通过  后台任务 worker 在线"; pass=$((pass+1)); else
+  echo "  失败  后台任务 worker 状态：$worker"; fail=$((fail+1)); fi
 check "未登录访问项目列表被拒绝"       401 "$BASE/api/projects"
 check "未登录提问被拒绝"              401 -X POST "$BASE/api/chat" -H "$J" -d '{"project_code":"BANK-A","message":"x"}'
 

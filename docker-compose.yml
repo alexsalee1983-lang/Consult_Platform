@@ -84,6 +84,31 @@ services:
     #     - ./agents:/srv/agents:ro
     # 运行时按文件修改时间自动重新加载，git pull 后不用重建镜像。生产环境不要挂载，md 随镜像发版。
 
+  worker:
+    # 后台任务（解析、向量化、到期删除），与 backend 同一镜像，见 backend/app/worker.py。
+    # 不开放端口；等 backend 健康（迁移已完成）后再启动。可用 --scale worker=2 起多个，任务不会重复执行。
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://consult:${POSTGRES_PASSWORD:-consult}@postgres:5432/consult
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:   # worker 每轮更新 /tmp/worker.alive，超过 60 秒没更新视为卡死
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/worker.alive')<60 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
+
   frontend:
     build:
       context: ./frontend

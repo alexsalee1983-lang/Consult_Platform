@@ -114,7 +114,7 @@ def test_first_login_must_change_password(admin, client):
     assert client.get("/api/projects").status_code == 200       # 新会话可用
     with SessionLocal() as db:
         rows = db.scalars(select(AuditLog).where(AuditLog.action == "auth.password_change",
-                                                 AuditLog.actor == "new_b1")).all()
+                                                 AuditLog.actor == "new_b1").order_by(AuditLog.id)).all()
     assert [a.result for a in rows] == ["blocked", "allowed"]   # 口令策略不通过不记失败，旧口令错记一次
     assert all(NEW_PASSWORD not in (a.detail or "") for a in rows)
 

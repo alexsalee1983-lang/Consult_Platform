@@ -102,6 +102,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 对象存储约定：文件只经 `app/services/storage.py` 读写（S3 协议，一期为自建 MinIO，见 `deploy/minio/README.md`）；只有 project（项目区）和 knowledge（知识区）两个区，分桶存放、默认服务端加密；哪个 Agent 能碰哪个区由工具层硬规则判断。测试里设 `TEST_S3_ENDPOINT` 才连真实存储，否则相关测试跳过。
 
+后台任务约定：耗时操作（解析、向量化、到期删除）不在请求里做，用 `app/services/jobs.py` 的 `enqueue()` 排队，由 worker 容器（`python -m app.worker`）执行；处理器用 `@jobs.handler("种类")` 注册，必须可重复执行；任务参数只放编号和对象键，不放原文。运维：`python -m app.cli jobs`（状态）、`python -m app.cli selfcheck`（自检）。
+
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求要带 `X-CSRF-Token`。管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。
