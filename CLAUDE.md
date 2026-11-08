@@ -61,6 +61,10 @@
 ```bash
 # 后端测试（本地）
 cd backend && pip install -r requirements-dev.txt && ruff check app tests alembic && pytest -q
+# 与 CI 一致的 PostgreSQL 测试（平台数据库镜像，含 zhparser；只在有 Docker 的机器上）
+docker build -t consult-platform-postgres:ci deploy/postgres
+docker run -d --name testdb -e POSTGRES_DB=consult_test -e POSTGRES_USER=consult -e POSTGRES_PASSWORD=consult -p 127.0.0.1:5432:5432 consult-platform-postgres:ci
+TEST_DATABASE_URL=postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_test pytest -q
 
 # 数据库迁移（backend 目录下；后端启动时也会自动升级到最新）
 python -m app.core.migrate

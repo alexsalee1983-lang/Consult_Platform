@@ -6,7 +6,13 @@ name: consult-platform
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    # PostgreSQL 16 + pgvector + zhparser 中文分词，见 deploy/postgres/README.md
+    build:
+      context: ./deploy/postgres
+      args:
+        SCWS_URL: ${SCWS_URL:-http://www.xunsearch.com/scws/down/scws-1.2.3.tar.bz2}
+        ZHPARSER_URL: ${ZHPARSER_URL:-https://github.com/amutu/zhparser/archive/refs/tags/v2.3.tar.gz}
+    image: consult-platform-postgres:pg16-zh
     restart: unless-stopped
     environment:
       POSTGRES_DB: consult

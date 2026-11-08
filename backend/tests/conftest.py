@@ -7,12 +7,25 @@ from pathlib import Path
 import pyotp
 import pytest
 
-# 测试用 SQLite 和内存会话，不依赖 Postgres / Redis；不配置模型地址，走演示回复。
-_db_file = Path(__file__).parent / "test.db"
-if _db_file.exists():
-    _db_file.unlink()
+# 数据库：设了 TEST_DATABASE_URL（CI 用平台数据库镜像，含 pgvector + zhparser）就用 PostgreSQL，
+# 每次运行前清空 public 模式；否则用本地 SQLite 文件快速跑（中文全文检索等 PostgreSQL 专属测试会跳过）。
+# 会话用内存，不依赖 Redis；不配置模型地址，走演示回复。
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
+if TEST_DATABASE_URL:
+    from sqlalchemy import create_engine, text
+
+    _eng = create_engine(TEST_DATABASE_URL)
+    with _eng.begin() as _conn:
+        _conn.execute(text("DROP SCHEMA public CASCADE"))
+        _conn.execute(text("CREATE SCHEMA public"))
+    _eng.dispose()
+    os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+else:
+    _db_file = Path(__file__).parent / "test.db"
+    if _db_file.exists():
+        _db_file.unlink()
+    os.environ["DATABASE_URL"] = f"sqlite:///{_db_file}"
 os.environ["APP_ENV"] = "test"
-os.environ["DATABASE_URL"] = f"sqlite:///{_db_file}"
 os.environ["LLM_BASE_URL"] = ""
 os.environ["REDIS_URL"] = "redis://127.0.0.1:1/0"
 os.environ["MINIO_ENDPOINT"] = "127.0.0.1:1"
@@ -29,6 +42,9 @@ os.environ["TEST_ACCOUNT_TOTP_SECRET"] = TEST_TOTP_SECRET
 for k in ("BOOTSTRAP_ADMIN_USERNAME", "BOOTSTRAP_ADMIN_PASSWORD", "BOOTSTRAP_ADMIN_TOTP_SECRET"):
     os.environ.pop(k, None)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
+on_postgres = pytest.mark.skipif(not TEST_DATABASE_URL, reason="需要 PostgreSQL（设置 TEST_DATABASE_URL）")
 
 
 def totp_code(secret: str, step_offset: int = 0) -> str:
