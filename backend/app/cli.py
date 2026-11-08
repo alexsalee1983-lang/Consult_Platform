@@ -173,6 +173,44 @@ def usage_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def jobs_status(args: argparse.Namespace) -> int:
+    from .models import Job
+    from .services import jobs
+
+    with SessionLocal() as db:
+        summary = jobs.summary(db)
+        failed = db.scalars(select(Job).where(Job.status == "failed").order_by(Job.id.desc()).limit(10)).all()
+    print("后台任务（种类：状态 数量）：")
+    for kind, counts in sorted(summary.items()):
+        print(f"  {kind}：" + "  ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+    if not summary:
+        print("  （暂无任务）")
+    for j in failed:
+        print(f"  失败 #{j.id} {j.kind} 尝试 {j.attempts} 次：{j.last_error}")
+    return 0
+
+
+def selfcheck(args: argparse.Namespace) -> int:
+    import time
+
+    from .models import Job
+    from .services import jobs
+
+    with SessionLocal() as db:
+        job_id = jobs.enqueue(db, "system.selfcheck", created_by="cli", max_attempts=1)
+    print(f"已排自检任务 #{job_id}，等待 worker 执行（最多 {args.wait} 秒）……")
+    deadline = time.time() + args.wait
+    while time.time() < deadline:
+        with SessionLocal() as db:
+            job = db.get(Job, job_id)
+            if job.status in ("done", "failed"):
+                print(f"任务 #{job_id}：{job.status}" + (f"（{job.last_error}）" if job.last_error else ""))
+                return 0 if job.status == "done" else 2
+        time.sleep(1)
+    print("超时：worker 没有执行，检查 docker compose ps 和 docker compose logs worker", file=sys.stderr)
+    return 3
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.cli", description="安全咨询平台运维命令")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -204,6 +242,10 @@ def main(argv: list[str] | None = None) -> int:
     us.add_argument("--by", default="username,project_code,model",
                     help="汇总维度，逗号分隔：username / project_code / model")
     us.set_defaults(func=usage_report)
+    sub.add_parser("jobs", help="后台任务状态").set_defaults(func=jobs_status)
+    sc = sub.add_parser("selfcheck", help="排一个 worker 自检任务并等待结果（成功退出码 0）")
+    sc.add_argument("--wait", type=int, default=60)
+    sc.set_defaults(func=selfcheck)
     args = p.parse_args(argv)
     upgrade_to_head()
     return args.func(args)

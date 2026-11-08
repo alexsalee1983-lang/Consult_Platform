@@ -5,10 +5,11 @@
 from .agent import Agent, AgentToolGrant, Tool
 from .audit import AuditLog
 from .conversation import Conversation, Message
+from .job import Job
 from .project import Confirmation, Deliverable, Project
 from .rbac import ProjectMember, Role, UserRole
 from .usage import LlmUsage
 from .user import User
 
-__all__ = ["Agent", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "LlmUsage",
+__all__ = ["Agent", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "Job", "LlmUsage",
            "Message", "Project", "ProjectMember", "Role", "Tool", "User", "UserRole"]
