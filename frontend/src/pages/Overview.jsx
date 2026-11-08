@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { api, DELIV_STATUS, KIND_CLS, TIER } from "../api.js";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 
@@ -42,7 +43,7 @@ export default function Overview({ code }) {
   return (
     <>
       <TopBar cap={`${p.code} · ${p.industry} · ${tier.label} · 阶段 ${p.phase_name} · 第 ${p.week} / ${p.total_weeks} 周`} title={`项目驾驶舱 · ${p.service}`}>
-        <a className="btnp" href={`#/chat/${p.code}`} style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>打开顾问对话</a>
+        <Link className="btnp" to={`/chat/${encodeURIComponent(p.code)}`} style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>打开顾问对话</Link>
       </TopBar>
       {error && <div className="err">{error.message}</div>}
       <div className="kpis">

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..core import audit
+from ..core.auth import current_user
 from ..core.db import get_db
-from ..models import Confirmation, Project
+from ..models import Confirmation, Project, User
 from ..schemas import PHASES, ConfirmationOut, ProjectDetail, ProjectOut, ResolveIn
 
 router = APIRouter(prefix="/api", tags=["projects"])
@@ -50,14 +51,13 @@ def list_confirmations(db: Session = Depends(get_db)):
 
 
 @router.post("/confirmations/{cid}/resolve", response_model=ConfirmationOut)
-def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db),
-            x_user: str = Header(default="dev", alias="X-User")):
+def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     c = db.get(Confirmation, cid)
     if c is None:
         raise HTTPException(404, "待确认事项不存在")
     c.status = "resolved"
     c.resolution = body.resolution
     db.commit()
-    audit.record(db, actor=x_user, action="confirmation.resolve", result="allowed",
+    audit.record(db, actor=user.username, action="confirmation.resolve", result="allowed",
                  project_code=c.project.code, confirmation_id=cid)
     return _conf_out(c)

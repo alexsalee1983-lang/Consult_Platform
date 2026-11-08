@@ -5,10 +5,15 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
 
+from .conftest import login  # noqa: E402
+
 
 @pytest.fixture(scope="module")
 def client():
     with TestClient(app) as c:
+        r = login(c)
+        assert r.status_code == 200, r.text
+        c.headers["X-CSRF-Token"] = r.json()["csrf_token"]
         yield c
 
 
@@ -47,10 +52,16 @@ def test_chat_blocks_confidential(client):
     assert {"ip", "credential"} <= kinds
 
 
-def test_audit_has_no_raw_text(client):
+def test_audit_has_no_raw_text_and_actor_is_session_user(client):
     client.post("/api/gateway/check", json={"text": "密码：Secret999"})
     rows = client.get("/api/audit").json()
     assert rows and all("Secret999" not in r["detail"] for r in rows)
+    assert rows[0]["actor"] == "tester"
+
+
+def test_actor_header_from_client_is_ignored(client):
+    client.post("/api/gateway/check", json={"text": "普通问题"}, headers={"X-User": "someone-else"})
+    assert client.get("/api/audit").json()[0]["actor"] == "tester"
 
 
 def test_resolve_confirmation(client):

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { api, KIND_CLS, TIER } from "../api.js";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 
@@ -6,7 +7,7 @@ function ProjectCard({ p }) {
   const tier = TIER[p.tier] || TIER.standard;
   const scoreColor = p.posture_score == null ? "var(--tx3)" : p.posture_score < 60 ? "var(--crim)" : "var(--amber)";
   return (
-    <a href={`#/project/${p.code}`} className="pnl" style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "minmax(0,1fr) 220px 120px", gap: 18, alignItems: "center", color: "inherit", textDecoration: "none" }}>
+    <Link to={`/project/${encodeURIComponent(p.code)}`} className="pnl" style={{ padding: "14px 16px", display: "grid", gridTemplateColumns: "minmax(0,1fr) 220px 120px", gap: 18, alignItems: "center", color: "inherit", textDecoration: "none" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
         <div className="row" style={{ flexWrap: "wrap" }}>
           <span className="mono" style={{ fontWeight: 700, color: "var(--amber)" }}>{p.code}</span>
@@ -25,7 +26,7 @@ function ProjectCard({ p }) {
         <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: scoreColor }}>{p.posture_score ?? "—"}</span>
         {p.open_confirmations > 0 && <span className="chip c-a">待你确认 {p.open_confirmations}</span>}
       </div>
-    </a>
+    </Link>
   );
 }
 
@@ -59,7 +60,7 @@ export default function Projects() {
             {confs.map((c) => (
               <li key={c.id} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <div className="sb"><span className={`chip ${KIND_CLS[c.kind] || "c-n"}`}>{c.kind}</span><span className="sub">{c.project_code} · {c.agent}</span></div>
-                <a href={`#/project/${c.project_code}`} style={{ color: "var(--tx)", textDecoration: "none" }}>{c.title}</a>
+                <Link to={`/project/${encodeURIComponent(c.project_code)}`} style={{ color: "var(--tx)", textDecoration: "none" }}>{c.title}</Link>
               </li>
             ))}
             {confs.length === 0 && <li className="sub">没有待确认事项</li>}

@@ -70,11 +70,18 @@ alembic revision --autogenerate --rev-id 0002_xxx -m "M1：说明"   # 生成后
 cd frontend && npm install && npm run build
 
 # 整套启动与冒烟测试（测试机）
-cp .env.example .env   # 首次
+cp .env.example .env   # 首次；按注释配置 COOKIE_SECURE 和测试账号 TEST_ACCOUNT_*
 docker compose up -d --build
 bash scripts/smoke_test.sh
 docker compose logs --no-color backend | tail -100
+
+# 用户管理（后端容器内；口令交互输入）
+docker compose exec backend python -m app.cli create-user --username <名字> --display-name <姓名>
+docker compose exec backend python -m app.cli unlock --username <名字>
+docker compose exec backend python -m app.cli reset-totp --username <名字>
 ```
+
+登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求要带 `X-CSRF-Token`。
 
 ## 分支、提交与 PR
 

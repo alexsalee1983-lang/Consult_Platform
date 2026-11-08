@@ -43,8 +43,9 @@ def test_models_match_migrations(engine):
 
 
 def test_unversioned_m0_database_is_stamped_and_keeps_data(engine):
-    # 模拟 M0：自动建表、已有数据、没有 alembic_version
-    Base.metadata.create_all(engine)
+    # 模拟 M0：只有 M0 的 4 张表（自动建表）、已有数据、没有 alembic_version
+    m0_tables = [Base.metadata.tables[t] for t in ("projects", "deliverables", "confirmations", "audit_logs")]
+    Base.metadata.create_all(engine, tables=m0_tables)
     with engine.begin() as conn:
         conn.execute(insert(models.Project.__table__).values(
             code="BANK-A", service="SOC 运营体系设计", industry="城商行", tier="standard", phase=0,

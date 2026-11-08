@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router";
 import { api } from "../api.js";
+import { useAuth } from "../auth.jsx";
 
 const ICONS = {
   chat: <path d="M4 5h16v11H8l-4 4z" />,
@@ -31,17 +33,27 @@ function statusColor(v) {
   return "var(--tx3)";
 }
 
-export default function Sidebar({ page, code }) {
+// 驾驶舱和对话页沿用当前项目；在“我的项目”页时默认第一个虚拟客户
+function currentCode(pathname) {
+  const m = pathname.match(/^\/(?:project|chat)\/([^/]+)/);
+  return m ? decodeURIComponent(m[1]) : "BANK-A";
+}
+
+export default function Sidebar() {
+  const { user, logout } = useAuth();
+  const { pathname } = useLocation();
+  const code = encodeURIComponent(currentCode(pathname));
   const [health, setHealth] = useState(null);
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth({ status: "down", checks: {} }));
   }, []);
 
   const items = [
-    { href: "#/projects", icon: "proj", label: "我的项目", on: page === "projects" },
-    { href: `#/project/${code}`, icon: "dash", label: "项目驾驶舱", on: page === "project" },
-    { href: `#/chat/${code}`, icon: "chat", label: "顾问对话", on: page === "chat" },
+    { to: "/projects", icon: "proj", label: "我的项目" },
+    { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱" },
+    { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
   ];
+  const name = user?.displayName || user?.username || "";
   const ok = health?.status === "ok";
 
   return (
@@ -61,10 +73,10 @@ export default function Sidebar({ page, code }) {
 
       <nav className="nav" aria-label="交付导航">
         {items.map((it) => (
-          <a key={it.label} href={it.href} className={it.on ? "on" : undefined} aria-current={it.on ? "page" : undefined}>
+          <NavLink key={it.label} to={it.to} className={({ isActive }) => (isActive ? "on" : undefined)}>
             <Icon name={it.icon} />
             {it.label}
-          </a>
+          </NavLink>
         ))}
       </nav>
 
@@ -83,11 +95,12 @@ export default function Sidebar({ page, code }) {
       </section>
 
       <div className="row" style={{ marginTop: "auto", gap: 10, paddingTop: 10, borderTop: "1px solid var(--ln)" }}>
-        <div style={{ width: 30, height: 30, borderRadius: "50%", background: "var(--s3)", border: "1px solid var(--ln2)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "var(--amber)" }}>李</div>
-        <div style={{ lineHeight: 1.3 }}>
-          <div>李明</div>
-          <div className="sub">高级顾问 · CISP</div>
+        <div aria-hidden="true" style={{ flex: "none", width: 30, height: 30, borderRadius: "50%", background: "var(--s3)", border: "1px solid var(--ln2)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "var(--amber)" }}>{name.slice(0, 1)}</div>
+        <div style={{ lineHeight: 1.3, minWidth: 0, flex: 1 }}>
+          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+          <div className="sub">{user?.username}</div>
         </div>
+        <button type="button" className="btn" style={{ height: 28, padding: "0 10px" }} onClick={logout}>退出</button>
       </div>
     </aside>
   );

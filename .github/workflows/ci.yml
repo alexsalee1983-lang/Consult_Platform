@@ -40,7 +40,15 @@ jobs:
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
-      - run: cp .env.example .env
+      - name: 生成 .env（测试账号每次随机生成，不写死口令）
+        run: |
+          cp .env.example .env
+          python3 - >> .env <<'PY'
+          import base64, secrets
+          print("TEST_ACCOUNT_USERNAME=ci-smoke")
+          print("TEST_ACCOUNT_PASSWORD=Ci1!" + secrets.token_urlsafe(18))
+          print("TEST_ACCOUNT_TOTP_SECRET=" + base64.b32encode(secrets.token_bytes(20)).decode())
+          PY
       - run: docker compose up -d --build
       - name: 等待服务就绪
         run: |
