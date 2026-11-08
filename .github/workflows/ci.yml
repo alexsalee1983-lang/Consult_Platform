@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, "feat/**"]
   pull_request:
+  schedule:
+    - cron: "0 1 * * 1"   # 每周一 09:00（北京时间）重跑，及时发现新公布的依赖漏洞
 
 jobs:
   backend:
@@ -30,7 +32,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npm install
+      - run: npm ci
       - run: npm run build
 
   compose:
@@ -80,3 +82,38 @@ jobs:
         run: docker compose --profile mock-llm logs --no-color | tail -200
       - if: always()
         run: docker compose --profile mock-llm down -v
+
+  # 安全扫描：发现任何已知漏洞或疑似密钥即失败。误报的处理办法见 docs/安全扫描.md。
+  security:
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 密钥扫描要看全部提交历史
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Python 依赖漏洞扫描（pip-audit）
+        run: |
+          pip install pip-audit==2.7.3
+          pip-audit -r backend/requirements-dev.txt
+
+      - name: 前端依赖漏洞扫描（npm audit）
+        working-directory: frontend
+        run: npm audit
+
+      - name: 密钥泄露扫描（gitleaks，全部提交历史）
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "$base/$tarball"
+          curl -sSfL "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt" -o checksums.txt
+          grep " $tarball\$" checksums.txt | sha256sum -c -
+          tar -xzf "$tarball" gitleaks
+          ./gitleaks git --redact --verbose .

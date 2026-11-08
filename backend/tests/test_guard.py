@@ -53,3 +53,36 @@ def test_excerpt_is_masked():
     r = check("密码：Abc@12345")
     assert "Abc@12345" not in r.findings[0].excerpt
     assert mask("abcdefgh") == "ab****gh"
+
+
+def test_credentials_without_separator():
+    # 关键词后只有空白、没有冒号等分隔符
+    assert "credential" in kinds("管理口令 Abc@12345")
+    assert "credential" in kinds("password Abc@12345")
+    assert "credential" in kinds("数据库 root 密码  P@ssw0rd!")
+    assert "credential" in kinds("Secret 9f8e7d6c5b")
+    assert "credential" in kinds("密钥 abc123，下周轮换")
+
+
+def test_bare_credential_excerpt_is_masked_and_not_duplicated():
+    r = check("管理口令 Abc@12345")
+    creds = [f for f in r.findings if f.kind == "credential"]
+    assert len(creds) == 1
+    assert "Abc@12345" not in creds[0].excerpt
+    assert creds[0].excerpt == mask("Abc@12345")
+    # 带分隔符的写法只报一次
+    assert len([f for f in check("password =P@ssw0rd!").findings if f.kind == "credential"]) == 1
+
+
+def test_credential_prose_is_not_blocked():
+    for text in (
+        "口令策略需要整改",
+        "密码复杂度要求为 8 位以上",
+        "修改默认口令",
+        "管理口令 定期更换",
+        "口令 8 位以上",
+        "password policy review",
+        "token 有效期 30 分钟",
+        "password 123456",  # 只有一类字符，不按口令处理
+    ):
+        assert "credential" not in kinds(text), text
