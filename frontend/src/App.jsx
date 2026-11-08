@@ -1,11 +1,13 @@
 import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
-import { HomeRedirect, RequireAuditor, RequireAuth, RequireBusiness } from "./auth.jsx";
+import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireSysAdmin } from "./auth.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
 import Login from "./pages/Login.jsx";
 import Overview from "./pages/Overview.jsx";
+import Password from "./pages/Password.jsx";
 import Projects from "./pages/Projects.jsx";
+import Users from "./pages/Users.jsx";
 
 function Shell() {
   return (
@@ -45,6 +47,8 @@ export default function App() {
           <Route path="/chat/:code" element={<ChatPage />} />
         </Route>
         <Route path="/audit" element={<RequireAuditor><Audit /></RequireAuditor>} />
+        <Route path="/admin/users" element={<RequireSysAdmin><Users /></RequireSysAdmin>} />
+        <Route path={PASSWORD_PATH} element={<Password />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -75,7 +75,7 @@ docker compose up -d --build
 bash scripts/smoke_test.sh
 docker compose logs --no-color backend | tail -100
 
-# 用户管理（后端容器内；口令交互输入）
+# 用户管理：日常在网页“用户与角色”页操作（系统管理员）；以下命令行用于首个管理员、审计员任命和应急（口令交互输入）
 docker compose exec backend python -m app.cli create-user --username <名字> --display-name <姓名>
 docker compose exec backend python -m app.cli unlock --username <名字>
 docker compose exec backend python -m app.cli reset-totp --username <名字>
@@ -98,7 +98,7 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
-登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求要带 `X-CSRF-Token`。
+登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求要带 `X-CSRF-Token`。管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。
 
 权限约定（规则全文在 `app/core/permissions.py` 文件头）：业务接口在路由上挂 `require_business`；按项目取数据一律用 `project_for_member`（非成员 404）；系统管理员、安全审计员与其他角色互斥且看不到业务数据；审计员只能用命令行授予。新增或改动接口权限，必须同步更新 `tests/test_permissions.py` 的权限矩阵。
 

@@ -10,7 +10,10 @@ export function AuthProvider({ children }) {
 
   const signedIn = useCallback((me) => {
     setCsrfToken(me.csrf_token);
-    setState({ status: "authed", user: { username: me.username, displayName: me.display_name, roles: me.roles || [] } });
+    setState({ status: "authed", user: {
+      username: me.username, displayName: me.display_name, roles: me.roles || [],
+      mustChangePassword: Boolean(me.must_change_password),
+    } });
   }, []);
 
   const signedOut = useCallback(() => {
@@ -26,6 +29,8 @@ export function AuthProvider({ children }) {
   const value = useMemo(() => ({
     ...state,
     login: async (username, password, totp) => signedIn(await api.login(username, password, totp)),
+    // 改口令后服务端换了新会话，用返回的 me 刷新 CSRF 令牌和“须改口令”状态
+    changePassword: async (oldPassword, newPassword) => signedIn(await api.changePassword(oldPassword, newPassword)),
     logout: async () => {
       try { await api.logout(); } finally { signedOut(); }
     },
@@ -53,10 +58,31 @@ export function isAuditor(user) {
   return (user?.roles || []).includes("security_auditor");
 }
 
-// 登录后的首页：审计员去审计日志，其他人去我的项目
+export function isSysAdmin(user) {
+  return (user?.roles || []).includes("sys_admin");
+}
+
+// 登录后的首页：审计员去审计日志，系统管理员去用户与角色，其他人去我的项目
+export function homePath(user) {
+  if (isAuditor(user)) return "/audit";
+  if (isSysAdmin(user)) return "/admin/users";
+  return "/projects";
+}
+
 export function HomeRedirect() {
   const { user } = useAuth();
-  return <Navigate to={isAuditor(user) ? "/audit" : "/projects"} replace />;
+  return <Navigate to={homePath(user)} replace />;
+}
+
+export function RequireSysAdmin({ children }) {
+  const { user } = useAuth();
+  if (isSysAdmin(user)) return children;
+  return (
+    <section className="pnl pad" aria-label="无权限">
+      <h1 className="h1">只有系统管理员能管理账号和角色</h1>
+      <div className="sub" style={{ fontSize: 13 }}>需要开通账号、调整角色或重置口令，请联系系统管理员。</div>
+    </section>
+  );
 }
 
 export function RequireAuditor({ children }) {
@@ -82,16 +108,20 @@ export function RequireBusiness({ children }) {
         {roles
           ? `你的账号是${roles}。按三权分立要求，系统管理员和安全审计员看不到项目、对话等业务数据。`
           : "你的账号还没有分配角色，请联系系统管理员。"}
-        账号管理和审计查询界面在后续版本提供。
+        {isSysAdmin(user) ? "请在“用户与角色”页管理账号。" : ""}
       </div>
     </section>
   );
 }
 
+export const PASSWORD_PATH = "/account/password";
+
 export function RequireAuth({ children }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const location = useLocation();
   if (status === "loading") return <div className="pnl pad sub" style={{ margin: 14 }}>正在检查登录状态……</div>;
   if (status === "anon") return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  // 初始口令或被重置的口令：先改口令，其他接口服务端也会拒绝
+  if (user?.mustChangePassword && location.pathname !== PASSWORD_PATH) return <Navigate to={PASSWORD_PATH} replace />;
   return children;
 }

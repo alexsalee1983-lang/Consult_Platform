@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { api } from "../api.js";
-import { hasBusinessRole, isAuditor, ROLE_NAMES, useAuth } from "../auth.jsx";
+import { hasBusinessRole, isAuditor, isSysAdmin, PASSWORD_PATH, ROLE_NAMES, useAuth } from "../auth.jsx";
 
 const ICONS = {
   chat: <path d="M4 5h16v11H8l-4 4z" />,
   proj: <><path d="M3 7h18v13H3z" /><path d="M8 7V4h8v3" /></>,
   dash: <><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></>,
   audit: <><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z" /><path d="M9 12h6M9 8h6M9 16h4" /></>,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 010 6.8M18 14.8c2 .7 3.2 2.5 3.5 5.2" /></>,
+  key: <><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M17 6l3 3M15 8l2 2" /></>,
 };
 
 function Icon({ name }) {
@@ -57,6 +59,8 @@ export default function Sidebar() {
       { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
     ] : []),
     ...(isAuditor(user) ? [{ to: "/audit", icon: "audit", label: "审计日志" }] : []),
+    ...(isSysAdmin(user) ? [{ to: "/admin/users", icon: "users", label: "用户与角色" }] : []),
+    { to: PASSWORD_PATH, icon: "key", label: "修改口令" },
   ];
   const name = user?.displayName || user?.username || "";
   const ok = health?.status === "ok";

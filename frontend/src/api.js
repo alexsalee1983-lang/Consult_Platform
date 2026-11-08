@@ -100,6 +100,24 @@ export const api = {
   conversation: (id) => request(`/api/conversations/${id}`),
   audit: (params) => request(`/api/audit?${new URLSearchParams(
     Object.entries(params).filter(([, v]) => v !== "" && v != null))}`),
+  changePassword: (old_password, new_password) =>
+    request("/api/auth/password", { method: "POST", body: JSON.stringify({ old_password, new_password }) }),
+  // 项目成员（项目经理可调整）与用户目录
+  members: (code) => request(`/api/projects/${encodeURIComponent(code)}/members`),
+  putMember: (code, username, project_role) =>
+    request(`/api/projects/${encodeURIComponent(code)}/members/${encodeURIComponent(username)}`,
+      { method: "PUT", body: JSON.stringify({ project_role }) }),
+  removeMember: (code, username) =>
+    request(`/api/projects/${encodeURIComponent(code)}/members/${encodeURIComponent(username)}`, { method: "DELETE" }),
+  lookupUsers: (q) => request(`/api/users/lookup?q=${encodeURIComponent(q)}`),
+  // 系统管理员：账号与角色
+  adminUsers: () => request("/api/admin/users"),
+  createUser: (username, display_name, roles) =>
+    request("/api/admin/users", { method: "POST", body: JSON.stringify({ username, display_name, roles }) }),
+  setRoles: (username, roles) =>
+    request(`/api/admin/users/${encodeURIComponent(username)}/roles`, { method: "PUT", body: JSON.stringify({ roles }) }),
+  userAction: (username, action) =>   // disable / enable / unlock / reset-password / reset-totp
+    request(`/api/admin/users/${encodeURIComponent(username)}/${action}`, { method: "POST" }),
   verifyAudit: (expectHead) =>
     request(`/api/audit/verify${expectHead ? `?expect_head=${encodeURIComponent(expectHead)}` : ""}`),
 };

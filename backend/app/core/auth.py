@@ -2,6 +2,7 @@
 
 作为应用级依赖挂在 FastAPI 上（见 main.py），新加的接口自动受保护，不需要逐个声明。
 修改类请求（POST / PUT / PATCH / DELETE）还要校验 CSRF 令牌。
+管理员建的账号或重置过口令的账号（must_change_password），改口令前只能访问 PASSWORD_CHANGE_PATHS。
 """
 from __future__ import annotations
 
@@ -15,6 +16,9 @@ from .db import get_db
 # 不需要登录的接口：健康检查（Docker 用，只返回组件状态）和登录本身
 PUBLIC_PATHS = frozenset({"/api/health", "/api/auth/login"})
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+# 须先改口令的账号只能访问这些接口
+PASSWORD_CHANGE_PATHS = frozenset({"/api/auth/me", "/api/auth/logout", "/api/auth/password"})
+MUST_CHANGE_PASSWORD = "请先修改初始口令，再使用其他功能"
 
 NOT_LOGGED_IN = "未登录或会话已过期，请重新登录"
 
@@ -32,6 +36,8 @@ def authenticate(request: Request, db: Session = Depends(get_db)) -> None:
         raise HTTPException(401, NOT_LOGGED_IN)
     if request.method in UNSAFE_METHODS and not sessions.csrf_ok(data, request.headers.get(sessions.CSRF_HEADER)):
         raise HTTPException(403, "请求缺少有效的 CSRF 令牌，请刷新页面后重试")
+    if user.must_change_password and request.url.path not in PASSWORD_CHANGE_PATHS:
+        raise HTTPException(403, MUST_CHANGE_PASSWORD)
     request.state.user = user
     request.state.session = data
 

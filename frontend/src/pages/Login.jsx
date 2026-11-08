@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Navigate, useLocation } from "react-router";
-import { hasBusinessRole, isAuditor, useAuth } from "../auth.jsx";
+import { hasBusinessRole, isAuditor, isSysAdmin, useAuth } from "../auth.jsx";
 
 // 登录前想去的页面，新登录的账号有权限才回去，否则去首页（同一浏览器换了不同角色的账号时）
 function allowed(path, user) {
   if (path.startsWith("/audit")) return isAuditor(user);
+  if (path.startsWith("/admin")) return isSysAdmin(user);
   if (/^\/(projects|project\/|chat\/)/.test(path)) return hasBusinessRole(user);
   return true;
 }

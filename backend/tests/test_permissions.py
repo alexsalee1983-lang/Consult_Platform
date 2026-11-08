@@ -42,6 +42,12 @@ MATRIX = [
     (("GET", "/api/admin/roles", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/usage", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/agent-grants", None),          (403, 403, 200, 403, 403)),
+    (("POST", "/api/admin/users", {"username": "matrix_new"}), (403, 403, 201, 403, 403)),
+    (("POST", "/api/admin/users/matrix_target/reset-password", None), (403, 403, 200, 403, 403)),
+    (("POST", "/api/admin/users/matrix_target/reset-totp", None),     (403, 403, 200, 403, 403)),
+    (("GET", "/api/users/lookup?q=u_", None),           (200, 200, 403, 403, 403)),
+    (("POST", "/api/auth/password", {"old_password": "x", "new_password": "y"}),
+                                                        (400, 400, 400, 400, 400)),
     (("GET", "/api/agents", None),                      (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/conversations", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/conversations", {"agent_code": "consultant-lead"}),
@@ -55,6 +61,7 @@ MATRIX = [
 
 @pytest.fixture(scope="module")
 def clients():
+    create_user((CONSULTANT,), username="matrix_target")   # 重置口令、动态码的操作对象
     made = {name: logged_in_client(app, create_user(roles, projects)) for name, (roles, projects) in ACTORS.items()}
     yield made
     for c in made.values():
