@@ -1,10 +1,16 @@
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router";
-import { useAuth } from "../auth.jsx";
+import { Navigate, useLocation } from "react-router";
+import { hasBusinessRole, isAuditor, useAuth } from "../auth.jsx";
+
+// 登录前想去的页面，新登录的账号有权限才回去，否则去首页（同一浏览器换了不同角色的账号时）
+function allowed(path, user) {
+  if (path.startsWith("/audit")) return isAuditor(user);
+  if (/^\/(projects|project\/|chat\/)/.test(path)) return hasBusinessRole(user);
+  return true;
+}
 
 export default function Login() {
-  const { status, login } = useAuth();
-  const navigate = useNavigate();
+  const { status, user, login } = useAuth();
   const location = useLocation();
   const [form, setForm] = useState({ username: "", password: "", totp: "" });
   const [error, setError] = useState("");
@@ -14,7 +20,8 @@ export default function Login() {
   const from = typeof location.state?.from === "string" && location.state.from.startsWith("/") &&
     !location.state.from.startsWith("//") ? location.state.from : "/";
 
-  if (status === "authed") return <Navigate to={from} replace />;
+  // 登录成功后 status 变为 authed，在这里跳转
+  if (status === "authed") return <Navigate to={allowed(from, user) ? from : "/"} replace />;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: k === "totp" ? e.target.value.replace(/\D/g, "").slice(0, 6) : e.target.value }));
 
@@ -25,7 +32,6 @@ export default function Login() {
     setError("");
     try {
       await login(form.username.trim(), form.password, form.totp);
-      navigate(from, { replace: true });
     } catch (err) {
       setError(err.message || "登录失败");
       setForm((f) => ({ ...f, password: "", totp: "" }));

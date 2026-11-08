@@ -8,12 +8,13 @@
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit, sessions
+from ..services import usage
 from ..core.auth import current_user
 from ..core.db import get_db, utcnow
 from ..core.permissions import ROLE_NAMES, SECURITY_AUDITOR, RoleRuleError, require_sys_admin, roles_of, set_roles
@@ -62,6 +63,12 @@ def _target(db: Session, admin: User, username: str, action: str) -> User:
 @router.get("/roles")
 def list_roles() -> dict[str, str]:
     return ROLE_NAMES
+
+
+@router.get("/usage")
+def usage_report(days: int = Query(30, ge=1, le=366), db: Session = Depends(get_db)) -> list[dict]:
+    """大模型用量，按人、模型汇总。三权分立：系统管理员看不到项目维度（项目维度用命令行 usage-report）。"""
+    return usage.summary(db, days, ("username", "model"))
 
 
 @router.get("/users", response_model=list[UserOut])

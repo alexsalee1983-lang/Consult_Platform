@@ -34,11 +34,13 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     (("GET", "/api/confirmations", None),               (200, 200, 403, 403, 403)),
     (("POST", "/api/chat", CHAT),                       (200, 404, 403, 403, 403)),
+    (("POST", "/api/chat/stream", CHAT),                (200, 404, 403, 403, 403)),
     (("POST", "/api/gateway/check", {"text": "问题"}),  (200, 200, 403, 403, 403)),
     (("GET", "/api/audit", None),                       (403, 403, 403, 200, 403)),
     (("GET", "/api/audit/verify", None),                (403, 403, 403, 200, 403)),
     (("GET", "/api/admin/users", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/roles", None),                 (403, 403, 200, 403, 403)),
+    (("GET", "/api/admin/usage", None),                 (403, 403, 200, 403, 403)),
 ]
 
 

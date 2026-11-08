@@ -90,6 +90,16 @@ check "正常提问可以通过"              200 -X POST "$BASE/api/chat" -H "$
       -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'
 check "含口令和 IP 的内容被拦截"      422 -X POST "$BASE/api/chat" -H "$J" -H "$C" \
       -d '{"project_code":"BANK-A","message":"核心交换机 10.1.20.1 密码：Abc@12345"}'
+check "流式提问可以通过"              200 -X POST "$BASE/api/chat/stream" -H "$J" -H "$C" \
+      -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'
+if grep -q "^event: done" "$BODY"; then echo "  通过  流式输出正常结束"; pass=$((pass+1)); else
+  echo "  失败  流式输出没有正常结束"; head -c 300 "$BODY"; echo; fail=$((fail+1)); fi
+# 接了模型（含 CI 的模拟模型）时设 SMOKE_EXPECT_LLM=ok，要求模型可用、回复不是演示模式
+if [ "${SMOKE_EXPECT_LLM:-}" = "ok" ]; then
+  llm="$(curl -s "$BASE/api/health" | python3 -c "import json,sys; print(json.load(sys.stdin)['checks']['llm'])")"
+  if [ "$llm" = "ok" ] && ! grep -q '"demo": true' "$BODY"; then echo "  通过  模型可用且不是演示回复"; pass=$((pass+1)); else
+    echo "  失败  模型状态：$llm"; fail=$((fail+1)); fi
+fi
 check "退出登录"                     204 -X POST "$BASE/api/auth/logout" -H "$C"
 check "退出后旧会话失效"              401 "$BASE/api/projects"
 

@@ -42,6 +42,17 @@ def login(client, username: str = TEST_USER, password: str = TEST_PASSWORD, secr
                                                 "totp": totp_code(secret, step_offset)})
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _app_started():
+    """先完整启动一次应用（迁移、测试账号、演示数据），单独运行某个测试文件时也有完整的库。"""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app):
+        pass
+
+
 def create_user(roles=(), projects=None, username: str | None = None):
     """在库里直接建一个用户，返回 (用户名, 口令, TOTP 密钥)。
 
