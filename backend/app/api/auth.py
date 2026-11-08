@@ -9,6 +9,7 @@ from ..core import audit, sessions
 from ..core.auth import current_user
 from ..core.config import get_settings
 from ..core.db import get_db, utcnow
+from ..core.permissions import roles_of
 from ..core.security import match_totp_step, verify_password
 from ..models import User
 
@@ -27,6 +28,7 @@ class LoginIn(BaseModel):
 class MeOut(BaseModel):
     username: str
     display_name: str
+    roles: list[str]
     csrf_token: str
 
 
@@ -38,8 +40,9 @@ def _set_cookie(response: Response, token: str) -> None:
     )
 
 
-def _me(user: User, csrf: str) -> MeOut:
-    return MeOut(username=user.username, display_name=user.display_name or user.username, csrf_token=csrf)
+def _me(db: Session, user: User, csrf: str) -> MeOut:
+    return MeOut(username=user.username, display_name=user.display_name or user.username,
+                 roles=sorted(roles_of(db, user.id)), csrf_token=csrf)
 
 
 def _as_aware(dt):
@@ -90,7 +93,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     token, data = sessions.create(user.id, user.username)
     _set_cookie(response, token)
     audit.record(db, actor=user.username, action="auth.login", result="allowed")
-    return _me(user, data.csrf)
+    return _me(db, user, data.csrf)
 
 
 @router.post("/logout", status_code=204)
@@ -103,5 +106,5 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db),
 
 
 @router.get("/me", response_model=MeOut)
-def me(request: Request, user: User = Depends(current_user)):
-    return _me(user, request.state.session.csrf)
+def me(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return _me(db, user, request.state.session.csrf)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { api } from "../api.js";
-import { useAuth } from "../auth.jsx";
+import { ROLE_NAMES, useAuth } from "../auth.jsx";
 
 const ICONS = {
   chat: <path d="M4 5h16v11H8l-4 4z" />,
@@ -98,7 +98,7 @@ export default function Sidebar() {
         <div aria-hidden="true" style={{ flex: "none", width: 30, height: 30, borderRadius: "50%", background: "var(--s3)", border: "1px solid var(--ln2)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "var(--amber)" }}>{name.slice(0, 1)}</div>
         <div style={{ lineHeight: 1.3, minWidth: 0, flex: 1 }}>
           <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-          <div className="sub">{user?.username}</div>
+          <div className="sub">{(user?.roles || []).map((r) => ROLE_NAMES[r] || r).join("、") || user?.username}</div>
         </div>
         <button type="button" className="btn" style={{ height: 28, padding: "0 10px" }} onClick={logout}>退出</button>
       </div>

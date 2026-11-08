@@ -4,6 +4,7 @@
 """
 from .audit import AuditLog
 from .project import Confirmation, Deliverable, Project
+from .rbac import ProjectMember, Role, UserRole
 from .user import User
 
-__all__ = ["AuditLog", "Confirmation", "Deliverable", "Project", "User"]
+__all__ = ["AuditLog", "Confirmation", "Deliverable", "Project", "ProjectMember", "Role", "User", "UserRole"]

@@ -24,6 +24,15 @@ PROTECTED = [
     ("GET", "/api/audit"),
     ("GET", "/api/auth/me"),
     ("POST", "/api/auth/logout"),
+    ("GET", "/api/projects/BANK-A/members"),
+    ("PUT", "/api/projects/BANK-A/members/x"),
+    ("DELETE", "/api/projects/BANK-A/members/x"),
+    ("GET", "/api/admin/roles"),
+    ("GET", "/api/admin/users"),
+    ("PUT", "/api/admin/users/x/roles"),
+    ("POST", "/api/admin/users/x/disable"),
+    ("POST", "/api/admin/users/x/enable"),
+    ("POST", "/api/admin/users/x/unlock"),
 ]
 
 
@@ -52,7 +61,7 @@ def test_every_api_route_is_protected_or_public(client):
     for route in app.routes:
         path = getattr(route, "path", "")
         if path.startswith("/api") and path not in PUBLIC_PATHS:
-            concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1")
+            concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 
@@ -69,7 +78,7 @@ def test_login_sets_hardened_cookie(client, make_user):
     assert "HttpOnly" in cookie
     assert "SameSite=strict" in cookie or "SameSite=Strict" in cookie
     assert r.json()["csrf_token"]
-    assert client.get("/api/projects").status_code == 200
+    assert client.get("/api/auth/me").status_code == 200
 
 
 def test_wrong_password_and_wrong_totp_rejected(client, make_user):
@@ -111,10 +120,10 @@ def test_session_id_rotates_on_login(client, make_user):
 
 def test_unsafe_requests_need_csrf_token(client, make_user):
     csrf = _login_ok(client, make_user())
-    body = {"text": "普通问题"}
-    assert client.post("/api/gateway/check", json=body).status_code == 403
-    assert client.post("/api/gateway/check", json=body, headers={"X-CSRF-Token": "forged"}).status_code == 403
-    assert client.post("/api/gateway/check", json=body, headers={"X-CSRF-Token": csrf}).status_code == 200
+    assert client.post("/api/auth/logout").status_code == 403
+    assert client.post("/api/auth/logout", headers={"X-CSRF-Token": "forged"}).status_code == 403
+    assert client.get("/api/auth/me").status_code == 200  # 被拒绝的请求没有生效
+    assert client.post("/api/auth/logout", headers={"X-CSRF-Token": csrf}).status_code == 204
 
 
 def test_me_returns_csrf_for_page_reload(client, make_user):
@@ -137,9 +146,9 @@ def test_idle_timeout(client, make_user, monkeypatch):
     _login_ok(client, make_user())
     t0 = sessions.now()
     monkeypatch.setattr(sessions, "now", lambda: t0 + 29 * 60)
-    assert client.get("/api/projects").status_code == 200        # 29 分钟内有操作，续期
+    assert client.get("/api/auth/me").status_code == 200         # 29 分钟内有操作，续期
     monkeypatch.setattr(sessions, "now", lambda: t0 + 29 * 60 + 31 * 60)
-    assert client.get("/api/projects").status_code == 401        # 之后 31 分钟无操作，超时
+    assert client.get("/api/auth/me").status_code == 401         # 之后 31 分钟无操作，超时
 
 
 def test_absolute_lifetime(client, make_user, monkeypatch):
@@ -147,7 +156,7 @@ def test_absolute_lifetime(client, make_user, monkeypatch):
     t0 = sessions.now()
     for minutes in range(20, 12 * 60, 20):  # 一直有操作
         monkeypatch.setattr(sessions, "now", lambda m=minutes: t0 + m * 60)
-        assert client.get("/api/projects").status_code == 200
+        assert client.get("/api/auth/me").status_code == 200
     monkeypatch.setattr(sessions, "now", lambda: t0 + 12 * 3600 + 60)
     assert client.get("/api/projects").status_code == 401
 

@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
-import { RequireAuth } from "./auth.jsx";
+import { RequireAuth, RequireBusiness } from "./auth.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Chat from "./pages/Chat.jsx";
 import Login from "./pages/Login.jsx";
@@ -11,7 +11,7 @@ function Shell() {
     <RequireAuth>
       <div className="layout">
         <Sidebar />
-        <main className="content"><Outlet /></main>
+        <main className="content"><RequireBusiness><Outlet /></RequireBusiness></main>
       </div>
     </RequireAuth>
   );

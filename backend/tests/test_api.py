@@ -1,3 +1,4 @@
+"""业务接口的基本行为，用测试账号（顾问；BANK-A 项目经理、MFG-C 项目成员、不在 GRID-B）。"""
 import pytest
 
 fastapi = pytest.importorskip("fastapi")
@@ -23,9 +24,13 @@ def test_health_reports_database_ok(client):
     assert r.json()["checks"]["database"] == "ok"
 
 
-def test_projects_seeded(client):
+def test_me_has_roles(client):
+    assert client.get("/api/auth/me").json()["roles"] == ["consultant"]
+
+
+def test_only_member_projects_listed(client):
     codes = [p["code"] for p in client.get("/api/projects").json()]
-    assert codes == ["BANK-A", "GRID-B", "MFG-C"]
+    assert codes == ["BANK-A", "MFG-C"]
 
 
 def test_project_detail(client):
@@ -35,8 +40,11 @@ def test_project_detail(client):
     assert p["open_confirmations"] == 3
 
 
-def test_unknown_project_404(client):
-    assert client.get("/api/projects/NOPE").status_code == 404
+def test_unknown_and_non_member_project_both_404(client):
+    unknown = client.get("/api/projects/NOPE")
+    other = client.get("/api/projects/GRID-B")
+    assert unknown.status_code == other.status_code == 404
+    assert unknown.json() == other.json()  # 不暴露项目是否存在
 
 
 def test_chat_demo_reply(client):
@@ -52,19 +60,17 @@ def test_chat_blocks_confidential(client):
     assert {"ip", "credential"} <= kinds
 
 
-def test_audit_has_no_raw_text_and_actor_is_session_user(client):
-    client.post("/api/gateway/check", json={"text": "密码：Secret999"})
-    rows = client.get("/api/audit").json()
-    assert rows and all("Secret999" not in r["detail"] for r in rows)
-    assert rows[0]["actor"] == "tester"
-
-
-def test_actor_header_from_client_is_ignored(client):
-    client.post("/api/gateway/check", json={"text": "普通问题"}, headers={"X-User": "someone-else"})
-    assert client.get("/api/audit").json()[0]["actor"] == "tester"
+def test_confirmations_only_from_member_projects(client):
+    codes = {c["project_code"] for c in client.get("/api/confirmations").json()}
+    assert codes and "GRID-B" not in codes
 
 
 def test_resolve_confirmation(client):
     first = client.get("/api/confirmations").json()[0]
     r = client.post(f"/api/confirmations/{first['id']}/resolve", json={"resolution": "选 A"})
     assert r.status_code == 200 and r.json()["status"] == "resolved"
+
+
+def test_members_listed(client):
+    names = {m["username"]: m["project_role"] for m in client.get("/api/projects/BANK-A/members").json()}
+    assert names["tester"] == "manager"

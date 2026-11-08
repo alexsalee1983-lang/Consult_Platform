@@ -10,7 +10,7 @@ export function AuthProvider({ children }) {
 
   const signedIn = useCallback((me) => {
     setCsrfToken(me.csrf_token);
-    setState({ status: "authed", user: { username: me.username, displayName: me.display_name } });
+    setState({ status: "authed", user: { username: me.username, displayName: me.display_name, roles: me.roles || [] } });
   }, []);
 
   const signedOut = useCallback(() => {
@@ -36,6 +36,35 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   return useContext(AuthContext);
+}
+
+// 与后端 app/core/permissions.py 一致
+export const ROLE_NAMES = {
+  consultant: "顾问", project_lead: "项目负责人", knowledge_expert: "知识专家",
+  knowledge_admin: "知识管理员", sys_admin: "系统管理员", security_auditor: "安全审计员",
+};
+const BUSINESS_ROLES = ["consultant", "project_lead", "knowledge_expert", "knowledge_admin"];
+
+export function hasBusinessRole(user) {
+  return (user?.roles || []).some((r) => BUSINESS_ROLES.includes(r));
+}
+
+// 业务页面：系统管理员、安全审计员、未分配角色的账号看到说明，而不是报错
+export function RequireBusiness({ children }) {
+  const { user } = useAuth();
+  if (hasBusinessRole(user)) return children;
+  const roles = (user?.roles || []).map((r) => ROLE_NAMES[r] || r).join("、");
+  return (
+    <section className="pnl pad" aria-label="无业务权限">
+      <h1 className="h1">没有业务数据访问权限</h1>
+      <div className="sub" style={{ fontSize: 13 }}>
+        {roles
+          ? `你的账号是${roles}。按三权分立要求，系统管理员和安全审计员看不到项目、对话等业务数据。`
+          : "你的账号还没有分配角色，请联系系统管理员。"}
+        账号管理和审计查询界面在后续版本提供。
+      </div>
+    </section>
+  );
 }
 
 export function RequireAuth({ children }) {
