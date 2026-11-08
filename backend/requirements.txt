@@ -11,3 +11,4 @@ pydantic==2.10.4
 pydantic-settings==2.7.0
 httpx==0.28.1
 redis==5.2.1
+minio==7.2.20             # 对象存储 S3 客户端（MinIO 官方 Python SDK，Apache-2.0，可访问任意 S3 兼容存储）

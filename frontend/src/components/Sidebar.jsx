@@ -25,7 +25,7 @@ function statusText(v) {
   if (s === "ok") return "正常";
   if (s === "configured") return "已接入";
   if (s.startsWith("demo")) return "演示模式";
-  if (s.startsWith("not enabled")) return "M1 启用";
+  if (s.startsWith("not enabled")) return "未启用";
   return "异常";
 }
 

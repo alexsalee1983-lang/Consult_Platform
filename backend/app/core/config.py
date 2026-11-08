@@ -10,12 +10,14 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://consult:consult@postgres:5432/consult"
     redis_url: str = "redis://redis:6379/0"
 
-    # 对象存储 M1 启用；留空表示未启用
+    # 对象存储（S3 接口，一期为自建 MinIO）；留空表示未启用（本地开发、单元测试）。
+    # 项目区与知识区分桶（架构设计第三节），桶默认开启服务端加密。
     minio_endpoint: str = ""
-    minio_access_key: str = "consult"
-    minio_secret_key: str = "change-me-minio"
-    minio_bucket: str = "project-area"
+    minio_access_key: str = ""
+    minio_secret_key: str = ""
     minio_secure: bool = False
+    minio_bucket_project: str = "project-area"
+    minio_bucket_knowledge: str = "knowledge-area"
 
     # 公司私有化部署的白名单大模型，OpenAI 兼容接口。留空时平台用演示回复，便于先跑通流程。
     # 一期测试用公司内部离线部署的 DeepSeek V4.1 Flash，三个能力档先都指向它；

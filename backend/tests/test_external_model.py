@@ -107,7 +107,8 @@ def test_health_reports_external(external, client):
 
 def test_prod_refuses_external_model():
     base = {"app_env": "prod", "session_backend": "redis", "cookie_secure": True, "test_account_username": "",
-            "test_account_password": "", "llm_external": True}
+            "test_account_password": "", "llm_external": True,
+            "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24}
     with pytest.raises(BootstrapError, match="外部模型"):
         check_settings(Settings(_env_file=None, **base))
     check_settings(Settings(_env_file=None, **{**base, "app_env": "test"}))

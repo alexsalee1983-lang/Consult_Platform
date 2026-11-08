@@ -36,6 +36,10 @@ def check_settings(s: Settings) -> None:
         raise BootstrapError("生产环境不得配置测试账号（TEST_ACCOUNT_*），请从 .env 删除")
     if s.is_prod and not s.cookie_secure:
         raise BootstrapError("生产环境必须开启 COOKIE_SECURE（只经 HTTPS 发送会话 Cookie）")
+    if s.is_prod and not s.minio_endpoint:
+        raise BootstrapError("生产环境必须配置对象存储（MINIO_ENDPOINT）")
+    if s.minio_endpoint and (not s.minio_access_key or len(s.minio_secret_key) < 20):
+        raise BootstrapError("对象存储的访问密钥未配置或过短（MINIO_ACCESS_KEY、MINIO_SECRET_KEY 至少 20 位）")
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
 
