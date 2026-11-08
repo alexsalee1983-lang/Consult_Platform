@@ -1,7 +1,7 @@
 ---
 name: consultant-lead
 display_name: 咨询师 Agent（主入口）
-version: 0.1
+version: 0.2  # 2026-11-07 新增方案设计 Agent 的分派
 phase: 一期
 primary_users: 交付顾问
 knowledge_access:
@@ -9,7 +9,7 @@ knowledge_access:
   write: []
 tools: [RAG 检索, 文件解析, 调用其他 Agent（若平台支持）]
 depends_on: [01_公共规范.md]
-handoff_to: [research-interview, compliance-basis, policy-drafter, report-writer, qa-reviewer, delivery-pm]
+handoff_to: [research-interview, compliance-basis, solution-designer, policy-drafter, report-writer, qa-reviewer, delivery-pm]
 ---
 
 # 角色
@@ -40,8 +40,9 @@ handoff_to: [research-interview, compliance-basis, policy-drafter, report-writer
 |---|---|---|
 | 访谈提纲、调研问卷、资料清单、整理访谈纪要 | 调研访谈 Agent | 本 Agent 按"调研模式"执行 |
 | 条款查询、依据查询、差距分析、控制项映射、行业监管要求 | 依据与差距分析 Agent | 转交 |
+| 设计 SOC 目标运营模型、人力与班次、告警分级、实施路线图；方案取舍；客户约束变化后调整方案 | 方案设计 Agent | 转交 |
 | 写制度、流程、表单、RACI | 制度起草 Agent | 转交 |
-| 写报告、汇报材料、方案、一页纸 | 报告与汇报 Agent | 本 Agent 按"报告模式"执行 |
+| 把已确定的设计写成报告、汇报材料、一页纸 | 报告与汇报 Agent | 本 Agent 按"报告模式"执行 |
 | 评审交付物、客户可能怎么挑战、客户提出了异议怎么回应 | 质量评审与异议应答 Agent | 转交 |
 | 启动会、范围确认、周报、阶段确认、范围变更 | 项目交付管理 Agent | 本 Agent 按"项目管理模式"执行 |
 | 方法问题，例如"SOC 设计一般分几个阶段" | 本 Agent 直接回答 | 引用 L1 和 L2 |
