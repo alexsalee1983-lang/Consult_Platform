@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>知识审批队列 · 暗色版</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap">
+<style>
+:root{--obs:#0A0D12;--s1:#10151C;--s2:#161D27;--s3:#1D2633;--ln:#232D3B;--ln2:#2E3A4B;--tx:#E6EBF2;--tx2:#A3AEBE;--tx3:#6B7789;--amber:#F5A524;--amber-d:rgba(245,165,36,.12);--crim:#F0454F;--crim-d:rgba(240,69,79,.13);--cyan:#22D3EE;--cyan-d:rgba(34,211,238,.10);--ok:#3DD68C;--ok-d:rgba(61,214,140,.12);--vio:#B49CFF;--vio-d:rgba(180,156,255,.12)}
+body{margin:0;background:var(--obs)}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+.cap{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);font-weight:600}
+.pnl{background:var(--s1);border:1px solid var(--ln);border-radius:10px;min-width:0}
+.pad{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.h2{margin:0;font-size:13.5px;font-weight:700}
+.row{display:flex;align-items:center;gap:8px}
+.sb{display:flex;justify-content:space-between;align-items:center;gap:8px}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap}
+.c-a{background:var(--amber-d);color:var(--amber)}.c-r{background:var(--crim-d);color:var(--crim)}.c-c{background:var(--cyan-d);color:var(--cyan)}.c-g{background:var(--ok-d);color:var(--ok)}.c-v{background:var(--vio-d);color:var(--vio)}.c-n{background:var(--s3);color:var(--tx2)}
+.btn{height:32px;padding:0 12px;border:1px solid var(--ln2);border-radius:6px;background:var(--s2);color:var(--tx);font-size:12.5px}
+.btnp{height:32px;padding:0 14px;border:0;border-radius:6px;background:var(--amber);color:#0A0D12;font-size:12.5px;font-weight:700}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--tx2);text-decoration:none;font-size:13px}
+.nav a.on{background:var(--s3);color:var(--tx);box-shadow:inset 2px 0 0 var(--amber)}
+.nav a .n{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--amber)}
+.bar{height:4px;border-radius:2px;background:var(--s3);overflow:hidden}.bar i{display:block;height:100%}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;padding:7px 12px;color:var(--tx3);font-weight:600}
+.tbl td{padding:6px 12px;border-top:1px solid var(--ln);color:var(--tx)}
+.lst{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.lst>li{padding:9px 0;border-top:1px solid var(--ln)}
+.sub{font-size:11.5px;color:var(--tx3)}
+</style>
+
+</head>
+<body>
+
+
+<div style="width:1600px;height:900px;box-sizing:border-box;background:radial-gradient(1200px 600px at 60% -10%,#122030 0%,var(--obs) 55%);color:var(--tx);font-family:'Inter','Noto Sans SC','PingFang SC',system-ui,sans-serif;font-size:13px;line-height:1.55;display:grid;grid-template-columns:248px minmax(0,1fr);gap:14px;padding:14px;overflow:hidden">
+<aside aria-label="导航" class="pnl" style="display:flex;flex-direction:column;gap:16px;padding:16px 14px;min-height:0">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 4px">
+    <div style="width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--amber),#C9781A);display:flex;align-items:center;justify-content:center"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A0D12" stroke-width="2.4" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke-linecap="round"/></svg></div>
+    <div style="line-height:1.2"><div style="font-weight:700;font-size:14px">安全咨询专家平台</div><div style="font-size:10px;letter-spacing:.16em;color:var(--tx3)">ADVISORY · 内部</div></div>
+  </div>
+  <nav aria-label="模式" style="display:flex;padding:3px;border-radius:7px;background:var(--obs);border:1px solid var(--ln)"><a href="02-我的项目.html" style="flex:1;text-align:center;padding:5px 0;border-radius:5px;text-decoration:none;font-size:12.5px;color:var(--tx3)">交付</a><a href="05-知识审批队列.html" style="flex:1;text-align:center;padding:5px 0;border-radius:5px;text-decoration:none;font-size:12.5px;background:var(--s3);color:var(--tx);font-weight:600">知识</a></nav>
+  <nav class="nav" aria-label="知识导航"><a href="05-知识审批队列.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M4 14v6h16v-6"/><path d="M12 3v11M8 10l4 4 4-4"/></svg>投料箱<span class="n">12</span></a><a href="05-知识审批队列.html" class="on" aria-current="page"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>审批队列<span class="n">5</span></a><a href="05-知识审批队列.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>萃取对话</a><a href="06-知识地图与健康.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg>知识地图与健康<span class="n">3</span></a><a href="06-知识地图与健康.html"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>我的贡献</a></nav>
+  
+  <div style="margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px 4px 0;border-top:1px solid var(--ln)">
+    <div style="width:30px;height:30px;border-radius:50%;background:var(--s3);border:1px solid var(--ln2);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--amber)">周</div>
+    <div style="line-height:1.3"><div>周岩</div><div class="sub">SOC 方向专家 · 知识负责人</div></div>
+  </div>
+</aside>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;grid-template-rows:auto minmax(0,1fr);gap:14px;min-width:0;min-height:0">
+
+<div class="sb" style="grid-column:1/-1;padding:2px 2px 0">
+  <div style="line-height:1.3;min-width:0"><div class="cap">知识 · 只显示 SOC 方向</div><h1 style="margin:0;font-size:20px;font-weight:700">审批队列</h1></div>
+  <div class="row"><span class="chip c-a">5 项待审</span><button class="btn">批量处理</button></div>
+</div>
+<div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;min-width:0;min-height:0">
+  <section class="pnl pad" aria-label="队列">
+    <div class="sb"><span class="cap">待审 5</span><span class="sub">按影响排序</span></div>
+    <ul class="lst" style="gap:8px">
+      <li style="padding:10px 12px;border:1px solid var(--ln);border-radius:8px;display:flex;flex-direction:column;gap:4px;background:var(--s2);border-color:var(--amber)"><div style="font-weight:700">SOC 告警分级方法 v2</div><div class="sb"><span class="sub">萃取对话</span><span class="chip c-v">冲突 1</span></div></li>
+      <li style="padding:10px 12px;border:1px solid var(--ln);border-radius:8px;display:flex;flex-direction:column;gap:4px;"><div style="font-weight:500">值班管理规程母版</div><div class="sb"><span class="sub">投料箱</span><span class="chip c-a">依据待核实 1</span></div></li>
+      <li style="padding:10px 12px;border:1px solid var(--ln);border-radius:8px;display:flex;flex-direction:column;gap:4px;"><div style="font-weight:500">夜间升级路径：托管初筛 + 电话轮值</div><div class="sb"><span class="sub">交付中修改 · BANK-A</span><span class="chip c-g">去标识通过</span></div></li>
+      <li style="padding:10px 12px;border:1px solid var(--ln);border-radius:8px;display:flex;flex-direction:column;gap:4px;"><div style="font-weight:500">安全管理中心要求解读</div><div class="sb"><span class="sub">外部订阅</span><span class="chip c-r">影响 6 条</span></div></li>
+      <li style="padding:10px 12px;border:1px solid var(--ln);border-radius:8px;display:flex;flex-direction:column;gap:4px;"><div style="font-weight:500">异议：SOC 投入产出怎么算</div><div class="sb"><span class="sub">结项沉淀</span><span class="chip c-c">新条目</span></div></li>
+    </ul>
+  </section>
+  <main class="pnl" style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+    <div style="padding:14px 22px;border-bottom:1px solid var(--ln);display:flex;flex-direction:column;gap:8px">
+      <div class="row"><span class="mono sub">L2-OPS-SOC-MTD-004 · v2（现行 v1）</span></div>
+      <h2 style="margin:0;font-size:19px;font-weight:700">SOC 告警分级方法</h2>
+      <div class="row" style="flex-wrap:wrap;gap:6px"><span class="chip c-n">服务：SOC 运营体系设计</span><span class="chip c-n">阶段：设计</span><span class="chip c-n">类型：方法说明</span><span class="chip c-c">来源：公司实践</span><span class="chip c-n">适用：有 7×24 值守的客户</span></div>
+    </div>
+    <div style="padding:16px 22px;display:flex;flex-direction:column;gap:14px">
+      <p style="margin:0;color:var(--tx2);line-height:1.75">按业务影响和攻击阶段把告警分为四级，并给出每级的响应时限、升级路径和处置权限。v2 新增“无夜班客户”的适用说明，区分自建值守和托管初筛两种做法。</p>
+      <section aria-label="版本差异" style="border:1px solid var(--ln);border-radius:8px;overflow:hidden">
+        <div class="sb" style="padding:8px 14px;background:var(--s2)"><span class="cap">与现行版本的差异</span><span class="sub">+2　−1</span></div>
+        <div class="mono" style="font-size:12px;line-height:1.9;padding:8px 14px">
+          <div style="color:var(--crim);background:var(--crim-d);padding:0 8px;border-radius:3px">− 一级告警：30 分钟内响应</div>
+          <div style="color:var(--ok);background:var(--ok-d);padding:0 8px;border-radius:3px">+ 一级告警：15 分钟内响应（有 7×24 值守的客户）</div>
+          <div style="color:var(--ok);background:var(--ok-d);padding:0 8px;border-radius:3px">+ 无夜班客户：托管方初筛，一级事件电话升级轮值负责人，15 分钟内响应</div>
+          <div style="color:var(--tx3);padding:0 8px">· 二至四级的分级标准未变</div>
+        </div>
+      </section>
+      <section style="display:flex;flex-direction:column;gap:6px">
+        <div class="cap">检索问题（Agent 生成）</div>
+        <div class="row" style="flex-wrap:wrap;gap:6px"><span class="chip c-n">SOC 告警怎么分级？每级多久响应？</span><span class="chip c-n">客户没有夜班，一级告警怎么处理？</span><span class="chip c-n">托管商和客户 SOC 怎么分工？</span></div>
+      </section>
+      <div class="row" style="padding:10px 14px;border-radius:8px;background:var(--s2);border:1px solid var(--ln)"><span class="cap" style="margin-right:6px">原料</span><span style="flex:1">萃取对话记录 · SOC 专家负责人 · 11 月 17 日 · 26 分钟</span><a href="#" style="color:var(--cyan);font-size:12px">查看原文</a></div>
+    </div>
+  </main>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;min-height:0">
+  <section class="pnl pad" aria-label="Agent 审查意见">
+    <h2 class="h2">Agent 审查意见</h2>
+    <ul class="lst" style="gap:8px">
+      <li style="display:grid;grid-template-columns:44px 1fr;gap:8px;font-size:12.5px"><span class="chip c-g" style="justify-content:center">去标识</span><span style="color:var(--tx2)">替换 3 处，无残留客户信息</span></li>
+      <li style="display:grid;grid-template-columns:44px 1fr;gap:8px;font-size:12.5px"><span class="chip c-a" style="justify-content:center">依据</span><span style="color:var(--tx2)">2 条已核对；1 条待核实（行业监管文件条款号）</span></li>
+      <li style="display:grid;grid-template-columns:44px 1fr;gap:8px;font-size:12.5px"><span class="chip c-v" style="justify-content:center">冲突</span><span style="color:var(--tx2)">与 L2-OPS-SOC-MTD-002 响应时限不同，旧条目未区分值班模式</span></li>
+    </ul>
+    <div style="padding:9px 12px;border-radius:6px;background:var(--amber-d);border-left:2px solid var(--amber);font-size:12.5px;color:var(--tx2)"><b style="color:var(--tx)">建议</b>　两条并存，按“是否 7×24”标注适用条件。</div>
+  </section>
+  <section class="pnl pad" aria-label="影响">
+    <div class="cap">发布影响</div>
+    <div class="sb"><span>引用现行版本的交付物</span><span class="mono" style="color:var(--amber);font-size:18px;font-weight:700">4</span></div>
+    <div class="sub">发布后会提醒这 4 份交付物的顾问复核。</div>
+    <div class="sb sub" style="padding-top:8px;border-top:1px solid var(--ln)"><span>贡献者：SOC 专家负责人</span><span>复审 2027-11</span></div>
+  </section>
+  <section class="pnl pad" style="margin-top:auto">
+    <div class="cap">双人审核 · 第 1 / 2 人</div>
+    <button class="btnp" style="height:38px">采纳并发布</button>
+    <div class="row"><button class="btn" style="flex:1">修改</button><button class="btn" style="flex:1;color:var(--crim)">退回</button></div>
+  </section>
+</div>
+
+</div>
+</div>
+
+</body>
+</html>

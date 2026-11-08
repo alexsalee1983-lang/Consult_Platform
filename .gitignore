@@ -1,0 +1,25 @@
+# 环境与密钥
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+backend/tests/test.db
+
+# Node
+node_modules/
+frontend/dist/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+
+# 客户资料不得进入代码仓
+data/
+uploads/
