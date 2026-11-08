@@ -3,11 +3,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import audit
-from ..db import get_db
-from ..gateway import BlockedError, complete
-from ..guard import check
+from ..core import audit
+from ..core.db import get_db
 from ..models import AuditLog, Project
+from ..services.gateway import BlockedError, complete
+from ..services.guard import check
 from ..schemas import AuditOut, ChatIn, ChatOut, FindingOut, GuardIn, GuardOut
 
 router = APIRouter(prefix="/api", tags=["gateway"])

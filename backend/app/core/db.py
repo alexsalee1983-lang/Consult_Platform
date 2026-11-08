@@ -1,6 +1,7 @@
 from collections.abc import Iterator
+from datetime import datetime, timezone
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import get_settings
@@ -8,6 +9,10 @@ from .config import get_settings
 
 class Base(DeclarativeBase):
     pass
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 _settings = get_settings()
@@ -22,12 +27,3 @@ def get_db() -> Iterator[Session]:
         yield db
     finally:
         db.close()
-
-
-def init_db() -> None:
-    from . import models  # noqa: F401  注册表结构
-
-    if engine.dialect.name == "postgresql":
-        with engine.begin() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    Base.metadata.create_all(engine)

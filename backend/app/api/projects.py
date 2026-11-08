@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from .. import audit
-from ..db import get_db
+from ..core import audit
+from ..core.db import get_db
 from ..models import Confirmation, Project
 from ..schemas import PHASES, ConfirmationOut, ProjectDetail, ProjectOut, ResolveIn
 

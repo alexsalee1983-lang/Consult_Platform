@@ -4,7 +4,7 @@ from urllib.parse import unquote
 
 from sqlalchemy.orm import Session
 
-from .models import AuditLog
+from ..models import AuditLog
 
 
 def digest(text: str) -> str:

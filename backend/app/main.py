@@ -2,15 +2,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .config import get_settings
-from .db import SessionLocal, init_db
-from .routers import chat, health, projects
+from .api import chat, health, projects
+from .core.config import get_settings
+from .core.db import SessionLocal
+from .core.migrate import upgrade_to_head
 from .seed import seed
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    upgrade_to_head()
     if get_settings().seed_demo_data:
         with SessionLocal() as db:
             seed(db)

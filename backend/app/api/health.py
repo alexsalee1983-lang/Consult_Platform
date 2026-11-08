@@ -3,8 +3,8 @@ import redis
 from fastapi import APIRouter
 from sqlalchemy import text
 
-from ..config import get_settings
-from ..db import engine
+from ..core.config import get_settings
+from ..core.db import engine
 
 router = APIRouter(tags=["health"])
 

@@ -36,7 +36,7 @@
 ## 数据保护红线（违反任何一条都不能合并）
 
 1. **代码仓、测试数据、截图、日志、提交信息里不得出现真实客户信息。** 只用虚拟客户（BANK-A、GRID-B、MFG-C 等）。
-2. **所有大模型调用必须经过 `backend/app/gateway.py`（S1 后为 `services/gateway`）。** 其他模块不得直接请求模型地址，不得引入会联网调用外部 AI 或外部服务的库。
+2. **所有大模型调用必须经过 `backend/app/services/gateway.py`。** 其他模块不得直接请求模型地址，不得引入会联网调用外部 AI 或外部服务的库。
 3. **发往模型和进入平台的内容先过机密级检测**（`guard`）。机密级包括：口令、密钥、可利用的漏洞细节、完整网络拓扑与 IP 规划、业务数据和个人信息样本。两档项目都不收。
 4. **审计日志和应用日志不记客户原文**，只记长度、摘要哈希、命中类别。
 5. **严格档项目**：资料不出客户现场，平台只接收客户书面同意后的去标识摘要卡；Agent 输出一律用占位符。
@@ -60,7 +60,11 @@
 
 ```bash
 # 后端测试（本地）
-cd backend && pip install -r requirements-dev.txt && ruff check app tests && pytest -q
+cd backend && pip install -r requirements-dev.txt && ruff check app tests alembic && pytest -q
+
+# 数据库迁移（backend 目录下；后端启动时也会自动升级到最新）
+python -m app.core.migrate
+alembic revision --autogenerate --rev-id 0002_xxx -m "M1：说明"   # 生成后人工检查
 
 # 前端构建
 cd frontend && npm install && npm run build

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from .config import get_settings
+from ..core.config import get_settings
 from .guard import GuardResult, check
 
 SYSTEM_BASE = (
