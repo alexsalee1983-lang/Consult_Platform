@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from .api import admin, agents, audit, auth, chat, conversations, directory, health, projects
 from .core.auth import authenticate
 from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
 from .core.db import SessionLocal
+from .core.errors import validation_error_handler
 from .core.migrate import upgrade_to_head
 from .seed import seed
 
@@ -34,6 +36,8 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None if _settings.is_prod else "/openapi.json",
 )
+# 422 不回显请求原文（口令、客户原文），见 core/errors.py
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)
