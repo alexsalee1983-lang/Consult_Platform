@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -10,6 +11,7 @@ from .core.config import get_settings
 from .core.db import SessionLocal
 from .core.errors import validation_error_handler
 from .core.migrate import upgrade_to_head
+from .services import storage
 from .seed import seed
 
 _settings = get_settings()
@@ -24,6 +26,11 @@ async def lifespan(app: FastAPI):
         if _settings.seed_demo_data:
             seed(db)
         ensure_test_memberships(db, _settings)
+    if storage.enabled():
+        try:
+            storage.ensure_buckets()
+        except Exception as e:  # noqa: BLE001  对象存储暂时不可用不阻止启动，健康检查会显示 down，首次使用时再建桶
+            logging.getLogger(__name__).warning("对象存储建桶失败：%s", type(e).__name__)
     yield
 
 

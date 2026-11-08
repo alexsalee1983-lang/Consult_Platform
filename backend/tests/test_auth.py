@@ -209,7 +209,8 @@ def test_password_policy():
 def _settings(**kw) -> Settings:
     base = {"app_env": "prod", "session_backend": "redis", "cookie_secure": True,
             "test_account_username": "", "test_account_password": "", "test_account_totp_secret": "",
-            "bootstrap_admin_username": "", "bootstrap_admin_password": "", "bootstrap_admin_totp_secret": ""}
+            "bootstrap_admin_username": "", "bootstrap_admin_password": "", "bootstrap_admin_totp_secret": "",
+            "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24}
     return Settings(_env_file=None, **{**base, **kw})
 
 

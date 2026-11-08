@@ -28,9 +28,22 @@ jobs:
           docker run -d --name testdb -e POSTGRES_DB=consult_test -e POSTGRES_USER=consult             -e POSTGRES_PASSWORD=consult -p 127.0.0.1:5432:5432 consult-platform-postgres:ci
           for i in $(seq 1 30); do docker exec testdb pg_isready -U consult -d consult_test && exit 0; sleep 2; done
           exit 1
+      # 对象存储测试跑在平台 MinIO 镜像上（源码自建，开启服务端加密）；密钥每次随机生成
+      - name: 构建并启动测试对象存储
+        working-directory: .
+        run: |
+          docker build -t consult-platform-minio:ci deploy/minio
+          sk=$(python3 -c "import secrets; print(secrets.token_urlsafe(30))")
+          kms=$(python3 -c "import base64, secrets; print('ci-key:' + base64.b64encode(secrets.token_bytes(32)).decode())")
+          echo "::add-mask::$sk"; echo "TEST_S3_SECRET_KEY=$sk" >> "$GITHUB_ENV"
+          docker run -d --name tests3 -e MINIO_ROOT_USER=ci-storage -e MINIO_ROOT_PASSWORD="$sk"             -e MINIO_KMS_SECRET_KEY="$kms" -e MINIO_KMS_AUTO_ENCRYPTION=on -e MINIO_BROWSER=off -e MINIO_UPDATE=off             -p 127.0.0.1:9000:9000 consult-platform-minio:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:9000/minio/health/live && exit 0; sleep 2; done
+          docker logs tests3; exit 1
       - run: pytest -q
         env:
           TEST_DATABASE_URL: postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_test
+          TEST_S3_ENDPOINT: 127.0.0.1:9000
+          TEST_S3_ACCESS_KEY: ci-storage
       - name: 本地快速测试（SQLite）也要能通过
         run: pytest -q -x
 
@@ -55,11 +68,14 @@ jobs:
       - name: 生成 .env（测试账号每次随机生成，不写死口令）
         run: |
           cp .env.example .env
+          sed -i '/^MINIO_SECRET_KEY=$/d; /^MINIO_KMS_SECRET_KEY=$/d' .env   # 下面随机生成
           python3 - >> .env <<'PY'
           import base64, secrets
           print("TEST_ACCOUNT_USERNAME=ci-smoke")
           print("TEST_ACCOUNT_PASSWORD=Ci1!" + secrets.token_urlsafe(18))
           print("TEST_ACCOUNT_TOTP_SECRET=" + base64.b32encode(secrets.token_bytes(20)).decode())
+          print("MINIO_SECRET_KEY=" + secrets.token_urlsafe(30))
+          print("MINIO_KMS_SECRET_KEY=ci-key:" + base64.b64encode(secrets.token_bytes(32)).decode())
           PY
           # 接模拟模型（OpenAI 兼容），走网关的真实 HTTP 路径：重试、流式、可用性检查、用量计量
           sed -i 's|^LLM_BASE_URL=.*|LLM_BASE_URL=http://mock-llm:8000/v1|' .env

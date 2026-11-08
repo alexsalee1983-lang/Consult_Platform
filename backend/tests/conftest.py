@@ -28,7 +28,10 @@ else:
 os.environ["APP_ENV"] = "test"
 os.environ["LLM_BASE_URL"] = ""
 os.environ["REDIS_URL"] = "redis://127.0.0.1:1/0"
-os.environ["MINIO_ENDPOINT"] = "127.0.0.1:1"
+# 对象存储：设了 TEST_S3_ENDPOINT（CI 用平台 MinIO 镜像）就连真实存储，否则不启用（相关测试跳过）
+os.environ["MINIO_ENDPOINT"] = os.environ.get("TEST_S3_ENDPOINT", "")
+os.environ["MINIO_ACCESS_KEY"] = os.environ.get("TEST_S3_ACCESS_KEY", "")
+os.environ["MINIO_SECRET_KEY"] = os.environ.get("TEST_S3_SECRET_KEY", "")
 os.environ["SESSION_BACKEND"] = "memory"
 os.environ["COOKIE_SECURE"] = "false"  # TestClient 走 http://testserver
 
@@ -44,6 +47,7 @@ for k in ("BOOTSTRAP_ADMIN_USERNAME", "BOOTSTRAP_ADMIN_PASSWORD", "BOOTSTRAP_ADM
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+on_s3 = pytest.mark.skipif(not os.environ.get("TEST_S3_ENDPOINT"), reason="需要对象存储（设置 TEST_S3_ENDPOINT）")
 on_postgres = pytest.mark.skipif(not TEST_DATABASE_URL, reason="需要 PostgreSQL（设置 TEST_DATABASE_URL）")
 
 
