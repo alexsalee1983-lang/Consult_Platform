@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 # 冒烟测试：在部署机上执行 ./scripts/smoke_test.sh
-# 默认测试 http://localhost:8080，可传入其他地址：./scripts/smoke_test.sh http://10.0.0.5:8080
+# 测试地址：第一个参数 > 环境变量 SMOKE_BASE > 默认 http://localhost:8080，例如
+#   ./scripts/smoke_test.sh http://127.0.0.1:18080
+#   SMOKE_BASE=http://127.0.0.1:18080 ./scripts/smoke_test.sh
+# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 22 项，否则 21 项）。
 #
 # 需要测试账号（只在 APP_ENV=dev/test 时由后端创建）：从环境变量读取，没有就读仓库根目录的 .env：
 #   TEST_ACCOUNT_USERNAME / TEST_ACCOUNT_PASSWORD / TEST_ACCOUNT_TOTP_SECRET
 # 动态码用 python3 标准库现算，不需要额外安装。
 set -u
-BASE="${1:-http://localhost:8080}"
+BASE="${1:-${SMOKE_BASE:-http://localhost:8080}}"
+BASE="${BASE%/}"
+echo "测试地址：$BASE"
+# 先确认地址能连上，避免地址填错时每一项都报失败（状态码 000）
+if ! curl -s -o /dev/null --max-time 10 "$BASE/api/health"; then
+  echo "连不上 $BASE：检查地址和端口（第一个参数或 SMOKE_BASE），以及服务是否已启动（docker compose ps）" >&2
+  exit 2
+fi
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 pass=0; fail=0
 JAR="$(mktemp)"; BODY="$(mktemp)"
@@ -53,7 +63,6 @@ login_body() {
     "$USER_NAME" "$USER_PASS" "$(totp)"
 }
 
-echo "测试地址：$BASE"
 if [ -z "$USER_NAME" ] || [ -z "$USER_PASS" ] || [ -z "$TOTP_SECRET" ]; then
   echo "  失败  未配置测试账号（TEST_ACCOUNT_USERNAME / PASSWORD / TOTP_SECRET），无法测试登录后的接口"
   exit 1
