@@ -1,5 +1,9 @@
 # 环境与密钥
 .env
+# .env 的任何副本（备份、临时文件）都含密钥，一律不提交；只提交占位值的 .env.example
+.env.*
+!.env.example
+*.env
 *.pem
 *.key
 
