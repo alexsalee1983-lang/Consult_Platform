@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import string
 from dataclasses import dataclass, field
 
 
@@ -44,9 +45,19 @@ def mask(text: str) -> str:
 # ---------- 各类检测 ----------
 
 _PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----")
+_CRED_KEYWORDS = (
+    r"(password|passwd|pwd|passphrase|secret|token|api[_-]?key|access[_-]?key|口令|密码|密钥)"
+)
+# 关键词 + 分隔符 + 值，例如“密码：Abc@12345”“password=xxx”
 _CREDENTIAL = re.compile(
-    r"(?i)(password|passwd|pwd|passphrase|secret|token|api[_-]?key|access[_-]?key|口令|密码|密钥)"
-    r"\s*(?:[:=：]|是|为)\s*[\"']?([^\s\"'，。；;,]{4,})"
+    r"(?i)" + _CRED_KEYWORDS + r"\s*(?:[:=：]|是|为)\s*[\"']?([^\s\"'，。；;,]{4,})"
+)
+# 关键词 + 空白 + 像口令的串，例如“管理口令 Abc@12345”“password P@ssw0rd”。
+# 值只取 ASCII 字母、数字、符号（不含引号、逗号、分号），至少 6 位且至少含两类字符，
+# 这样“口令策略需要整改”“密码复杂度要求为 8 位以上”这类问题描述不会被拦。
+_SECRET_SYMBOLS = "".join(c for c in string.punctuation if c not in "\"',;")
+_CREDENTIAL_BARE = re.compile(
+    r"(?i)" + _CRED_KEYWORDS + r"\s+([A-Za-z0-9" + re.escape(_SECRET_SYMBOLS) + r"]{6,})"
 )
 _CLOUD_KEY = re.compile(r"\b(?:AKIA[0-9A-Z]{16}|LTAI[0-9A-Za-z]{12,20}|sk-[A-Za-z0-9_\-]{20,})\b")
 _IPV4 = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(/\d{1,2})?(?![\d.])")
@@ -57,6 +68,15 @@ _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 _ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
 _ID_CHECK = "10X98765432"
+
+
+def _looks_like_secret(s: str) -> bool:
+    classes = (
+        any(c.isascii() and c.isalpha() for c in s),
+        any(c.isdigit() for c in s),
+        any(c in _SECRET_SYMBOLS for c in s),
+    )
+    return sum(classes) >= 2
 
 
 def _valid_cn_id(s: str) -> bool:
@@ -88,6 +108,13 @@ def check(text: str) -> GuardResult:
     for m in _PRIVATE_KEY.finditer(text):
         _add(findings, "private_key", "私钥", m)
     for m in _CREDENTIAL.finditer(text):
+        _add(findings, "credential", "账号口令或密钥", m, 2)
+    cred_spans = [(f.start, f.end) for f in findings if f.kind == "credential"]
+    for m in _CREDENTIAL_BARE.finditer(text):
+        if not _looks_like_secret(m.group(2)):
+            continue
+        if any(s < m.end(2) and m.start(2) < e for s, e in cred_spans):
+            continue  # 已被带分隔符的规则命中
         _add(findings, "credential", "账号口令或密钥", m, 2)
     for m in _CLOUD_KEY.finditer(text):
         _add(findings, "cloud_key", "云服务访问密钥", m)
