@@ -24,8 +24,8 @@ from ..core.permissions import membership, project_for_member, require_business
 from ..models import Agent, Conversation, Message, Project, User
 from ..schemas import ChatIn
 from ..services import gateway
-from ..services.gateway import BlockedError, Completion, GatewayError
-from .chat import UNAVAILABLE, _blocked, _failed, _sse, _succeeded
+from ..services.gateway import BlockedError, Completion, ExternalModelForbidden, GatewayError
+from .chat import UNAVAILABLE, _blocked, _external_forbidden, _failed, _sse, _succeeded
 
 router = APIRouter(prefix="/api", tags=["conversations"], dependencies=[Depends(require_business)])
 
@@ -132,6 +132,8 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
                          system=runtime.system_prompt(doc, card), history=runtime.history(list(c.messages)))
     try:
         first = next(gen)  # 拦截（422）和开始输出前的失败（502）以普通 HTTP 错误返回，被拦截的内容不存
+    except ExternalModelForbidden as e:
+        _external_forbidden(db, username, project.code, chat_in, e, stream=True, agent=agent_code, extra=extra)
     except BlockedError as e:
         _blocked(db, username, project.code, chat_in, e, stream=True, agent=agent_code, extra=extra)
     except GatewayError as e:

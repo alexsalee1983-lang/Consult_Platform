@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from ..core.config import get_settings
 from ..core.db import engine
-from ..services.gateway import availability
+from ..services.gateway import availability, uses_external_model
 
 router = APIRouter(tags=["health"])
 
@@ -48,4 +48,6 @@ def health() -> dict:
         "object_storage": _minio(),
         "llm": availability(),
     }
-    return {"status": "ok" if checks["database"] == "ok" else "degraded", "checks": checks}
+    # llm_external：界面据此提示“当前为外部测试模型，勿输入真实客户信息”
+    return {"status": "ok" if checks["database"] == "ok" else "degraded", "checks": checks,
+            "llm_external": uses_external_model()}

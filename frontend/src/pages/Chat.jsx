@@ -37,6 +37,7 @@ export default function Chat({ code }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [external, setExternal] = useState(false);   // 当前接的是外部测试模型
   const endRef = useRef(null);
 
   const loadConvs = useCallback(() => api.conversations(code).then(setConvs).catch(() => setConvs([])), [code]);
@@ -44,6 +45,7 @@ export default function Chat({ code }) {
   useEffect(() => {
     api.project(code).then(setProject).catch(() => setProject(null));
     api.agents().then(setAgents).catch(() => setAgents([]));
+    api.health().then((h) => setExternal(Boolean(h.llm_external))).catch(() => setExternal(false));
     setConv(null);
     setMessages([]);
     loadConvs();
@@ -118,7 +120,7 @@ export default function Chat({ code }) {
   return (
     <>
       <TopBar cap={`${code} · ${project?.service || ""} · 阶段 ${project?.phase_name || ""}`} title="顾问对话">
-        <span className={`chip ${tier.cls}`}>{tier.label}{project?.tier === "strict" ? " · 输出使用占位符" : " · 资料不出公司"}</span>
+        <span className={`chip ${tier.cls}`}>{tier.label}{project?.tier === "strict" ? " · 输出使用占位符" : external ? " · 外部测试模型" : " · 资料不出公司"}</span>
         <span className="chip c-a">输出均为草稿 · 待顾问审核</span>
       </TopBar>
       <div className="chat-layout">
@@ -153,6 +155,14 @@ export default function Chat({ code }) {
             <span style={{ fontWeight: 700 }}>{conv ? conv.title || "（未命名）" : "新对话"}</span>
             <span className="sub">{agentName} Agent{agent?.prompt_version ? ` · 提示词 ${conv?.prompt_version ?? agent.prompt_version}` : ""}</span>
           </div>
+          {external && (
+            <div className="blocked" role="note" style={{ margin: "12px 20px 0" }}>
+              <div style={{ fontWeight: 700, color: "var(--crim)" }}>当前接的是公司外部的测试模型，勿输入任何真实客户信息</div>
+              <div className="sub" style={{ marginTop: 2 }}>
+                只用虚拟客户数据测试；提问会经平台假名化后发出；严格档项目不能使用（决策记录 2026-11-08）。
+              </div>
+            </div>
+          )}
           <div style={{ flex: 1, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
             {messages.length === 0 && (
               <div className="sub">

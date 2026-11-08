@@ -46,6 +46,10 @@ class BlockedError(Exception):
         self.result = result
 
 
+class ExternalModelForbidden(Exception):
+    """当前接的是外部模型，而这次调用不允许发给外部（严格档项目）。"""
+
+
 class GatewayError(Exception):
     """模型服务不可用（重试后仍失败）或返回了无法解析的结果。"""
 
@@ -64,6 +68,7 @@ class Completion:
     latency_ms: int = 0
     attempts: int = 1
     pseudonymized: bool = False
+    external: bool = False      # 是否发给了公司外部的模型服务
 
 
 @dataclass
@@ -119,12 +124,24 @@ def build_messages(message: str, tier: str, project_code: str, system: str | Non
     return msgs
 
 
+def uses_external_model() -> bool:
+    """当前是否会把请求发给公司外部的模型服务（配置了地址且 LLM_EXTERNAL=true）。"""
+    s = get_settings()
+    return bool(s.llm_external and s.llm_base_url)
+
+
 def _prepare(message: str, tier: str, project_code: str, level: str, terms: dict[str, str] | None,
              stream: bool, system: str | None = None, history: list[dict] | None = None) -> _Prepared:
+    s = get_settings()
+    if tier == "strict" and uses_external_model():
+        # 严格档承诺“不发送给任何外部人工智能服务”（客户告知模板），在发出任何请求前拒绝
+        raise ExternalModelForbidden("严格档项目不得使用外部模型；当前平台接的是外部测试模型")
     result = check(message)
     if result.blocked:
         raise BlockedError(result)
-    pseudo = Pseudonymizer.from_terms(terms) if get_settings().llm_pseudonymize and terms else None
+    # 外部模型强制假名化（决策记录：接入云端模型时标准档必须开启）
+    pseudonymize = s.llm_pseudonymize or uses_external_model()
+    pseudo = Pseudonymizer.from_terms(terms) if pseudonymize and terms else None
     text = pseudo.apply(message) if pseudo else message
     if pseudo:
         history = [{**m, "content": pseudo.apply(m["content"])} for m in (history or [])]
@@ -201,7 +218,7 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
     prompt_tokens, completion_tokens = _usage(data)
     return Completion(text=p.pseudo.restore(text) if p.pseudo else text, model=data.get("model", p.model),
                       demo=False, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
-                      latency_ms=_elapsed_ms(p), attempts=attempts, pseudonymized=p.pseudo is not None)
+                      latency_ms=_elapsed_ms(p), attempts=attempts, pseudonymized=p.pseudo is not None, external=uses_external_model())
 
 
 def stream(message: str, *, tier: str, project_code: str, level: str = "standard",
@@ -255,7 +272,7 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
             yield tail
     yield Completion(text="".join(parts), model=model, demo=False, prompt_tokens=prompt_tokens,
                      completion_tokens=completion_tokens, latency_ms=_elapsed_ms(p), attempts=attempts,
-                     pseudonymized=p.pseudo is not None)
+                     pseudonymized=p.pseudo is not None, external=uses_external_model())
 
 
 # ---- 可用性检查 ----

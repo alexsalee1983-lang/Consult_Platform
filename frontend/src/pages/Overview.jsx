@@ -17,6 +17,8 @@ export default function Overview({ code }) {
   const [p, setP] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [external, setExternal] = useState(false);   // 当前接的是外部测试模型
+  useEffect(() => { api.health().then((h) => setExternal(Boolean(h.llm_external))).catch(() => {}); }, []);
 
   const load = useCallback(() => {
     setError(null);
@@ -50,7 +52,7 @@ export default function Overview({ code }) {
         <Kpi cap="态势评分" value={p.posture_score ?? "—"} sub="满分 100" color="var(--amber)" />
         <Kpi cap="交付件已签署" value={`${signed} / ${p.deliverables.length}`} sub="按 D1～D8 统计" />
         <Kpi cap="待你确认" value={p.open_confirmations} sub="Agent 需要你判断的事项" color={p.open_confirmations ? "var(--amber)" : "var(--ok)"} />
-        <Kpi cap="数据档位" value={tier.label} sub={p.tier === "strict" ? "资料不出场 · 只收摘要卡" : "模型在公司内部 · 资料不出公司"} color={p.tier === "strict" ? "var(--crim)" : "var(--cyan)"} />
+        <Kpi cap="数据档位" value={tier.label} sub={p.tier === "strict" ? "资料不出场 · 只收摘要卡" : (external ? "当前为外部测试模型 · 只用虚拟数据" : "模型在公司内部 · 资料不出公司")} color={p.tier === "strict" ? "var(--crim)" : "var(--cyan)"} />
       </div>
       <div className="grid-main">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
