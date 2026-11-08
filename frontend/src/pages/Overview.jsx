@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api, DELIV_STATUS, KIND_CLS, TIER } from "../api.js";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
+import Members from "../components/Members.jsx";
 
 function Kpi({ cap, value, sub, color }) {
   return (
@@ -76,6 +77,7 @@ export default function Overview({ code }) {
             </ul>
           </section>
         </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         <section className="pnl pad" aria-label="待你确认">
           <div className="sb"><h2 className="h2">待你确认</h2><span className="mono" style={{ color: "var(--amber)" }}>{p.confirmations.length}</span></div>
           <ul className="lst">
@@ -89,6 +91,8 @@ export default function Overview({ code }) {
             {p.confirmations.length === 0 && <li className="sub">没有待确认事项</li>}
           </ul>
         </section>
+        <Members code={p.code} />
+        </div>
       </div>
     </>
   );

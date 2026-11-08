@@ -98,3 +98,15 @@ button { font: inherit; cursor: pointer; }
   .layout { grid-template-columns: minmax(0, 1fr); }
   .side { position: static; height: auto; }
 }
+
+/* 用户与角色管理 */
+.btn.sm { height: 26px; padding: 0 8px; font-size: 12px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.field select.sm { height: 26px; padding: 0 6px; font-size: 12px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.roles { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; border: 0; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--tx2); cursor: pointer; }
+.chk input { accent-color: var(--amber); width: 14px; height: 14px; margin: 0; }
+.cred { border-color: var(--amber); }
+.cred-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; background: var(--s2); border: 1px solid var(--ln); }
+.cred-v { flex: 1; min-width: 0; word-break: break-all; color: var(--tx); font-size: 13px; }

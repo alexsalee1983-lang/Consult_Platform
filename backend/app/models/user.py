@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..core.db import Base, utcnow
@@ -21,6 +21,8 @@ class User(Base):
     totp_secret: Mapped[str] = mapped_column(String(64))             # Base32；S5 加密存储
     totp_last_step: Mapped[int] = mapped_column(BigInteger, default=0)  # 已用过的最近时间步，防止动态码重放
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 管理员在网页上建账号或重置口令后为 True：登录后只能改口令，改完才能用其他功能
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

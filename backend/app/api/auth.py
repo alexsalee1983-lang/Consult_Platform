@@ -10,7 +10,13 @@ from ..core.auth import current_user
 from ..core.config import get_settings
 from ..core.db import get_db, utcnow
 from ..core.permissions import roles_of
-from ..core.security import match_totp_step, verify_password
+from ..core.security import (
+    PasswordPolicyError,
+    check_password_policy,
+    hash_password,
+    match_totp_step,
+    verify_password,
+)
 from ..models import User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -30,6 +36,12 @@ class MeOut(BaseModel):
     display_name: str
     roles: list[str]
     csrf_token: str
+    must_change_password: bool = False
+
+
+class PasswordIn(BaseModel):
+    old_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
 
 
 def _set_cookie(response: Response, token: str) -> None:
@@ -42,7 +54,8 @@ def _set_cookie(response: Response, token: str) -> None:
 
 def _me(db: Session, user: User, csrf: str) -> MeOut:
     return MeOut(username=user.username, display_name=user.display_name or user.username,
-                 roles=sorted(roles_of(db, user.id)), csrf_token=csrf)
+                 roles=sorted(roles_of(db, user.id)), csrf_token=csrf,
+                 must_change_password=user.must_change_password)
 
 
 def _as_aware(dt):
@@ -108,3 +121,41 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db),
 @router.get("/me", response_model=MeOut)
 def me(request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return _me(db, user, request.state.session.csrf)
+
+
+@router.post("/password", response_model=MeOut)
+def change_password(body: PasswordIn, request: Request, response: Response, db: Session = Depends(get_db),
+                    user: User = Depends(current_user)):
+    """本人修改口令。旧口令输错计入登录失败次数（防止拿到会话的人借此猜口令），达到上限锁定并结束全部会话。
+    成功后结束该用户的全部会话，再为当前请求发一个新会话，其他设备需要重新登录。"""
+    s = get_settings()
+    if not verify_password(user.password_hash, body.old_password):
+        user.failed_logins += 1
+        reason = "bad_password"
+        locked = user.failed_logins >= s.login_max_failures
+        if locked:
+            user.locked_until = utcnow() + timedelta(minutes=s.login_lock_minutes)
+            user.failed_logins = 0
+            reason += "+locked"
+        db.commit()
+        audit.record(db, actor=user.username, action="auth.password_change", result="blocked", reason=reason)
+        if locked:
+            sessions.destroy_all_for_user(user.id)
+            raise HTTPException(401, LOCKED)
+        raise HTTPException(400, "当前口令不正确")
+    try:
+        check_password_policy(body.new_password, s.password_min_length)
+    except PasswordPolicyError as e:
+        raise HTTPException(422, str(e)) from e
+    if verify_password(user.password_hash, body.new_password):
+        raise HTTPException(422, "新口令不能与当前口令相同")
+
+    user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
+    user.failed_logins = 0
+    db.commit()
+    sessions.destroy_all_for_user(user.id)
+    token, data = sessions.create(user.id, user.username)
+    _set_cookie(response, token)
+    audit.record(db, actor=user.username, action="auth.password_change", result="allowed")
+    return _me(db, user, data.csrf)

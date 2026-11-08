@@ -43,6 +43,11 @@ PROTECTED = [
     ("POST", "/api/admin/users/x/disable"),
     ("POST", "/api/admin/users/x/enable"),
     ("POST", "/api/admin/users/x/unlock"),
+    ("POST", "/api/admin/users"),
+    ("POST", "/api/admin/users/x/reset-password"),
+    ("POST", "/api/admin/users/x/reset-totp"),
+    ("POST", "/api/auth/password"),
+    ("GET", "/api/users/lookup"),
 ]
 
 

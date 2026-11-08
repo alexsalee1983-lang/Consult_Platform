@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hmac
+import secrets
 import time
 
 import pyotp
@@ -32,6 +33,22 @@ def check_password_policy(password: str, min_length: int) -> None:
                  any(c.isdigit() for c in password), any(not c.isalnum() for c in password)])
     if kinds < 3:
         raise PasswordPolicyError("口令须包含大写字母、小写字母、数字、符号中的至少三类")
+
+
+# 生成的初始口令不含易混淆字符（0/O、1/l/I），方便管理员线下转交
+_LOWER = "abcdefghijkmnpqrstuvwxyz"
+_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+_DIGITS = "23456789"
+_SYMBOLS = "#%+-=@"
+
+
+def generate_initial_password(length: int = 16) -> str:
+    """一次性初始口令：四类字符各至少一个，满足口令策略。用户首次登录后必须修改。"""
+    pool = _LOWER + _UPPER + _DIGITS + _SYMBOLS
+    chars = [secrets.choice(k) for k in (_LOWER, _UPPER, _DIGITS, _SYMBOLS)]
+    chars += [secrets.choice(pool) for _ in range(max(length, 12) - len(chars))]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
 
 
 def hash_password(password: str) -> str:
