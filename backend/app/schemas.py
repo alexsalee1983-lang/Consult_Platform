@@ -76,6 +76,8 @@ class ChatOut(BaseModel):
 
 class AuditOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+    id: int
+    hash: str | None = None   # 为空表示哈希链启用前的旧记录
     at: datetime
     actor: str
     project_code: str

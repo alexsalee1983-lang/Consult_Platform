@@ -12,7 +12,7 @@ export default function Login() {
 
   // 只接受站内路径，防止跳转到外部地址
   const from = typeof location.state?.from === "string" && location.state.from.startsWith("/") &&
-    !location.state.from.startsWith("//") ? location.state.from : "/projects";
+    !location.state.from.startsWith("//") ? location.state.from : "/";
 
   if (status === "authed") return <Navigate to={from} replace />;
 

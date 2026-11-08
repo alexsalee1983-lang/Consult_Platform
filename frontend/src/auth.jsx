@@ -49,6 +49,27 @@ export function hasBusinessRole(user) {
   return (user?.roles || []).some((r) => BUSINESS_ROLES.includes(r));
 }
 
+export function isAuditor(user) {
+  return (user?.roles || []).includes("security_auditor");
+}
+
+// 登录后的首页：审计员去审计日志，其他人去我的项目
+export function HomeRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={isAuditor(user) ? "/audit" : "/projects"} replace />;
+}
+
+export function RequireAuditor({ children }) {
+  const { user } = useAuth();
+  if (isAuditor(user)) return children;
+  return (
+    <section className="pnl pad" aria-label="无权限">
+      <h1 className="h1">只有安全审计员能查看审计日志</h1>
+      <div className="sub" style={{ fontSize: 13 }}>审计员由单独任命，在服务器上授予。</div>
+    </section>
+  );
+}
+
 // 业务页面：系统管理员、安全审计员、未分配角色的账号看到说明，而不是报错
 export function RequireBusiness({ children }) {
   const { user } = useAuth();
