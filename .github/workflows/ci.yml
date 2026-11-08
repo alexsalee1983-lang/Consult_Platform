@@ -74,6 +74,20 @@ jobs:
       - run: bash scripts/smoke_test.sh http://localhost:8080
         env:
           SMOKE_EXPECT_LLM: ok
+      - name: 后端容器重建后，前端不重启也能连上（nginx 重新解析后端地址）
+        run: |
+          before=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker compose ps -q backend))
+          docker compose stop backend
+          docker run -d --rm --name ip-holder --network "$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' $(docker compose ps -q frontend))" busybox sleep 120
+          docker compose up -d --force-recreate --no-deps backend
+          after=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker compose ps -q backend))
+          echo "后端地址 $before -> $after"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/health)
+            [ "$code" = "200" ] && echo "经前端访问后端：200" && exit 0
+            sleep 3
+          done
+          echo "后端重建后经前端访问失败：$code"; docker compose logs --no-color frontend | tail -20; exit 1
       - name: 中文分词可用（zhparser）
         run: |
           out=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT to_tsvector('zh', '安全运营中心的值班制度')")
