@@ -41,6 +41,12 @@ MATRIX = [
     (("GET", "/api/admin/users", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/roles", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/usage", None),                 (403, 403, 200, 403, 403)),
+    (("GET", "/api/admin/agent-grants", None),          (403, 403, 200, 403, 403)),
+    (("GET", "/api/agents", None),                      (200, 200, 403, 403, 403)),
+    (("POST", "/api/agents/consultant-lead/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (200, 404, 403, 403, 403)),
+    (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (403, 403, 403, 403, 403)),
 ]
 
 

@@ -65,6 +65,16 @@ def list_roles() -> dict[str, str]:
     return ROLE_NAMES
 
 
+@router.get("/agent-grants")
+def agent_grants(db: Session = Depends(get_db)) -> list[dict]:
+    """Agent × 工具授权矩阵（只读；改授权走迁移和代码审阅）。"""
+    from ..agents.tools import granted_tools
+    from ..models import Agent
+
+    return [{"agent": a.code, "name": a.name, "side": a.side, "phase": a.phase, "enabled": a.enabled,
+             "tools": granted_tools(db, a.code)} for a in db.scalars(select(Agent).order_by(Agent.side, Agent.code))]
+
+
 @router.get("/usage")
 def usage_report(days: int = Query(30, ge=1, le=366), db: Session = Depends(get_db)) -> list[dict]:
     """大模型用量，按人、模型汇总。三权分立：系统管理员看不到项目维度（项目维度用命令行 usage-report）。"""

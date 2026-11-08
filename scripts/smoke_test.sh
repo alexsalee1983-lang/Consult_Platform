@@ -90,6 +90,10 @@ check "正常提问可以通过"              200 -X POST "$BASE/api/chat" -H "$
       -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'
 check "含口令和 IP 的内容被拦截"      422 -X POST "$BASE/api/chat" -H "$J" -H "$C" \
       -d '{"project_code":"BANK-A","message":"核心交换机 10.1.20.1 密码：Abc@12345"}'
+check "咨询师 Agent 能读项目区"       200 -X POST "$BASE/api/agents/consultant-lead/tools/project.read" -H "$J" -H "$C" \
+      -d '{"project_code":"BANK-A"}'
+check "知识侧 Agent 读不到项目区"     403 -X POST "$BASE/api/agents/kb-builder/tools/project.read" -H "$J" -H "$C" \
+      -d '{"project_code":"BANK-A"}'
 check "流式提问可以通过"              200 -X POST "$BASE/api/chat/stream" -H "$J" -H "$C" \
       -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'
 if grep -q "^event: done" "$BODY"; then echo "  通过  流式输出正常结束"; pass=$((pass+1)); else
