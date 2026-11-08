@@ -77,5 +77,21 @@ def test_downgrade_to_base_and_back(engine):
     assert _current(engine) == _head()
 
 
+def test_0007_fixes_old_solution_design_code(engine):
+    """跑过旧 0006（代号 solution-design）的库，升级到 0007 后改为 solution-designer，授权随之迁移。"""
+    with engine.begin() as conn:
+        command.upgrade(alembic_config(conn), "0006_agents_tools")
+        conn.execute(text("INSERT INTO agents VALUES ('solution-design', '方案设计', 'delivery', '一期', 1)"))
+        conn.execute(text("DELETE FROM agent_tool_grants WHERE agent_code = 'solution-designer'"))
+        conn.execute(text("DELETE FROM agents WHERE code = 'solution-designer'"))
+        conn.execute(text("INSERT INTO agent_tool_grants VALUES ('solution-design', 'kb.search', 'old', '2026-11-07')"))
+        command.upgrade(alembic_config(conn), "head")
+        codes = {r[0] for r in conn.execute(text("SELECT code FROM agents"))}
+        grants = {r[0] for r in conn.execute(text("SELECT tool_code FROM agent_tool_grants "
+                                                  "WHERE agent_code = 'solution-designer'"))}
+    assert "solution-designer" in codes and "solution-design" not in codes
+    assert grants == {"kb.search"}
+
+
 def test_baseline_revision_exists():
     assert ScriptDirectory.from_config(alembic_config()).get_revision(BASELINE) is not None

@@ -92,6 +92,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 工具约定：Agent 读写数据只经 `app/agents/tools.py` 的 `invoke()`（授权 + 硬规则 + 项目成员检查 + 审计）。Agent × 工具授权由迁移写入，改授权要新迁移、同步 `tests/test_tools.py` 的 `EXPECTED`，并在 PR 写明依据；不提供修改授权的接口。新工具要在 `tools` 表登记区域（knowledge / project / staging / none）和读写，硬规则按这两项判断。
 
+运行时约定：Agent 的系统提示 = `agents/01_公共规范.md` + 角色 md 正文 + 平台生成的项目卡（`app/agents/runtime.py`）；项目卡经工具层 `project.read` 读取。md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier`、`tools`（仅作说明）、`service_modules`。每条对话和回复记下提示词版本（md 内容哈希）。后端镜像以仓库根目录为构建范围，`agents/` 打进镜像（`backend/Dockerfile`、根目录 `.dockerignore`）；测试机可只读挂载 `./agents:/srv/agents:ro`，md 改了自动重新加载。
+
 网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。测试里用 `gateway.set_transport(httpx.MockTransport(...))` 模拟模型，不要连真实地址。
 
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。

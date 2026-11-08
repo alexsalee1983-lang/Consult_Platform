@@ -34,14 +34,23 @@ async function request(path, options = {}) {
   return data;
 }
 
-// 流式对话：/api/chat/stream 返回 Server-Sent Events（event: delta / done / error）。
+// 流式接口返回 Server-Sent Events（event: delta / done / error）。
 // onDelta(text) 每收到一段调用一次；返回 done 事件的数据。拦截（422）、无权限等在开始输出前以 ApiError 抛出。
-export async function chatStream(project_code, message, onDelta) {
-  const res = await fetch("/api/chat/stream", {
+export function chatStream(project_code, message, onDelta) {
+  return streamPost("/api/chat/stream", { project_code, message }, onDelta);
+}
+
+// Agent 对话：发一条消息，流式返回
+export function sendMessage(conversationId, message, onDelta) {
+  return streamPost(`/api/conversations/${conversationId}/messages`, { message }, onDelta);
+}
+
+async function streamPost(url, body, onDelta) {
+  const res = await fetch(url, {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
-    body: JSON.stringify({ project_code, message }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
@@ -84,6 +93,11 @@ export const api = {
     request(`/api/confirmations/${id}/resolve`, { method: "POST", body: JSON.stringify({ resolution }) }),
   chat: (project_code, message) =>
     request("/api/chat", { method: "POST", body: JSON.stringify({ project_code, message }) }),
+  agents: () => request("/api/agents"),
+  conversations: (code) => request(`/api/projects/${encodeURIComponent(code)}/conversations`),
+  createConversation: (code, agent_code) =>
+    request(`/api/projects/${encodeURIComponent(code)}/conversations`, { method: "POST", body: JSON.stringify({ agent_code }) }),
+  conversation: (id) => request(`/api/conversations/${id}`),
   audit: (params) => request(`/api/audit?${new URLSearchParams(
     Object.entries(params).filter(([, v]) => v !== "" && v != null))}`),
   verifyAudit: (expectHead) =>

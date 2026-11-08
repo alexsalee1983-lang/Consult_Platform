@@ -67,12 +67,17 @@ def list_roles() -> dict[str, str]:
 
 @router.get("/agent-grants")
 def agent_grants(db: Session = Depends(get_db)) -> list[dict]:
-    """Agent × 工具授权矩阵（只读；改授权走迁移和代码审阅）。"""
-    from ..agents.tools import granted_tools
+    """Agent × 工具授权矩阵（只读；改授权走迁移和代码审阅），附 md 就绪情况和 md 与授权表的差异提示。"""
+    from ..agents import runtime
     from ..models import Agent
 
-    return [{"agent": a.code, "name": a.name, "side": a.side, "phase": a.phase, "enabled": a.enabled,
-             "tools": granted_tools(db, a.code)} for a in db.scalars(select(Agent).order_by(Agent.side, Agent.code))]
+    out = []
+    for a in db.scalars(select(Agent).order_by(Agent.side, Agent.code)):
+        i = runtime.agent_info(db, a)
+        out.append({"agent": a.code, "name": a.name, "side": a.side, "phase": a.phase, "enabled": a.enabled,
+                    "tools": i.tools, "ready": i.ready, "reason": i.reason, "prompt_version": i.prompt_version,
+                    "md_notes": i.notes})
+    return out
 
 
 @router.get("/usage")

@@ -12,9 +12,10 @@ from .gateway import Completion
 
 
 def record(db: Session, *, username: str, project_code: str, level: str, model: str, status: str,
-           stream: bool, completion: Completion | None = None, attempts: int = 1) -> None:
+           stream: bool, completion: Completion | None = None, attempts: int = 1, agent_code: str = "") -> None:
     c = completion
-    db.add(LlmUsage(username=username[:64], project_code=project_code, level=level, model=(c.model if c else model)[:64],
+    db.add(LlmUsage(username=username[:64], project_code=project_code, level=level, agent_code=agent_code,
+                    model=(c.model if c else model)[:64],
                     status=status, demo=bool(c and c.demo), stream=stream, pseudonymized=bool(c and c.pseudonymized),
                     prompt_tokens=c.prompt_tokens if c else 0, completion_tokens=c.completion_tokens if c else 0,
                     latency_ms=c.latency_ms if c else 0, attempts=c.attempts if c else attempts))

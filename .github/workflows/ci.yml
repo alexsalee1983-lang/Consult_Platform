@@ -71,6 +71,18 @@ jobs:
           assert out.attempts == 2 and not out.demo, out
           print("重试成功，尝试次数", out.attempts)
           PY
+      - name: Agent md 已打进后端镜像且就绪
+        run: |
+          docker compose exec -T backend python - <<'PY'
+          from app.agents import runtime
+          from app.core.db import SessionLocal
+          with SessionLocal() as db:
+              infos = {i.code: i for i in runtime.list_agents(db)}
+          ready = sorted(c for c, i in infos.items() if i.ready)
+          print("就绪的 Agent：", ready)
+          assert "consultant-lead" in ready and "solution-designer" in ready, infos
+          PY
+          docker compose exec -T backend sh -c 'test -f /srv/agents/01_公共规范.md && test ! -e /srv/.env && test ! -e /srv/.git && test ! -e /srv/backend'
       - name: 审计哈希链：多进程并发写入后校验（PostgreSQL）
         run: bash scripts/audit_chain_check.sh 4 50
       - name: 审计表只能追加（数据库触发器）
