@@ -121,11 +121,15 @@ jobs:
         run: npm audit
 
       - name: 密钥泄露扫描（gitleaks，全部提交历史）
+        timeout-minutes: 15
         run: |
           base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
           tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -sSfLO "$base/$tarball"
-          curl -sSfL "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt" -o checksums.txt
+          # GitHub 发布页下载偶尔返回 502/504：每次最多等 60 秒，失败后重试 5 次（间隔 15 秒）。
+          # 校验和比对不变，重试拿到的文件同样要通过 sha256 校验。
+          dl="curl -sSfL --connect-timeout 20 --max-time 60 --retry 5 --retry-delay 15 --retry-all-errors"
+          $dl "$base/$tarball" -o "$tarball"
+          $dl "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt" -o checksums.txt
           grep " $tarball\$" checksums.txt | sha256sum -c -
           tar -xzf "$tarball" gitleaks
           ./gitleaks git --redact --verbose .
