@@ -20,7 +20,19 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements-dev.txt
       - run: ruff check app tests alembic
+      # 接口测试跑在平台数据库镜像上（PostgreSQL 16 + pgvector + zhparser），与生产一致
+      - name: 构建并启动测试数据库
+        working-directory: .
+        run: |
+          docker build -t consult-platform-postgres:ci deploy/postgres
+          docker run -d --name testdb -e POSTGRES_DB=consult_test -e POSTGRES_USER=consult             -e POSTGRES_PASSWORD=consult -p 127.0.0.1:5432:5432 consult-platform-postgres:ci
+          for i in $(seq 1 30); do docker exec testdb pg_isready -U consult -d consult_test && exit 0; sleep 2; done
+          exit 1
       - run: pytest -q
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_test
+      - name: 本地快速测试（SQLite）也要能通过
+        run: pytest -q -x
 
   frontend:
     runs-on: ubuntu-latest
@@ -62,6 +74,11 @@ jobs:
       - run: bash scripts/smoke_test.sh http://localhost:8080
         env:
           SMOKE_EXPECT_LLM: ok
+      - name: 中文分词可用（zhparser）
+        run: |
+          out=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT to_tsvector('zh', '安全运营中心的值班制度')")
+          echo "$out"
+          echo "$out" | grep -q "值班"
       - name: 网关重试（模拟模型第一次返回 503）
         run: |
           docker compose exec -T backend python - <<'PY'
