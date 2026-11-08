@@ -31,7 +31,7 @@ def test_prod_requires_object_storage_and_strong_secret():
     base = {"app_env": "prod", "session_backend": "redis", "cookie_secure": True, "test_account_username": "",
             "test_account_password": ""}
     with pytest.raises(BootstrapError, match="对象存储"):
-        check_settings(Settings(_env_file=None, **base))
+        check_settings(Settings(_env_file=None, **base, minio_endpoint=""))   # 显式清空，不受环境变量影响
     with pytest.raises(BootstrapError, match="过短"):
         check_settings(Settings(_env_file=None, **base, minio_endpoint="minio:9000", minio_access_key="k",
                                 minio_secret_key="short"))
