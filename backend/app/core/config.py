@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     embed_api_key: str = ""
     embed_model: str = "BAAI/bge-small-zh-v1.5"
     embed_batch_size: int = 32
+    # 向量检索的相似度下限（余弦相似度，0～1）：向量检索总会返回“最近的”切片，哪怕毫不相关，
+    # 所以只有向量命中、全文没命中的结果，相似度低于下限就丢掉。依据查询更严，避免把弱相关条款当依据引用。
+    # 默认值按 bge-small-zh-v1.5 的经验取，S2 评测（scripts/kb_eval.py）后校准。
+    kb_vector_min_similarity: float = 0.5
+    kb_basis_min_similarity: float = 0.65
 
     seed_demo_data: bool = True
 

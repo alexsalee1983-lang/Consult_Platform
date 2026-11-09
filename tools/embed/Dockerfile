@@ -10,10 +10,20 @@ WORKDIR /srv
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG HF_ENDPOINT=https://huggingface.co
 ARG EMBED_MODEL=BAAI/bge-small-zh-v1.5
+# 构建机需要代理时：docker compose build --build-arg HTTP_PROXY=... --build-arg HTTPS_PROXY=...
+# 这里显式声明，并在下载步骤里同时设置大小写两种写法（不同的下载库读的写法不同）；不会写进镜像
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
 COPY requirements.txt .
 RUN pip install -i ${PIP_INDEX_URL} -r requirements.txt
 ENV FASTEMBED_CACHE_PATH=/models EMBED_MODEL=${EMBED_MODEL}
-RUN HF_ENDPOINT=${HF_ENDPOINT} python -c "import os; from fastembed import TextEmbedding; \
+# 下载有超时：连不上时报错退出，不会无声地一直卡住
+RUN if [ -n "${HTTPS_PROXY}" ]; then p="已设置"; else p="未设置"; fi && \
+    echo "正在下载向量模型 ${EMBED_MODEL}（来源 ${HF_ENDPOINT}，代理：${p}；不打印代理地址）" && \
+    export http_proxy="${HTTP_PROXY}" https_proxy="${HTTPS_PROXY}" no_proxy="${NO_PROXY}" \
+           HF_HUB_DOWNLOAD_TIMEOUT=60 HF_HUB_ETAG_TIMEOUT=30 HF_ENDPOINT="${HF_ENDPOINT}" && \
+    timeout 1200 python -c "import os; from fastembed import TextEmbedding; \
 m = TextEmbedding(os.environ['EMBED_MODEL'], cache_dir='/models'); \
 v = list(m.embed(['安全运营中心值班制度']))[0]; print('model ready, dim', len(v))"
 COPY app.py .

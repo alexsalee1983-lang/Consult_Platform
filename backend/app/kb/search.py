@@ -3,6 +3,8 @@
 - 全文：PostgreSQL 中文全文索引（zh），查询分词后任一词命中即可，按 ts_rank_cd 排序。
 - 向量：查询经网关 embed 转成向量，按余弦距离在 HNSW 索引上找最近的切片；向量服务没启用或不可用时只用全文。
 - 融合：两路各取前 40 个切片，按 RRF（1 / (60 + 名次)）相加，同一条目只保留得分最高的切片。
+- 相似度下限：只有向量命中、全文没命中的切片，余弦相似度低于下限就丢掉（向量检索总会返回“最近的”结果）；
+  依据查询用更高的下限（KB_BASIS_MIN_SIMILARITY），查不到就提示【依据待核实】。
 - 过滤：层级、服务产品（默认同时包含 GEN 通用知识）、阶段、类型；受限条目按可见角色（与 app/kb/review.py 一致）。
 - 查询先过机密级检测；审计只记查询长度和摘要哈希，不记原文。
 - 依据查询（basis）：只查 L4 依据库，按公共规范第 3 节给出引用格式，复审日期已过的提示“请确认是否有更新”。
@@ -89,12 +91,13 @@ def _fulltext_pg(db: Session, q: str, where: str, params: dict) -> list[int]:
     return [r[0] for r in rows]
 
 
-def _vector_pg(db: Session, vec: list[float], model: str, where: str, params: dict) -> list[int]:
+def _vector_pg(db: Session, vec: list[float], model: str, where: str, params: dict) -> list[tuple[int, float]]:
+    """返回 [(切片编号, 余弦相似度)]，按相似度从高到低。"""
     literal = "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
-    rows = db.execute(text(f"""SELECT c.id {_BASE}
+    rows = db.execute(text(f"""SELECT c.id, 1 - (c.embedding <=> CAST(:vec AS vector)) AS sim {_BASE}
         WHERE c.embedding IS NOT NULL AND c.embedding_model = :model {where}
         ORDER BY c.embedding <=> CAST(:vec AS vector) LIMIT {POOL}"""), {**params, "vec": literal, "model": model})
-    return [r[0] for r in rows]
+    return [(r[0], float(r[1])) for r in rows]
 
 
 def _fulltext_simple(db: Session, q: str, where: str, params: dict) -> list[int]:
@@ -115,7 +118,8 @@ def _rrf(*rankings: list[int]) -> dict[int, float]:
 
 
 def search(db: Session, user: User, query: str, *, layer: str = "", product: str = "", stage: str = "",
-           doc_type: str = "", limit: int = 8, include_general: bool = True, purpose: str = "kb.search") -> dict:
+           doc_type: str = "", limit: int = 8, include_general: bool = True, purpose: str = "kb.search",
+           min_similarity: float | None = None) -> dict:
     query = query.strip()
     if not query:
         raise SearchError(422, "检索词不能为空")
@@ -138,7 +142,11 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
             emb = gateway.embed([query])
             usage.record(db, username=user.username, project_code="", level="embed", model=emb.model, status="ok",
                          stream=False, attempts=emb.attempts)
-            vec_ids = _vector_pg(db, emb.vectors[0], emb.model, where, params)
+            floor = get_settings().kb_vector_min_similarity if min_similarity is None else min_similarity
+            full_set_pre = set(full)
+            # 全文也命中的切片照常参与融合；只有向量命中的，相似度够高才要
+            vec_ids = [cid for cid, sim in _vector_pg(db, emb.vectors[0], emb.model, where, params)
+                       if cid in full_set_pre or sim >= floor]
             vector_status = "ok"
         except gateway.GatewayError as e:         # 向量服务不可用：退回只用全文
             vector_status = f"unavailable: {str(e)[:60]}"
@@ -182,7 +190,8 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
 def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit: int = 5) -> dict:
     """依据查询：只查 L4 依据库。查不到时提示按公共规范第 3 节标注【依据待核实】。"""
     q = f"{ref_document} {query}".strip() if ref_document else query
-    out = search(db, user, q, layer="L4", limit=limit, include_general=True, purpose="kb.basis")
+    out = search(db, user, q, layer="L4", limit=limit, include_general=True, purpose="kb.basis",
+                 min_similarity=get_settings().kb_basis_min_similarity)
     if ref_document:
         out["items"] = [h for h in out["items"] if ref_document in h["ref_document"]] or out["items"]
     if not out["items"]:
