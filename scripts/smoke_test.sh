@@ -123,12 +123,14 @@ if [ "${SMOKE_EXPECT_LLM:-}" = "ok" ]; then
   if [ "$llm" = "ok" ] && ! grep -q '"demo": true' "$BODY"; then echo "  通过  模型可用且不是演示回复"; pass=$((pass+1)); else
     echo "  失败  模型状态：$llm"; fail=$((fail+1)); fi
 fi
-# 知识投料：每次内容带时间戳，避免与上次运行重复（重复会返回 409）
+# 知识投料：每次内容带一个 UUID，避免与上次运行重复（重复会返回 409）。
+# 不用纳秒时间戳：19 位数字偶尔能通过 Luhn 校验，会被机密级检测当成银行卡号拦下
+RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 KB_OK="$(mktemp --suffix=.md)"; KB_BAD="$(mktemp --suffix=.md)"
 printf '# 冒烟测试-值班交接（%s）
 
 冒烟测试农商行的交接班时核对未闭环的一级事件。
-' "$(date +%s%N)" > "$KB_OK"
+' "$RUN_ID" > "$KB_OK"
 printf '# 冒烟测试-网络改造
 
 核心交换机 10.1.20.1 管理口令 Abc@12345
