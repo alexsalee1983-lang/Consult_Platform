@@ -117,12 +117,20 @@ class KbUpload(Base):
     content_type: Mapped[str] = mapped_column(String(128), default="")
     size: Mapped[int] = mapped_column(Integer, default=0)
     sha256: Mapped[str] = mapped_column(String(64), index=True)
-    status: Mapped[str] = mapped_column(String(16), default="received", index=True)  # received/blocked/parsing/parsed/failed
+    status: Mapped[str] = mapped_column(String(16), default="received", index=True)  # received / parsed / failed
     guard_categories: Mapped[list] = mapped_column(JSON, default=list)        # 机密级命中类别，不记命中内容
     error: Mapped[str] = mapped_column(String(200), default="")
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
     uploaded_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # 解析结果（迁移 0012）：parsed_key 指向对象存储知识区里的解析结果 JSON（章节 + 片段）
+    kind: Mapped[str] = mapped_column(String(16), default="")                 # docx / pdf / markdown / text
+    parsed_key: Mapped[str] = mapped_column(String(512), default="")
+    page_count: Mapped[int] = mapped_column(Integer, default=0)
+    section_count: Mapped[int] = mapped_column(Integer, default=0)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    char_count: Mapped[int] = mapped_column(Integer, default=0)
+    parsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class KbDeidReport(Base):

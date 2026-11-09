@@ -1,6 +1,30 @@
 """知识库元数据：取值表与校验规则，依据 agents/01_公共规范.md 第 7 节（第一期标准）。
 
 改这里的取值必须同步公共规范第 7 节（公共规范的修改要负责人同意），并更新 tests/test_kb_schema.py。
+
+公共规范字段 → 代码字段（条目 KbItem / 版本 KbVersion，见 app/models/kb.py；建条目用 app/kb/items.py 的
+ItemMeta / VersionContent）：
+
+| 公共规范 | 代码 | 取值 |
+|---|---|---|
+| doc_id | KbItem.doc_id | 自动分配，格式见 DOC_ID_RE |
+| 标题 | KbVersion.title / VersionContent.title | |
+| 层级 | KbItem.layer / ItemMeta.layer | LAYERS 的键：L1～L5 |
+| 一级目录 | domain | DOMAINS 的键：GOV / CMP / DAT / OPS / RES / ARC |
+| 服务产品 | product | PRODUCTS 的键：SOC / GEN |
+| 交付阶段 | stage | STAGES：启动……通用（中文） |
+| 交付物类型 | doc_type | DOC_TYPES 的键：TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT |
+| 能力域标签 | capabilities | CAPABILITIES：管理 / 运营 / 技术支撑（列表） |
+| 适用行业 | industries | 中文列表，通用的填 ["通用"] |
+| 密级 | classification | internal 内部 / restricted 受限 |
+| 脱敏状态 | KbVersion.deid_status | pending 未脱敏 / passed 已脱敏 / not_needed 无需脱敏 |
+| 来源 | source_type | expert 专家萃取 / project 项目沉淀 / public 公开资料 / internal 公司内部制度改造 |
+| 授权编号、标准编号 | source_detail | internal 必填 |
+| 负责人 | KbItem.owner | 用户名 |
+| 版本 | KbVersion.version | 1, 2, 3……自动递增 |
+| 生效日期 / 复审日期 | effective_date / review_date | 复审日期不填时按层级自动算 |
+| 可见角色 | visible_roles | consultant / presales / admin（列表） |
+| 依据：文件名 / 版本号 / 生效状态 | ref_document / ref_version / ref_status | L4 必填；ref_status 为 current / upcoming / repealed |
 """
 from __future__ import annotations
 
