@@ -234,3 +234,18 @@ def test_vector_service_down_falls_back_to_fulltext(people, embedder):
     embedder(fail=True)
     out = _search(people, "consultant", "托管方 夜间值守")
     assert out["vector"].startswith("unavailable") and out["items"]
+
+
+@on_postgres
+def test_unrelated_query_gets_no_vector_only_hits(people, corpus, embedder):
+    """向量检索总会返回最近的切片；相似度下限保证毫不相关的问题查不到依据，照常提示【依据待核实】。"""
+    embedder()
+    with SessionLocal() as db:
+        for vid in (corpus["basis"].id, corpus["duty"].id):
+            search.embed_version(db, vid)
+        member = db.merge(people["consultant"])
+        out = search.basis(db, member, "量子纠缠遥感卫星编队")
+        assert out["items"] == [] and "依据待核实" in out["note"]
+        assert search.search(db, member, "zzzxxxqqq")["items"] == []
+        hit = search.basis(db, member, "安全事件 集中分析")["items"]               # 相关的照常命中
+        assert corpus["basis"].doc_id in [h["doc_id"] for h in hit]
