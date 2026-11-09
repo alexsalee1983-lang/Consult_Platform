@@ -223,6 +223,95 @@ def kb_reembed(args: argparse.Namespace) -> int:
     return 0
 
 
+def _knowledge_user(db, username: str):
+    from .kb import review
+
+    user = db.scalar(select(User).where(User.username == username))
+    if user is None or not user.is_active:
+        print(f"用户 {username} 不存在或已停用", file=sys.stderr)
+        return None
+    if not review.is_knowledge_user(db, user):
+        print(f"用户 {username} 不是知识专家或知识管理员", file=sys.stderr)
+        return None
+    return user
+
+
+def kb_import(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .kb import importer
+
+    path = Path(args.dir)
+    if not path.is_dir():
+        print(f"目录不存在：{path}", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        user = _knowledge_user(db, args.as_user)
+        if user is None:
+            return 1
+        results = importer.import_dir(db, user, path, submit=args.submit)
+    label = {"created": "新建", "revised": "修订", "unchanged": "无变化", "skipped": "跳过", "error": "失败"}
+    for r in results:
+        where = f" {r.doc_id}" if r.doc_id else ""
+        print(f"  {label.get(r.action, r.action)}  {r.file}{where}" + (f"  —— {r.message}" if r.message else ""))
+    counts = {k: sum(1 for r in results if r.action == k) for k in label}
+    print("合计：" + "，".join(f"{label[k]} {n}" for k, n in counts.items() if n) +
+          ("；已提交审核，仍需双人审核后发布" if args.submit else "；均为草稿，在审批队列提交审核"))
+    return 2 if counts["error"] else 0
+
+
+def kb_draft(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .kb import drafting
+
+    src = Path(args.source)
+    if not src.is_file():
+        print(f"资料文件不存在：{src}", file=sys.stderr)
+        return 1
+    defaults = {k: v for k, v in (("product", args.product), ("domain", args.domain)) if v}
+    with SessionLocal() as db:
+        user = _knowledge_user(db, args.as_user)
+        if user is None:
+            return 1
+        try:
+            report = drafting.draft(db, user, src.name, src.read_bytes(), source_detail=args.source_detail,
+                                    defaults=defaults)
+        except drafting.DraftError as e:
+            print(f"起草失败：{e}", file=sys.stderr)
+            return 2
+    written = drafting.write_report(report, Path(args.out))
+    print(f"调用模型 {report.calls} 次（{report.model}）。{report.note}")
+    print(f"起草 {len(report.accepted)} 条，写到 {args.out}；退回 {len(report.rejected)} 条（见 {args.out}/_rejected/）")
+    for p in written:
+        print(f"  {p.name}")
+    print("这些只是草稿文件：专家逐条修改核对后，用 kb-import 导入，再经双人审核发布。")
+    return 0
+
+
+def kb_eval(args: argparse.Namespace) -> int:
+    import json
+    from pathlib import Path
+
+    from .kb import evaluate
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == args.as_user))
+        if user is None or not user.is_active:
+            print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
+            return 1
+        try:
+            report = evaluate.run(db, user, evaluate.load_questions(Path(args.questions)))
+        except evaluate.EvalError as e:
+            print(f"题目文件有问题：{e}", file=sys.stderr)
+            return 1
+    print(evaluate.format_report(report))
+    if args.out:
+        Path(args.out).write_text(json.dumps(report.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"明细已写到 {args.out}")
+    return 0 if report.accuracy >= 0.9 else 3
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.cli", description="安全咨询平台运维命令")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -259,6 +348,24 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--wait", type=int, default=60)
     sc.set_defaults(func=selfcheck)
     sub.add_parser("kb-reembed", help="更换向量模型后，重新向量化全部已发布知识").set_defaults(func=kb_reembed)
+    ki = sub.add_parser("kb-import", help="批量导入知识条目文件（只收公开资料，导入为草稿）")
+    ki.add_argument("dir", help="条目文件所在目录（*.md，带元数据头）")
+    ki.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份导入")
+    ki.add_argument("--submit", action="store_true", help="导入后一并提交审核")
+    ki.set_defaults(func=kb_import)
+    kd = sub.add_parser("kb-draft", help="由知识库建设 Agent 从公开资料原文起草条目文件（不直接入库）")
+    kd.add_argument("--source", required=True, help="公开资料文件：.docx / .pdf / .md / .txt")
+    kd.add_argument("--source-detail", required=True, help="来源说明，如“中华人民共和国网络安全法（2016）全文”")
+    kd.add_argument("--out", required=True, help="起草结果写到哪个目录")
+    kd.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份起草")
+    kd.add_argument("--product", default="", help="默认服务产品缩写，如 SOC、GEN")
+    kd.add_argument("--domain", default="", help="默认一级目录缩写，如 OPS、CMP")
+    kd.set_defaults(func=kb_draft)
+    ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90% 时退出码 0）")
+    ke.add_argument("questions", help="评测题目文件（YAML）")
+    ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
+    ke.add_argument("--out", default="", help="把明细写成 JSON 文件")
+    ke.set_defaults(func=kb_eval)
     args = p.parse_args(argv)
     upgrade_to_head()
     return args.func(args)

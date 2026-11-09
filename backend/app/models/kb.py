@@ -37,6 +37,8 @@ class KbItem(Base):
     classification: Mapped[str] = mapped_column(String(16), default="internal")  # internal / restricted
     visible_roles: Mapped[list] = mapped_column(JSON, default=_default_visible_roles)
     owner: Mapped[str] = mapped_column(String(64), default="")                 # 专家负责人（用户名）
+    # 批量导入的条目标识（迁移 0016）：条目文件里的 key，重复导入时据此修订而不是重复建条目；评测题也按它对应
+    import_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     current_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("kb_versions.id", use_alter=True, name="fk_kb_items_current_version"), nullable=True)
     retired: Mapped[bool] = mapped_column(Boolean, default=False)

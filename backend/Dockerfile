@@ -17,6 +17,8 @@ COPY backend/alembic ./alembic
 COPY backend/app ./app
 # Agent md：运行时从 /srv/agents 读取（测试机可用只读挂载覆盖，改 md 不用重建镜像）
 COPY agents ./agents
+# 知识条目文件、评测题（命令行 kb-import / kb-eval 用，如 /srv/knowledge/samples）
+COPY knowledge ./knowledge
 # 代码和 md 归 root 所有，应用用户只读
 RUN useradd -r -u 10001 app
 USER app
