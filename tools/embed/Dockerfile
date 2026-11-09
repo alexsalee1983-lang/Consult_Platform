@@ -11,10 +11,9 @@ ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG HF_ENDPOINT=https://huggingface.co
 ARG EMBED_MODEL=BAAI/bge-small-zh-v1.5
 # 构建机需要代理时：docker compose build --build-arg HTTP_PROXY=... --build-arg HTTPS_PROXY=...
-# 这里显式声明，并在下载步骤里同时设置大小写两种写法（不同的下载库读的写法不同）；不会写进镜像
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY
+# HTTP_PROXY 等是 Docker 预定义的构建参数：**不要用 ARG 声明**——不声明时它们在 RUN 里照样可用，
+# 且不会写进镜像历史（docker history）；声明了反而会把代理地址（可能含账号口令）留在镜像元数据里。
+# 下载步骤里再补上小写写法（不同的下载库读的写法不同）。
 COPY requirements.txt .
 RUN pip install -i ${PIP_INDEX_URL} -r requirements.txt
 ENV FASTEMBED_CACHE_PATH=/models EMBED_MODEL=${EMBED_MODEL}
