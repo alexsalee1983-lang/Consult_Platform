@@ -46,6 +46,8 @@ MATRIX = [
     (("POST", "/api/admin/users/matrix_target/reset-password", None), (403, 403, 200, 403, 403)),
     (("POST", "/api/admin/users/matrix_target/reset-totp", None),     (403, 403, 200, 403, 403)),
     (("GET", "/api/kb/intake", None),                   (200, 200, 403, 403, 403)),
+    (("GET", "/api/kb/items", None),                    (200, 200, 403, 403, 403)),
+    (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/admin/jobs", None),                  (403, 403, 200, 403, 403)),
     (("POST", "/api/admin/jobs/selfcheck", None),       (403, 403, 202, 403, 403)),
     (("GET", "/api/users/lookup?q=u_", None),           (200, 200, 403, 403, 403)),

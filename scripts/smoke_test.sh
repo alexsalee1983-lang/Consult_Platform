@@ -3,7 +3,7 @@
 # 测试地址：第一个参数 > 环境变量 SMOKE_BASE > 默认 http://localhost:8080，例如
 #   ./scripts/smoke_test.sh http://127.0.0.1:18080
 #   SMOKE_BASE=http://127.0.0.1:18080 ./scripts/smoke_test.sh
-# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 29 项，否则 28 项）。
+# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 31 项，否则 30 项）。
 #
 # 需要测试账号（只在 APP_ENV=dev/test 时由后端创建）：从环境变量读取，没有就读仓库根目录的 .env：
 #   TEST_ACCOUNT_USERNAME / TEST_ACCOUNT_PASSWORD / TEST_ACCOUNT_TOTP_SECRET
@@ -148,6 +148,8 @@ if [ "$status" = "deid_pending" ]; then echo "  通过  知识投料：后台解
 check "知识投料：去标识报告可查看"      200 "$BASE/api/kb/intake/${upload_id:-0}/deid"
 if grep -q "冒烟测试农商行" "$BODY"; then echo "  失败  知识投料：去标识报告里仍有客户名"; fail=$((fail+1)); else
   echo "  通过  知识投料：去标识报告和预览不含客户名"; pass=$((pass+1)); fi
+check "知识条目列表（已发布）"          200 "$BASE/api/kb/items?status=published"
+check "顾问不能查看知识审核队列"        403 "$BASE/api/kb/review-queue"
 check "退出登录"                     204 -X POST "$BASE/api/auth/logout" -H "$C"
 check "退出后旧会话失效"              401 "$BASE/api/projects"
 
