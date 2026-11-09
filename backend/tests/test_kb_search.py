@@ -104,9 +104,9 @@ def test_drafts_and_retired_not_searchable(people, corpus):
 
 
 def test_filters_include_general_knowledge(people, corpus):
-    docs = _ids(_search(people, "consultant", "一级事件 升级", product="SOC", stage="设计"))
+    docs = _ids(_search(people, "consultant", "一级事件 升级", product="SOC", stage="设计", limit=20))
     assert corpus["general"].doc_id in docs                            # GEN / 通用阶段默认带上
-    docs = _ids(_search(people, "consultant", "一级事件 升级", product="SOC", include_general=False))
+    docs = _ids(_search(people, "consultant", "一级事件 升级", product="SOC", include_general=False, limit=20))
     assert corpus["general"].doc_id not in docs
     found = _ids(_search(people, "consultant", "告警", doc_type="MTD", layer="L2"))
     assert corpus["alert"].doc_id in found                                  # 其他测试也可能发布同类条目
