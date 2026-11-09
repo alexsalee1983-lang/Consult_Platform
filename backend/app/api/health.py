@@ -5,7 +5,7 @@ from sqlalchemy import text
 from ..core.config import get_settings
 from ..core.db import engine
 from ..services import storage
-from ..services.gateway import availability, uses_external_model
+from ..services.gateway import availability, embed_availability, uses_external_model
 
 router = APIRouter(tags=["health"])
 
@@ -46,6 +46,7 @@ def health() -> dict:
         "object_storage": storage.health(),   # 两个区的桶都在且开启了服务端加密才是 ok
         "worker": _worker(),                    # 后台任务（解析、向量化、删除），看 worker 心跳
         "llm": availability(),
+        "embedding": embed_availability(),       # 向量服务（知识检索的向量部分）；未启用时只用全文检索
     }
     # llm_external：界面据此提示“当前为外部测试模型，勿输入真实客户信息”
     return {"status": "ok" if checks["database"] == "ok" else "degraded", "checks": checks,

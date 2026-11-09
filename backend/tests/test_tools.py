@@ -42,7 +42,7 @@ def member():
 
 def _invoke(user, agent, tool, project="BANK-A", args=None):
     with SessionLocal() as db:
-        return tools.invoke(db, db.merge(user), agent, tool, args or {"text": "问题"}, project)
+        return tools.invoke(db, db.merge(user), agent, tool, args or {"text": "问题", "query": "问题"}, project)
 
 
 @pytest.mark.parametrize("agent", list(EXPECTED))
@@ -127,8 +127,17 @@ def test_quality_check_tool(member):
 
 
 def test_placeholders_say_so(member):
-    r = _invoke(member, "consultant-lead", "kb.search")
-    assert r["placeholder"] is True and r["items"] == []
+    r = _invoke(member, "report-writer", "doc.generate")
+    assert r["placeholder"] is True and r["document"] is None
+
+
+def test_kb_search_tool_is_real(member):
+    r = _invoke(member, "consultant-lead", "kb.search", args={"query": "值班交接"})
+    assert "placeholder" not in r and isinstance(r["items"], list)
+    with pytest.raises(tools.ToolError):
+        _invoke(member, "consultant-lead", "kb.search", args={"query": ""})          # 空检索词
+    with pytest.raises(tools.ToolError):
+        _invoke(member, "consultant-lead", "kb.search", args={"query": "口令 Abc@12345"})   # 机密级
 
 
 def test_tool_calls_are_audited_without_content(member):

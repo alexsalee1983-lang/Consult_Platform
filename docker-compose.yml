@@ -58,6 +58,18 @@ services:
     volumes:
       - miniodata:/data
 
+  embed:
+    # 向量服务：CPU 上运行小型中文向量模型（BAAI/bge-small-zh-v1.5，512 维），OpenAI 兼容 /v1/embeddings，
+    # 见 tools/embed。模型在构建时下载进镜像，运行时不联网；不映射端口。公司模型平台的 embedding 就绪后，
+    # 在 .env 设 EMBED_BASE_URL / EMBED_MODEL 指向它，可以不再启动本服务（决策记录 2026-11-08）。
+    build:
+      context: ./tools/embed
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
+    image: consult-platform-embed:bge-small-zh-v1.5
+    restart: unless-stopped
+
   backend:
     build:
       context: .                      # 仓库根目录：带上 agents/ 的 md（见 backend/Dockerfile、.dockerignore）
@@ -70,6 +82,11 @@ services:
       DATABASE_URL: postgresql+psycopg://consult:${POSTGRES_PASSWORD:-consult}@postgres:5432/consult
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
+      EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
+      # 内部服务一律直连：宿主机若在 ~/.docker/config.json 配了代理，Docker 会把 HTTP_PROXY 注入容器，
+      # 不列在这里的内部地址会被绕到外部代理上。新增内部服务时同步加到这里。
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,6 +115,11 @@ services:
       DATABASE_URL: postgresql+psycopg://consult:${POSTGRES_PASSWORD:-consult}@postgres:5432/consult
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
+      EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
+      # 内部服务一律直连：宿主机若在 ~/.docker/config.json 配了代理，Docker 会把 HTTP_PROXY 注入容器，
+      # 不列在这里的内部地址会被绕到外部代理上。新增内部服务时同步加到这里。
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
     command: ["python", "-m", "app.worker"]
     depends_on:
       backend:

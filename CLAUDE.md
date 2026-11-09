@@ -106,6 +106,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 知识库约定：知识区表结构在 `app/models/kb.py`，元数据取值和校验在 `app/kb/meta.py`（依据公共规范第 7 节，改取值要同步公共规范并经负责人同意）；建条目、建版本只经 `app/kb/items.py`。条目的 doc_id 固定不变，内容变化一律建新版本，历史版本保留。知识区只收去标识后的做法：去标识报告只记类别、占位符和次数，上传记录只记机密级命中类别，都不记原文。去标识只经 `app/kb/deid_flow.py`：规则词库（`deid.py`）→ 脱敏审查 Agent 复查（`deid_agent.py`，经网关，返回的漏网名称只在内存里用）→ 知识管理员确认（不能是上传者）；确认后原件和未去标识的解析结果从对象存储删除。
 
+检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
+
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求要带 `X-CSRF-Token`。管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。

@@ -165,13 +165,16 @@ def _backoff(attempt: int, resp: httpx.Response | None = None) -> None:
     _sleep(delay)
 
 
-def _send(client: httpx.Client, payload: dict, stream: bool) -> tuple[httpx.Response, int]:
-    """发请求，可重试的错误按指数退避重试。返回 (响应, 尝试次数)；stream=True 时响应未读取，调用方负责关闭。"""
+def _send(client: httpx.Client, payload: dict, stream: bool, url: str | None = None,
+          headers: dict | None = None) -> tuple[httpx.Response, int]:
+    """发请求，可重试的错误按指数退避重试。返回 (响应, 尝试次数)；stream=True 时响应未读取，调用方负责关闭。
+    url / headers 不传时发到大模型的 /chat/completions；向量化传向量服务的地址。"""
     max_attempts = get_settings().llm_max_retries + 1
     last_error = "unknown"
+    target = url or _url("/chat/completions")
     for attempt in range(1, max_attempts + 1):
         try:
-            req = client.build_request("POST", _url("/chat/completions"), json=payload, headers=_headers())
+            req = client.build_request("POST", target, json=payload, headers=_headers() if headers is None else headers)
             resp = client.send(req, stream=stream)
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
             last_error = type(e).__name__
@@ -277,6 +280,69 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
 
 # ---- 可用性检查 ----
 _health_cache: dict[str, tuple[float, str]] = {}
+
+
+# ---- 向量化 ----
+
+EMBED_DIM = 512   # 与数据库向量列一致（迁移 0014_kb_embedding）；换模型时连同迁移一起改
+
+
+class EmbeddingDisabled(GatewayError):
+    pass
+
+
+@dataclass
+class Embedding:
+    vectors: list[list[float]]
+    model: str
+    attempts: int = 1
+
+
+def embedding_enabled() -> bool:
+    return bool(get_settings().embed_base_url)
+
+
+def _embed_headers() -> dict:
+    key = get_settings().embed_api_key
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
+def embed(texts: list[str]) -> Embedding:
+    """把文本转成向量。每条先过机密级检测（命中抛 BlockedError，不发出）；返回维度必须是 EMBED_DIM。"""
+    s = get_settings()
+    if not s.embed_base_url:
+        raise EmbeddingDisabled("向量服务未配置（EMBED_BASE_URL）")
+    for t in texts:
+        result = check(t)
+        if result.blocked:
+            raise BlockedError(result)
+    payload = {"model": s.embed_model, "input": texts}
+    with _client() as client:
+        resp, attempts = _send(client, payload, stream=False, url=s.embed_base_url.rstrip("/") + "/embeddings",
+                               headers=_embed_headers())
+        try:
+            data = sorted(resp.json()["data"], key=lambda d: d["index"])
+            vectors = [[float(x) for x in d["embedding"]] for d in data]
+        except (ValueError, KeyError, TypeError) as e:
+            raise GatewayError("向量服务返回的结果无法解析", attempts) from e
+    if len(vectors) != len(texts) or any(len(v) != EMBED_DIM for v in vectors):
+        raise GatewayError(f"向量维度或条数不对（期望 {EMBED_DIM} 维），需检查 EMBED_MODEL 或做迁移", attempts)
+    return Embedding(vectors=vectors, model=s.embed_model, attempts=attempts)
+
+
+def embed_availability() -> str:
+    s = get_settings()
+    if not s.embed_base_url:
+        return "not enabled"
+    try:
+        with httpx.Client(timeout=httpx.Timeout(3.0, connect=2.0), transport=_transport) as client:
+            resp = client.get(s.embed_base_url.rstrip("/") + "/models", headers=_embed_headers())
+        if resp.status_code != 200:
+            return f"down: HTTP {resp.status_code}"
+        ids = {m.get("id") for m in (resp.json().get("data") or [])}
+        return "ok" if s.embed_model in ids else f"down: 向量服务上没有 {s.embed_model}"
+    except (httpx.HTTPError, ValueError) as e:
+        return f"down: {type(e).__name__}"
 
 
 def availability() -> str:

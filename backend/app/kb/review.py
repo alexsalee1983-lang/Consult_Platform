@@ -224,6 +224,9 @@ def publish(db: Session, v: KbVersion) -> None:
     db.commit()
     audit.record(db, actor="kb-review", action="kb.publish", result="allowed", doc_id=item.doc_id, version=v.version,
                  chunks=len(chunks))
+    from .search import enqueue_embedding          # 发布后后台向量化（未启用向量服务时跳过）
+
+    enqueue_embedding(db, v.id, created_by=v.submitted_by or "kb-review")
 
 
 def retire(db: Session, user: User, item: KbItem, reason: str) -> KbItem:

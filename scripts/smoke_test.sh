@@ -3,7 +3,7 @@
 # 测试地址：第一个参数 > 环境变量 SMOKE_BASE > 默认 http://localhost:8080，例如
 #   ./scripts/smoke_test.sh http://127.0.0.1:18080
 #   SMOKE_BASE=http://127.0.0.1:18080 ./scripts/smoke_test.sh
-# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 31 项，否则 30 项）。
+# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 33 项，否则 32 项；向量服务未启用时再少 1 项）。
 #
 # 需要测试账号（只在 APP_ENV=dev/test 时由后端创建）：从环境变量读取，没有就读仓库根目录的 .env：
 #   TEST_ACCOUNT_USERNAME / TEST_ACCOUNT_PASSWORD / TEST_ACCOUNT_TOTP_SECRET
@@ -123,12 +123,14 @@ if [ "${SMOKE_EXPECT_LLM:-}" = "ok" ]; then
   if [ "$llm" = "ok" ] && ! grep -q '"demo": true' "$BODY"; then echo "  通过  模型可用且不是演示回复"; pass=$((pass+1)); else
     echo "  失败  模型状态：$llm"; fail=$((fail+1)); fi
 fi
-# 知识投料：每次内容带时间戳，避免与上次运行重复（重复会返回 409）
+# 知识投料：每次内容带一个 UUID，避免与上次运行重复（重复会返回 409）。
+# 不用纳秒时间戳：19 位数字偶尔能通过 Luhn 校验，会被机密级检测当成银行卡号拦下
+RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 KB_OK="$(mktemp --suffix=.md)"; KB_BAD="$(mktemp --suffix=.md)"
 printf '# 冒烟测试-值班交接（%s）
 
 冒烟测试农商行的交接班时核对未闭环的一级事件。
-' "$(date +%s%N)" > "$KB_OK"
+' "$RUN_ID" > "$KB_OK"
 printf '# 冒烟测试-网络改造
 
 核心交换机 10.1.20.1 管理口令 Abc@12345
@@ -149,6 +151,11 @@ check "知识投料：去标识报告可查看"      200 "$BASE/api/kb/intake/${
 if grep -q "冒烟测试农商行" "$BODY"; then echo "  失败  知识投料：去标识报告里仍有客户名"; fail=$((fail+1)); else
   echo "  通过  知识投料：去标识报告和预览不含客户名"; pass=$((pass+1)); fi
 check "知识条目列表（已发布）"          200 "$BASE/api/kb/items?status=published"
+check "知识检索可用"                  200 "$BASE/api/kb/search?q=%E5%80%BC%E7%8F%AD"
+embedding="$(curl -s "$BASE/api/health" | python3 -c "import json,sys; print(json.load(sys.stdin)['checks'].get('embedding', ''))")"
+if [ "$embedding" = "not enabled" ]; then echo "  跳过  向量服务未启用（EMBED_BASE_URL 为空），只用全文检索"
+elif [ "$embedding" = "ok" ]; then echo "  通过  向量服务可用"; pass=$((pass+1))
+else echo "  失败  向量服务状态：$embedding"; fail=$((fail+1)); fi
 check "顾问不能查看知识审核队列"        403 "$BASE/api/kb/review-queue"
 check "退出登录"                     204 -X POST "$BASE/api/auth/logout" -H "$C"
 check "退出后旧会话失效"              401 "$BASE/api/projects"

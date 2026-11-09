@@ -9,8 +9,9 @@ Agent 读写数据只能经 invoke()。每次调用依次检查（任一不满�
 4. 涉及项目的工具，发起对话的用户必须是该项目成员（非成员与项目不存在一样）。
 
 审计只记 Agent、工具、项目、结果和参数长度，不记参数和结果内容。
-一期工具：project.read（真实数据）、quality.check（机密级检查）；kb.search、basis.lookup 在 M2 知识服务接入，
-doc.generate 在 M3 交付链接入，kb.stage_write 在 M2 投料接入，目前是占位实现。
+已实现：project.read（真实数据）、quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，
+只查 L4）；doc.generate 在 M3 交付链接入，kb.stage_write 在 M2 后续接入，目前是占位实现。
+kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用人的可见范围过滤（app/kb/search.py）。
 """
 from __future__ import annotations
 
@@ -82,6 +83,27 @@ def _quality_check(ctx: ToolContext, args: dict) -> dict:
             "findings": [{"kind": f.kind, "label": f.label, "excerpt": f.excerpt} for f in r.findings]}
 
 
+def _kb_search(ctx: ToolContext, args: dict) -> dict:
+    from ..kb import search as kb
+
+    try:
+        return kb.search(ctx.db, ctx.user, str(args.get("query", "")), layer=str(args.get("layer", "")),
+                         product=str(args.get("product", "")), stage=str(args.get("stage", "")),
+                         doc_type=str(args.get("doc_type", "")), limit=int(args.get("limit", 8)))
+    except kb.SearchError as e:
+        raise ToolError(e.detail if isinstance(e.detail, str) else e.detail.get("summary", "检索被拒绝")) from e
+
+
+def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
+    from ..kb import search as kb
+
+    try:
+        return kb.basis(ctx.db, ctx.user, str(args.get("query", "")), ref_document=str(args.get("ref_document", "")),
+                        limit=int(args.get("limit", 5)))
+    except kb.SearchError as e:
+        raise ToolError(e.detail if isinstance(e.detail, str) else e.detail.get("summary", "检索被拒绝")) from e
+
+
 def _placeholder(milestone: str, empty: dict) -> Callable[[ToolContext, dict], dict]:
     def run(ctx: ToolContext, args: dict) -> dict:
         return {**empty, "placeholder": True, "note": f"该工具在 {milestone} 接入，目前返回空结果"}
@@ -91,8 +113,8 @@ def _placeholder(milestone: str, empty: dict) -> Callable[[ToolContext, dict], d
 IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "project.read": _project_read,
     "quality.check": _quality_check,
-    "kb.search": _placeholder("M2 知识服务", {"items": []}),
-    "basis.lookup": _placeholder("M2 知识服务", {"items": []}),
+    "kb.search": _kb_search,
+    "basis.lookup": _basis_lookup,
     "doc.generate": _placeholder("M3 交付链", {"document": None}),
     "kb.stage_write": _placeholder("M2 投料", {"staged": False}),
 }
