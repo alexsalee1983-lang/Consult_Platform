@@ -3,7 +3,7 @@
 # 测试地址：第一个参数 > 环境变量 SMOKE_BASE > 默认 http://localhost:8080，例如
 #   ./scripts/smoke_test.sh http://127.0.0.1:18080
 #   SMOKE_BASE=http://127.0.0.1:18080 ./scripts/smoke_test.sh
-# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 27 项，否则 26 项）。
+# 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 29 项，否则 28 项）。
 #
 # 需要测试账号（只在 APP_ENV=dev/test 时由后端创建）：从环境变量读取，没有就读仓库根目录的 .env：
 #   TEST_ACCOUNT_USERNAME / TEST_ACCOUNT_PASSWORD / TEST_ACCOUNT_TOTP_SECRET
@@ -127,7 +127,7 @@ fi
 KB_OK="$(mktemp --suffix=.md)"; KB_BAD="$(mktemp --suffix=.md)"
 printf '# 冒烟测试-值班交接（%s）
 
-交接班时核对未闭环的一级事件。
+冒烟测试农商行的交接班时核对未闭环的一级事件。
 ' "$(date +%s%N)" > "$KB_OK"
 printf '# 冒烟测试-网络改造
 
@@ -138,13 +138,16 @@ upload_id="$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get
 check "知识投料：含口令和 IP 的文件被拦截" 422 -X POST "$BASE/api/kb/intake" -H "$C" -F "file=@$KB_BAD;filename=bad.md"
 rm -f "$KB_OK" "$KB_BAD"
 status=""
-for i in $(seq 1 15); do   # 等 worker 解析，最多 30 秒
+for i in $(seq 1 30); do   # 等 worker 解析并去标识，最多 60 秒
   [ -n "$upload_id" ] || break
   status="$(curl -s -b "$JAR" "$BASE/api/kb/intake/$upload_id" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status',''))")"
-  [ "$status" = "parsed" ] && break; sleep 2
+  [ "$status" = "deid_pending" ] && break; sleep 2
 done
-if [ "$status" = "parsed" ]; then echo "  通过  知识投料：后台解析完成"; pass=$((pass+1)); else
-  echo "  失败  知识投料：后台解析状态 ${status:-无}"; fail=$((fail+1)); fi
+if [ "$status" = "deid_pending" ]; then echo "  通过  知识投料：后台解析和去标识完成"; pass=$((pass+1)); else
+  echo "  失败  知识投料：后台处理状态 ${status:-无}（期望 deid_pending）"; fail=$((fail+1)); fi
+check "知识投料：去标识报告可查看"      200 "$BASE/api/kb/intake/${upload_id:-0}/deid"
+if grep -q "冒烟测试农商行" "$BODY"; then echo "  失败  知识投料：去标识报告里仍有客户名"; fail=$((fail+1)); else
+  echo "  通过  知识投料：去标识报告和预览不含客户名"; pass=$((pass+1)); fi
 check "退出登录"                     204 -X POST "$BASE/api/auth/logout" -H "$C"
 check "退出后旧会话失效"              401 "$BASE/api/projects"
 

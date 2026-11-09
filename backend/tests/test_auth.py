@@ -54,6 +54,9 @@ PROTECTED = [
     ("POST", "/api/kb/intake"),
     ("GET", "/api/kb/intake"),
     ("GET", "/api/kb/intake/1"),
+    ("GET", "/api/kb/intake/1/deid"),
+    ("POST", "/api/kb/intake/1/deid/rerun"),
+    ("POST", "/api/kb/intake/1/deid/decision"),
 ]
 
 

@@ -43,7 +43,14 @@ async def completions(request: Request):
         _failed_once.add(key)
         return JSONResponse({"error": {"message": "temporarily unavailable"}}, status_code=503)
 
-    text = _reply(question)
+    system = next((m.get("content", "") for m in body.get("messages", []) if m.get("role") == "system"), "")
+    # 脱敏审查 Agent 要求只输出 JSON：返回固定的审查结果（不识别任何名称），验证平台解析和报告流程
+    if "residual_terms" in system:
+        text = json.dumps({"conclusion": "有条件通过", "risk_level": "低", "residual_terms": [],
+                           "combination_risks": [], "manual_items": ["模拟模型：没有做真实审查，需人工复核"]},
+                          ensure_ascii=False)
+    else:
+        text = _reply(question)
     usage = {"prompt_tokens": sum(len(m.get("content", "")) for m in body.get("messages", [])),
              "completion_tokens": len(text)}
     usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]

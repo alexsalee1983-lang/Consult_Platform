@@ -121,3 +121,5 @@ def _parse_job(payload: dict, ctx: jobs.JobContext) -> None:
             doc.pages, len(doc.sections), len(chunks), doc.chars)
         up.parsed_at = utcnow()
         db.commit()
+        # 接着自动去标识（规则 + 脱敏审查 Agent），结果待知识管理员确认
+        jobs.enqueue(db, "kb.deid", {"upload_id": up.id}, created_by=up.uploaded_by, max_attempts=2)
