@@ -276,7 +276,8 @@ def diff_with_current(db: Session, v: KbVersion, max_lines: int = 200) -> list[s
 
 
 def similar_items(db: Session, v: KbVersion, limit: int = 5) -> list[dict]:
-    """同服务产品下、正文与标题相近的已发布条目（可能重复或冲突），供审核人对照。只在 PostgreSQL 上可用。"""
+    """同服务产品下、正文与标题相近的已发布条目（可能重复或冲突），供审核人对照。只在 PostgreSQL 上可用。
+    标题分词后任一词命中即可（把 & 换成 |），按相关度排序。"""
     if db.get_bind().dialect.name != "postgresql":
         return []
     rows = db.execute(text("""
@@ -284,7 +285,7 @@ def similar_items(db: Session, v: KbVersion, limit: int = 5) -> list[dict]:
         FROM kb_chunks c
         JOIN kb_versions cv ON cv.id = c.version_id AND cv.status = 'published'
         JOIN kb_items i ON i.current_version_id = cv.id AND NOT i.retired
-        , replace(plainto_tsquery('zh', :q)::text, '&', '|')::tsquery q   -- 标题里任一词命中即可，按相关度排序
+        , CAST(replace(CAST(plainto_tsquery('zh', :q) AS text), '&', '|') AS tsquery) q
         WHERE c.tsv @@ q AND i.id <> :item AND i.product = :product
         GROUP BY i.doc_id, cv.title ORDER BY score DESC LIMIT :limit
     """), {"q": v.title, "item": v.item_id, "product": v.item.product, "limit": limit}).all()
