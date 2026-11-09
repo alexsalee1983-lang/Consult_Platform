@@ -57,6 +57,18 @@ PROTECTED = [
     ("GET", "/api/kb/intake/1/deid"),
     ("POST", "/api/kb/intake/1/deid/rerun"),
     ("POST", "/api/kb/intake/1/deid/decision"),
+    ("GET", "/api/kb/items"),
+    ("POST", "/api/kb/items"),
+    ("GET", "/api/kb/items/x"),
+    ("POST", "/api/kb/items/x/versions"),
+    ("POST", "/api/kb/items/x/retire"),
+    ("POST", "/api/kb/items/x/reconfirm"),
+    ("GET", "/api/kb/versions/1"),
+    ("PATCH", "/api/kb/versions/1"),
+    ("POST", "/api/kb/versions/1/submit"),
+    ("POST", "/api/kb/versions/1/review"),
+    ("GET", "/api/kb/review-queue"),
+    ("GET", "/api/kb/review-due"),
 ]
 
 
@@ -86,7 +98,7 @@ def test_every_api_route_is_protected_or_public(client):
         path = getattr(route, "path", "")
         if path.startswith("/api") and path not in PUBLIC_PATHS:
             concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x") \
-                .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1")
+                .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 
