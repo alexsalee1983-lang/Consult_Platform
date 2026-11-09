@@ -14,4 +14,4 @@ redis==5.2.1
 minio==7.2.20             # 对象存储 S3 客户端（MinIO 官方 Python SDK，Apache-2.0，可访问任意 S3 兼容存储）
 python-multipart==0.0.32  # 接收上传文件（FastAPI 的 multipart 解析，Apache-2.0）
 python-docx==1.2.0        # 读取 Word（.docx）正文和标题层级，本地解析不联网（MIT）
-pypdf==6.21.2             # 读取文字版 PDF，纯 Python、不联网（BSD-3-Clause）；扫描件不做 OCR
+pypdf==6.21.4             # 读取文字版 PDF，纯 Python、不联网（BSD-3-Clause）；扫描件不做 OCR。6.21.4 修复 7 个解析漏洞，不得降级
