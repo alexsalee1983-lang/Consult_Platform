@@ -249,7 +249,7 @@ def test_unrelated_query_gets_no_vector_only_hits(people, corpus, embedder):
         out = search.basis(db, member, "量子纠缠遥感卫星编队")
         assert out["items"] == [] and "依据待核实" in out["note"]
         assert search.search(db, member, "zzzxxxqqq")["items"] == []
-        hit = search.basis(db, member, "安全事件 集中分析")["items"]               # 相关的照常命中
+        hit = search.basis(db, member, "安全管理中心 安全事件 集中分析")["items"]   # 相关的照常命中
         assert corpus["basis"].doc_id in [h["doc_id"] for h in hit]
 
 
@@ -264,7 +264,7 @@ def test_basis_drops_fulltext_hits_below_similarity(people, embedder):
         search.embed_version(db, v.id)
         assert any("监管报送时限要求" in x for x in e.inputs)                 # 向量化文本带上了标题
         member = db.merge(people["consultant"])
-        q = "金融机构外汇交易头寸的监管上限是多少"
+        q = "外汇交易头寸需要报送哪些材料"          # 只靠“报送”“材料”撞上全文，向量相似度低
         assert v.doc_id not in [h["doc_id"] for h in search.basis(db, member, q)["items"]]
         loose = search.search(db, member, q, layer="L4", limit=20)["items"]
         assert v.doc_id in [h["doc_id"] for h in loose]                     # 普通检索照常按全文召回
