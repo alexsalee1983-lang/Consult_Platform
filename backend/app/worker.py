@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .core.config import get_settings
 from .core.db import SessionLocal
-from .kb import deid_flow, intake  # noqa: F401  注册 kb.parse、kb.deid 等任务处理器
+from .kb import deid_flow, intake, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed 等任务处理器
 from .services import jobs
 
 POLL_SECONDS = 5

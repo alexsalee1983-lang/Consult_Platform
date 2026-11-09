@@ -91,6 +91,9 @@ class KbChunk(Base):
     seq: Mapped[int] = mapped_column(Integer)
     heading: Mapped[str] = mapped_column(String(300), default="")            # 所在章节标题路径
     text: Mapped[str] = mapped_column(Text)
+    # 向量（迁移 0014）：PostgreSQL 上另有 embedding vector(512) 列和 HNSW 索引，不映射到 ORM，读写走 SQL
+    # （app/kb/search.py）；这里记生成向量所用的模型，换模型后据此重新向量化
+    embedding_model: Mapped[str] = mapped_column(String(64), default="")
 
 
 class KbReview(Base):

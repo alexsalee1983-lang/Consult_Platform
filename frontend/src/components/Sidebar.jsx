@@ -97,7 +97,7 @@ export default function Sidebar() {
         {health &&
           Object.entries(health.checks || {}).map(([k, v]) => (
             <div key={k} className="sb sub">
-              <span>{{ database: "数据库", redis: "缓存", object_storage: "对象存储", worker: "后台任务", llm: "大模型" }[k] || k}</span>
+              <span>{{ database: "数据库", redis: "缓存", object_storage: "对象存储", worker: "后台任务", llm: "大模型", embedding: "向量服务" }[k] || k}</span>
               <span style={{ color: statusColor(v) }}>{statusText(v)}</span>
             </div>
           ))}

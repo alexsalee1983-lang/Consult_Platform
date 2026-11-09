@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # 界面提示“勿输入真实客户信息”；生产环境（APP_ENV=prod）开启则拒绝启动。
     llm_external: bool = False
 
+    # 向量服务（OpenAI 兼容 /embeddings），同样只经网关调用。决策记录 2026-11-08：公司模型平台的 embedding
+    # 接口就绪前，用 CPU 上的小型中文向量模型（docker compose 的 embed 服务）；就绪后只改这里并重新向量化。
+    # 留空表示不启用向量检索，知识检索只用全文检索。维度必须与数据库向量列一致（迁移 0014：512）。
+    embed_base_url: str = ""
+    embed_api_key: str = ""
+    embed_model: str = "BAAI/bge-small-zh-v1.5"
+    embed_batch_size: int = 32
+
     seed_demo_data: bool = True
 
     # Agent md 目录（01_公共规范.md、roles/*.md）。留空时依次找 /srv/agents（镜像内）和仓库根目录的 agents/。

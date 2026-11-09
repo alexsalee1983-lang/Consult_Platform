@@ -211,6 +211,18 @@ def selfcheck(args: argparse.Namespace) -> int:
     return 3
 
 
+def kb_reembed(args: argparse.Namespace) -> int:
+    from .kb import search
+
+    with SessionLocal() as db:
+        n = search.reembed_all(db, created_by="cli")
+    if not n:
+        print("没有排任务：向量服务未配置（EMBED_BASE_URL），或数据库不是 PostgreSQL，或没有已发布条目")
+        return 1
+    print(f"已为 {n} 个已发布版本排向量化任务，由 worker 执行；进度用 python -m app.cli jobs 查看")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m app.cli", description="安全咨询平台运维命令")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -246,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     sc = sub.add_parser("selfcheck", help="排一个 worker 自检任务并等待结果（成功退出码 0）")
     sc.add_argument("--wait", type=int, default=60)
     sc.set_defaults(func=selfcheck)
+    sub.add_parser("kb-reembed", help="更换向量模型后，重新向量化全部已发布知识").set_defaults(func=kb_reembed)
     args = p.parse_args(argv)
     upgrade_to_head()
     return args.func(args)

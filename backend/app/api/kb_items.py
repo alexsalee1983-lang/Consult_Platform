@@ -12,6 +12,8 @@ POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审的条目（知识专家、知识管理员）
+GET  /api/kb/search?q=                   知识检索（全文 + 向量，RRF 融合），只返回已发布、看得到的条目
+GET  /api/kb/basis?q=                    依据查询（只查 L4 依据库），附引用格式
 
 普通顾问只能看到已发布、未下线的现行版本；看不到的条目和版本一律 404。
 """
@@ -26,6 +28,7 @@ from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
 from ..kb import review as rv
+from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
 from ..models import KbItem, KbVersion, User
 
@@ -312,3 +315,27 @@ def review_queue(db: Session = Depends(get_db), user: User = Depends(current_use
 def review_due(days: int = Query(30, ge=0, le=366), db: Session = Depends(get_db), user: User = Depends(current_user)):
     _knowledge_only(db, user)
     return [_version_out(db, v, user) for v in rv.review_due(db, days)]
+
+
+def _search_error(e: kb_search.SearchError):
+    return HTTPException(e.status, e.detail)
+
+
+@router.get("/search")
+def search(q: str = Query("", max_length=500), layer: str = "", product: str = "", stage: str = "",
+           doc_type: str = "", limit: int = Query(8, ge=1, le=20), db: Session = Depends(get_db),
+           user: User = Depends(current_user)) -> dict:
+    try:
+        return kb_search.search(db, user, q, layer=layer, product=product, stage=stage, doc_type=doc_type,
+                                limit=limit)
+    except kb_search.SearchError as e:
+        raise _search_error(e) from e
+
+
+@router.get("/basis")
+def basis(q: str = Query("", max_length=500), ref_document: str = Query("", max_length=200),
+          limit: int = Query(5, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    try:
+        return kb_search.basis(db, user, q, ref_document=ref_document, limit=limit)
+    except kb_search.SearchError as e:
+        raise _search_error(e) from e
