@@ -117,7 +117,8 @@ class KbUpload(Base):
     content_type: Mapped[str] = mapped_column(String(128), default="")
     size: Mapped[int] = mapped_column(Integer, default=0)
     sha256: Mapped[str] = mapped_column(String(64), index=True)
-    status: Mapped[str] = mapped_column(String(16), default="received", index=True)  # received / parsed / failed
+    # received 待解析 / parsed 已解析 / deid_pending 去标识待确认 / deid_passed 去标识通过 / deid_rejected 退回 / failed
+    status: Mapped[str] = mapped_column(String(16), default="received", index=True)
     guard_categories: Mapped[list] = mapped_column(JSON, default=list)        # 机密级命中类别，不记命中内容
     error: Mapped[str] = mapped_column(String(200), default="")
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
@@ -131,6 +132,8 @@ class KbUpload(Base):
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     char_count: Mapped[int] = mapped_column(Integer, default=0)
     parsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 去标识通过或退回后，原件和未去标识的解析结果从对象存储删除（迁移 0013）
+    raw_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class KbDeidReport(Base):
@@ -141,7 +144,19 @@ class KbDeidReport(Base):
     # [{"category": "客户名", "placeholder": "【客户】", "count": 3}, ……]，不记被替换的原文
     replacements: Mapped[list] = mapped_column(JSON, default=list)
     residual_findings: Mapped[list] = mapped_column(JSON, default=list)       # 替换后仍疑似可识别的类别
-    status: Mapped[str] = mapped_column(String(16), default="pending")        # pending / passed / rejected
+    status: Mapped[str] = mapped_column(String(16), default="pending")        # pending / passed / rejected / superseded
     reviewed_by: Mapped[str] = mapped_column(String(64), default="")
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # 迁移 0013：脱敏审查 Agent 复查结果与人工确认（均不含原文）
+    created_by: Mapped[str] = mapped_column(String(64), default="")
+    total: Mapped[int] = mapped_column(Integer, default=0)                    # 替换总次数
+    agent_status: Mapped[str] = mapped_column(String(16), default="")         # ok / skipped / failed
+    agent_note: Mapped[str] = mapped_column(String(200), default="")
+    conclusion: Mapped[str] = mapped_column(String(16), default="")           # 通过 / 有条件通过 / 退回（Agent 结论）
+    risk_level: Mapped[str] = mapped_column(String(8), default="")            # 低 / 中 / 高
+    combination_risks: Mapped[list] = mapped_column(JSON, default=list)       # [{description, handling}]
+    manual_items: Mapped[list] = mapped_column(JSON, default=list)            # 需人工确认的项
+    deid_key: Mapped[str] = mapped_column(String(512), default="")            # 去标识后正文（知识区）
+    safe_filename: Mapped[str] = mapped_column(String(255), default="")       # 去标识后的文件名
+    comment: Mapped[str] = mapped_column(String(1000), default="")            # 人工确认意见
