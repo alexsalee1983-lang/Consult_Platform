@@ -1,0 +1,15 @@
+# gitleaks 配置：沿用默认规则，只为知识条目文件的 key 行放行（gitleaks 会自动读取仓库根目录的这个文件）。
+# 知识条目文件（knowledge/**/*.md）的元数据头第一行是“key: 条目标识”，如 key: csl-art25-incident-plan，
+# 默认的 generic-api-key 规则会把它当成密钥。只放行“在 knowledge/ 下 且 整行是 key: 小写字母数字连字符”的情况，
+# 其他任何位置、任何写法照常扫描。误报处理办法见 docs/安全扫描.md。
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "知识条目文件的 key 是条目标识，不是密钥"
+condition = "AND"
+paths = ['''^knowledge/.+\.md$''']
+regexTarget = "line"
+# (?m)：gitleaks 的 line 目标可能带上前后文，用多行模式让 ^ $ 按单行匹配，只放行“整行就是 key: 标识”
+regexes = ['''(?m)^key: [a-z0-9][a-z0-9-]{1,62}[a-z0-9][ \t]*$''']
