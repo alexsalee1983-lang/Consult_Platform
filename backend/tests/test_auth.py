@@ -51,6 +51,9 @@ PROTECTED = [
     ("GET", "/api/admin/jobs"),
     ("POST", "/api/admin/jobs/selfcheck"),
     ("POST", "/api/admin/jobs/1/retry"),
+    ("POST", "/api/kb/intake"),
+    ("GET", "/api/kb/intake"),
+    ("GET", "/api/kb/intake/1"),
 ]
 
 
@@ -80,7 +83,7 @@ def test_every_api_route_is_protected_or_public(client):
         path = getattr(route, "path", "")
         if path.startswith("/api") and path not in PUBLIC_PATHS:
             concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x") \
-                .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1")
+                .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 

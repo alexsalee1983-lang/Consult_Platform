@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from .api import admin, agents, audit, auth, chat, conversations, directory, health, projects
+from .api import admin, agents, audit, auth, chat, conversations, directory, health, kb, projects
 from .core.auth import authenticate
 from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
@@ -54,3 +54,4 @@ app.include_router(admin.router)
 app.include_router(agents.router)
 app.include_router(conversations.router)
 app.include_router(directory.router)
+app.include_router(kb.router)
