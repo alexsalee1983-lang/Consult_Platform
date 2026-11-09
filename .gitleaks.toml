@@ -11,4 +11,5 @@ description = "知识条目文件的 key 是条目标识，不是密钥"
 condition = "AND"
 paths = ['''^knowledge/.+\.md$''']
 regexTarget = "line"
-regexes = ['''^key: [a-z0-9][a-z0-9-]{1,62}[a-z0-9]$''']
+# (?m)：gitleaks 的 line 目标可能带上前后文，用多行模式让 ^ $ 按单行匹配，只放行“整行就是 key: 标识”
+regexes = ['''(?m)^key: [a-z0-9][a-z0-9-]{1,62}[a-z0-9][ \t]*$''']
