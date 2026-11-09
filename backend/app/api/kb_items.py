@@ -12,6 +12,9 @@ POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审的条目（知识专家、知识管理员）
+GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
+GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
+GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵、待复审、本月运营（知识专家、知识管理员）
 GET  /api/kb/search?q=                   知识检索（全文 + 向量，RRF 融合），只返回已发布、看得到的条目
 GET  /api/kb/basis?q=                    依据查询（只查 L4 依据库），附引用格式
 
@@ -27,6 +30,7 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
+from ..kb import meta as kb_meta
 from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
@@ -339,3 +343,65 @@ def basis(q: str = Query("", max_length=500), ref_document: str = Query("", max_
         return kb_search.basis(db, user, q, ref_document=ref_document, limit=limit)
     except kb_search.SearchError as e:
         raise _search_error(e) from e
+
+
+
+@router.get("/meta")
+def meta_options() -> dict:
+    m = kb_meta
+    return {"layers": m.LAYERS, "domains": m.DOMAINS, "products": m.PRODUCTS, "stages": list(m.STAGES),
+            "doc_types": m.DOC_TYPES, "capabilities": list(m.CAPABILITIES), "classifications": m.CLASSIFICATIONS,
+            "source_types": m.SOURCE_TYPES, "visible_roles": m.VISIBLE_ROLES, "ref_statuses": m.REF_STATUSES,
+            "version_statuses": m.VERSION_STATUSES}
+
+
+@router.get("/versions", response_model=list[VersionOut])
+def list_versions(status: str = Query("", max_length=16), mine: bool = False, db: Session = Depends(get_db),
+                  user: User = Depends(current_user)):
+    _knowledge_only(db, user)
+    stmt = select(KbVersion).order_by(KbVersion.id.desc()).limit(200)
+    if status:
+        stmt = stmt.where(KbVersion.status == status)
+    if mine:
+        stmt = stmt.where(KbVersion.created_by == user.username)
+    return [_version_out(db, v, user) for v in db.scalars(stmt)]
+
+
+@router.get("/stats")
+def stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """知识地图与健康（设计稿 06）。“零命中检索”只有次数：审计不记检索词原文，看不到具体问题。"""
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from ..core.db import utcnow
+    from ..models import AuditLog
+
+    _knowledge_only(db, user)
+    live = (select(KbItem, KbVersion).join(KbVersion, KbItem.current_version_id == KbVersion.id)
+            .where(KbItem.retired.is_(False), KbVersion.status == "published"))
+    rows = db.execute(live).all()
+    by_source: dict[str, int] = {}
+    coverage: dict[str, dict[str, int]] = {}
+    for item, v in rows:
+        by_source[v.source_type] = by_source.get(v.source_type, 0) + 1
+        coverage.setdefault(item.product, {}).setdefault(item.stage, 0)
+        coverage[item.product][item.stage] += 1
+    month_ago = utcnow() - timedelta(days=30)
+    searches = db.scalars(select(AuditLog.detail).where(AuditLog.action.in_(("kb.search", "kb.basis")),
+                                                       AuditLog.result == "allowed", AuditLog.at >= month_ago)).all()
+    zero = sum(1 for d in searches if '"results": 0' in (d or ""))
+    return {
+        "published": len(rows),
+        "by_source": by_source,
+        "coverage": coverage,
+        "review_due": len(rv.review_due(db, 0)),
+        "review_due_30d": len(rv.review_due(db, 30)),
+        "in_review": db.scalar(select(func.count()).select_from(KbVersion).where(KbVersion.status == "in_review")),
+        "drafts": db.scalar(select(func.count()).select_from(KbVersion).where(KbVersion.status == "draft")),
+        "retired": db.scalar(select(func.count()).select_from(KbItem).where(KbItem.retired.is_(True))),
+        "published_30d": db.scalar(select(func.count()).select_from(KbVersion)
+                                   .where(KbVersion.published_at >= month_ago)),
+        "searches_30d": len(searches),
+        "zero_hit_searches_30d": zero,
+    }

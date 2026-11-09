@@ -6,7 +6,7 @@ import { hasBusinessRole, isAuditor, isSysAdmin, useAuth } from "../auth.jsx";
 function allowed(path, user) {
   if (path.startsWith("/audit")) return isAuditor(user);
   if (path.startsWith("/admin")) return isSysAdmin(user);
-  if (/^\/(projects|project\/|chat\/)/.test(path)) return hasBusinessRole(user);
+  if (/^\/(projects|project\/|chat\/|kb\/)/.test(path)) return hasBusinessRole(user);
   return true;
 }
 

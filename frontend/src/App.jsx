@@ -1,8 +1,12 @@
 import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
-import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireSysAdmin } from "./auth.jsx";
+import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireSysAdmin } from "./auth.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
+import KbIntake from "./pages/KbIntake.jsx";
+import KbMap from "./pages/KbMap.jsx";
+import KbReview from "./pages/KbReview.jsx";
+import KbSearch from "./pages/KbSearch.jsx";
 import Login from "./pages/Login.jsx";
 import Overview from "./pages/Overview.jsx";
 import Password from "./pages/Password.jsx";
@@ -45,6 +49,10 @@ export default function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/project/:code" element={<OverviewPage />} />
           <Route path="/chat/:code" element={<ChatPage />} />
+          <Route path="/kb/search" element={<KbSearch />} />
+          <Route path="/kb/intake" element={<KbIntake />} />
+          <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />
+          <Route path="/kb/map" element={<RequireKnowledge><KbMap /></RequireKnowledge>} />
         </Route>
         <Route path="/audit" element={<RequireAuditor><Audit /></RequireAuditor>} />
         <Route path="/admin/users" element={<RequireSysAdmin><Users /></RequireSysAdmin>} />

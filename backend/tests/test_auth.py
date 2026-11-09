@@ -71,6 +71,9 @@ PROTECTED = [
     ("GET", "/api/kb/review-due"),
     ("GET", "/api/kb/search"),
     ("GET", "/api/kb/basis"),
+    ("GET", "/api/kb/meta"),
+    ("GET", "/api/kb/versions"),
+    ("GET", "/api/kb/stats"),
 ]
 
 
