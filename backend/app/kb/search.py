@@ -3,8 +3,10 @@
 - 全文：PostgreSQL 中文全文索引（zh），查询分词后任一词命中即可，按 ts_rank_cd 排序。
 - 向量：查询经网关 embed 转成向量，按余弦距离在 HNSW 索引上找最近的切片；向量服务没启用或不可用时只用全文。
 - 融合：两路各取前 40 个切片，按 RRF（1 / (60 + 名次)）相加，同一条目只保留得分最高的切片。
-- 相似度下限：只有向量命中、全文没命中的切片，余弦相似度低于下限就丢掉（向量检索总会返回“最近的”结果）；
-  依据查询用更高的下限（KB_BASIS_MIN_SIMILARITY），查不到就提示【依据待核实】。
+- 相似度下限：只有向量命中、全文没命中的切片，余弦相似度低于下限就丢掉（向量检索总会返回“最近的”结果）。
+  依据查询更严（strict）：**所有结果**（含全文命中的）都要达到 KB_BASIS_MIN_SIMILARITY——只靠一个常见词
+  撞上全文检索的弱相关条款也不能当依据（测试 #27：“外汇交易头寸的监管上限”因“监管”一词召回了无关依据）。
+  向量服务不可用时无法判断相似度，依据查询照常只用全文，结果里 vector 字段会注明。
 - 过滤：层级、服务产品（默认同时包含 GEN 通用知识）、阶段、类型；受限条目按可见角色（与 app/kb/review.py 一致）。
 - 查询先过机密级检测；审计只记查询长度和摘要哈希，不记原文。
 - 依据查询（basis）：只查 L4 依据库，按公共规范第 3 节给出引用格式，复审日期已过的提示“请确认是否有更新”。
@@ -26,6 +28,9 @@ from ..services import gateway, guard, jobs, usage
 from . import review
 
 RRF_K = 60
+# 向量化时片段文本的组织方式；改了组织方式就升版本号，kb-reembed 会把旧向量全部重算。
+# t2：标题 + 摘要 + 章节 + 正文（短条目只有正文时彼此区分度太低，测试 #27 评测发现）
+EMBED_TEXT_VERSION = "t2"
 POOL = 40
 MAX_LIMIT = 20
 
@@ -92,12 +97,31 @@ def _fulltext_pg(db: Session, q: str, where: str, params: dict) -> list[int]:
     return [r[0] for r in rows]
 
 
+def embed_marker(model: str) -> str:
+    """kb_chunks.embedding_model 里记的值：模型名 + 片段文本组织方式版本。"""
+    return f"{model}#{EMBED_TEXT_VERSION}"
+
+
+def _vec_literal(vec: list[float]) -> str:
+    return "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
+
+
+def _similarity_of(db: Session, vec: list[float], model: str, ids: list[int]) -> dict[int, float]:
+    """指定切片与查询向量的余弦相似度（全文命中但不在向量前 40 名里的切片用）。"""
+    if not ids:
+        return {}
+    rows = db.execute(text("""SELECT c.id, 1 - (c.embedding <=> CAST(:vec AS vector)) FROM kb_chunks c
+        WHERE c.id = ANY(:ids) AND c.embedding IS NOT NULL AND c.embedding_model = :model"""),
+                      {"vec": _vec_literal(vec), "ids": ids, "model": embed_marker(model)})
+    return {r[0]: float(r[1]) for r in rows}
+
+
 def _vector_pg(db: Session, vec: list[float], model: str, where: str, params: dict) -> list[tuple[int, float]]:
     """返回 [(切片编号, 余弦相似度)]，按相似度从高到低。"""
-    literal = "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
     rows = db.execute(text(f"""SELECT c.id, 1 - (c.embedding <=> CAST(:vec AS vector)) AS sim {_BASE}
         WHERE c.embedding IS NOT NULL AND c.embedding_model = :model {where}
-        ORDER BY c.embedding <=> CAST(:vec AS vector) LIMIT {POOL}"""), {**params, "vec": literal, "model": model})
+        ORDER BY c.embedding <=> CAST(:vec AS vector) LIMIT {POOL}"""),
+                      {**params, "vec": _vec_literal(vec), "model": embed_marker(model)})
     return [(r[0], float(r[1])) for r in rows]
 
 
@@ -120,7 +144,7 @@ def _rrf(*rankings: list[int]) -> dict[int, float]:
 
 def search(db: Session, user: User, query: str, *, layer: str = "", product: str = "", stage: str = "",
            doc_type: str = "", limit: int = 8, include_general: bool = True, purpose: str = "kb.search",
-           min_similarity: float | None = None) -> dict:
+           min_similarity: float | None = None, strict: bool = False) -> dict:
     query = query.strip()
     if not query:
         raise SearchError(422, "检索词不能为空")
@@ -150,6 +174,10 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
             nearest = _vector_pg(db, emb.vectors[0], emb.model, where, params)
             sims = dict(nearest)
             vec_ids = [cid for cid, sim in nearest if cid in full_set_pre or sim >= floor]
+            if strict:   # 依据查询：全文命中的也要达到下限
+                sims.update(_similarity_of(db, emb.vectors[0], emb.model, [c for c in full if c not in sims]))
+                full = [cid for cid in full if sims.get(cid, 0.0) >= floor]
+                vec_ids = [cid for cid in vec_ids if sims.get(cid, 0.0) >= floor]
             vector_status = "ok"
         except gateway.GatewayError as e:         # 向量服务不可用：退回只用全文
             vector_status = f"unavailable: {str(e)[:60]}"
@@ -195,7 +223,7 @@ def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit:
     """依据查询：只查 L4 依据库。查不到时提示按公共规范第 3 节标注【依据待核实】。"""
     q = f"{ref_document} {query}".strip() if ref_document else query
     out = search(db, user, q, layer="L4", limit=limit, include_general=True, purpose="kb.basis",
-                 min_similarity=get_settings().kb_basis_min_similarity)
+                 min_similarity=get_settings().kb_basis_min_similarity, strict=True)
     if ref_document:
         out["items"] = [h for h in out["items"] if ref_document in h["ref_document"]] or out["items"]
     if not out["items"]:
@@ -206,19 +234,22 @@ def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit:
 # ---- 向量化（后台任务）----
 
 def embed_version(db: Session, version_id: int) -> int:
-    """给一个已发布版本中尚未向量化（或模型已更换）的切片生成向量。返回处理的切片数。"""
+    """给一个已发布版本中尚未向量化（或模型、文本组织方式已更换）的切片生成向量。返回处理的切片数。
+    向量化的文本 = 标题 + 摘要 + 章节标题 + 正文，让短条目之间也有足够的区分度。"""
     s = get_settings()
+    marker = embed_marker(s.embed_model)
+    v = db.get(KbVersion, version_id)
+    prefix = "\n".join(x for x in ((v.title, v.summary) if v else ()) if x)
     rows = db.execute(select(KbChunk.id, KbChunk.heading, KbChunk.text)
-                      .where(KbChunk.version_id == version_id, KbChunk.embedding_model != s.embed_model)
+                      .where(KbChunk.version_id == version_id, KbChunk.embedding_model != marker)
                       .order_by(KbChunk.seq)).all()
     done = 0
     for i in range(0, len(rows), max(1, s.embed_batch_size)):
         batch = rows[i:i + s.embed_batch_size]
-        emb = gateway.embed([f"{h}\n{t}" if h else t for _, h, t in batch])
+        emb = gateway.embed(["\n".join(x for x in (prefix, h, t) if x) for _, h, t in batch])
         for (cid, _, _), vec in zip(batch, emb.vectors, strict=True):
-            literal = "[" + ",".join(f"{x:.6f}" for x in vec) + "]"
             db.execute(text("UPDATE kb_chunks SET embedding = CAST(:v AS vector), embedding_model = :m WHERE id = :id"),
-                       {"v": literal, "m": emb.model, "id": cid})
+                       {"v": _vec_literal(vec), "m": embed_marker(emb.model), "id": cid})
         db.commit()
         done += len(batch)
     return done
