@@ -189,6 +189,7 @@ class _Embedder:
             return httpx.Response(503)
         self.calls += 1
         inputs = json.loads(request.content)["input"]
+        self.inputs = getattr(self, "inputs", []) + list(inputs)
         return httpx.Response(200, json={"data": [{"index": i, "embedding": _fake_vector(t)[:self.dim]}
                                                   for i, t in enumerate(inputs)]})
 
@@ -222,7 +223,7 @@ def test_publish_embeds_and_hybrid_search(people, embedder):
         while jobs.run_once(db, "test-worker", kinds=["kb.embed"]):
             pass
         n = db.execute(text("SELECT count(*) FROM kb_chunks WHERE version_id = :v AND embedding IS NOT NULL "
-                            "AND embedding_model = :m"), {"v": v.id, "m": get_settings().embed_model}).scalar()
+                            "AND embedding_model = :m"), {"v": v.id, "m": search.embed_marker(get_settings().embed_model)}).scalar()
     assert n >= 1 and e.calls >= 1
     out = _search(people, "consultant", "托管方 夜间值守")
     assert out["vector"] == "ok"
@@ -250,3 +251,34 @@ def test_unrelated_query_gets_no_vector_only_hits(people, corpus, embedder):
         assert search.search(db, member, "zzzxxxqqq")["items"] == []
         hit = search.basis(db, member, "安全事件 集中分析")["items"]               # 相关的照常命中
         assert corpus["basis"].doc_id in [h["doc_id"] for h in hit]
+
+
+
+@on_postgres
+def test_basis_drops_fulltext_hits_below_similarity(people, embedder):
+    """测试 #27：只靠一个常见词撞上全文检索的弱相关依据，不能出现在依据查询里；普通检索不受影响。"""
+    e = embedder()
+    v = _publish(people, "监管报送时限要求", "## 第七条 报送\n\n重要事项应当在规定时限内向监管部门报送材料。", layer="L4",
+                 product="GEN", doc_type="REF", stage="通用", ref=("某某监管办法", "2020", "current"))
+    with SessionLocal() as db:
+        search.embed_version(db, v.id)
+        assert any("监管报送时限要求" in x for x in e.inputs)                 # 向量化文本带上了标题
+        member = db.merge(people["consultant"])
+        q = "金融机构外汇交易头寸的监管上限是多少"
+        assert v.doc_id not in [h["doc_id"] for h in search.basis(db, member, q)["items"]]
+        loose = search.search(db, member, q, layer="L4", limit=20)["items"]
+        assert v.doc_id in [h["doc_id"] for h in loose]                     # 普通检索照常按全文召回
+        assert v.doc_id in [h["doc_id"] for h in search.basis(db, member, "监管部门 报送材料 时限")["items"]]
+
+
+@on_postgres
+def test_reembed_after_text_version_change(people, embedder):
+    embedder()
+    v = _publish(people, "向量版本测试", "## 内容\n\n向量化文本组织方式变化后应重新向量化。")
+    with SessionLocal() as db:
+        assert search.embed_version(db, v.id) >= 1
+        assert search.embed_version(db, v.id) == 0                          # 已是当前版本，不重复
+        db.execute(text("UPDATE kb_chunks SET embedding_model = :m WHERE version_id = :v"),
+                   {"m": get_settings().embed_model, "v": v.id})             # 模拟旧版本（不带 #t2）
+        db.commit()
+        assert search.embed_version(db, v.id) >= 1
