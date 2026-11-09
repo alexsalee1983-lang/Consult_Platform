@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..agents import runtime, tools
+from ..agents import knowledge, runtime, tools
 from ..core import audit
 from ..core.auth import current_user
 from ..core.db import SessionLocal, get_db, utcnow
@@ -48,6 +48,7 @@ class MessageOut(BaseModel):
     model: str
     prompt_version: str
     created_at: datetime
+    references: list[dict] = []     # 本条回复附给 Agent 的知识库条目（doc_id、标题、章节、引用格式）
 
 
 class ConversationOut(BaseModel):
@@ -111,7 +112,8 @@ def get(cid: int, db: Session = Depends(get_db), user: User = Depends(current_us
     base = _out(db, c, project.code)
     return ConversationDetail(**base.model_dump(), messages=[
         MessageOut(id=m.id, role=m.role, content=m.content, status=m.status, model=m.model,
-                   prompt_version=m.prompt_version, created_at=m.created_at) for m in c.messages])
+                   prompt_version=m.prompt_version, created_at=m.created_at, references=m.kb_refs or [])
+        for m in c.messages])
 
 
 @router.post("/conversations/{cid}/messages")
@@ -127,9 +129,11 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
 
     chat_in = ChatIn(project_code=project.code, message=body.message, level=doc.level)
     username, agent_code, conv_id, version = user.username, c.agent_code, c.id, doc.version
-    extra = {"conversation_id": conv_id, "prompt_version": version}
+    # 提问前先检索知识库，命中的条目附进系统提示（检索经工具层，按授权和可见范围，写审计）
+    kb_block, refs = knowledge.retrieve(db, user, agent_code, project, body.message)
+    extra = {"conversation_id": conv_id, "prompt_version": version, "kb_refs": len(refs)}
     gen = gateway.stream(body.message, tier=project.tier, project_code=project.code, level=doc.level,
-                         system=runtime.system_prompt(doc, card), history=runtime.history(list(c.messages)))
+                         system=runtime.system_prompt(doc, card, kb_block), history=runtime.history(list(c.messages)))
     try:
         first = next(gen)  # 拦截（422）和开始输出前的失败（502）以普通 HTTP 错误返回，被拦截的内容不存
     except ExternalModelForbidden as e:
@@ -156,13 +160,13 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
                     with SessionLocal() as s:
                         s.add(Message(conversation_id=conv_id, role="assistant", content=item.text, model=item.model,
                                       prompt_version=version, prompt_tokens=item.prompt_tokens,
-                                      completion_tokens=item.completion_tokens))
+                                      completion_tokens=item.completion_tokens, kb_refs=refs))
                         s.get(Conversation, conv_id).updated_at = utcnow()
                         s.commit()
                         _succeeded(s, username, code, chat_in, item, stream=True, agent=agent_code, extra=extra)
                     yield _sse("done", {"model": item.model, "demo": item.demo, "prompt_version": version,
                                         "prompt_tokens": item.prompt_tokens,
-                                        "completion_tokens": item.completion_tokens})
+                                        "completion_tokens": item.completion_tokens, "references": refs})
                     return
                 parts.append(item)
                 yield _sse("delta", {"text": item})
@@ -170,7 +174,7 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
         except GatewayError as e:  # 输出途中中断：已输出部分存为不完整回复，下次对话不带上
             with SessionLocal() as s:
                 s.add(Message(conversation_id=conv_id, role="assistant", content="".join(parts),
-                              status="interrupted", prompt_version=version))
+                              status="interrupted", prompt_version=version, kb_refs=refs))
                 s.commit()
                 _failed(s, username, code, chat_in, e, stream=True, agent=agent_code, extra=extra)
             yield _sse("error", {"detail": "模型输出中断，请重试"})

@@ -91,10 +91,13 @@ def project_card(db: Session, user: User, agent_code: str, project_code: str) ->
     return "\n".join(lines)
 
 
-def system_prompt(doc: registry.AgentDoc, card: str) -> str:
-    return (f"{doc.common.strip()}\n\n---\n\n{doc.body.strip()}\n\n---\n\n{card}\n\n"
-            "（平台说明：以上项目卡由平台根据项目区数据生成。知识检索、依据查询等工具在后续版本接入，"
-            "目前查不到依据库条目时按公共规范第 3 节标注【依据待核实】。）")
+def system_prompt(doc: registry.AgentDoc, card: str, knowledge: str = "") -> str:
+    """公共规范 + 角色 md + 项目卡 + 本轮知识库检索结果（app/agents/knowledge.py）。"""
+    note = ("（平台说明：以上项目卡由平台根据项目区数据生成。平台在每次提问前按问题检索知识库，命中的条目附在下面；"
+            "使用其中内容时注明 [doc_id]；法规标准条款只能按 L4 条目给出的引用格式引用。"
+            "检索结果里没有的依据，按公共规范第 3 节标注【依据待核实】，不得凭记忆补写条款号或原文。）")
+    tail = f"\n\n---\n\n{knowledge}" if knowledge else "\n\n（本轮没有检索到相关知识库条目。）"
+    return f"{doc.common.strip()}\n\n---\n\n{doc.body.strip()}\n\n---\n\n{card}\n\n{note}{tail}"
 
 
 def history(messages: list[Message]) -> list[dict]:

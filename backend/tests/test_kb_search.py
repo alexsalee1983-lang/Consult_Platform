@@ -114,13 +114,14 @@ def test_filters_include_general_knowledge(people, corpus):
 def test_basis_lookup_citation_and_stale_flag(people, corpus):
     with SessionLocal() as db:
         out = search.basis(db, db.merge(people["consultant"]), "安全事件 集中分析")
-    hit = out["items"][0]
+    hit = next(h for h in out["items"] if h["doc_id"] == corpus["basis"].doc_id)   # 其他测试也可能发布依据条目
     assert hit["layer"] == "L4" and hit["citation"] == f"【依据：GB/T 22239 2019 8.1.5 集中管控｜{corpus['basis'].doc_id}】"
     assert hit["needs_update_check"] is False
     with SessionLocal() as db:
         db.get(KbVersion, corpus["basis"].id).review_date = date.today() - timedelta(days=1)
         db.commit()
-        assert search.basis(db, db.merge(people["consultant"]), "集中分析")["items"][0]["needs_update_check"] is True
+        again = search.basis(db, db.merge(people["consultant"]), "集中分析", limit=20)["items"]
+        assert next(h for h in again if h["doc_id"] == corpus["basis"].doc_id)["needs_update_check"] is True
         empty = search.basis(db, db.merge(people["consultant"]), "完全不存在的法规条款名称壬癸")
     assert empty["items"] == [] and "依据待核实" in empty["note"]
 
