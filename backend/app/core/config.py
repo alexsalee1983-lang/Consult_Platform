@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # 所以只有向量命中、全文没命中的结果，相似度低于下限就丢掉。依据查询更严，避免把弱相关条款当依据引用。
     # 默认值按 bge-small-zh-v1.5 的经验取，S2 评测（scripts/kb_eval.py）后校准。
     kb_vector_min_similarity: float = 0.5
-    kb_basis_min_similarity: float = 0.65
+    kb_basis_min_similarity: float = 0.55   # 测试机实测：相关 0.61～0.65，无关 0.34 左右，两边留余量
 
     seed_demo_data: bool = True
 
