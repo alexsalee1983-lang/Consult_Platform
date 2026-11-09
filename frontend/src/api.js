@@ -23,7 +23,9 @@ const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 async function request(path, options = {}) {
   const method = (options.method || "GET").toUpperCase();
-  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  // 上传文件（FormData）时由浏览器自动设置 multipart 边界，不能写死 JSON
+  const isForm = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers = { ...(isForm ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
   if (UNSAFE.has(method) && csrfToken) headers["X-CSRF-Token"] = csrfToken;
   const res = await fetch(path, { ...options, method, headers, credentials: "same-origin" });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
@@ -118,6 +120,39 @@ export const api = {
     request(`/api/admin/users/${encodeURIComponent(username)}/roles`, { method: "PUT", body: JSON.stringify({ roles }) }),
   userAction: (username, action) =>   // disable / enable / unlock / reset-password / reset-totp
     request(`/api/admin/users/${encodeURIComponent(username)}/${action}`, { method: "POST" }),
+  // ---- 知识服务 ----
+  kbMeta: () => request("/api/kb/meta"),
+  kbStats: () => request("/api/kb/stats"),
+  kbUpload: (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request("/api/kb/intake", { method: "POST", body: fd });
+  },
+  kbUploads: () => request("/api/kb/intake"),
+  kbUpload1: (id) => request(`/api/kb/intake/${id}`),
+  kbDeid: (id) => request(`/api/kb/intake/${id}/deid`),
+  kbDeidRerun: (id, extra_terms) =>
+    request(`/api/kb/intake/${id}/deid/rerun`, { method: "POST", body: JSON.stringify({ extra_terms }) }),
+  kbDeidDecide: (id, decision, comment) =>
+    request(`/api/kb/intake/${id}/deid/decision`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
+  kbItems: (params = {}) => request(`/api/kb/items?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
+  kbItem: (docId) => request(`/api/kb/items/${encodeURIComponent(docId)}`),
+  kbCreateItem: (body) => request("/api/kb/items", { method: "POST", body: JSON.stringify(body) }),
+  kbRevise: (docId, body) =>
+    request(`/api/kb/items/${encodeURIComponent(docId)}/versions`, { method: "POST", body: JSON.stringify(body) }),
+  kbRetire: (docId, reason) =>
+    request(`/api/kb/items/${encodeURIComponent(docId)}/retire`, { method: "POST", body: JSON.stringify({ reason }) }),
+  kbReconfirm: (docId) => request(`/api/kb/items/${encodeURIComponent(docId)}/reconfirm`, { method: "POST" }),
+  kbVersion: (id) => request(`/api/kb/versions/${id}`),
+  kbVersions: (params = {}) => request(`/api/kb/versions?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null))}`),
+  kbEditVersion: (id, changes) => request(`/api/kb/versions/${id}`, { method: "PATCH", body: JSON.stringify(changes) }),
+  kbSubmit: (id) => request(`/api/kb/versions/${id}/submit`, { method: "POST" }),
+  kbReview: (id, role, decision, comment) =>
+    request(`/api/kb/versions/${id}/review`, { method: "POST", body: JSON.stringify({ role, decision, comment }) }),
+  kbQueue: () => request("/api/kb/review-queue"),
+  kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
+  kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
+  kbBasis: (q) => request(`/api/kb/basis?q=${encodeURIComponent(q)}`),
   verifyAudit: (expectHead) =>
     request(`/api/audit/verify${expectHead ? `?expect_head=${encodeURIComponent(expectHead)}` : ""}`),
 };

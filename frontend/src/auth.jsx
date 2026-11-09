@@ -58,6 +58,15 @@ export function isAuditor(user) {
   return (user?.roles || []).includes("security_auditor");
 }
 
+export function hasRole(user, role) {
+  return (user?.roles || []).includes(role);
+}
+
+// 知识专家、知识管理员：能看审批队列、知识地图，能编辑和审核知识条目
+export function isKnowledge(user) {
+  return hasRole(user, "knowledge_expert") || hasRole(user, "knowledge_admin");
+}
+
 export function isSysAdmin(user) {
   return (user?.roles || []).includes("sys_admin");
 }
@@ -72,6 +81,17 @@ export function homePath(user) {
 export function HomeRedirect() {
   const { user } = useAuth();
   return <Navigate to={homePath(user)} replace />;
+}
+
+export function RequireKnowledge({ children }) {
+  const { user } = useAuth();
+  if (isKnowledge(user)) return children;
+  return (
+    <section className="pnl pad" aria-label="无权限">
+      <h1 className="h1">只有知识专家、知识管理员能使用这个页面</h1>
+      <div className="sub" style={{ fontSize: 13 }}>顾问可以在“投料箱”提交资料，在“知识检索”查已发布的知识。</div>
+    </section>
+  );
 }
 
 export function RequireSysAdmin({ children }) {

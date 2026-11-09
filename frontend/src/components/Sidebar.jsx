@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { api } from "../api.js";
-import { hasBusinessRole, isAuditor, isSysAdmin, PASSWORD_PATH, ROLE_NAMES, useAuth } from "../auth.jsx";
+import { hasBusinessRole, isAuditor, isKnowledge, isSysAdmin, PASSWORD_PATH, ROLE_NAMES, useAuth } from "../auth.jsx";
 
 const ICONS = {
   chat: <path d="M4 5h16v11H8l-4 4z" />,
@@ -10,6 +10,10 @@ const ICONS = {
   audit: <><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z" /><path d="M9 12h6M9 8h6M9 16h4" /></>,
   users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 010 6.8M18 14.8c2 .7 3.2 2.5 3.5 5.2" /></>,
   key: <><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M17 6l3 3M15 8l2 2" /></>,
+  search: <><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2" /></>,
+  inbox: <><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1.5 2.5h5L16 13h5" /></>,
+  review: <><path d="M9 11l2.5 2.5L16 9" /><rect x="4" y="3" width="16" height="18" rx="2" /></>,
+  map: <><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" /><path d="M9 4v14M15 6v14" /></>,
 };
 
 function Icon({ name }) {
@@ -58,6 +62,15 @@ export default function Sidebar() {
       { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱" },
       { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
     ] : []),
+    ...(hasBusinessRole(user) ? [
+      { group: "知识" },
+      { to: "/kb/search", icon: "search", label: "知识检索" },
+      { to: "/kb/intake", icon: "inbox", label: "投料箱" },
+      ...(isKnowledge(user) ? [
+        { to: "/kb/review", icon: "review", label: "审批队列" },
+        { to: "/kb/map", icon: "map", label: "知识地图与健康" },
+      ] : []),
+    ] : []),
     ...(isAuditor(user) ? [{ to: "/audit", icon: "audit", label: "审计日志" }] : []),
     ...(isSysAdmin(user) ? [{ to: "/admin/users", icon: "users", label: "用户与角色" }] : []),
     { to: PASSWORD_PATH, icon: "key", label: "修改口令" },
@@ -81,7 +94,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="nav" aria-label="交付导航">
-        {items.map((it) => (
+        {items.map((it) => (it.group ? <div key={it.group} className="cap nav-group">{it.group}</div> :
           <NavLink key={it.label} to={it.to} className={({ isActive }) => (isActive ? "on" : undefined)}>
             <Icon name={it.icon} />
             {it.label}
