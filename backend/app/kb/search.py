@@ -57,6 +57,7 @@ class Hit:
     ref_status: str = ""
     needs_update_check: bool = False
     citation: str = ""
+    similarity: float | None = None   # 向量余弦相似度（没走向量检索时为空），评测校准门槛用
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -136,6 +137,7 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
     full = (_fulltext_pg if postgres else _fulltext_simple)(db, query, where, params)
 
     vec_ids: list[int] = []
+    sims: dict[int, float] = {}
     vector_status = "not enabled"
     if postgres and gateway.embedding_enabled():
         try:
@@ -145,8 +147,9 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
             floor = get_settings().kb_vector_min_similarity if min_similarity is None else min_similarity
             full_set_pre = set(full)
             # 全文也命中的切片照常参与融合；只有向量命中的，相似度够高才要
-            vec_ids = [cid for cid, sim in _vector_pg(db, emb.vectors[0], emb.model, where, params)
-                       if cid in full_set_pre or sim >= floor]
+            nearest = _vector_pg(db, emb.vectors[0], emb.model, where, params)
+            sims = dict(nearest)
+            vec_ids = [cid for cid, sim in nearest if cid in full_set_pre or sim >= floor]
             vector_status = "ok"
         except gateway.GatewayError as e:         # 向量服务不可用：退回只用全文
             vector_status = f"unavailable: {str(e)[:60]}"
@@ -171,7 +174,8 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
                 product=item.product, stage=item.stage, doc_type=item.doc_type, heading=c.heading,
                 snippet=c.text[:400], score=round(s, 5),
                 matched="+".join(x for x, ok in (("全文", c.id in full_set), ("向量", c.id in vec_set)) if ok),
-                review_date=v.review_date.isoformat() if v.review_date else None)
+                review_date=v.review_date.isoformat() if v.review_date else None,
+                similarity=round(sims[c.id], 4) if c.id in sims else None)
         if item.layer == "L4":
             h.ref_document, h.ref_version, h.ref_status = v.ref_document, v.ref_version, v.ref_status
             h.needs_update_check = bool(v.review_date and v.review_date < today)

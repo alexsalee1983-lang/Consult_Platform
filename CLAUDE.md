@@ -89,6 +89,11 @@ docker compose exec backend python -m app.cli verify-audit          # 校验审�
 bash scripts/audit_chain_check.sh                                    # 测试机：多进程并发写审计后校验（生产拒绝执行）
 docker compose exec backend python -m app.cli usage-report --days 30 # 大模型用量（按人、项目、模型）
 
+# 知识批量入库与评测（条目文件格式见 backend/app/kb/files.py，示范见 knowledge/）
+docker compose exec backend python -m app.cli kb-import /srv/knowledge/samples --as <知识专家> [--submit]
+docker compose exec backend python -m app.cli kb-draft --source <公开资料> --source-detail "<来源>" --out /tmp/drafts --as <知识专家>
+docker compose exec backend python -m app.cli kb-eval /srv/knowledge/eval/samples.yaml --as <用户> [--out /tmp/report.json]
+
 # 没有公司模型时，用模拟模型跑通网关真实路径（.env 设 LLM_BASE_URL=http://mock-llm:8000/v1）
 docker compose --profile mock-llm up -d --build
 SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh

@@ -1,0 +1,88 @@
+# 示范评测题：对应 knowledge/samples/ 的示范条目，用于跑通评测流程、观察相似度分布。
+# 正式评测题（50～100 题）在正式条目起草后编写，经知识专家评审。
+# expect 为空列表 = 期望查不到（依据查询应提示【依据待核实】）。
+
+# ---- 依据查询（只查 L4）----
+- id: B001
+  mode: basis
+  question: 网络运营者的网络日志至少要留存多久？
+  expect: [csl-art21-mlps]
+- id: B002
+  mode: basis
+  question: 等级保护制度要求网络运营者履行哪些安全保护义务？
+  expect: [csl-art21-mlps]
+- id: B003
+  mode: basis
+  question: 发生危害网络安全的事件时，运营者要做什么？依据是什么？
+  expect: [csl-art25-incident-plan]
+- id: B004
+  mode: basis
+  question: 应急预案有没有法定要求？
+  expect: [csl-art25-incident-plan]
+- id: B005
+  mode: basis
+  question: 数据分类和重要数据备份加密的要求出自哪里？
+  expect: [csl-art21-mlps]
+- id: B006
+  mode: basis
+  question: 发现系统漏洞和网络攻击后要及时处置，有什么依据？
+  expect: [csl-art25-incident-plan]
+- id: B007
+  mode: basis
+  question: 量子通信卫星的频谱分配标准是什么？
+  expect: []
+- id: B008
+  mode: basis
+  question: 金融机构外汇交易头寸的监管上限是多少？
+  expect: []
+
+# ---- 知识检索 ----
+- id: S001
+  mode: search
+  question: 告警怎么分级？每级多久响应？
+  expect: [soc-alert-grading]
+- id: S002
+  mode: search
+  question: 客户没有夜班，一级告警夜里怎么处理？
+  expect: [soc-night-duty]
+- id: S003
+  mode: search
+  question: 交接班记录要写哪些内容？
+  expect: [soc-shift-handover]
+- id: S004
+  mode: search
+  question: SOC 现状调研从哪几个方面入手？
+  expect: [soc-current-state-survey]
+- id: S005
+  mode: search
+  question: 平均处置时间怎么算？
+  expect: [soc-metrics]
+- id: S006
+  mode: search
+  question: 员工点了钓鱼邮件里的链接，SOC 怎么处置？
+  expect: [soc-phishing-playbook]
+- id: S007
+  mode: search
+  question: 访谈提纲怎么设计？
+  expect: [delivery-interview-guide]
+- id: S008
+  mode: search
+  question: 上线后告警太多分析员处理不过来怎么办？
+  expect: [pit-default-alert-threshold, soc-alert-grading]
+- id: S009
+  mode: search
+  question: 误报率按什么口径统计？
+  expect: [soc-metrics]
+  product: SOC
+- id: S010
+  mode: search
+  question: 托管方和客户之间的夜间升级要约定什么？
+  expect: [soc-night-duty]
+- id: S011
+  mode: search
+  question: 跨境电商平台的物流时效怎么优化？
+  expect: []
+- id: S012
+  mode: search
+  question: 新能源汽车电池的回收补贴政策
+  expect: []
