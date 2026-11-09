@@ -151,3 +151,6 @@ textarea.inp { height: auto; padding: 8px 10px; line-height: 1.6; resize: vertic
 .legend { padding: 1px 6px; border-radius: 4px; }
 @media (max-width: 1200px) { .kb3 { grid-template-columns: 260px minmax(0, 1fr); } .kb3 > :last-child { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .kb2, .kb3 { grid-template-columns: minmax(0, 1fr); } }
+
+/* 对话区固定高度：只在消息列表内部滚动，输入框始终在底部，输出时页面不跟着变长 */
+.chat-main { height: calc(100vh - 110px); min-height: 420px; }

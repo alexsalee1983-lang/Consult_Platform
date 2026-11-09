@@ -53,7 +53,9 @@ export default function Chat({ code }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [external, setExternal] = useState(false);   // 当前接的是外部测试模型
-  const endRef = useRef(null);
+  // 只滚动对话区内部，不滚动整页；用户往上翻看时不把他拽回底部
+  const scrollerRef = useRef(null);
+  const stickRef = useRef(true);
 
   const loadConvs = useCallback(() => api.conversations(code).then(setConvs).catch(() => setConvs([])), [code]);
 
@@ -65,7 +67,18 @@ export default function Chat({ code }) {
     setMessages([]);
     loadConvs();
   }, [code, loadConvs]);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || !stickRef.current) return undefined;
+    // 流式输出时每段字都会触发；合并到下一帧，直接定位到底部（不用平滑滚动，避免连续动画互相打断而抖动）
+    const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    return () => cancelAnimationFrame(id);
+  }, [messages]);
+
+  function onScroll(e) {
+    const el = e.currentTarget;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  }
 
   const agent = agents.find((a) => a.code === (conv?.agent_code ?? agentCode));
   const agentName = conv?.agent_name ?? agent?.name ?? "";
@@ -94,6 +107,7 @@ export default function Chat({ code }) {
     const content = (msg ?? text).trim();
     if (!content || sending) return;
     setText("");
+    stickRef.current = true;          // 发新消息时回到底部跟随输出
     setError("");
     setSending(true);
     let current = conv;
@@ -165,7 +179,7 @@ export default function Chat({ code }) {
           </ul>
         </aside>
 
-        <section className="pnl" style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 110px)", minWidth: 0 }}>
+        <section className="pnl chat-main" style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
           <div className="sb" style={{ padding: "10px 20px", borderBottom: "1px solid var(--ln)" }}>
             <span style={{ fontWeight: 700 }}>{conv ? conv.title || "（未命名）" : "新对话"}</span>
             <span className="sub">{agentName} Agent{agent?.prompt_version ? ` · 提示词 ${conv?.prompt_version ?? agent.prompt_version}` : ""}</span>
@@ -178,7 +192,8 @@ export default function Chat({ code }) {
               </div>
             </div>
           )}
-          <div style={{ flex: 1, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+          <div ref={scrollerRef} onScroll={onScroll}
+            style={{ flex: 1, minHeight: 0, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", overscrollBehavior: "contain" }}>
             {messages.length === 0 && (
               <div className="sub">
                 发送前平台会先检查机密级内容（口令、密钥、IP、身份证号、银行卡号、手机号、邮箱），命中即拦截，不会发给大模型，也不保存。
@@ -205,7 +220,6 @@ export default function Chat({ code }) {
             })}
             {sending && messages[messages.length - 1]?.role === "user" && <div className="sub">Agent 正在思考……</div>}
             {error && <div className="err" role="alert">{error}</div>}
-            <div ref={endRef} />
           </div>
           <form style={{ padding: "12px 20px 14px", borderTop: "1px solid var(--ln)", display: "flex", flexDirection: "column", gap: 8 }}
             onSubmit={(e) => { e.preventDefault(); send(); }}>
