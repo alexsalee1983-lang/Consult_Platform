@@ -284,7 +284,7 @@ def similar_items(db: Session, v: KbVersion, limit: int = 5) -> list[dict]:
         FROM kb_chunks c
         JOIN kb_versions cv ON cv.id = c.version_id AND cv.status = 'published'
         JOIN kb_items i ON i.current_version_id = cv.id AND NOT i.retired
-        , plainto_tsquery('zh', :q) q
+        , replace(plainto_tsquery('zh', :q)::text, '&', '|')::tsquery q   -- 标题里任一词命中即可，按相关度排序
         WHERE c.tsv @@ q AND i.id <> :item AND i.product = :product
         GROUP BY i.doc_id, cv.title ORDER BY score DESC LIMIT :limit
     """), {"q": v.title, "item": v.item_id, "product": v.item.product, "limit": limit}).all()
