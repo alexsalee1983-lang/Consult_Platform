@@ -5,7 +5,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..core.db import Base, utcnow
@@ -40,5 +40,7 @@ class Message(Base):
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Agent 回复时附给它的知识库条目（迁移 0015）：[{doc_id, title, heading, layer, citation}]，不含正文
+    kb_refs: Mapped[list] = mapped_column(JSON, default=list)
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")

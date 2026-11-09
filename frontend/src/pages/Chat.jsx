@@ -18,9 +18,24 @@ function Blocked({ detail }) {
   );
 }
 
+// 本条回复前平台检索到、附给 Agent 的知识库条目
+function References({ refs }) {
+  if (!refs || refs.length === 0) return null;
+  return (
+    <div className="refs" aria-label="参考知识">
+      <span className="cap">参考知识</span>
+      {refs.map((r) => (
+        <span key={r.doc_id} className="ref" title={r.citation || r.heading || r.title}>
+          <span className="mono">{r.doc_id}</span> {r.title}{r.heading ? ` · ${r.heading}` : ""}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function fromServer(m, agentName) {
   if (m.role === "user") return { role: "user", content: m.content };
-  return { role: "ai", content: m.content, model: m.model, agentName, interrupted: m.status !== "ok" };
+  return { role: "ai", content: m.content, model: m.model, agentName, interrupted: m.status !== "ok", references: m.references || [] };
 }
 
 function shortTime(at) {
@@ -98,7 +113,7 @@ export default function Chat({ code }) {
           patchLast((last) => ({ ...last, content: last.content + delta }));
         }
       });
-      if (started) patchLast((last) => ({ ...last, streaming: false, model: done.model, demo: done.demo }));
+      if (started) patchLast((last) => ({ ...last, streaming: false, model: done.model, demo: done.demo, references: done.references || [] }));
       // 后端用第一条提问作标题，这里同步显示
       setConv((c) => (c && !c.title ? { ...c, title: content.split("\n")[0].slice(0, 40) } : c));
     } catch (e) {
@@ -167,7 +182,7 @@ export default function Chat({ code }) {
             {messages.length === 0 && (
               <div className="sub">
                 发送前平台会先检查机密级内容（口令、密钥、IP、身份证号、银行卡号、手机号、邮箱），命中即拦截，不会发给大模型，也不保存。
-                Agent 会读取本项目的项目卡；对话保存在项目区，只有你能看到。所有调用写入审计日志，日志不记录原文。
+                Agent 会读取本项目的项目卡，并在每次回答前检索知识库（只用已发布的知识，引用的条目显示在回复下方）；对话保存在项目区，只有你能看到。所有调用写入审计日志，日志不记录原文。
               </div>
             )}
             {messages.map((m, i) => {
@@ -183,6 +198,7 @@ export default function Chat({ code }) {
                       {m.streaming ? " · 输出中……" : ""}{m.interrupted ? " · 输出中断，内容不完整" : ""}
                     </div>
                     <div className="body">{m.content}</div>
+                    <References refs={m.references} />
                   </div>
                 </div>
               );
