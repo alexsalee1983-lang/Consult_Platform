@@ -104,6 +104,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 后台任务约定：耗时操作（解析、向量化、到期删除）不在请求里做，用 `app/services/jobs.py` 的 `enqueue()` 排队，由 worker 容器（`python -m app.worker`）执行；处理器用 `@jobs.handler("种类")` 注册，必须可重复执行；任务参数只放编号和对象键，不放原文。运维：`python -m app.cli jobs`（状态）、`python -m app.cli selfcheck`（自检）。
 
+知识库约定：知识区表结构在 `app/models/kb.py`，元数据取值和校验在 `app/kb/meta.py`（依据公共规范第 7 节，改取值要同步公共规范并经负责人同意）；建条目、建版本只经 `app/kb/items.py`。条目的 doc_id 固定不变，内容变化一律建新版本，历史版本保留。知识区只收去标识后的做法：去标识报告只记类别、占位符和次数，上传记录只记机密级命中类别，都不记原文。
+
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求要带 `X-CSRF-Token`。管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。
