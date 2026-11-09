@@ -83,6 +83,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
+      # 内部服务一律直连：宿主机若在 ~/.docker/config.json 配了代理，Docker 会把 HTTP_PROXY 注入容器，
+      # 不列在这里的内部地址会被绕到外部代理上。新增内部服务时同步加到这里。
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,6 +116,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
+      # 内部服务一律直连：宿主机若在 ~/.docker/config.json 配了代理，Docker 会把 HTTP_PROXY 注入容器，
+      # 不列在这里的内部地址会被绕到外部代理上。新增内部服务时同步加到这里。
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
     command: ["python", "-m", "app.worker"]
     depends_on:
       backend:
