@@ -15,19 +15,20 @@ from app.models import Agent, AgentToolGrant, AuditLog, Tool, User
 
 from .conftest import create_user, logged_in_client
 
-ALL_TOOLS = ["kb.search", "basis.lookup", "project.read", "doc.generate", "quality.check", "kb.stage_write"]
-#                      知识检索 依据查询 读项目区 文档生成 质量检查 写待入库区
+ALL_TOOLS = ["kb.search", "basis.lookup", "project.read", "doc.generate", "quality.check", "kb.stage_write",
+             "project.evidence"]
+#                      知识检索 依据查询 读项目区 文档生成 质量检查 写待入库区 查证据（M3，迁移 0017，与读项目区同列）
 EXPECTED = {
-    "consultant-lead":    (1, 0, 1, 0, 0, 0),
-    "delivery-pm":        (1, 0, 1, 1, 0, 0),
-    "research-interview": (1, 0, 1, 1, 0, 0),
-    "compliance-basis":   (1, 1, 1, 0, 0, 0),
-    "solution-designer":  (1, 1, 1, 0, 0, 0),
-    "policy-drafter":     (1, 1, 1, 1, 0, 0),
-    "report-writer":      (1, 0, 1, 1, 0, 0),
-    "qa-reviewer":        (1, 1, 1, 0, 1, 0),
-    "kb-builder":         (1, 1, 0, 0, 0, 1),
-    "sanitizer":          (0, 0, 0, 0, 0, 1),
+    "consultant-lead":    (1, 0, 1, 0, 0, 0, 1),
+    "delivery-pm":        (1, 0, 1, 1, 0, 0, 1),
+    "research-interview": (1, 0, 1, 1, 0, 0, 1),
+    "compliance-basis":   (1, 1, 1, 0, 0, 0, 1),
+    "solution-designer":  (1, 1, 1, 0, 0, 0, 1),
+    "policy-drafter":     (1, 1, 1, 1, 0, 0, 1),
+    "report-writer":      (1, 0, 1, 1, 0, 0, 1),
+    "qa-reviewer":        (1, 1, 1, 0, 1, 0, 1),
+    "kb-builder":         (1, 1, 0, 0, 0, 1, 0),
+    "sanitizer":          (0, 0, 0, 0, 0, 1, 0),
 }
 KNOWLEDGE_SIDE = {"kb-builder", "sanitizer"}
 
@@ -64,8 +65,9 @@ def test_registered_grants_equal_expected():
 
 @pytest.mark.parametrize("agent", sorted(KNOWLEDGE_SIDE))
 def test_knowledge_agents_cannot_read_project_area(member, agent):
-    with pytest.raises(tools.ToolDenied):
-        _invoke(member, agent, "project.read")
+    for tool in ("project.read", "project.evidence"):
+        with pytest.raises(tools.ToolDenied):
+            _invoke(member, agent, tool)
 
 
 def test_hard_rule_holds_even_if_grant_table_is_edited(member):

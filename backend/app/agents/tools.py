@@ -9,7 +9,7 @@ Agent 读写数据只能经 invoke()。每次调用依次检查（任一不满�
 4. 涉及项目的工具，发起对话的用户必须是该项目成员（非成员与项目不存在一样）。
 
 审计只记 Agent、工具、项目、结果和参数长度，不记参数和结果内容。
-已实现：project.read（真实数据）、quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，
+已实现：project.read（真实数据）、project.evidence（查证据：清单或某条证据的正文，分段返回；M3）、quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，
 只查 L4）；doc.generate 在 M3 交付链接入，kb.stage_write 在 M2 后续接入，目前是占位实现。
 kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用人的可见范围过滤（app/kb/search.py）。
 """
@@ -77,6 +77,16 @@ def _project_read(ctx: ToolContext, args: dict) -> dict:
                                    if c.status == "open"]}
 
 
+def _project_evidence(ctx: ToolContext, args: dict) -> dict:
+    from ..project import evidence
+
+    try:
+        offset, limit = int(args.get("offset", 0)), int(args.get("limit", evidence.READ_CHARS))
+    except (TypeError, ValueError) as e:
+        raise ToolError("offset、limit 必须是整数") from e
+    return evidence.read_for_agent(ctx.db, ctx.project, str(args.get("code", "")), offset, limit)
+
+
 def _quality_check(ctx: ToolContext, args: dict) -> dict:
     r = check(str(args.get("text", "")))
     return {"blocked": r.blocked, "summary": r.summary(),
@@ -112,13 +122,14 @@ def _placeholder(milestone: str, empty: dict) -> Callable[[ToolContext, dict], d
 
 IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "project.read": _project_read,
+    "project.evidence": _project_evidence,
     "quality.check": _quality_check,
     "kb.search": _kb_search,
     "basis.lookup": _basis_lookup,
     "doc.generate": _placeholder("M3 交付链", {"document": None}),
     "kb.stage_write": _placeholder("M2 投料", {"staged": False}),
 }
-NEEDS_PROJECT = frozenset({"project.read", "doc.generate"})
+NEEDS_PROJECT = frozenset({"project.read", "project.evidence", "doc.generate"})
 
 
 def granted_tools(db: Session, agent_code: str) -> list[str]:
