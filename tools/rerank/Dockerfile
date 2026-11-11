@@ -5,6 +5,9 @@
 # 构建机连不上外网时：HF_ENDPOINT 指向公司内部的模型镜像站。
 # 默认 int8 量化版（约 0.6 GB，CPU 上比完整版快约 3 倍，示范评测结果相同；决策记录 11-11 补充）。
 # 换完整版（约 2.3 GB）：构建参数 RERANK_MODEL=BAAI/bge-reranker-v2-m3，.env 的 RERANK_MODEL 改成同名。
+# 注意：RERANK_MODEL 是 fastembed 里的模型名，不是 HuggingFace 仓库名。两个名字实际都从
+# onnx-community/bge-reranker-v2-m3-ONNX 下载：完整版取 onnx/model.onnx，int8 取 onnx/model_int8.onnx。
+# 所以在 HuggingFace 上查不到“BAAI/bge-reranker-v2-m3-int8”仓库是正常的；下载失败请查网络和代理。
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /srv
@@ -18,7 +21,7 @@ RUN pip install -i ${PIP_INDEX_URL} -r requirements.txt
 ENV FASTEMBED_CACHE_PATH=/models RERANK_MODEL=${RERANK_MODEL}
 # 下载有超时：连不上时报错退出，不会无声地一直卡住
 RUN if [ -n "${HTTPS_PROXY}" ]; then p="已设置"; else p="未设置"; fi && \
-    echo "正在下载重排模型 ${RERANK_MODEL}（来源 ${HF_ENDPOINT}，代理：${p}；不打印代理地址）" && \
+    echo "正在下载重排模型 ${RERANK_MODEL}（fastembed 模型名，实际仓库 onnx-community/bge-reranker-v2-m3-ONNX；来源 ${HF_ENDPOINT}，代理：${p}；不打印代理地址）" && \
     export http_proxy="${HTTP_PROXY}" https_proxy="${HTTPS_PROXY}" no_proxy="${NO_PROXY}" \
            HF_HUB_DOWNLOAD_TIMEOUT=60 HF_HUB_ETAG_TIMEOUT=30 HF_ENDPOINT="${HF_ENDPOINT}" && \
     timeout 2400 python -c "import os; from fastembed.rerank.cross_encoder import TextCrossEncoder; \
