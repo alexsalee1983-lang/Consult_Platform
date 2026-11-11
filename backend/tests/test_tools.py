@@ -16,20 +16,23 @@ from app.models import Agent, AgentToolGrant, AuditLog, Tool, User
 from .conftest import create_user, logged_in_client
 
 ALL_TOOLS = ["kb.search", "basis.lookup", "project.read", "doc.generate", "quality.check", "kb.stage_write",
-             "project.evidence"]
-#                      知识检索 依据查询 读项目区 文档生成 质量检查 写待入库区 查证据（M3，迁移 0017，与读项目区同列）
+             "project.evidence", "confirm.create"]
+#                      知识检索 依据查询 读项目区 文档生成 质量检查 写待入库区 查证据 发确认卡
+# 查证据（M3，迁移 0017）与读项目区同列；发确认卡（M3，迁移 0019）授权全部 8 个交付侧 Agent（决策记录 2026-11-10）
 EXPECTED = {
-    "consultant-lead":    (1, 0, 1, 0, 0, 0, 1),
-    "delivery-pm":        (1, 0, 1, 1, 0, 0, 1),
-    "research-interview": (1, 0, 1, 1, 0, 0, 1),
-    "compliance-basis":   (1, 1, 1, 0, 0, 0, 1),
-    "solution-designer":  (1, 1, 1, 0, 0, 0, 1),
-    "policy-drafter":     (1, 1, 1, 1, 0, 0, 1),
-    "report-writer":      (1, 0, 1, 1, 0, 0, 1),
-    "qa-reviewer":        (1, 1, 1, 0, 1, 0, 1),
-    "kb-builder":         (1, 1, 0, 0, 0, 1, 0),
-    "sanitizer":          (0, 0, 0, 0, 0, 1, 0),
+    "consultant-lead":    (1, 0, 1, 0, 0, 0, 1, 1),
+    "delivery-pm":        (1, 0, 1, 1, 0, 0, 1, 1),
+    "research-interview": (1, 0, 1, 1, 0, 0, 1, 1),
+    "compliance-basis":   (1, 1, 1, 0, 0, 0, 1, 1),
+    "solution-designer":  (1, 1, 1, 0, 0, 0, 1, 1),
+    "policy-drafter":     (1, 1, 1, 1, 0, 0, 1, 1),
+    "report-writer":      (1, 0, 1, 1, 0, 0, 1, 1),
+    "qa-reviewer":        (1, 1, 1, 0, 1, 0, 1, 1),
+    "kb-builder":         (1, 1, 0, 0, 0, 1, 0, 0),
+    "sanitizer":          (0, 0, 0, 0, 0, 1, 0, 0),
 }
+# 授权矩阵测试里每个工具的调用参数；发确认卡发到严格档 GRID-B（避免改变 BANK-A 演示数据的待确认数）
+MATRIX_CALLS = {"confirm.create": ("GRID-B", {"kind": "证据不足", "title": "授权矩阵测试卡"})}
 KNOWLEDGE_SIDE = {"kb-builder", "sanitizer"}
 
 
@@ -49,11 +52,12 @@ def _invoke(user, agent, tool, project="BANK-A", args=None):
 @pytest.mark.parametrize("agent", list(EXPECTED))
 def test_grant_matrix(member, agent):
     for tool, allowed in zip(ALL_TOOLS, EXPECTED[agent]):
+        project, args = MATRIX_CALLS.get(tool, ("BANK-A", None))
         if allowed:
-            assert isinstance(_invoke(member, agent, tool), dict), f"{agent} 应能用 {tool}"
+            assert isinstance(_invoke(member, agent, tool, project, args), dict), f"{agent} 应能用 {tool}"
         else:
             with pytest.raises(tools.ToolDenied):
-                _invoke(member, agent, tool)
+                _invoke(member, agent, tool, project, args)
 
 
 def test_registered_grants_equal_expected():

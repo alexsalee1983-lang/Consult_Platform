@@ -20,6 +20,19 @@ class ConfirmationOut(BaseModel):
     agent: str
     status: str
     project_code: str = ""
+    agent_code: str = ""
+    options: list[dict] = []          # [{"key": "A", "text": "……"}]
+    recommendation: str = ""
+    reason: str = ""
+    impact: str = ""
+    deliverable_code: str = ""
+    section_seq: int | None = None
+    created_by: str = ""
+    created_at: datetime | None = None
+    choice: str = ""
+    resolution: str = ""
+    resolved_by: str = ""
+    resolved_at: datetime | None = None
 
 
 class ProjectOut(BaseModel):
@@ -43,7 +56,9 @@ class ProjectDetail(ProjectOut):
 
 
 class ResolveIn(BaseModel):
-    resolution: str = Field(min_length=1, max_length=2000)
+    """选一个选项（choice），或写意见（resolution），或两者都有。"""
+    choice: str = Field(default="", max_length=1)
+    resolution: str = Field(default="", max_length=2000)
 
 
 class GuardIn(BaseModel):

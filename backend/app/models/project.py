@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..core.db import Base, utcnow as _now
@@ -48,7 +48,11 @@ class Deliverable(Base):
 
 
 class Confirmation(Base):
-    """需要顾问做判断的事项：方案取舍、来源冲突、证据不足、入库确认、范围确认。"""
+    """需要顾问做判断的事项（确认卡）：方案取舍、来源冲突、证据不足、范围确认、入库确认。
+
+    Agent 经工具 confirm.create 发卡（迁移 0019 起），附选项、推荐和理由、影响；顾问选一个选项或写自己的意见，
+    处理后 Agent 再继续（S3 第 ④ 个 PR 的编排据此暂停和继续）。规则见 app/project/confirmations.py。
+    """
 
     __tablename__ = "confirmations"
 
@@ -56,9 +60,21 @@ class Confirmation(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     kind: Mapped[str] = mapped_column(String(16))
     title: Mapped[str] = mapped_column(String(256))
-    agent: Mapped[str] = mapped_column(String(64))
+    agent: Mapped[str] = mapped_column(String(64))                   # 显示名，如“方案设计 Agent”
     status: Mapped[str] = mapped_column(String(16), default="open")  # open / resolved
     resolution: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    # ---- 迁移 0019 ----
+    agent_code: Mapped[str] = mapped_column(String(32), default="")  # 发卡的 Agent 代号；演示数据为空
+    options: Mapped[list] = mapped_column(JSON, default=list)        # [{"key": "A", "text": "……"}]
+    recommendation: Mapped[str] = mapped_column(String(8), default="")   # 推荐的选项 key
+    reason: Mapped[str] = mapped_column(Text, default="")            # 推荐理由（引用前提、差距编号、依据）
+    impact: Mapped[str] = mapped_column(Text, default="")            # 选不同选项分别影响什么
+    deliverable_code: Mapped[str] = mapped_column(String(8), default="")   # 关联的交付件（可空），如 D5
+    section_seq: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 关联的章（可空）
+    created_by: Mapped[str] = mapped_column(String(64), default="")  # 发起对话的顾问
+    choice: Mapped[str] = mapped_column(String(8), default="")       # 顾问选的选项 key；自己写意见时为空
+    resolved_by: Mapped[str] = mapped_column(String(64), default="")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     project: Mapped[Project] = relationship(back_populates="confirmations")
