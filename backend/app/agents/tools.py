@@ -9,8 +9,11 @@ Agent 读写数据只能经 invoke()。每次调用依次检查（任一不满�
 4. 涉及项目的工具，发起对话的用户必须是该项目成员（非成员与项目不存在一样）。
 
 审计只记 Agent、工具、项目、结果和参数长度，不记参数和结果内容。
-已实现：project.read（真实数据）、quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，
-只查 L4）；doc.generate 在 M3 交付链接入，kb.stage_write 在 M2 后续接入，目前是占位实现。
+已实现：project.read（真实数据）、project.evidence（查证据：清单或某条证据的正文，分段返回；M3）、
+doc.generate（交付件分章节：读大纲 / 读章节、写大纲、写章节新版本，规则见 app/project/deliverables.py；M3）、
+confirm.create（发确认卡：选项、推荐和理由、影响，规则见 app/project/confirmations.py；M3）、
+quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，只查 L4）；
+kb.stage_write 在 M2 后续接入，目前是占位实现。
 kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用人的可见范围过滤（app/kb/search.py）。
 """
 from __future__ import annotations
@@ -32,7 +35,15 @@ DELIVERY, KNOWLEDGE = "delivery", "knowledge"
 
 
 class ToolError(Exception):
+    """工具调用失败。status 与 detail 原样交给接口层：业务模块的 422 / 409 / 404 不能被统一成 400，
+    机密级拦截的结构化详情（blocked、findings）也要保留，Agent 编排据此决定改参数、重读还是放弃。"""
     status = 400
+
+    def __init__(self, detail: Any = "", status: int | None = None):
+        self.detail = detail
+        if status is not None:
+            self.status = status
+        super().__init__(detail if isinstance(detail, str) else detail.get("summary", "被拒绝"))
 
 
 class ToolDenied(ToolError):
@@ -73,8 +84,18 @@ def _project_read(ctx: ToolContext, args: dict) -> dict:
         return {"project": card, "note": "严格档项目：Agent 只能使用摘要卡，摘要卡在 M4 接入"}
     return {"project": card,
             "deliverables": [{"code": d.code, "title": d.title, "status": d.status} for d in p.deliverables],
-            "open_confirmations": [{"kind": c.kind, "title": c.title} for c in p.confirmations
+            "open_confirmations": [{"id": c.id, "kind": c.kind, "title": c.title} for c in p.confirmations
                                    if c.status == "open"]}
+
+
+def _project_evidence(ctx: ToolContext, args: dict) -> dict:
+    from ..project import evidence
+
+    try:
+        offset, limit = int(args.get("offset", 0)), int(args.get("limit", evidence.READ_CHARS))
+    except (TypeError, ValueError) as e:
+        raise ToolError("offset、limit 必须是整数") from e
+    return evidence.read_for_agent(ctx.db, ctx.project, str(args.get("code", "")), offset, limit)
 
 
 def _quality_check(ctx: ToolContext, args: dict) -> dict:
@@ -91,7 +112,7 @@ def _kb_search(ctx: ToolContext, args: dict) -> dict:
                          product=str(args.get("product", "")), stage=str(args.get("stage", "")),
                          doc_type=str(args.get("doc_type", "")), limit=int(args.get("limit", 8)))
     except kb.SearchError as e:
-        raise ToolError(e.detail if isinstance(e.detail, str) else e.detail.get("summary", "检索被拒绝")) from e
+        raise ToolError(e.detail, status=e.status) from e
 
 
 def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
@@ -101,7 +122,26 @@ def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
         return kb.basis(ctx.db, ctx.user, str(args.get("query", "")), ref_document=str(args.get("ref_document", "")),
                         limit=int(args.get("limit", 5)))
     except kb.SearchError as e:
-        raise ToolError(e.detail if isinstance(e.detail, str) else e.detail.get("summary", "检索被拒绝")) from e
+        raise ToolError(e.detail, status=e.status) from e
+
+
+def _doc_generate(ctx: ToolContext, args: dict) -> dict:
+    from ..project import deliverables
+
+    try:
+        return deliverables.generate_for_agent(ctx.db, ctx.user, ctx.project, ctx.agent.code, args)
+    except deliverables.DeliverableError as e:
+        raise ToolError(e.detail, status=e.status) from e
+
+
+def _confirm_create(ctx: ToolContext, args: dict) -> dict:
+    from ..project import confirmations
+
+    try:
+        c, created = confirmations.create(ctx.db, ctx.user, ctx.project, ctx.agent, args)
+    except confirmations.ConfirmationError as e:
+        raise ToolError(e.detail, status=e.status) from e
+    return confirmations.card_for_agent(c, created)
 
 
 def _placeholder(milestone: str, empty: dict) -> Callable[[ToolContext, dict], dict]:
@@ -112,13 +152,15 @@ def _placeholder(milestone: str, empty: dict) -> Callable[[ToolContext, dict], d
 
 IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "project.read": _project_read,
+    "project.evidence": _project_evidence,
     "quality.check": _quality_check,
     "kb.search": _kb_search,
     "basis.lookup": _basis_lookup,
-    "doc.generate": _placeholder("M3 交付链", {"document": None}),
+    "doc.generate": _doc_generate,
+    "confirm.create": _confirm_create,
     "kb.stage_write": _placeholder("M2 投料", {"staged": False}),
 }
-NEEDS_PROJECT = frozenset({"project.read", "doc.generate"})
+NEEDS_PROJECT = frozenset({"project.read", "project.evidence", "doc.generate", "confirm.create"})
 
 
 def granted_tools(db: Session, agent_code: str) -> list[str]:

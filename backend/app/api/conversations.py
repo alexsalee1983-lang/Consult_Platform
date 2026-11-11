@@ -125,7 +125,7 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
     except runtime.AgentNotReady as e:
         raise HTTPException(409, str(e)) from e
     except tools.ToolError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, e.detail) from e
 
     chat_in = ChatIn(project_code=project.code, message=body.message, level=doc.level)
     username, agent_code, conv_id, version = user.username, c.agent_code, c.id, doc.version

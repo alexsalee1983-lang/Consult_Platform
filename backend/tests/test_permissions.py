@@ -25,6 +25,9 @@ ACTORS = {
 COLUMNS = list(ACTORS)
 
 CHAT = {"project_code": "BANK-A", "message": "一期人力模型怎么选？"}
+OUTLINE = {"titles": ["权限矩阵：现状", "权限矩阵：差距"]}
+SECTION = {"body": "权限矩阵测试正文：值班台交接记录为纸质 [O-01]。"}
+NOTE = {"kind": "observation", "title": "权限矩阵：值班室巡查", "content": "值班台有两块大屏，交接班记录为纸质。"}
 # (方法, 路径, 请求体) → 每类账号的期望状态码，顺序同 COLUMNS
 MATRIX = [
     (("GET", "/api/auth/me", None),                     (200, 200, 200, 200, 200)),
@@ -32,7 +35,18 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A", None),             (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/evidences", None),   (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/notes", NOTE),      (201, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/evidences/O-01", None), (200, 404, 403, 403, 403)),   # 上一行建的第一条观察
+    (("POST", "/api/projects/GRID-B/notes", NOTE),      (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7", None), (200, 404, 403, 403, 403)),
+    (("PUT", "/api/projects/BANK-A/deliverables/D7/outline", OUTLINE), (200, 404, 403, 403, 403)),
+    (("PUT", "/api/projects/BANK-A/deliverables/D7/sections/1", SECTION), (201, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
+    (("PUT", "/api/projects/GRID-B/deliverables/D2/outline", OUTLINE), (404, 404, 403, 403, 403)),
     (("GET", "/api/confirmations", None),               (200, 200, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/confirmations", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/chat", CHAT),                       (200, 404, 403, 403, 403)),
     (("POST", "/api/chat/stream", CHAT),                (200, 404, 403, 403, 403)),
     (("POST", "/api/gateway/check", {"text": "问题"}),  (200, 200, 403, 403, 403)),

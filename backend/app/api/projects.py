@@ -1,5 +1,10 @@
-"""项目、待确认事项、项目成员。全部要求业务角色；项目数据只对项目成员可见，非成员一律 404。"""
-from fastapi import APIRouter, Depends, HTTPException
+"""项目、待确认事项（确认卡）、项目成员。全部要求业务角色；项目数据只对项目成员可见，非成员一律 404。
+
+确认卡（M3）：GET /api/confirmations 我参与的项目里待处理的卡；GET /api/projects/{code}/confirmations?status=
+某项目的卡（open 待处理 / resolved 已处理 / all）；POST /api/confirmations/{id}/resolve 处理（选选项或写意见），
+规则见 app/project/confirmations.py。
+"""
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -16,6 +21,7 @@ from ..core.permissions import (
     roles_of,
 )
 from ..models import Confirmation, Project, ProjectMember, User
+from ..project import confirmations as conf_svc
 from ..schemas import PHASES, ConfirmationOut, ProjectDetail, ProjectOut, ResolveIn
 
 router = APIRouter(prefix="/api", tags=["projects"], dependencies=[Depends(require_business)])
@@ -63,16 +69,26 @@ def list_confirmations(db: Session = Depends(get_db), user: User = Depends(curre
     return [_conf_out(c) for c in rows]
 
 
+@router.get("/projects/{code}/confirmations", response_model=list[ConfirmationOut])
+def project_confirmations(code: str, status: str = Query(default="all", pattern="^(open|resolved|all)$"),
+                          db: Session = Depends(get_db), user: User = Depends(current_user)):
+    p = project_for_member(db, code, user)
+    q = select(Confirmation).where(Confirmation.project_id == p.id)
+    if status != "all":
+        q = q.where(Confirmation.status == status)
+    return [_conf_out(c) for c in db.scalars(q.options(selectinload(Confirmation.project))
+                                             .order_by(Confirmation.id.desc()))]
+
+
 @router.post("/confirmations/{cid}/resolve", response_model=ConfirmationOut)
 def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     c = db.get(Confirmation, cid)
     if c is None or membership(db, c.project_id, user.id) is None:
         raise HTTPException(404, "待确认事项不存在")
-    c.status = "resolved"
-    c.resolution = body.resolution
-    db.commit()
-    audit.record(db, actor=user.username, action="confirmation.resolve", result="allowed",
-                 project_code=c.project.code, confirmation_id=cid)
+    try:
+        c = conf_svc.resolve(db, user, c, body.choice, body.resolution)
+    except conf_svc.ConfirmationError as e:
+        raise HTTPException(e.status, e.detail) from e
     return _conf_out(c)
 
 

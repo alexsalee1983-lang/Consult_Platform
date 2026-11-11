@@ -113,6 +113,12 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。重排只经网关 `gateway.rerank()`（tools/rerank 服务，默认 bge-reranker-v2-m3 int8；查询过机密级检测，命中的候选不发出、记 0 分），RRF 后前 `KB_RERANK_CANDIDATES` 个切片按重排分数排序，依据查询门槛用 `KB_BASIS_MIN_RERANK`；重排不可用时退回 RRF 排序和余弦相似度门槛，返回体 `rerank` 字段注明。查询写了标准号或法规条号时先按 L4 元数据精确匹配（`search._exact_match`）。向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
 
+项目区约定（M3）：客户资料、访谈纪要、现场观察只经 `app/project/evidence.py` 进入平台（先过机密级检测；严格档一律拒收），按项目分配证据编号 D-xx / I-xx / O-xx，编号不变、不复用；访谈纪要只写受访者角色。资料原件和解析结果存对象存储项目区，键里不用原文件名；文件名和正文不进审计。Agent 经工具 `project.evidence` 读证据。
+
+交付件约定（M3）：交付件按章节存储，只经 `app/project/deliverables.py` 写入（Agent 经工具 `doc.generate`，顾问经 `/api/projects/{code}/deliverables/...`）：先写大纲再写各章，每次写入新建一个版本、旧版本保留（`section_versions` 只追加）；正文和标题先过机密级检测；严格档拒绝（M4）、已签署拒绝；正文里的来源标注 `[I-01]` `[D-12]` `[O-05]` `[L4-…]` `[推断]` 写入时核对并记在版本的 `sources` 里，核对不上的不拒绝、列入 `unresolved`。审计只记编号、版本、字数和摘要哈希，不记正文和标题。
+
+确认卡约定（M3）：Agent 遇到方案取舍、来源冲突、证据不足、范围确认、入库确认，经工具 `confirm.create` 发卡（选项、推荐和理由、影响，可关联交付件某章），规则只在 `app/project/confirmations.py`：卡片文字过机密级检测；同一 Agent 重复发同标题的未处理卡不新建；顾问经 `POST /api/confirmations/{id}/resolve` 选选项（`choice`）或写意见（`resolution`），处理过的不能再处理。审计不记标题、选项和意见原文。
+
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求（POST / PUT / PATCH / DELETE）要带请求头 `X-CSRF-Token`，值取登录接口或 `GET /api/auth/me` 返回体里的 `csrf_token` 字段（**不在 cookie 里**；会话 cookie `cp_session` 是 HttpOnly，脚本读不到）；改口令成功后会换新会话，要用新返回的 `csrf_token`。管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。
