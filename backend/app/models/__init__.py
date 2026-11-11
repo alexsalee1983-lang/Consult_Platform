@@ -5,6 +5,7 @@
 from .agent import Agent, AgentToolGrant, Tool
 from .audit import AuditLog
 from .conversation import Conversation, Message
+from .deliverable import DeliverableSection, SectionVersion
 from .evidence import Evidence, ProjectDocument
 from .job import Job
 from .kb import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion
@@ -13,6 +14,6 @@ from .rbac import ProjectMember, Role, UserRole
 from .usage import LlmUsage
 from .user import User
 
-__all__ = ["Agent", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "Evidence", "Job", "KbChunk", "KbDeidReport", "KbItem", "KbReview",
+__all__ = ["Agent", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "Job", "KbChunk", "KbDeidReport", "KbItem", "KbReview",
            "KbUpload", "KbVersion", "LlmUsage",
-           "Message", "Project", "ProjectDocument", "ProjectMember", "Role", "Tool", "User", "UserRole"]
+           "Message", "Project", "ProjectDocument", "ProjectMember", "Role", "SectionVersion", "Tool", "User", "UserRole"]

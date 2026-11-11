@@ -129,8 +129,10 @@ def test_quality_check_tool(member):
 
 
 def test_placeholders_say_so(member):
-    r = _invoke(member, "report-writer", "doc.generate")
-    assert r["placeholder"] is True and r["document"] is None
+    r = _invoke(member, "kb-builder", "kb.stage_write", project=None)
+    assert r["placeholder"] is True and r["staged"] is False
+    r = _invoke(member, "report-writer", "doc.generate")                    # 已是真实实现：不带参数返回交付件清单
+    assert "placeholder" not in r and [d["deliverable"] for d in r["deliverables"]][:2] == ["D1", "D2"]
 
 
 def test_kb_search_tool_is_real(member):
