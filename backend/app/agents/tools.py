@@ -35,7 +35,15 @@ DELIVERY, KNOWLEDGE = "delivery", "knowledge"
 
 
 class ToolError(Exception):
+    """工具调用失败。status 与 detail 原样交给接口层：业务模块的 422 / 409 / 404 不能被统一成 400，
+    机密级拦截的结构化详情（blocked、findings）也要保留，Agent 编排据此决定改参数、重读还是放弃。"""
     status = 400
+
+    def __init__(self, detail: Any = "", status: int | None = None):
+        self.detail = detail
+        if status is not None:
+            self.status = status
+        super().__init__(detail if isinstance(detail, str) else detail.get("summary", "被拒绝"))
 
 
 class ToolDenied(ToolError):
@@ -104,7 +112,7 @@ def _kb_search(ctx: ToolContext, args: dict) -> dict:
                          product=str(args.get("product", "")), stage=str(args.get("stage", "")),
                          doc_type=str(args.get("doc_type", "")), limit=int(args.get("limit", 8)))
     except kb.SearchError as e:
-        raise ToolError(e.detail if isinstance(e.detail, str) else e.detail.get("summary", "检索被拒绝")) from e
+        raise ToolError(e.detail, status=e.status) from e
 
 
 def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
@@ -114,7 +122,7 @@ def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
         return kb.basis(ctx.db, ctx.user, str(args.get("query", "")), ref_document=str(args.get("ref_document", "")),
                         limit=int(args.get("limit", 5)))
     except kb.SearchError as e:
-        raise ToolError(e.detail if isinstance(e.detail, str) else e.detail.get("summary", "检索被拒绝")) from e
+        raise ToolError(e.detail, status=e.status) from e
 
 
 def _doc_generate(ctx: ToolContext, args: dict) -> dict:
@@ -123,7 +131,7 @@ def _doc_generate(ctx: ToolContext, args: dict) -> dict:
     try:
         return deliverables.generate_for_agent(ctx.db, ctx.user, ctx.project, ctx.agent.code, args)
     except deliverables.DeliverableError as e:
-        raise ToolError(e.detail if isinstance(e.detail, str) else e.detail.get("summary", "被拒绝")) from e
+        raise ToolError(e.detail, status=e.status) from e
 
 
 def _confirm_create(ctx: ToolContext, args: dict) -> dict:
@@ -132,7 +140,7 @@ def _confirm_create(ctx: ToolContext, args: dict) -> dict:
     try:
         c, created = confirmations.create(ctx.db, ctx.user, ctx.project, ctx.agent, args)
     except confirmations.ConfirmationError as e:
-        raise ToolError(e.detail if isinstance(e.detail, str) else e.detail.get("summary", "被拒绝")) from e
+        raise ToolError(e.detail, status=e.status) from e
     return confirmations.card_for_agent(c, created)
 
 

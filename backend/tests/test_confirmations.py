@@ -71,6 +71,22 @@ def test_bad_cards_rejected(proj, args, msg):
         _send(name, code, args)
 
 
+def test_tool_channel_keeps_status_and_detail(proj):
+    """经接口调用工具时，业务错误的状态码和机密级拦截详情原样返回（测试 #35/#36：曾统一成 400、只剩一句话）。"""
+    code, name = proj
+    url = "/api/agents/solution-designer/tools/confirm.create"
+    with logged_in_client(app, name) as c:
+        bad = c.post(url, json={"project_code": code, "args": {**CARD, "recommendation": "C"}})
+        assert bad.status_code == 422 and isinstance(bad.json()["detail"], str)
+        blocked = c.post(url, json={"project_code": code, "args": {**CARD, "reason": "管理口令 Abc@12345"}})
+        assert blocked.status_code == 422
+        detail = blocked.json()["detail"]
+        assert detail["blocked"] and detail["findings"] and "Abc@12345" not in blocked.text
+        assert c.post(url, json={"project_code": code, "args": CARD}).status_code == 200
+        assert c.post("/api/agents/kb-builder/tools/confirm.create",
+                      json={"project_code": code, "args": CARD}).status_code == 403
+
+
 def test_knowledge_agents_cannot_send_cards(proj):
     code, name = proj
     with pytest.raises(tools.ToolDenied):
