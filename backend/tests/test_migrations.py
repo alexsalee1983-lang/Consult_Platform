@@ -85,7 +85,7 @@ def test_0007_fixes_old_solution_design_code(engine):
         conn.execute(text("DELETE FROM agent_tool_grants WHERE agent_code = 'solution-designer'"))
         conn.execute(text("DELETE FROM agents WHERE code = 'solution-designer'"))
         conn.execute(text("INSERT INTO agent_tool_grants VALUES ('solution-design', 'kb.search', 'old', '2026-11-07')"))
-        command.upgrade(alembic_config(conn), "head")
+        command.upgrade(alembic_config(conn), "0007_conversations")   # 之后的迁移会再加授权（如 0017），只看 0007
         codes = {r[0] for r in conn.execute(text("SELECT code FROM agents"))}
         grants = {r[0] for r in conn.execute(text("SELECT tool_code FROM agent_tool_grants "
                                                   "WHERE agent_code = 'solution-designer'"))}

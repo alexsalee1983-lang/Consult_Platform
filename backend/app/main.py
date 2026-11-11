@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from .api import admin, agents, audit, auth, chat, conversations, directory, health, kb, kb_items, projects
+from .api import admin, agents, audit, auth, chat, conversations, directory, evidence, health, kb, kb_items, projects
 from .core.auth import authenticate
 from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
@@ -48,6 +48,7 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)
+app.include_router(evidence.router)
 app.include_router(chat.router)
 app.include_router(audit.router)
 app.include_router(admin.router)
