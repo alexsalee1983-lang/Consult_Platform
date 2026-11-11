@@ -32,6 +32,7 @@ RUN useradd -r -u 10001 app && chmod -R a+rX /models
 USER app
 ENV HF_HUB_OFFLINE=1
 EXPOSE 8000
-HEALTHCHECK --interval=15s --timeout=5s --retries=8 --start-period=60s \
+# 启动宽限 180 秒：测试机上 int8 模型加载偶尔超过 60 秒，宽限内失败不计数（#34 测试）
+HEALTHCHECK --interval=15s --timeout=5s --retries=8 --start-period=180s \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
