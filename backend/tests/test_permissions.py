@@ -46,6 +46,7 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/GRID-B/deliverables/D2/outline", OUTLINE), (404, 404, 403, 403, 403)),
     (("GET", "/api/confirmations", None),               (200, 200, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/confirmations", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/chat", CHAT),                       (200, 404, 403, 403, 403)),
     (("POST", "/api/chat/stream", CHAT),                (200, 404, 403, 403, 403)),
     (("POST", "/api/gateway/check", {"text": "问题"}),  (200, 200, 403, 403, 403)),

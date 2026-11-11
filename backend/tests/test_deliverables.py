@@ -185,10 +185,20 @@ def test_doc_generate_tool(proj):
             "current_version"] == 1
         v = db.scalar(select(SectionVersion).where(SectionVersion.note == "Agent 初稿").order_by(SectionVersion.id.desc()))
         assert v.agent_code == "report-writer" and v.author == name
-        with pytest.raises(tools.ToolError):                                     # 机密级：工具报错，不保存
+        with pytest.raises(tools.ToolError) as e:                                # 机密级：工具报错，不保存
             tools.invoke(db, user, "report-writer", "doc.generate",
                          {"action": "write", "deliverable": "D4", "section": 1, "body": "口令 Abc@12345"}, code)
-        with pytest.raises(tools.ToolError):
+        assert e.value.status == 422 and e.value.detail["blocked"] and e.value.detail["findings"]
+        with pytest.raises(tools.ToolError) as e:
             tools.invoke(db, user, "report-writer", "doc.generate", {"action": "delete", "deliverable": "D4"}, code)
+        assert e.value.status == 422
+        with pytest.raises(tools.ToolError) as e:                                # 业务状态码原样透出，不统一成 400
+            tools.invoke(db, user, "report-writer", "doc.generate", {"deliverable": "D9"}, code)
+        assert e.value.status == 404
+        with pytest.raises(tools.ToolError) as e:
+            tools.invoke(db, user, "report-writer", "doc.generate",
+                         {"action": "write", "deliverable": "D4", "section": 2, "body": "新的差距", "base_version": 0},
+                         code)
+        assert e.value.status == 409
         with pytest.raises(tools.ToolDenied):                                    # 咨询师 Agent 没有“文档生成”授权
             tools.invoke(db, user, "consultant-lead", "doc.generate", {"deliverable": "D4"}, code)

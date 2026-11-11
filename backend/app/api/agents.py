@@ -51,4 +51,4 @@ def call_tool(agent: str, tool: str, body: ToolCallIn, db: Session = Depends(get
     try:
         return tools.invoke(db, user, agent, tool, body.args, body.project_code)
     except tools.ToolError as e:
-        raise HTTPException(e.status, str(e)) from e
+        raise HTTPException(e.status, e.detail) from e
