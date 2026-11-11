@@ -282,3 +282,124 @@ def test_reembed_after_text_version_change(people, embedder):
                    {"m": get_settings().embed_model, "v": v.id})             # 模拟旧版本（不带 #t2）
         db.commit()
         assert search.embed_version(db, v.id) >= 1
+
+
+# ---- 重排（模拟重排服务；SQLite 和 PostgreSQL 都跑）----
+
+class _Reranker:
+    """按关键词打分：候选里含 good 中任一词给 0.9，否则 0.01。fail=True 模拟服务不可用。"""
+
+    def __init__(self, good=(), fail=False):
+        self.good, self.fail, self.calls, self.docs = tuple(good), fail, 0, []
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": get_settings().rerank_model}]})
+        if self.fail:
+            return httpx.Response(503)
+        self.calls += 1
+        body = json.loads(request.content)
+        self.docs = body["documents"]
+        return httpx.Response(200, json={"results": [
+            {"index": i, "relevance_score": 0.9 if any(g in d for g in self.good) else 0.01}
+            for i, d in enumerate(body["documents"])][::-1]})               # 乱序返回，网关按 index 对回去
+
+
+@pytest.fixture()
+def reranker(monkeypatch):
+    def use(**kw) -> _Reranker:
+        r = _Reranker(**kw)
+        monkeypatch.setattr(get_settings(), "rerank_base_url", "http://rerank.internal/v1")
+        monkeypatch.setattr(get_settings(), "llm_max_retries", 0)
+        gateway.set_transport(httpx.MockTransport(r.handler))
+        return r
+    yield use
+    gateway.set_transport(None)
+
+
+def test_cn_number():
+    assert [search._cn_number(n) for n in (7, 10, 15, 21, 100, 105, 110, 230)] == \
+        ["七", "十", "十五", "二十一", "一百", "一百零五", "一百一十", "二百三十"]
+
+
+def test_gateway_rerank_guard_order_and_errors(reranker, monkeypatch):
+    with pytest.raises(gateway.RerankDisabled):
+        gateway.rerank("值班", ["交接"])
+    r = reranker(good=("交接",))
+    with pytest.raises(gateway.BlockedError):                               # 查询含机密级内容：不发出
+        gateway.rerank("口令 Abc@12345", ["交接"])
+    out = gateway.rerank("值班", ["无关内容", "交接班记录", "服务器口令 Abc@12345"])
+    assert out.scores == [0.01, 0.9, 0.0]                                   # 乱序返回也按输入顺序对上
+    assert all("Abc@12345" not in d for d in r.docs) and len(r.docs) == 2  # 含机密级的候选不发出、记 0 分
+    monkeypatch.setattr(get_settings(), "kb_rerank_max_chars", 5)
+    gateway.rerank("值班", ["一二三四五六七八"])
+    assert r.docs == ["一二三四五"]                                          # 按字数上限截断
+    assert gateway.rerank_availability() == "ok"
+    reranker(fail=True)
+    with pytest.raises(gateway.GatewayError):
+        gateway.rerank("值班", ["交接"])
+
+
+def test_rerank_reorders_search_results(people, reranker):
+    a = _publish(people, "壬午演练甲", "## 演练\n\n壬午演练的准备工作清单。")
+    b = _publish(people, "壬午演练乙", "## 演练\n\n壬午演练的复盘报告写法，复盘要点。")
+    r = reranker(good=("复盘",))
+    out = _search(people, "consultant", "壬午演练")
+    assert out["rerank"] == "ok" and r.calls == 1
+    ids = _ids(out)
+    assert ids.index(b.doc_id) < ids.index(a.doc_id)
+    top = out["items"][0]
+    assert top["doc_id"] == b.doc_id and top["rerank_score"] == 0.9 and top["rank_before_rerank"] >= 1
+    assert any("壬午演练乙" in d for d in r.docs)                            # 候选带上了标题
+
+
+def test_rerank_down_falls_back_to_rrf(people, reranker):
+    _publish(people, "癸未巡检", "## 巡检\n\n癸未巡检的检查表。")
+    reranker(fail=True)
+    out = _search(people, "consultant", "癸未巡检")
+    assert out["rerank"].startswith("unavailable") and out["items"]
+    assert out["items"][0]["rerank_score"] is None
+
+
+def test_basis_uses_rerank_threshold(people, reranker, monkeypatch):
+    v = _publish(people, "甲申报送办法", "## 第七条 报送\n\n甲申事项应当在五日内向主管部门报送。", layer="L4",
+                 product="GEN", doc_type="REF", stage="通用", ref=("甲申监管办法", "2020", "current"))
+    reranker(good=("五日内",))
+    with SessionLocal() as db:
+        member = db.merge(people["consultant"])
+        hit = search.basis(db, member, "甲申事项 报送时限")
+        assert hit["rerank"] == "ok" and v.doc_id in [h["doc_id"] for h in hit["items"]]
+    reranker(good=("不会出现的词",))                                         # 重排认为不相关：挡掉
+    with SessionLocal() as db:
+        member = db.merge(people["consultant"])
+        out = search.basis(db, member, "甲申事项 报送时限")
+        assert v.doc_id not in [h["doc_id"] for h in out["items"]]
+        loose = search.basis(db, member, "甲申事项 报送时限", min_rerank=0.0)   # 评测取分数用
+        assert v.doc_id in [h["doc_id"] for h in loose["items"]]
+        monkeypatch.setattr(get_settings(), "kb_basis_min_rerank", 0.005)
+        assert v.doc_id in [h["doc_id"] for h in search.basis(db, member, "甲申事项 报送时限")["items"]]
+
+
+def test_exact_standard_and_article_match(people, corpus, reranker):
+    law = _publish(people, "乙酉条例解读", "## 第二十一条 值守\n\n乙酉单位应当安排专人值守。\n\n## 第二十二条 记录\n\n应当留存值守记录。",
+                   layer="L4", product="GEN", doc_type="REF", stage="通用",
+                   ref=("中华人民共和国乙酉安全条例", "2021", "current"))
+    reranker(good=("不会出现的词",))                                         # 重排全给低分：只有精确匹配能出结果
+    with SessionLocal() as db:
+        member = db.merge(people["consultant"])
+        out = search.basis(db, member, "GB/T 22239 8.1.5 有什么要求")
+        exact = [h for h in out["items"] if "精确" in h["matched"]]             # 其他测试也可能发布同一条款
+        assert exact and out["items"][:len(exact)] == exact and corpus["basis"].doc_id in [h["doc_id"] for h in exact]
+        assert all(h["heading"].startswith("8.1.5") for h in exact)
+        art = search.basis(db, member, "乙酉安全条例第21条怎么规定")["items"]  # 阿拉伯数字条号、省略“中华人民共和国”
+        assert art and art[0]["doc_id"] == law.doc_id and art[0]["heading"].startswith("第二十一条")
+        only_doc = search.basis(db, member, "GB/T22239 里讲了什么")["items"]   # 只点名文件：限定在该文件内
+        assert only_doc and all(h["ref_document"] == "GB/T 22239" for h in only_doc)
+        assert search.basis(db, member, "GB/T 99999 8.1.5")["items"] == []   # 库里没有的标准：照常走门槛
+
+
+def test_exact_clause_in_plain_search_does_not_hide_other_layers(people, corpus, reranker):
+    reranker(good=("集中",))
+    out = _search(people, "consultant", "GB/T 22239 8.1.5 集中管控 告警")
+    assert "精确" in out["items"][0]["matched"]
+    assert any(h["layer"] != "L4" for h in out["items"])                  # 普通检索不只限定在该标准内

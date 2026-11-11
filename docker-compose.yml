@@ -70,6 +70,22 @@ services:
     image: consult-platform-embed:bge-small-zh-v1.5
     restart: unless-stopped
 
+  rerank:
+    # 重排服务（决策记录 2026-11-11）：CPU 上运行交叉编码重排模型 bge-reranker-v2-m3（默认 int8 量化版，约 0.6 GB），
+    # /v1/rerank，见 tools/rerank。知识检索在 RRF 融合后用它给候选片段重新打分；模型在构建时下载进镜像，运行时不联网；不映射端口。
+    # 换完整版：.env 设 RERANK_MODEL=BAAI/bge-reranker-v2-m3 和 RERANK_IMAGE_TAG=bge-reranker-v2-m3，重新构建 rerank 并重建 backend。
+    # 不启用：.env 设 RERANK_BASE_URL=（空），检索只用 RRF 排序，依据查询退回余弦相似度门槛。
+    build:
+      context: ./tools/rerank
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
+        RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3-int8}
+    image: consult-platform-rerank:${RERANK_IMAGE_TAG:-bge-reranker-v2-m3-int8}
+    environment:
+      RERANK_MODEL: ${RERANK_MODEL:-BAAI/bge-reranker-v2-m3-int8}
+    restart: unless-stopped
+
   backend:
     build:
       context: .                      # 仓库根目录：带上 agents/ 的 md（见 backend/Dockerfile、.dockerignore）
@@ -83,10 +99,11 @@ services:
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
+      RERANK_BASE_URL: ${RERANK_BASE_URL-http://rerank:8000/v1}
       # 内部服务一律直连：宿主机若在 ~/.docker/config.json 配了代理，Docker 会把 HTTP_PROXY 注入容器，
       # 不列在这里的内部地址会被绕到外部代理上。新增内部服务时同步加到这里。
-      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
-      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend
     depends_on:
       postgres:
         condition: service_healthy
@@ -116,10 +133,11 @@ services:
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
       EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
+      RERANK_BASE_URL: ${RERANK_BASE_URL-http://rerank:8000/v1}
       # 内部服务一律直连：宿主机若在 ~/.docker/config.json 配了代理，Docker 会把 HTTP_PROXY 注入容器，
       # 不列在这里的内部地址会被绕到外部代理上。新增内部服务时同步加到这里。
-      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
-      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,mock-llm,backend,worker,frontend
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend
     command: ["python", "-m", "app.worker"]
     depends_on:
       backend:

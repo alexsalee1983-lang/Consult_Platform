@@ -156,6 +156,14 @@ embedding="$(curl -s "$BASE/api/health" | python3 -c "import json,sys; print(jso
 if [ "$embedding" = "not enabled" ]; then echo "  跳过  向量服务未启用（EMBED_BASE_URL 为空），只用全文检索"
 elif [ "$embedding" = "ok" ]; then echo "  通过  向量服务可用"; pass=$((pass+1))
 else echo "  失败  向量服务状态：$embedding"; fail=$((fail+1)); fi
+rerank_state() { curl -s "$BASE/api/health" | python3 -c "import json,sys; print(json.load(sys.stdin)['checks'].get('rerank', ''))"; }
+rerank="$(rerank_state)"
+for _ in $(seq 1 24); do   # 重排服务启动时要加载模型（几十秒），最多等 2 分钟
+  case "$rerank" in down*) sleep 5; rerank="$(rerank_state)";; *) break;; esac
+done
+if [ "$rerank" = "not enabled" ]; then echo "  跳过  重排服务未启用（RERANK_BASE_URL 为空），检索只用 RRF 排序"
+elif [ "$rerank" = "ok" ]; then echo "  通过  重排服务可用"; pass=$((pass+1))
+else echo "  失败  重排服务状态：$rerank"; fail=$((fail+1)); fi
 check "顾问不能查看知识审核队列"        403 "$BASE/api/kb/review-queue"
 check "退出登录"                     204 -X POST "$BASE/api/auth/logout" -H "$C"
 check "退出后旧会话失效"              401 "$BASE/api/projects"

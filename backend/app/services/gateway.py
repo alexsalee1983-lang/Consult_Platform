@@ -345,6 +345,73 @@ def embed_availability() -> str:
         return f"down: {type(e).__name__}"
 
 
+# ---- 重排 ----
+
+class RerankDisabled(GatewayError):
+    pass
+
+
+@dataclass
+class Rerank:
+    scores: list[float]          # 与输入候选一一对应（按输入顺序），0～1，越高越相关
+    model: str
+    attempts: int = 1
+
+
+def rerank_enabled() -> bool:
+    return bool(get_settings().rerank_base_url)
+
+
+def _rerank_headers() -> dict:
+    key = get_settings().rerank_api_key
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
+def rerank(query: str, documents: list[str]) -> Rerank:
+    """给“查询 + 候选片段”逐对打分（交叉编码重排）。候选按 KB_RERANK_MAX_CHARS 截断。
+    机密级检测：查询命中抛 BlockedError（不发出）；某个候选命中则不发出、该候选记 0 分（视为不相关），其余照常。
+    服务不可用或返回不完整时抛 GatewayError，由调用方退回原排序。"""
+    s = get_settings()
+    if not s.rerank_base_url:
+        raise RerankDisabled("重排服务未配置（RERANK_BASE_URL）")
+    result = check(query)
+    if result.blocked:
+        raise BlockedError(result)
+    docs = [d[:max(1, s.kb_rerank_max_chars)] for d in documents]
+    send = [i for i, d in enumerate(docs) if not check(d).blocked]
+    scores = [0.0] * len(docs)
+    if not send:
+        return Rerank(scores=scores, model=s.rerank_model, attempts=0)
+    payload = {"model": s.rerank_model, "query": query, "documents": [docs[i] for i in send]}
+    with _client() as client:
+        resp, attempts = _send(client, payload, stream=False, url=s.rerank_base_url.rstrip("/") + "/rerank",
+                               headers=_rerank_headers())
+        try:
+            by_index = {int(r["index"]): float(r["relevance_score"]) for r in resp.json()["results"]}
+        except (ValueError, KeyError, TypeError) as e:
+            raise GatewayError("重排服务返回的结果无法解析", attempts) from e
+    if sorted(by_index) != list(range(len(send))):
+        raise GatewayError("重排服务返回的条数不对", attempts)
+    for j, i in enumerate(send):
+        scores[i] = by_index[j]
+    return Rerank(scores=scores, model=s.rerank_model, attempts=attempts)
+
+
+def rerank_availability() -> str:
+    s = get_settings()
+    if not s.rerank_base_url:
+        return "not enabled"
+    try:
+        with httpx.Client(timeout=httpx.Timeout(3.0, connect=2.0), transport=_transport) as client:
+            resp = client.get(s.rerank_base_url.rstrip("/") + "/models", headers=_rerank_headers())
+        if resp.status_code != 200:
+            return f"down: HTTP {resp.status_code}"
+        ids = {m.get("id") for m in (resp.json().get("data") or [])}
+        return "ok" if s.rerank_model in ids else f"down: 重排服务上没有 {s.rerank_model}"
+    except (httpx.HTTPError, ValueError) as e:
+        return f"down: {type(e).__name__}"
+
+
 def availability() -> str:
     """ok / demo / down: 原因。结果缓存 LLM_HEALTH_TTL_SECONDS 秒，避免健康检查频繁打到模型平台。"""
     s = get_settings()
