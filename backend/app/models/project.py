@@ -38,8 +38,13 @@ class Deliverable(Base):
     title: Mapped[str] = mapped_column(String(128))
     status: Mapped[str] = mapped_column(String(16), default="not_started")
     # not_started 未开始 / drafting 起草中 / review 待审核 / signed 已签署
+    revision: Mapped[int] = mapped_column(Integer, default=0)   # 每写入一次章节加 1（界面上的 v3），迁移 0018
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_by: Mapped[str] = mapped_column(String(64), default="")
 
     project: Mapped[Project] = relationship(back_populates="deliverables")
+    sections: Mapped[list["DeliverableSection"]] = relationship(  # noqa: F821
+        order_by="DeliverableSection.seq", cascade="all, delete-orphan")
 
 
 class Confirmation(Base):
