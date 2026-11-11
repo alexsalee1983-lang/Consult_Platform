@@ -290,6 +290,8 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
     rr: dict[int, float] = {}
     rank_before: dict[int, int] = {}
     rerank_status = "not enabled"
+    if not scores and gateway.rerank_enabled():
+        rerank_status = "no candidates"           # 已启用但没有候选可重排（和“未启用”区分开）
     if scores and gateway.rerank_enabled():
         order = sorted(scores, key=lambda cid: (-scores[cid], cid))
         top = order[:max(1, s.kb_rerank_candidates)]

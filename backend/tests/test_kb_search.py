@@ -361,6 +361,13 @@ def test_rerank_down_falls_back_to_rrf(people, reranker):
     assert out["items"][0]["rerank_score"] is None
 
 
+def test_rerank_status_no_candidates(people, reranker):
+    """已启用重排但没有任何候选：状态是 no candidates，不是 not enabled，也不调用重排服务。"""
+    r = reranker()
+    out = _search(people, "consultant", "壬癸子丑寅卯辰")
+    assert out["items"] == [] and out["rerank"] == "no candidates" and r.calls == 0
+
+
 def test_basis_uses_rerank_threshold(people, reranker, monkeypatch):
     v = _publish(people, "甲申报送办法", "## 第七条 报送\n\n甲申事项应当在五日内向主管部门报送。", layer="L4",
                  product="GEN", doc_type="REF", stage="通用", ref=("甲申监管办法", "2020", "current"))

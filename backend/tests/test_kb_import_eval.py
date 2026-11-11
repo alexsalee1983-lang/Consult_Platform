@@ -294,13 +294,16 @@ def test_eval_reports_rerank_scores(monkeypatch):
     gateway.set_transport(httpx.MockTransport(handler))
     try:
         qs = [{"id": "R1", "mode": "basis", "question": "网络日志 留存", "expect": ["ev-csl-art21-mlps"]},
-              {"id": "R2", "mode": "basis", "question": "应急预案 外汇", "expect": []}]
+              {"id": "R2", "mode": "basis", "question": "应急预案 外汇", "expect": []},
+              # 最后一题完全没有候选：报告的重排状态不能被它改成“未启用”（测试机 #34 发现）
+              {"id": "R3", "mode": "search", "question": "乙丙丁戊己庚辛", "expect": []}]
         with SessionLocal() as db:
             report = evaluate.run(db, db.merge(_user(("consultant",))), qs)
     finally:
         gateway.set_transport(None)
     assert report.rerank == "ok" and report.rerank_candidates == get_settings().kb_rerank_candidates
-    r1, r2 = report.results
+    r1, r2, r3 = report.results
+    assert r3.correct and not r3.got
     assert r1.correct and r1.expected_rerank == 0.9 and r1.expected_rank_before is not None
     assert r2.correct and r2.top_wrong_rerank == 0.001                       # 门槛挡掉了，但分数取到了
     assert report.in_candidates == 1.0 and report.rerank_scores["negatives_max"]["max"] == 0.001

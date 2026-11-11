@@ -102,9 +102,19 @@ def _stats(values: list[float]) -> dict | None:
             "max": round(max(values), 4)}
 
 
+def _overall_rerank(states: list[str]) -> str:
+    """整份报告的重排状态：按所有题汇总，不由最后一题决定。没有候选的题（多为负例）不算。"""
+    real = [x for x in states if x and x != "no candidates"]
+    bad = [x for x in real if x != "ok"]
+    if "ok" in real:
+        return f"ok（{len(bad)} 题未重排：{bad[0]}）" if bad else "ok"
+    return bad[0] if bad else (states[-1] if states else "")
+
+
 def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
     keys = dict(db.execute(select(KbItem.doc_id, KbItem.import_key)).all())
     report = EvalReport(total=len(questions))
+    rerank_states: list[str] = []
     for q in questions:
         mode, expect = q.get("mode", "basis"), [str(x) for x in q.get("expect", [])]
         if mode == "basis":
@@ -112,7 +122,7 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         else:
             out = search.search(db, user, q["question"], product=q.get("product", ""), limit=TOP_K)
         report.vector = out.get("vector", "")
-        report.rerank = out.get("rerank", "")
+        rerank_states.append(out.get("rerank", ""))
         hits = out["items"]
         got = [keys.get(h["doc_id"]) or h["doc_id"] for h in hits]
         rank = next((i for i, k in enumerate(got, 1) if k in expect), None)
@@ -122,7 +132,7 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         r = QuestionResult(q["id"], mode, expect, got, rank, correct, exp_sim, max(wrong) if wrong else None)
         # 重排分数：被门槛挡掉的依据查询以门槛 0 再查一次，只取分数
         scored, scored_keys = hits, got
-        if mode == "basis" and report.rerank == "ok" and (not expect or rank is None):
+        if mode == "basis" and rerank_states[-1] == "ok" and (not expect or rank is None):
             scored = search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0)["items"]
             scored_keys = [keys.get(h["doc_id"]) or h["doc_id"] for h in scored]
         exp_hit = next((h for h, k in zip(scored, scored_keys, strict=True) if k in expect), None)
@@ -155,7 +165,8 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         "negatives_max": _stats([r.top_wrong_similarity for r in report.results
                                  if not r.expect and r.top_wrong_similarity is not None]),
     }
-    if report.rerank == "ok":
+    report.rerank = _overall_rerank(rerank_states)
+    if report.rerank.startswith("ok"):
         report.rerank_scores = {
             "expected_hits": _stats([r.expected_rerank for r in report.results if r.expected_rerank is not None]),
             "top_wrong": _stats([r.top_wrong_rerank for r in report.results
