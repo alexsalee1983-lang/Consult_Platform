@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { api, DELIV_STATUS, KIND_CLS, TIER } from "../api.js";
+import { api, DELIV_STATUS, TIER } from "../api.js";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
+import ConfirmCard from "../components/ConfirmCard.jsx";
 import Members from "../components/Members.jsx";
 
 function Kpi({ cap, value, sub, color }) {
@@ -17,7 +18,6 @@ function Kpi({ cap, value, sub, color }) {
 export default function Overview({ code }) {
   const [p, setP] = useState(null);
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(null);
   const [external, setExternal] = useState(false);   // 当前接的是外部测试模型
   useEffect(() => { api.health().then((h) => setExternal(Boolean(h.llm_external))).catch(() => {}); }, []);
 
@@ -26,18 +26,6 @@ export default function Overview({ code }) {
     api.project(code).then(setP).catch(setError);
   }, [code]);
   useEffect(load, [load]);
-
-  async function resolve(c) {
-    setBusy(c.id);
-    try {
-      await api.resolve(c.id, "已在驾驶舱确认");
-      load();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(null);
-    }
-  }
 
   if (!p) return <Loading error={error} />;
   const tier = TIER[p.tier] || TIER.standard;
@@ -68,9 +56,11 @@ export default function Overview({ code }) {
               {p.deliverables.map((d) => {
                 const st = DELIV_STATUS[d.status] || DELIV_STATUS.not_started;
                 return (
-                  <li key={d.code} className="sb">
-                    <span><span className="mono sub" style={{ marginRight: 8 }}>{d.code}</span>{d.title}</span>
-                    <span className={`chip ${st.cls}`}>{st.label}</span>
+                  <li key={d.code}>
+                    <Link className="sb" to={`/project/${encodeURIComponent(p.code)}/deliverables/${d.code}`} style={{ color: "var(--tx)", textDecoration: "none" }}>
+                      <span><span className="mono sub" style={{ marginRight: 8 }}>{d.code}</span>{d.title}</span>
+                      <span className={`chip ${st.cls}`}>{st.label}</span>
+                    </Link>
                   </li>
                 );
               })}
@@ -81,13 +71,7 @@ export default function Overview({ code }) {
         <section className="pnl pad" aria-label="待你确认">
           <div className="sb"><h2 className="h2">待你确认</h2><span className="mono" style={{ color: "var(--amber)" }}>{p.confirmations.length}</span></div>
           <ul className="lst">
-            {p.confirmations.map((c) => (
-              <li key={c.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div className="sb"><span className={`chip ${KIND_CLS[c.kind] || "c-n"}`}>{c.kind}</span><span className="sub">{c.agent}</span></div>
-                <div>{c.title}</div>
-                <div><button className="btn" disabled={busy === c.id} onClick={() => resolve(c)}>{busy === c.id ? "处理中…" : "标记已处理"}</button></div>
-              </li>
-            ))}
+            {p.confirmations.map((c) => <ConfirmCard key={c.id} c={c} onDone={load} />)}
             {p.confirmations.length === 0 && <li className="sub">没有待确认事项</li>}
           </ul>
         </section>

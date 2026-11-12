@@ -9,6 +9,7 @@ const ICONS = {
   dash: <><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /></>,
   audit: <><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z" /><path d="M9 12h6M9 8h6M9 16h4" /></>,
   users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5" /><path d="M16 4.6a3.5 3.5 0 010 6.8M18 14.8c2 .7 3.2 2.5 3.5 5.2" /></>,
+  doc: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M9 12h6M9 16h6" /></>,
   key: <><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M17 6l3 3M15 8l2 2" /></>,
   search: <><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2" /></>,
   inbox: <><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1.5 2.5h5L16 13h5" /></>,
@@ -59,7 +60,8 @@ export default function Sidebar() {
   const items = [
     ...(hasBusinessRole(user) ? [
       { to: "/projects", icon: "proj", label: "我的项目" },
-      { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱" },
+      { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
+      { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
       { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
     ] : []),
     ...(hasBusinessRole(user) ? [
@@ -95,7 +97,7 @@ export default function Sidebar() {
 
       <nav className="nav" aria-label="交付导航">
         {items.map((it) => (it.group ? <div key={it.group} className="cap nav-group">{it.group}</div> :
-          <NavLink key={it.label} to={it.to} className={({ isActive }) => (isActive ? "on" : undefined)}>
+          <NavLink key={it.label} to={it.to} end={it.end} className={({ isActive }) => (isActive ? "on" : undefined)}>
             <Icon name={it.icon} />
             {it.label}
           </NavLink>

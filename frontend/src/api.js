@@ -13,7 +13,9 @@ export function setUnauthorizedHandler(fn) {
 
 export class ApiError extends Error {
   constructor(status, detail) {
-    super(typeof detail === "string" ? detail : `HTTP ${status}`);
+    super(typeof detail === "string" ? detail
+      : Array.isArray(detail?.reasons) ? detail.reasons.join("；")   // 门禁不过：{gate, reasons}
+      : Array.isArray(detail) ? "提交的内容格式不正确" : `HTTP ${status}`);
     this.status = status;
     this.detail = detail;
   }
@@ -82,6 +84,30 @@ async function streamPost(url, body, onDelta) {
   throw new ApiError(502, "模型输出中断，请重试");
 }
 
+function dpath(code, dcode) {
+  return `/api/projects/${encodeURIComponent(code)}/deliverables/${encodeURIComponent(dcode)}`;
+}
+
+// 下载文件（导出 Word）：出错时按接口的 detail 抛 ApiError，成功时让浏览器保存
+async function download(path) {
+  const res = await fetch(path, { credentials: "same-origin" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    if (res.status === 401) onUnauthorized();
+    throw new ApiError(res.status, data?.detail ?? data);
+  }
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+  const name = m ? decodeURIComponent(m[1]) : "export.docx";
+  const url = URL.createObjectURL(await res.blob());
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { name, exportId: res.headers.get("X-Export-Id") || "" };
+}
+
 export const api = {
   login: (username, password, totp) =>
     request("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password, totp }), skipAuthRedirect: true }),
@@ -91,8 +117,11 @@ export const api = {
   projects: () => request("/api/projects"),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   confirmations: () => request("/api/confirmations"),
-  resolve: (id, resolution) =>
-    request(`/api/confirmations/${id}/resolve`, { method: "POST", body: JSON.stringify({ resolution }) }),
+  // 处理确认卡：选一个选项（choice）或写意见（resolution），或两者都有
+  resolve: (id, { choice = "", resolution = "" }) =>
+    request(`/api/confirmations/${id}/resolve`, { method: "POST", body: JSON.stringify({ choice, resolution }) }),
+  projectConfirmations: (code, status = "open") =>
+    request(`/api/projects/${encodeURIComponent(code)}/confirmations?status=${status}`),
   chat: (project_code, message) =>
     request("/api/chat", { method: "POST", body: JSON.stringify({ project_code, message }) }),
   agents: () => request("/api/agents"),
@@ -153,6 +182,22 @@ export const api = {
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
   kbBasis: (q) => request(`/api/kb/basis?q=${encodeURIComponent(q)}`),
+  // ---- 交付件（M3）：章节与版本、质量评审、签署、导出 ----
+  deliverable: (code, dcode) => request(dpath(code, dcode)),
+  putOutline: (code, dcode, titles) =>
+    request(`${dpath(code, dcode)}/outline`, { method: "PUT", body: JSON.stringify({ titles }) }),
+  section: (code, dcode, seq, version) =>
+    request(`${dpath(code, dcode)}/sections/${seq}${version ? `?version=${version}` : ""}`),
+  putSection: (code, dcode, seq, body, note, base_version) =>
+    request(`${dpath(code, dcode)}/sections/${seq}`, { method: "PUT", body: JSON.stringify({ body, note, base_version }) }),
+  sectionDiff: (code, dcode, seq, a, b) => request(`${dpath(code, dcode)}/sections/${seq}/diff?a=${a}&b=${b}`),
+  reviews: (code, dcode) => request(`${dpath(code, dcode)}/reviews`),
+  review: (code, dcode, id) => request(`${dpath(code, dcode)}/reviews/${id}`),
+  startReview: (code, dcode) => request(`${dpath(code, dcode)}/reviews`, { method: "POST" }),
+  signoff: (code, dcode) => request(`${dpath(code, dcode)}/signoff`),
+  signoffAction: (code, dcode, action, comment = "") =>   // submit / sign / return
+    request(`${dpath(code, dcode)}/signoff/${action}`, { method: "POST", body: JSON.stringify({ comment }) }),
+  exportWord: (code, dcode) => download(`${dpath(code, dcode)}/export`),
   verifyAudit: (expectHead) =>
     request(`/api/audit/verify${expectHead ? `?expect_head=${encodeURIComponent(expectHead)}` : ""}`),
 };
@@ -164,8 +209,10 @@ export const TIER = {
 };
 export const DELIV_STATUS = {
   signed: { label: "已签署", cls: "c-g" },
-  review: { label: "待你审核", cls: "c-a" },
+  review: { label: "待签署", cls: "c-a" },
   drafting: { label: "起草中", cls: "c-c" },
   not_started: { label: "未开始", cls: "c-n" },
 };
 export const KIND_CLS = { 方案取舍: "c-a", 来源冲突: "c-v", 证据不足: "c-r", 入库确认: "c-g", 范围确认: "c-c" };
+export const CONCLUSION_CLS = { pass: "c-g", revise: "c-a", fail: "c-r" };
+export const SEVERITY_CLS = { 阻断: "c-r", 重要: "c-a", 建议: "c-n" };
