@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.main import app
-from app.models import AuditLog, Confirmation, Deliverable, LlmUsage, Project
+from app.models import AuditLog, Confirmation, Deliverable, Job, LlmUsage, Project
 from app.project import deliverables, runs
 from app.seed import DELIVERABLES
 from app.services import gateway, jobs
@@ -244,3 +244,78 @@ def test_parse_output():
         runs.parse_output("```确认卡\n不是 JSON\n```", "x")
     with pytest.raises(runs.StepRetry):
         runs.parse_output("   ", "x")
+
+
+def test_card_on_last_step_finishes_run(proj, model):
+    """测试 #41 缺陷 1：最后一步发的卡处理完后运行应结束（done），不再排任务。"""
+    code, c = proj
+    _note(c, code)
+    model.replies["交付链第 7 步"] = DRAFT + CARD_BLOCK
+    rid = c.post(f"/api/projects/{code}/runs").json()["id"]
+    _work()
+    run = _run(c, code, rid)
+    assert run["status"] == "waiting" and run["next_step"] == "end"
+    assert c.post(f"/api/confirmations/{run['waiting_cards'][0]}/resolve", json={"choice": "A"}).status_code == 200
+    run = _run(c, code, rid)
+    assert run["status"] == "done" and run["finished_at"] and run["waiting_cards"] == []
+    with SessionLocal() as db:
+        assert not db.scalars(select(Job).where(Job.kind == runs.JOB_KIND, Job.status == "queued",
+                                                     Job.project_code == code)).all()
+    _work()
+    assert _run(c, code, rid)["status"] == "done"
+    ctx = jobs.JobContext(job_id=0, kind=runs.JOB_KIND, attempt=1, project_code=code, created_by="")
+    runs._step_job({"run_id": rid}, ctx)                                     # 多余的任务也不出错、不改状态
+    assert _run(c, code, rid)["status"] == "done"
+
+
+def test_cancel_during_model_call_writes_nothing(proj, model):
+    """测试 #41 缺陷 2：模型调用期间取消，本步不写交付件、不发卡，运行保持已取消。"""
+    code, c = proj
+    _note(c, code)
+    model.replies["交付链第 3 步"] = FACTS + CARD_BLOCK
+    rid = c.post(f"/api/projects/{code}/runs").json()["id"]
+    inner = model.handler
+
+    def cancel_then_reply(request):
+        assert c.post(f"/api/projects/{code}/runs/{rid}/cancel").status_code == 200
+        return inner(request)
+
+    gateway.set_transport(httpx.MockTransport(cancel_then_reply))
+    _work()
+    run = _run(c, code, rid)
+    assert run["status"] == "cancelled" and run["waiting_cards"] == [] and run["card_ids"] == []
+    assert run["steps"] == [] and _bodies(code, "D3") == []
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        assert not db.scalars(select(Confirmation).where(Confirmation.project_id == p.id)).all()
+
+
+def test_cancel_wins_over_worker_state_update(proj, model, monkeypatch):
+    """取消发生在写入期间（模型返回之后）：本步写完即停，运行不被改回 waiting / queued。"""
+    code, c = proj
+    _note(c, code)
+    rid = c.post(f"/api/projects/{code}/runs").json()["id"]
+    real = runs._send_cards
+
+    def send_then_cancel(*a, **kw):
+        ids = real(*a, **kw)
+        assert c.post(f"/api/projects/{code}/runs/{rid}/cancel").status_code == 200
+        return ids
+
+    monkeypatch.setattr(runs, "_send_cards", send_then_cancel)
+    _work()
+    run = _run(c, code, rid)
+    assert run["status"] == "cancelled" and run["next_step"] == "facts"
+    assert [s["status"] for s in run["steps"]] == ["cancelled"] and len(model.requests) == 1
+
+
+def test_signed_deliverable_refuses_start(proj, model):
+    """测试 #41 缺陷 3：要写入的 D3 / D4 已签署时发起即 422，说明原因。"""
+    code, c = proj
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        deliverables.get_deliverable(db, p, "D4").status = "signed"
+        db.commit()
+    r = c.post(f"/api/projects/{code}/runs")
+    assert r.status_code == 422 and "D4 已签署" in r.json()["detail"]
+    assert not c.get(f"/api/projects/{code}/runs").json()

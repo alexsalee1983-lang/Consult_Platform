@@ -14,7 +14,12 @@
 - 模型调用只经网关 gateway.complete；用量记 usage.record；审计只记编号、步骤、字数、用量，不记提示和产出原文。
 - 停下来问：没有任何证据时发“证据不足”卡、停在本步；模型在输出里提出的确认卡照发，本步产出照写，
   停在下一步之前。顾问把本次运行等待的卡都处理完后自动继续，处理结果作为“顾问已确认事项”交给后续步骤。
-- 严格档不跑（资料不出客户现场，M4 摘要卡）；同一项目同时只能有一个未结束的运行。
+- 严格档不跑（资料不出客户现场，M4 摘要卡）；同一项目同时只能有一个未结束的运行；
+  要写入的交付件（D3、D4）已签署的不跑（422，测试 #41）。
+- 取消（测试 #41）：取消与 worker 改运行状态都先锁住运行这一行（SELECT … FOR UPDATE）再判断状态，
+  worker 不会把“已取消”改回去。模型返回后、写入交付件和发卡之前再看一次状态，已取消就什么也不写；
+  正在写入的那一小段里取消的，本步写完即停，运行保持“已取消”，不再发下一步。
+- 最后一步的卡处理完直接结束运行（done），不再排任务（测试 #41）。
 - 失败：模型暂时不可用按任务重试（最多 MAX_ATTEMPTS 次），机密级拦截、授权拒绝、输出格式不对等直接失败，
   失败原因只写类别，不含客户原文。
 """
@@ -96,6 +101,16 @@ class StepRetry(Exception):
     """本步暂时失败（模型不可用、输出格式不对），按任务重试。"""
 
 
+class StepCancelled(Exception):
+    """运行在本步执行期间被取消：不再写入、不再继续。"""
+
+
+def _lock(db: Session, run: AgentRun) -> str:
+    """锁住运行这一行并读最新状态（PostgreSQL 行锁，到本事务提交为止）。"""
+    db.refresh(run, with_for_update=True)
+    return run.status
+
+
 # ---- 发起、取消、确认卡处理后继续 ----
 
 def start(db: Session, user: User, project: Project) -> AgentRun:
@@ -107,6 +122,11 @@ def start(db: Session, user: User, project: Project) -> AgentRun:
     if active is not None:
         _deny(db, user, project, action, "active_run")
         raise RunError(409, f"本项目已有未结束的交付链运行（#{active.id}），请等它结束或先取消")
+    signed = [s.deliverable for s in STEPS if s.deliverable and getattr(
+        deliverables.get_deliverable(db, project, s.deliverable), "status", "") == "signed"]
+    if signed:
+        _deny(db, user, project, action, "signed")
+        raise RunError(422, f"{'、'.join(signed)} 已签署，交付链不能再改写")
     for s in STEPS:
         try:
             runtime.ready_doc(db, s.agent)
@@ -125,7 +145,7 @@ def start(db: Session, user: User, project: Project) -> AgentRun:
 
 
 def cancel(db: Session, user: User, project: Project, run: AgentRun) -> AgentRun:
-    if run.status not in ACTIVE:
+    if _lock(db, run) not in ACTIVE:
         raise RunError(409, "这次运行已经结束，不能取消")
     run.status, run.waiting_cards = "cancelled", []
     run.updated_at = run.finished_at = utcnow()
@@ -146,11 +166,18 @@ def on_card_resolved(db: Session, card: Confirmation) -> AgentRun | None:
                                                            Confirmation.status == "open")).all()
         if pending:
             return None
-        run.status, run.waiting_cards, run.updated_at = "queued", [], utcnow()
+        if _lock(db, run) != "waiting":
+            db.commit()
+            return None
+        finished = run.step_index >= len(STEPS)          # 最后一步发的卡：处理完就结束，不再排任务
+        run.status, run.waiting_cards, run.updated_at = ("done" if finished else "queued"), [], utcnow()
+        if finished:
+            run.finished_at = run.updated_at
         audit.record(db, actor=card.resolved_by or "system", action="run.resume", result="allowed",
-                     project_code=card.project.code, run_id=run.id, step=_step_key(run))
+                     project_code=card.project.code, run_id=run.id, step=_step_key(run), next=run.status)
         db.commit()
-        _enqueue(db, run, card.project)
+        if not finished:
+            _enqueue(db, run, card.project)
         return run
     return None
 
@@ -272,21 +299,33 @@ def _step_job(payload: dict, ctx: jobs.JobContext) -> None:
         user = db.scalar(select(User).where(User.username == run.created_by))
         member = user is not None and db.scalar(select(ProjectMember).where(
             ProjectMember.project_id == project.id, ProjectMember.user_id == user.id)) is not None
+        if _lock(db, run) not in ("queued", "running"):   # 加锁后再看一次：刚被取消的不改回 running
+            db.commit()
+            return
         if not member or not user.is_active:
             _fail(db, run, project, "发起人已不是项目成员或账号已停用")
+            return
+        if run.step_index >= len(STEPS):                 # 已经走完的运行直接结束，不让越界异常逃出去
+            run.status, run.waiting_cards = "done", []
+            run.updated_at = run.finished_at = utcnow()
+            db.commit()
             return
         step = STEPS[run.step_index]
         run.status, run.updated_at = "running", utcnow()
         db.commit()
         try:
             _execute(db, user, project, run, step)
+        except StepCancelled:
+            db.rollback()
+            audit.record(db, actor="worker", action="run.step", result="allowed", project_code=project.code,
+                         run_id=run.id, step=step.key, agent=step.agent, next="cancelled", reason="cancelled")
+            db.commit()
         except StepRetry as e:
             db.rollback()
             if ctx.attempt >= MAX_ATTEMPTS:
                 _fail(db, run, project, f"{STEP_NAMES[step.key]}：{e}")
                 raise jobs.JobError(str(e), retry=False) from e
-            run.status, run.updated_at = "queued", utcnow()
-            db.commit()
+            _requeue(db, run)
             raise jobs.JobError(str(e)) from e
         except StepFailed as e:
             db.rollback()
@@ -297,12 +336,20 @@ def _step_job(payload: dict, ctx: jobs.JobContext) -> None:
             if ctx.attempt >= MAX_ATTEMPTS:
                 _fail(db, run, project, f"{STEP_NAMES[step.key]}：内部错误（{type(e).__name__}）")
                 raise jobs.JobError(type(e).__name__, retry=False) from e
-            run.status, run.updated_at = "queued", utcnow()
-            db.commit()
+            _requeue(db, run)
             raise
 
 
+def _requeue(db: Session, run: AgentRun) -> None:
+    if _lock(db, run) == "running":                     # 已取消的保持已取消
+        run.status, run.updated_at = "queued", utcnow()
+    db.commit()
+
+
 def _fail(db: Session, run: AgentRun, project: Project, reason: str) -> None:
+    if _lock(db, run) not in ACTIVE:                    # 已取消的保持已取消
+        db.commit()
+        return
     run.status, run.error, run.waiting_cards = "failed", reason[:200], []
     run.updated_at = run.finished_at = utcnow()
     audit.record(db, actor="worker", action="run.failed", result="error", project_code=project.code,
@@ -365,6 +412,9 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
         raise StepFailed("模型输出命中机密级内容，未保存")
     default_title = deliverables.get_deliverable(db, project, step.deliverable).title if step.deliverable else step.name
     sections, cards = parse_output(c.text, default_title)
+    db.refresh(run)                                     # 模型调用期间可能被取消：取消了就什么也不写
+    if run.status != "running":
+        raise StepCancelled()
 
     record.model, record.prompt_tokens, record.completion_tokens = c.model[:64], c.prompt_tokens, c.completion_tokens
     record.refs = {"kb_refs": len(refs)}
@@ -379,6 +429,13 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     record.refs["cards"] = card_ids
     record.finished_at = utcnow()
     db.add(record)
+    if _lock(db, run) != "running":                     # 写入期间被取消：本步记录留下，运行保持已取消
+        record.status = "cancelled"
+        audit.record(db, actor="worker", action="run.step", result="allowed", project_code=project.code,
+                     run_id=run.id, step=step.key, agent=step.agent, sections=len(sections), cards=len(card_ids),
+                     next="cancelled", reason="cancelled")
+        db.commit()
+        return
     run.card_ids = [*run.card_ids, *card_ids]
     run.step_index += 1
     open_ids = [i for i in card_ids if db.get(Confirmation, i).status == "open"]
@@ -405,6 +462,9 @@ def _usage(db: Session, user: User, project: Project, level: str, step: Step, st
 def _ask_for_evidence(db: Session, user: User, project: Project, run: AgentRun, step: Step,
                       record: AgentRunStep) -> None:
     """没有任何证据：发“证据不足”卡，停在本步；顾问补了证据、处理卡后重跑本步。"""
+    db.refresh(run)
+    if run.status != "running":
+        raise StepCancelled()
     r = tools.invoke(db, user, step.agent, "confirm.create", {
         "kind": "证据不足", "title": "本项目还没有访谈纪要或客户资料，无法整理 D3 事实清单",
         "options": ["A 已补充访谈纪要或资料，继续整理", "B 暂停交付链"], "recommendation": "A",
@@ -412,6 +472,10 @@ def _ask_for_evidence(db: Session, user: User, project: Project, run: AgentRun, 
         "impact": "选 A 后平台重新读取证据再整理；仍没有证据会再次停下", "deliverable": "D3"}, project.code)
     record.status, record.refs, record.finished_at = "waiting", {"cards": [r["id"]]}, utcnow()
     db.add(record)
+    if _lock(db, run) != "running":
+        record.status = "cancelled"
+        db.commit()
+        return
     run.card_ids = [*run.card_ids, r["id"]]
     run.status, run.waiting_cards, run.updated_at = "waiting", [r["id"]], utcnow()
     audit.record(db, actor="worker", action="run.step", result="allowed", project_code=project.code, run_id=run.id,

@@ -42,7 +42,7 @@ class AgentRunStep(Base):
     run_id: Mapped[int] = mapped_column(ForeignKey("agent_runs.id"), index=True)
     step: Mapped[str] = mapped_column(String(16))                # facts / gap / draft
     agent_code: Mapped[str] = mapped_column(String(32))
-    status: Mapped[str] = mapped_column(String(16))              # done / waiting（停下来等补证）
+    status: Mapped[str] = mapped_column(String(16))              # done / waiting（停下来等补证）/ cancelled（本步执行中被取消）
     output: Mapped[str] = mapped_column(Text, default="")        # 不写交付件的步骤的产出（差距分析）
     refs: Mapped[dict] = mapped_column(JSON, default=dict)       # 产出引用：交付件、章节版本、确认卡编号
     prompt_version: Mapped[str] = mapped_column(String(64), default="")
