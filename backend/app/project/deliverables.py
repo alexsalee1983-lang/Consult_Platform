@@ -150,7 +150,9 @@ def set_outline(db: Session, user: User, project: Project, d: Deliverable, title
     缩短大纲时，被去掉的章必须还没有正文（有正文的章不能从大纲里删，避免丢版本）。"""
     action = "deliverable.outline"
     _check_writable(db, user, project, d, action)
-    titles = [str(t).strip() for t in titles]
+    if any(not isinstance(t, str) for t in titles):   # 防止对象被 str() 成 Python 写法写进标题（测试 #34）
+        raise DeliverableError(422, "sections 只能是章节标题字符串列表，例如 [\"现状梳理\", \"差距分析\"]")
+    titles = [t.strip() for t in titles]
     if not titles or len(titles) > MAX_SECTIONS:
         raise DeliverableError(422, f"大纲要有 1～{MAX_SECTIONS} 章")
     if any(not t or len(t) > MAX_TITLE for t in titles):

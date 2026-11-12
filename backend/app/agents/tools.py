@@ -19,6 +19,7 @@ kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用�
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -88,13 +89,22 @@ def _project_read(ctx: ToolContext, args: dict) -> dict:
                                    if c.status == "open"]}
 
 
+def _int_arg(args: dict, name: str, default: int) -> int:
+    """整数参数：Agent 传来的字符串数字照收，不是整数的返回 422（不能让 ValueError 变成 500）。"""
+    value = args.get(name, default)
+    if value in (None, ""):
+        return default
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and re.fullmatch(r"\s*[+-]?\d+\s*", value):
+        return int(value)
+    raise ToolError(f"{name} 必须是整数", status=422)
+
+
 def _project_evidence(ctx: ToolContext, args: dict) -> dict:
     from ..project import evidence
 
-    try:
-        offset, limit = int(args.get("offset", 0)), int(args.get("limit", evidence.READ_CHARS))
-    except (TypeError, ValueError) as e:
-        raise ToolError("offset、limit 必须是整数") from e
+    offset, limit = _int_arg(args, "offset", 0), _int_arg(args, "limit", evidence.READ_CHARS)
     return evidence.read_for_agent(ctx.db, ctx.project, str(args.get("code", "")), offset, limit)
 
 
@@ -110,7 +120,7 @@ def _kb_search(ctx: ToolContext, args: dict) -> dict:
     try:
         return kb.search(ctx.db, ctx.user, str(args.get("query", "")), layer=str(args.get("layer", "")),
                          product=str(args.get("product", "")), stage=str(args.get("stage", "")),
-                         doc_type=str(args.get("doc_type", "")), limit=int(args.get("limit", 8)))
+                         doc_type=str(args.get("doc_type", "")), limit=_int_arg(args, "limit", 8))
     except kb.SearchError as e:
         raise ToolError(e.detail, status=e.status) from e
 
@@ -120,7 +130,7 @@ def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
 
     try:
         return kb.basis(ctx.db, ctx.user, str(args.get("query", "")), ref_document=str(args.get("ref_document", "")),
-                        limit=int(args.get("limit", 5)))
+                        limit=_int_arg(args, "limit", 5))
     except kb.SearchError as e:
         raise ToolError(e.detail, status=e.status) from e
 
