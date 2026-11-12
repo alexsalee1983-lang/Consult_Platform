@@ -111,7 +111,7 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 知识库约定：知识区表结构在 `app/models/kb.py`，元数据取值和校验在 `app/kb/meta.py`（依据公共规范第 7 节，改取值要同步公共规范并经负责人同意）；建条目、建版本只经 `app/kb/items.py`。条目的 doc_id 固定不变，内容变化一律建新版本，历史版本保留。知识区只收去标识后的做法：去标识报告只记类别、占位符和次数，上传记录只记机密级命中类别，都不记原文。去标识只经 `app/kb/deid_flow.py`：规则词库（`deid.py`）→ 脱敏审查 Agent 复查（`deid_agent.py`，经网关，返回的漏网名称只在内存里用）→ 知识管理员确认（不能是上传者）；确认后原件和未去标识的解析结果从对象存储删除。
 
-检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
+检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。重排只经网关 `gateway.rerank()`（tools/rerank 服务，默认 bge-reranker-v2-m3 int8；查询过机密级检测，命中的候选不发出、记 0 分），RRF 后前 `KB_RERANK_CANDIDATES` 个切片按重排分数排序，依据查询门槛用 `KB_BASIS_MIN_RERANK`；重排不可用时退回 RRF 排序和余弦相似度门槛，返回体 `rerank` 字段注明。查询写了标准号或法规条号时先按 L4 元数据精确匹配（`search._exact_match`）。向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
 
 项目区约定（M3）：客户资料、访谈纪要、现场观察只经 `app/project/evidence.py` 进入平台（先过机密级检测；严格档一律拒收），按项目分配证据编号 D-xx / I-xx / O-xx，编号不变、不复用；访谈纪要只写受访者角色。资料原件和解析结果存对象存储项目区，键里不用原文件名；文件名和正文不进审计。Agent 经工具 `project.evidence` 读证据。
 
@@ -131,6 +131,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 - 提交信息用中文，以里程碑开头，例如 `M1：登录与会话`。
 - PR 描述必须写：改了什么、怎么测（测试助手照着执行）、对应开发计划哪一项、是否涉及数据库迁移或权限变更。
 - 合并条件：CI 全绿 → 测试助手在测试机上测试通过并在 PR 留评论 → 负责人合并。
+- 开发与测试经 PR 通信，标签 `待测试` / `测试未通过` / `测试通过` 表示轮到谁（`docs/测试交接规范.md` 第 0 节）。开发助手开 PR 或修完推送后打 `待测试`；修复后的复测项写成标题为“复核说明”的 PR 评论。
+- 开发助手可能从不同入口启动（桌面 app、飞书 cc-connect 等），但它们共用开发电脑上同一个仓库目录：**同一时间只让一个会话改仓库**（切分支、改文件、提交）。开工前 `git status`，发现不是自己改的未提交文件，先停下问负责人，不要覆盖、不要提交。
 - 每个里程碑验收后打标签 `v0.1`、`v0.2`……，一期可用版本为 `v1.0`。
 
 ## 遇到以下情况先停下来问负责人

@@ -13,6 +13,9 @@
 - 前 1 / 3 / 5 命中率、MRR（只算期望命中的题）。
 - 相似度分布：期望条目的向量相似度、排第一但不对的条目的相似度、“期望查不到”的题里最高的相似度，
   用来校准 KB_VECTOR_MIN_SIMILARITY / KB_BASIS_MIN_SIMILARITY。
+- 重排（启用时）：同样三组的重排分数分布，用来校准 KB_BASIS_MIN_RERANK；以及“重排前进了前 N”的比例
+  （期望条目在 RRF 候选里排在前 KB_RERANK_CANDIDATES 名以内，重排才有机会把它提上来）。
+  依据查询被门槛挡掉的题（期望查不到的题、没命中的题）会以门槛 0 再查一次，只为取分数，不改变对错判定。
 评测按普通检索调用，审计照常记录（不记题目原文）。
 """
 from __future__ import annotations
@@ -25,6 +28,7 @@ import yaml
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..core.config import get_settings
 from ..models import KbItem, User
 from . import search
 
@@ -46,6 +50,9 @@ class QuestionResult:
     correct: bool
     expected_similarity: float | None = None
     top_wrong_similarity: float | None = None
+    expected_rerank: float | None = None
+    top_wrong_rerank: float | None = None
+    expected_rank_before: int | None = None   # 期望条目重排前在 RRF 候选里的名次
 
 
 @dataclass
@@ -54,7 +61,11 @@ class EvalReport:
     accuracy: float = 0.0
     by_mode: dict = field(default_factory=dict)
     similarity: dict = field(default_factory=dict)
+    rerank_scores: dict = field(default_factory=dict)
     vector: str = ""
+    rerank: str = ""
+    rerank_candidates: int = 0
+    in_candidates: float | None = None        # 期望命中的题里，期望条目重排前进了前 N 的比例
     results: list[QuestionResult] = field(default_factory=list)
 
     def to_json(self) -> dict:
@@ -91,9 +102,19 @@ def _stats(values: list[float]) -> dict | None:
             "max": round(max(values), 4)}
 
 
+def _overall_rerank(states: list[str]) -> str:
+    """整份报告的重排状态：按所有题汇总，不由最后一题决定。没有候选的题（多为负例）不算。"""
+    real = [x for x in states if x and x != "no candidates"]
+    bad = [x for x in real if x != "ok"]
+    if "ok" in real:
+        return f"ok（{len(bad)} 题未重排：{bad[0]}）" if bad else "ok"
+    return bad[0] if bad else (states[-1] if states else "")
+
+
 def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
     keys = dict(db.execute(select(KbItem.doc_id, KbItem.import_key)).all())
     report = EvalReport(total=len(questions))
+    rerank_states: list[str] = []
     for q in questions:
         mode, expect = q.get("mode", "basis"), [str(x) for x in q.get("expect", [])]
         if mode == "basis":
@@ -101,14 +122,26 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         else:
             out = search.search(db, user, q["question"], product=q.get("product", ""), limit=TOP_K)
         report.vector = out.get("vector", "")
+        rerank_states.append(out.get("rerank", ""))
         hits = out["items"]
         got = [keys.get(h["doc_id"]) or h["doc_id"] for h in hits]
         rank = next((i for i, k in enumerate(got, 1) if k in expect), None)
         correct = (rank is not None and rank <= ACCURACY_K) if expect else not hits
         exp_sim = hits[rank - 1]["similarity"] if rank else None
         wrong = [h["similarity"] for h, k in zip(hits, got, strict=True) if k not in expect and h["similarity"] is not None]
-        report.results.append(QuestionResult(q["id"], mode, expect, got, rank, correct, exp_sim,
-                                             max(wrong) if wrong else None))
+        r = QuestionResult(q["id"], mode, expect, got, rank, correct, exp_sim, max(wrong) if wrong else None)
+        # 重排分数：被门槛挡掉的依据查询以门槛 0 再查一次，只取分数
+        scored, scored_keys = hits, got
+        if mode == "basis" and rerank_states[-1] == "ok" and (not expect or rank is None):
+            scored = search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0)["items"]
+            scored_keys = [keys.get(h["doc_id"]) or h["doc_id"] for h in scored]
+        exp_hit = next((h for h, k in zip(scored, scored_keys, strict=True) if k in expect), None)
+        if exp_hit:
+            r.expected_rerank, r.expected_rank_before = exp_hit.get("rerank_score"), exp_hit.get("rank_before_rerank")
+        wrong_rr = [h["rerank_score"] for h, k in zip(scored, scored_keys, strict=True)
+                    if k not in expect and h.get("rerank_score") is not None]
+        r.top_wrong_rerank = max(wrong_rr) if wrong_rr else None
+        report.results.append(r)
 
     for mode in ("basis", "search"):
         rs = [r for r in report.results if r.mode == mode]
@@ -132,12 +165,26 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         "negatives_max": _stats([r.top_wrong_similarity for r in report.results
                                  if not r.expect and r.top_wrong_similarity is not None]),
     }
+    report.rerank = _overall_rerank(rerank_states)
+    if report.rerank.startswith("ok"):
+        report.rerank_scores = {
+            "expected_hits": _stats([r.expected_rerank for r in report.results if r.expected_rerank is not None]),
+            "top_wrong": _stats([r.top_wrong_rerank for r in report.results
+                                 if r.expect and r.top_wrong_rerank is not None]),
+            "negatives_max": _stats([r.top_wrong_rerank for r in report.results
+                                     if not r.expect and r.top_wrong_rerank is not None]),
+        }
+        n = report.rerank_candidates = get_settings().kb_rerank_candidates
+        pos = [r for r in report.results if r.expect]
+        if pos:
+            report.in_candidates = round(sum(1 for r in pos if r.expected_rank_before and r.expected_rank_before <= n)
+                                         / len(pos), 4)
     return report
 
 
 def format_report(r: EvalReport) -> str:
     lines = [f"依据查询准确率（验收口径，≥ 90% 为达标）：{r.accuracy:.1%}" + ("  达标" if r.accuracy >= 0.9 else "  未达标"),
-             f"向量检索：{r.vector or '—'}", ""]
+             f"向量检索：{r.vector or '—'}；重排：{r.rerank or '—'}", ""]
     for mode, m in r.by_mode.items():
         name = "依据查询" if mode == "basis" else "知识检索"
         hits = "" if m["hit@1"] is None else \
@@ -147,6 +194,16 @@ def format_report(r: EvalReport) -> str:
     for k, label in (("expected_hits", "期望条目"), ("top_wrong", "不对但排在前面的"), ("negatives_max", "期望查不到的题里最高的")):
         s = r.similarity.get(k)
         lines.append(f"  {label}：" + (f"{s['n']} 个，最低 {s['min']} / 中位 {s['median']} / 最高 {s['max']}" if s else "无数据"))
+    if r.rerank_scores:
+        lines += ["", "重排分数分布（用于校准 KB_BASIS_MIN_RERANK）："]
+        for k, label in (("expected_hits", "期望条目"), ("top_wrong", "不对但排在前面的"),
+                         ("negatives_max", "期望查不到的题里最高的")):
+            s = r.rerank_scores.get(k)
+            lines.append(f"  {label}：" + (f"{s['n']} 个，最低 {s['min']} / 中位 {s['median']} / 最高 {s['max']}"
+                                           if s else "无数据"))
+        if r.in_candidates is not None:
+            lines.append(f"  期望条目重排前进了前 {r.rerank_candidates} 名：{r.in_candidates:.0%}"
+                         "（低于 100% 说明候选数不够，考虑调大 KB_RERANK_CANDIDATES）")
     wrong = [x for x in r.results if not x.correct]
     if wrong:
         lines += ["", f"答错的题（{len(wrong)}）："]

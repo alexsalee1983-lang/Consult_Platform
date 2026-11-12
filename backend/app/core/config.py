@@ -55,6 +55,21 @@ class Settings(BaseSettings):
     # 两侧各留约 0.02～0.03。0.55 会误杀正例（B005），0.5 离正例只差 0.002。正式评测题扩充后重新校准。
     kb_basis_min_similarity: float = 0.48
 
+    # 重排服务（/rerank，交叉编码模型，决策记录 2026-11-11），同样只经网关调用。留空表示不启用：检索只用 RRF 排序，
+    # 依据查询退回上面的余弦相似度门槛。docker compose 默认指向 rerank 服务（tools/rerank）。
+    rerank_base_url: str = ""
+    rerank_api_key: str = ""
+    rerank_model: str = "BAAI/bge-reranker-v2-m3-int8"   # int8 量化版（决策记录 11-11 补充）
+    # 送去重排的候选片段数（RRF 融合后的前 N 个）和每个片段的字数上限。CPU 上重排耗时大致与“个数 × 字数”成正比。
+    kb_rerank_candidates: int = 20
+    kb_rerank_max_chars: int = 400
+    # 依据查询门槛（重排分数，0～1，sigmoid 后）：启用重排时取代 KB_BASIS_MIN_SIMILARITY。初值按开发电脑上的
+    # 示范评测：正例最低 0.14（B004），该查不到的题最高 0.001，取 0.05。正式评测题编好后重新校准（交接文档 S2 第 5 步）。
+    kb_basis_min_rerank: float = 0.05
+    # 普通检索的重排分数下限：只挡掉趋近 0 分的无关结果（测试 #34：该查不到的 S011 得分 0.0003～0.0008）。
+    # 比依据查询宽得多，宁可多给几条弱相关的；正式评测后与 KB_BASIS_MIN_RERANK 一起校准。
+    kb_search_min_rerank: float = 0.005
+
     seed_demo_data: bool = True
 
     # Agent md 目录（01_公共规范.md、roles/*.md）。留空时依次找 /srv/agents（镜像内）和仓库根目录的 agents/。

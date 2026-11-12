@@ -9,6 +9,12 @@
   向量服务不可用时无法判断相似度，依据查询照常只用全文，结果里 vector 字段会注明。
 - 过滤：层级、服务产品（默认同时包含 GEN 通用知识）、阶段、类型；受限条目按可见角色（与 app/kb/review.py 一致）。
 - 查询先过机密级检测；审计只记查询长度和摘要哈希，不记原文。
+- 重排（决策记录 2026-11-11）：融合后的前 KB_RERANK_CANDIDATES 个切片经网关 rerank 用交叉编码模型重新打分，
+  按重排分数排序；依据查询的“够不够格”改用重排分数门槛 KB_BASIS_MIN_RERANK（取代上面的余弦相似度下限），
+  普通检索也有一个低得多的下限 KB_SEARCH_MIN_RERANK，只挡掉趋近 0 分的无关结果。
+  重排服务没启用或不可用时退回 RRF 排序和余弦相似度门槛，结果里 rerank 字段会注明。
+- 标准号 / 条款号：查询写了标准号（GB/T 22239 8.1.4）或法规条号（网络安全法第二十一条）时先按元数据精确匹配，
+  文件和条款都对上的排最前、不受门槛限制；依据查询只对上文件的，结果限定在该文件内。
 - 依据查询（basis）：只查 L4 依据库，按公共规范第 3 节给出引用格式，复审日期已过的提示“请确认是否有更新”。
 SQLite（本地快速测试）没有全文和向量索引，用二字词匹配的简化实现，只为让接口和规则可测。
 """
@@ -63,6 +69,8 @@ class Hit:
     needs_update_check: bool = False
     citation: str = ""
     similarity: float | None = None   # 向量余弦相似度（没走向量检索时为空），评测校准门槛用
+    rerank_score: float | None = None  # 重排分数 0～1（没重排时为空）；重排时 score 等于它，否则是 RRF 分数
+    rank_before_rerank: int | None = None   # 重排前在 RRF 候选里的名次，评测看正确条目有没有进前 N
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -142,9 +150,85 @@ def _rrf(*rankings: list[int]) -> dict[int, float]:
     return scores
 
 
+# ---- 标准号 / 条款号精确匹配（依据库 L4）----
+# 查询里写了标准号（如“GB/T 22239 8.1.4”）或法规条号（如“网络安全法第二十一条”）时，先按条目元数据精确匹配：
+# 文件和条款都对上的片段排在最前，不受重排门槛限制；依据查询只对上文件的，结果限定在该文件内（再按重排排序）。
+_STD_RE = re.compile(r"(GB/T|GB/Z|GB|JR/T|YD/T|GM/T|GA/T|DL/T|JT/T|WS/T|SJ/T)\s*(\d{3,6}(?:\.\d+)?)", re.I)
+_CLAUSE_RE = re.compile(r"(?<![\d.])(\d{1,2}(?:\.\d{1,3}){1,4})(?![\d.])")
+_ARTICLE_RE = re.compile(r"第\s*([0-9一二三四五六七八九十百零〇两]{1,6})\s*条")
+_CN_DIGITS = "零一二三四五六七八九"
+
+
+def _cn_number(n: int) -> str:
+    """1～999 的阿拉伯数字转成条号常用的中文写法（21 → 二十一，105 → 一百零五）。"""
+    if n < 10:
+        return _CN_DIGITS[n]
+    if n < 20:
+        return "十" + (_CN_DIGITS[n % 10] if n % 10 else "")
+    if n < 100:
+        return _CN_DIGITS[n // 10] + "十" + (_CN_DIGITS[n % 10] if n % 10 else "")
+    rest = n % 100
+    if rest == 0:
+        tail = ""
+    elif rest < 10:
+        tail = "零" + _CN_DIGITS[rest]
+    elif rest < 20:
+        tail = "一" + _cn_number(rest)
+    else:
+        tail = _cn_number(rest)
+    return _CN_DIGITS[n // 100] + "百" + tail
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", "", s or "").upper()
+
+
+@dataclass
+class _Exact:
+    doc_chunks: set[int]          # 文件对上的切片
+    pinned: list[int]             # 文件和条款都对上的切片（排最前）
+
+
+def _exact_match(db: Session, query: str, where: str, params: dict) -> _Exact | None:
+    codes = {_norm(m.group(1) + m.group(2)) for m in _STD_RE.finditer(query)}
+    clauses = set(_CLAUSE_RE.findall(_STD_RE.sub(" ", query)))
+    articles = {_cn_number(int(a)) if a.isdigit() and 0 < int(a) < 1000 else a for a in _ARTICLE_RE.findall(query)}
+    if not codes and not articles:
+        return None
+    rows = db.execute(text(f"SELECT c.id, c.heading, v.ref_document {_BASE} WHERE i.layer = 'L4' {where} "
+                           "ORDER BY c.id"), params).all()
+    q = _norm(query)
+
+    def doc_hit(ref: str) -> bool:
+        r = _norm(ref)
+        if not r:
+            return False
+        if codes:
+            return any(code in r for code in codes)
+        short = r.removeprefix("中华人民共和国")       # 法规条号：查询里要写到法规名（可省略“中华人民共和国”）
+        return len(short) >= 4 and short in q
+
+    docs = [(cid, heading or "") for cid, heading, ref in rows if doc_hit(ref)]
+    if not docs:
+        return None
+
+    def clause_hit(heading: str) -> bool:
+        h = _norm(heading)
+        if any(re.match(re.escape(c) + r"(?![\d.])", h) for c in clauses):
+            return True
+        return any(f"第{a}条" in h for a in articles)
+
+    pinned = [cid for cid, heading in docs if (clauses or articles) and clause_hit(heading)]
+    return _Exact(doc_chunks={cid for cid, _ in docs}, pinned=pinned)
+
+
+def _rerank_text(c: KbChunk, title: str) -> str:
+    return "\n".join(x for x in (title, c.heading, c.text) if x)
+
+
 def search(db: Session, user: User, query: str, *, layer: str = "", product: str = "", stage: str = "",
            doc_type: str = "", limit: int = 8, include_general: bool = True, purpose: str = "kb.search",
-           min_similarity: float | None = None, strict: bool = False) -> dict:
+           min_similarity: float | None = None, strict: bool = False, min_rerank: float | None = None) -> dict:
     query = query.strip()
     if not query:
         raise SearchError(422, "检索词不能为空")
@@ -155,12 +239,17 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
         raise SearchError(422, {"blocked": True, "summary": result.summary() + "，没有检索",
                                 "findings": [{"kind": f.kind, "label": f.label, "excerpt": f.excerpt}
                                              for f in result.findings[:10]]})
+    s = get_settings()
     limit = max(1, min(limit, MAX_LIMIT))
     where, params = _filters(layer, product, stage, doc_type, include_general)
     postgres = db.get_bind().dialect.name == "postgresql"
     full = (_fulltext_pg if postgres else _fulltext_simple)(db, query, where, params)
 
-    vec_ids: list[int] = []
+    # 两套候选：*_loose 给重排用（依据查询不按余弦相似度预先过滤，够不够格由重排分数判断）；
+    # *_strict 是不启用重排或重排不可用时的老办法（余弦相似度门槛）。普通检索两套相同。
+    vec_loose: list[int] = []
+    full_strict: list[int] = full
+    vec_strict: list[int] = []
     sims: dict[int, float] = {}
     vector_status = "not enabled"
     if postgres and gateway.embedding_enabled():
@@ -168,42 +257,99 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
             emb = gateway.embed([query])
             usage.record(db, username=user.username, project_code="", level="embed", model=emb.model, status="ok",
                          stream=False, attempts=emb.attempts)
-            floor = get_settings().kb_vector_min_similarity if min_similarity is None else min_similarity
+            floor = s.kb_vector_min_similarity if min_similarity is None else min_similarity
             full_set_pre = set(full)
-            # 全文也命中的切片照常参与融合；只有向量命中的，相似度够高才要
             nearest = _vector_pg(db, emb.vectors[0], emb.model, where, params)
             sims = dict(nearest)
-            vec_ids = [cid for cid, sim in nearest if cid in full_set_pre or sim >= floor]
-            if strict:   # 依据查询：全文命中的也要达到下限
+            # 全文也命中的切片照常参与融合；只有向量命中的，相似度够高才要
+            vec_strict = [cid for cid, sim in nearest if cid in full_set_pre or sim >= floor]
+            vec_loose = vec_strict
+            if strict:   # 依据查询（老办法）：全文命中的也要达到下限
                 sims.update(_similarity_of(db, emb.vectors[0], emb.model, [c for c in full if c not in sims]))
-                full = [cid for cid in full if sims.get(cid, 0.0) >= floor]
-                vec_ids = [cid for cid in vec_ids if sims.get(cid, 0.0) >= floor]
+                full_strict = [cid for cid in full if sims.get(cid, 0.0) >= floor]
+                vec_strict = [cid for cid in vec_strict if sims.get(cid, 0.0) >= floor]
+                vec_loose = [cid for cid, _ in nearest]
             vector_status = "ok"
         except gateway.GatewayError as e:         # 向量服务不可用：退回只用全文
             vector_status = f"unavailable: {str(e)[:60]}"
 
-    scores = _rrf(full, vec_ids)
-    full_set, vec_set = set(full), set(vec_ids)
-    chunks = {c.id: c for c in db.scalars(select(KbChunk).where(KbChunk.id.in_(list(scores))))} if scores else {}
-    best: dict[int, tuple[float, KbChunk]] = {}
-    for cid, s in scores.items():
-        c = chunks.get(cid)
-        if c is not None and (c.version_id not in best or s > best[c.version_id][0]):
-            best[c.version_id] = (s, c)
+    exact = _exact_match(db, query, where, params)
+    pinned = set(exact.pinned) if exact else set()
 
+    def candidates(full_ids: list[int], vec_ids: list[int]) -> dict[int, float]:
+        scores = _rrf(full_ids, vec_ids)
+        if exact and strict:   # 依据查询点名了某份标准 / 法规：只在它里面找
+            scores = {cid: v for cid, v in scores.items() if cid in exact.doc_chunks}
+            for cid in sorted(exact.doc_chunks)[:POOL]:
+                scores.setdefault(cid, 0.0)
+        for cid in exact.pinned if exact else ():   # 点到的条款一律加进来（普通检索也排最前）
+            scores.setdefault(cid, 0.0)
+        return scores
+
+    scores = candidates(full, vec_loose)
+    chunks: dict[int, KbChunk] = {}
+    rr: dict[int, float] = {}
+    rank_before: dict[int, int] = {}
+    rerank_status = "not enabled"
+    if not scores and gateway.rerank_enabled():
+        rerank_status = "no candidates"           # 已启用但没有候选可重排（和“未启用”区分开）
+    if scores and gateway.rerank_enabled():
+        order = sorted(scores, key=lambda cid: (-scores[cid], cid))
+        top = order[:max(1, s.kb_rerank_candidates)]
+        chunks = {c.id: c for c in db.scalars(select(KbChunk).where(KbChunk.id.in_(top)))}
+        titles = dict(db.execute(select(KbVersion.id, KbVersion.title).where(
+            KbVersion.id.in_({c.version_id for c in chunks.values()}))).all())
+        top = [cid for cid in top if cid in chunks]
+        try:
+            r = gateway.rerank(query, [_rerank_text(chunks[cid], titles.get(chunks[cid].version_id, "")) for cid in top])
+            usage.record(db, username=user.username, project_code="", level="rerank", model=r.model, status="ok",
+                         stream=False, attempts=r.attempts)
+            rr = dict(zip(top, r.scores, strict=True))
+            rank_before = {cid: n for n, cid in enumerate(order, 1)}
+            rerank_status = "ok"
+        except gateway.GatewayError as e:          # 重排不可用：退回 RRF 排序和余弦相似度门槛
+            rerank_status = f"unavailable: {str(e)[:60]}"
+
+    if rerank_status == "ok":
+        # 重排分数要达到门槛：依据查询用 KB_BASIS_MIN_RERANK，普通检索用更低的 KB_SEARCH_MIN_RERANK（只挡掉趋近 0 分的
+        # 无关结果，测试 #34：S011 返回了 0.0003～0.0008 分的条目）。点到条款的不受限；依据查询点名了文件但没点到条款的，
+        # 在该文件内按重排排序、不受门槛限制。
+        floor = min_rerank if min_rerank is not None else (s.kb_basis_min_rerank if strict else s.kb_search_min_rerank)
+        keep = [cid for cid in rr if cid in pinned or (strict and exact is not None and not pinned) or rr[cid] >= floor]
+        keep += [cid for cid in pinned if cid not in rr]   # 点到的条款没进重排候选时也保留
+        ordered = sorted(keep, key=lambda cid: (cid not in pinned, -rr.get(cid, 0.0), -scores[cid], cid))
+        vec_shown = vec_loose
+    else:
+        if strict:
+            scores = candidates(full_strict, vec_strict)
+        ordered = sorted(scores, key=lambda cid: (cid not in pinned, -scores[cid], cid))
+        vec_shown = vec_strict if strict else vec_loose
+
+    full_set, vec_set = set(full), set(vec_shown)
+    missing = [cid for cid in ordered if cid not in chunks]
+    if missing:
+        chunks.update({c.id: c for c in db.scalars(select(KbChunk).where(KbChunk.id.in_(missing)))})
+    seen: set[int] = set()
     hits: list[Hit] = []
     today = date.today()
-    for version_id, (s, c) in sorted(best.items(), key=lambda kv: -kv[1][0]):
-        v = db.get(KbVersion, version_id)
+    for cid in ordered:
+        c = chunks.get(cid)
+        if c is None or c.version_id in seen:
+            continue
+        seen.add(c.version_id)                       # 同一条目只保留排得最靠前的切片
+        v = db.get(KbVersion, c.version_id)
         item: KbItem = v.item
         if not review.can_view(db, user, item, v):
             continue
+        how = [x for x, ok in (("精确", cid in pinned), ("全文", cid in full_set), ("向量", cid in vec_set)) if ok]
         h = Hit(doc_id=item.doc_id, version=v.version, title=v.title, layer=item.layer, domain=item.domain,
                 product=item.product, stage=item.stage, doc_type=item.doc_type, heading=c.heading,
-                snippet=c.text[:400], score=round(s, 5),
-                matched="+".join(x for x, ok in (("全文", c.id in full_set), ("向量", c.id in vec_set)) if ok),
+                snippet=c.text[:400], score=round(rr.get(cid, scores.get(cid, 0.0)), 5),
+                matched="+".join(how) or "标准号",
                 review_date=v.review_date.isoformat() if v.review_date else None,
-                similarity=round(sims[c.id], 4) if c.id in sims else None)
+                similarity=round(sims[cid], 4) if cid in sims else None,
+                rerank_score=round(rr[cid], 4) if cid in rr else None,
+                rank_before_rerank=rank_before.get(cid))
         if item.layer == "L4":
             h.ref_document, h.ref_version, h.ref_status = v.ref_document, v.ref_version, v.ref_status
             h.needs_update_check = bool(v.review_date and v.review_date < today)
@@ -214,16 +360,19 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
 
     audit.record(db, actor=user.username, action=purpose, result="allowed", length=len(query),
                  query_sha=audit.digest(query), results=len(hits), vector=vector_status.split(":")[0],
+                 rerank=rerank_status.split(":")[0],
                  filters={k: val for k, val in (("layer", layer), ("product", product), ("stage", stage),
                                                 ("doc_type", doc_type)) if val})
-    return {"query_length": len(query), "vector": vector_status, "items": [h.to_json() for h in hits]}
+    return {"query_length": len(query), "vector": vector_status, "rerank": rerank_status,
+            "items": [h.to_json() for h in hits]}
 
 
-def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit: int = 5) -> dict:
+def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit: int = 5,
+          min_rerank: float | None = None) -> dict:
     """依据查询：只查 L4 依据库。查不到时提示按公共规范第 3 节标注【依据待核实】。"""
     q = f"{ref_document} {query}".strip() if ref_document else query
     out = search(db, user, q, layer="L4", limit=limit, include_general=True, purpose="kb.basis",
-                 min_similarity=get_settings().kb_basis_min_similarity, strict=True)
+                 min_similarity=get_settings().kb_basis_min_similarity, strict=True, min_rerank=min_rerank)
     if ref_document:
         out["items"] = [h for h in out["items"] if ref_document in h["ref_document"]] or out["items"]
     if not out["items"]:

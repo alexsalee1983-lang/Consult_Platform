@@ -5,7 +5,7 @@ from sqlalchemy import text
 from ..core.config import get_settings
 from ..core.db import engine
 from ..services import storage
-from ..services.gateway import availability, embed_availability, uses_external_model
+from ..services.gateway import availability, embed_availability, rerank_availability, uses_external_model
 
 router = APIRouter(tags=["health"])
 
@@ -47,6 +47,7 @@ def health() -> dict:
         "worker": _worker(),                    # 后台任务（解析、向量化、删除），看 worker 心跳
         "llm": availability(),
         "embedding": embed_availability(),       # 向量服务（知识检索的向量部分）；未启用时只用全文检索
+        "rerank": rerank_availability(),         # 重排服务；未启用或不可用时检索只用 RRF 排序
     }
     # llm_external：界面据此提示“当前为外部测试模型，勿输入真实客户信息”
     return {"status": "ok" if checks["database"] == "ok" else "degraded", "checks": checks,
