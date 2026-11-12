@@ -86,3 +86,49 @@ def test_credential_prose_is_not_blocked():
         "password 123456",  # 只有一类字符，不按口令处理
     ):
         assert "credential" not in kinds(text), text
+
+
+def test_bare_password_without_keyword():
+    # #36 测试发现漏拦：不带“口令”“密码”字样的口令
+    for text in (
+        "用 Abc@12345 登录",
+        "使用Qwe!2024ok登录堡垒机",
+        "login with P@ssw0rd1",
+        "admin/Abc@12345",
+        "默认账号 root:123456 未修改",
+        "弱口令 admin/admin123",
+        "sa：Sql2019#db",
+        "交换机统一用 P@ssw0rd 管理",
+        "备份口径见附件，Zx#9876ab 为临时值",
+    ):
+        assert "credential" in kinds(text), text
+
+
+def test_bare_password_excerpt_is_masked_and_reported_once():
+    r = check("admin/Abc@12345，用 Abc@12345 登录")
+    creds = [f for f in r.findings if f.kind == "credential"]
+    assert len(creds) == 2  # 两处各报一次，不因三条规则重复报
+    assert all("Abc@12345" not in f.excerpt for f in creds)
+    # 带关键词的写法仍只报一次
+    assert len([f for f in check("管理口令 P@ssw0rd!").findings if f.kind == "credential"]) == 1
+
+
+def test_bare_password_rules_do_not_block_ordinary_text():
+    for text in (
+        "依据 GB/T 22239-2019 第 8.1.4.1 条",
+        "GB/T22239-2019、JR/T 0071-2020",
+        "升级到 Windows10-Pro、iOS-17.2、AES-256-GCM",
+        "镜像 redis:7-alpine、mysql:5.7.44、postgres:16",
+        "接口 /api/admin/agent-grants 与 /api/admin/users/x/roles",
+        "admin/root 等默认账号应禁用",
+        "使用 SSL-VPN 登录",
+        "使用 Windows10 登录",
+        "TCP/IP、I/O、A/B 测试、8:30-17:30 值班",
+        "发到 zhang.san@bank.com",
+        "LLM_MODEL=deepseek-v4.1-flash",
+        "https://example.com/a?Id=1&b=X2",
+        "C++ 与 C# 项目，R&D 部门",
+        "等保 2.0 三级，SOC 7x24 值守",
+        "user:test 这类说明",
+    ):
+        assert "credential" not in kinds(text), text
