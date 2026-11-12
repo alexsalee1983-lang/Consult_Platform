@@ -121,6 +121,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 导出约定（M3 ⑥）：交付件 Word 导出只经 `app/project/export.py`（`GET /api/projects/{code}/deliverables/{dcode}/export`）：模板从 `EXPORT_TEMPLATE` 读（不配用内置默认模板；配了但打不开返回 503，不退回默认），占位符和 `{{正文}}` 锚点见文件头；未签署的每页页眉标草稿，页脚写导出人、时间和导出编号；来源标注保留原样并加 Word 脚注（python-docx 不支持脚注，直接写 `word/footnotes.xml`）；严格档 422、没有大纲 409。审计只记编号、各章版本号、文件大小和哈希、模板类别和导出编号，不记正文、标题和模板路径。
 
+编排约定（M3 ④）：交付链运行只经 `app/project/runs.py`（平台自写流程控制，不用 LangGraph）：标准档 3→4→7（调研访谈 Agent 读证据写 D3 → 依据与差距分析 Agent 出差距分析、存运行记录 → 报告与汇报 Agent 写 D4 初稿），每步是后台任务 `agent_run.step`，开头看运行状态、不是 queued 就不做；Agent 读写仍只经 `tools.invoke`，模型只经 `gateway.complete`。没有证据发“证据不足”卡停在本步；模型输出里的确认卡照发、停在下一步之前，顾问处理完等待的卡后自动继续（`on_card_resolved`），处理结果作为“顾问已确认事项”交给后续步骤，同一问题本次运行不再问。严格档、要写的 D3 / D4 已签署都 422，同一项目同时只能有一个未结束的运行（409）；取消和 worker 改运行状态都先锁行再判断，模型返回后、写入前再看一次状态，已取消就不写；最后一步的卡处理完直接结束。接口 `/api/projects/{code}/runs`。审计只记编号、步骤、字数和用量。
+
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求（POST / PUT / PATCH / DELETE）要带请求头 `X-CSRF-Token`，值取登录接口或 `GET /api/auth/me` 返回体里的 `csrf_token` 字段（**不在 cookie 里**；会话 cookie `cp_session` 是 HttpOnly，脚本读不到）；改口令成功后会换新会话，要用新返回的 `csrf_token`。管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。
