@@ -16,7 +16,7 @@
 
 签署流程（设计稿 04：Agent 起草 → 质量评审 → 顾问审核 → 项目负责人签署）：
 - 提交签署（submit）：项目成员；门禁 = 每章都有正文 + 最近一次评审已完成、针对当前修订、阻断为 0。状态 → review。
-- 签署（sign）：项目经理；交付件在 review 且修订号与提交时一致，门禁再查一次；提交人不能自己签署（四眼原则）。
+- 签署（sign）：项目经理；交付件在 review 且修订号与提交时一致，门禁再查一次；项目经理可以签自己提交的（负责人 2026-11-12 定，不设四眼限制）。
   状态 → signed，之后交付件只读（写入 409、交付链不跑），导出不再带草稿页眉。
 - 退回（return）：项目经理，必须写理由；状态 → drafting。
 - review 状态下任何章节或大纲写入，都把状态改回 drafting（提交作废，要重新评审、重新提交）。
@@ -451,8 +451,6 @@ def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str
     sub = _last_submit(db, d)
     if sub is None or sub.revision != d.revision:
         _refuse(db, user, project, d, action, "stale", 409, f"{d.code} 提交后有修改，请重新评审并提交")
-    if sub.actor == user.username:
-        _refuse(db, user, project, d, action, "self_sign", 409, "提交人不能自己签署，请由另一位项目经理签署")
     g = gate(db, d)
     if not g.ok:
         _refuse(db, user, project, d, action, "gate", 409, {"gate": False, "reasons": g.reasons})

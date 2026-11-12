@@ -5,7 +5,7 @@ GET  /api/projects/{code}/deliverables/{dcode}/reviews            评审列表�
 GET  /api/projects/{code}/deliverables/{dcode}/reviews/{rid}      某次评审：结论、计数、问题清单、评审报告
 GET  /api/projects/{code}/deliverables/{dcode}/signoff            签署流程：状态、门禁、最近评审、流程记录
 POST /api/projects/{code}/deliverables/{dcode}/signoff/submit     顾问审核完成，提交签署（门禁不过 409）
-POST /api/projects/{code}/deliverables/{dcode}/signoff/sign       项目经理签署（非项目经理 403，提交人不能自签 409）
+POST /api/projects/{code}/deliverables/{dcode}/signoff/sign       项目经理签署（非项目经理 403）
 POST /api/projects/{code}/deliverables/{dcode}/signoff/return     项目经理退回修改（必须写理由）
 
 严格档 422。规则见 app/project/quality.py。

@@ -1,5 +1,5 @@
 """质量门禁与签署（M3 ⑤）：评审跑通（Agent 问题表 + 平台硬规则，结论按规则重算）、阻断时门禁不放行、
-评审后改了正文门禁要求重评、提交签署 → 项目经理签署（非项目经理 403、提交人不能自签）、签署后只读且导出不带草稿页眉、
+评审后改了正文门禁要求重评、提交签署 → 项目经理签署（非项目经理 403、项目经理可签自己提交的）、签署后只读且导出不带草稿页眉、
 退回要写理由、待签署时改正文回到起草中、输出格式不对重试到上限失败、严格档拒绝、成员隔离、审计不记原文。"""
 import io
 import json
@@ -149,14 +149,14 @@ def test_review_submit_sign_then_readonly_and_export_without_draft(team, model):
             assert secret not in dump
 
 
-def test_submitter_cannot_sign_own_submission(team, model):
-    code, member, mgr_a, mgr_b = team
+def test_manager_can_sign_own_submission(team, model):
+    """负责人 2026-11-12 定：不设四眼限制，只有一位项目经理的项目也能走完签署。"""
+    code, member, mgr_a, _ = team
     _draft(mgr_a, code)
     _review(mgr_a, code)
     assert mgr_a.post(_url(code, "signoff/submit"), json={}).status_code == 200
     r = mgr_a.post(_url(code, "signoff/sign"), json={})
-    assert r.status_code == 409 and "自己签署" in r.json()["detail"]
-    assert mgr_b.post(_url(code, "signoff/sign"), json={}).status_code == 200
+    assert r.status_code == 200 and r.json()["status"] == "signed"
 
 
 def test_rule_blockers_fail_gate(team, model):
