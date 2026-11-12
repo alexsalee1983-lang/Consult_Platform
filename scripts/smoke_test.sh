@@ -97,6 +97,7 @@ C="X-CSRF-Token: $CSRF"
 
 check "项目列表"                     200 "$BASE/api/projects"
 check "项目详情 BANK-A"              200 "$BASE/api/projects/BANK-A"
+check "交付链运行列表可查看"          200 "$BASE/api/projects/BANK-A/runs"
 check "不存在的项目返回 404"          404 "$BASE/api/projects/NOPE"
 # 测试账号故意不是 GRID-B 的成员（app/core/bootstrap.py TEST_MEMBERSHIPS）
 check "非项目成员访问 GRID-B 返回 404" 404 "$BASE/api/projects/GRID-B"
