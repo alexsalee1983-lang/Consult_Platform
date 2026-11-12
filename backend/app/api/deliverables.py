@@ -5,12 +5,15 @@ PUT  /api/projects/{code}/deliverables/{dcode}/outline                  设置�
 GET  /api/projects/{code}/deliverables/{dcode}/sections/{seq}           某章正文（默认当前版本，?version= 看历史）和版本列表
 PUT  /api/projects/{code}/deliverables/{dcode}/sections/{seq}           顾问修改某章：新建一个版本（可带 base_version 防覆盖）
 GET  /api/projects/{code}/deliverables/{dcode}/sections/{seq}/diff      两个版本的差异（?a=1&b=2，统一 diff 格式）
+GET  /api/projects/{code}/deliverables/{dcode}/export                   导出 Word（各章当前版本，套模板；规则见 app/project/export.py）
 
 严格档项目写入 422（M4 接入）；已签署的交付件写入 409；机密级命中 422（不保存）。规则见 app/project/deliverables.py。
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -19,6 +22,7 @@ from ..core.db import get_db
 from ..core.permissions import project_for_member, require_business
 from ..models import Deliverable, User
 from ..project import deliverables as svc
+from ..project import export as export_svc
 
 router = APIRouter(prefix="/api/projects", tags=["deliverables"], dependencies=[Depends(require_business)])
 
@@ -155,3 +159,15 @@ def section_diff(code: str, dcode: str, seq: int, a: int = Query(ge=1), b: int =
         return {"seq": seq, "a": a, "b": b, "diff": svc.diff(svc.require_section(d, seq), a, b)}
     except svc.DeliverableError as e:
         _raise(e)
+
+
+@router.get("/{code}/deliverables/{dcode}/export")
+def export_deliverable(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    p, d = _load(db, code, dcode, user)
+    try:
+        r = export_svc.export_deliverable(db, user, p, d)
+    except export_svc.ExportError as e:
+        raise HTTPException(e.status, e.detail) from e
+    return Response(r.data, media_type=export_svc.MIME, headers={
+        "Content-Disposition": f"attachment; filename=\"{p.code}-{d.code}.docx\"; filename*=UTF-8''{quote(r.filename)}",
+        "X-Export-Id": r.export_id, "Cache-Control": "no-store"})
