@@ -405,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
     kd.add_argument("--product", default="", help="默认服务产品缩写，如 SOC、GEN")
     kd.add_argument("--domain", default="", help="默认一级目录缩写，如 OPS、CMP")
     kd.set_defaults(func=kb_draft)
-    ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90% 时退出码 0）")
+    ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
     ke.add_argument("--out", default="", help="把明细写成 JSON 文件")
