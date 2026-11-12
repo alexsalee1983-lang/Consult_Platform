@@ -10,7 +10,8 @@
 - 过滤：层级、服务产品（默认同时包含 GEN 通用知识）、阶段、类型；受限条目按可见角色（与 app/kb/review.py 一致）。
 - 查询先过机密级检测；审计只记查询长度和摘要哈希，不记原文。
 - 重排（决策记录 2026-11-11）：融合后的前 KB_RERANK_CANDIDATES 个切片经网关 rerank 用交叉编码模型重新打分，
-  按重排分数排序；依据查询的“够不够格”改用重排分数门槛 KB_BASIS_MIN_RERANK（取代上面的余弦相似度下限）。
+  按重排分数排序；依据查询的“够不够格”改用重排分数门槛 KB_BASIS_MIN_RERANK（取代上面的余弦相似度下限），
+  普通检索也有一个低得多的下限 KB_SEARCH_MIN_RERANK，只挡掉趋近 0 分的无关结果。
   重排服务没启用或不可用时退回 RRF 排序和余弦相似度门槛，结果里 rerank 字段会注明。
 - 标准号 / 条款号：查询写了标准号（GB/T 22239 8.1.4）或法规条号（网络安全法第二十一条）时先按元数据精确匹配，
   文件和条款都对上的排最前、不受门槛限制；依据查询只对上文件的，结果限定在该文件内。
@@ -310,9 +311,11 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
             rerank_status = f"unavailable: {str(e)[:60]}"
 
     if rerank_status == "ok":
-        # 依据查询：重排分数要达到门槛；点到条款的不受限；点名了文件但没点到条款的，在该文件内按重排排序
-        keep = [cid for cid in rr if not strict or cid in pinned or (exact is not None and not pinned)
-                or rr[cid] >= (s.kb_basis_min_rerank if min_rerank is None else min_rerank)]
+        # 重排分数要达到门槛：依据查询用 KB_BASIS_MIN_RERANK，普通检索用更低的 KB_SEARCH_MIN_RERANK（只挡掉趋近 0 分的
+        # 无关结果，测试 #34：S011 返回了 0.0003～0.0008 分的条目）。点到条款的不受限；依据查询点名了文件但没点到条款的，
+        # 在该文件内按重排排序、不受门槛限制。
+        floor = min_rerank if min_rerank is not None else (s.kb_basis_min_rerank if strict else s.kb_search_min_rerank)
+        keep = [cid for cid in rr if cid in pinned or (strict and exact is not None and not pinned) or rr[cid] >= floor]
         keep += [cid for cid in pinned if cid not in rr]   # 点到的条款没进重排候选时也保留
         ordered = sorted(keep, key=lambda cid: (cid not in pinned, -rr.get(cid, 0.0), -scores[cid], cid))
         vec_shown = vec_loose

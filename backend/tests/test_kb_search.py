@@ -353,6 +353,15 @@ def test_rerank_reorders_search_results(people, reranker):
     assert any("壬午演练乙" in d for d in r.docs)                            # 候选带上了标题
 
 
+def test_plain_search_drops_near_zero_rerank(people, reranker, monkeypatch):
+    v = _publish(people, "癸未巡检记录", "## 巡检\n\n癸未机房巡检的记录要点。")
+    reranker(good=("不会出现的词",))                                         # 全部 0.01 分
+    assert v.doc_id in _ids(_search(people, "consultant", "癸未巡检"))      # 默认下限 0.005：0.01 保留
+    monkeypatch.setattr(get_settings(), "kb_search_min_rerank", 0.05)
+    out = _search(people, "consultant", "癸未巡检")
+    assert out["rerank"] == "ok" and v.doc_id not in _ids(out)            # 低于下限：挡掉
+
+
 def test_rerank_down_falls_back_to_rrf(people, reranker):
     _publish(people, "癸未巡检", "## 巡检\n\n癸未巡检的检查表。")
     reranker(fail=True)

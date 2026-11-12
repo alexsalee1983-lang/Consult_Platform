@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # 依据查询门槛（重排分数，0～1，sigmoid 后）：启用重排时取代 KB_BASIS_MIN_SIMILARITY。初值按开发电脑上的
     # 示范评测：正例最低 0.14（B004），该查不到的题最高 0.001，取 0.05。正式评测题编好后重新校准（交接文档 S2 第 5 步）。
     kb_basis_min_rerank: float = 0.05
+    # 普通检索的重排分数下限：只挡掉趋近 0 分的无关结果（测试 #34：该查不到的 S011 得分 0.0003～0.0008）。
+    # 比依据查询宽得多，宁可多给几条弱相关的；正式评测后与 KB_BASIS_MIN_RERANK 一起校准。
+    kb_search_min_rerank: float = 0.005
 
     seed_demo_data: bool = True
 
