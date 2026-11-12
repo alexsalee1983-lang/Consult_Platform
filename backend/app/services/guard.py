@@ -59,6 +59,31 @@ _SECRET_SYMBOLS = "".join(c for c in string.punctuation if c not in "\"',;")
 _CREDENTIAL_BARE = re.compile(
     r"(?i)" + _CRED_KEYWORDS + r"\s+([A-Za-z0-9" + re.escape(_SECRET_SYMBOLS) + r"]{6,})"
 )
+# 不带“口令”“密码”字样的口令（#36 测试发现漏拦）。三条规则，都只认“像口令”的串：
+# ① 常见账号 + / 或 : + 口令，例如“admin/Abc@12345”“root:123456”；
+_SECRET_CHARS = r"[A-Za-z0-9" + re.escape(_SECRET_SYMBOLS) + r"]"
+_ACCOUNTS = (
+    r"admin|administrator|root|sa|sys|system|sysadmin|secadmin|auditadmin|guest|test|user|"
+    r"oracle|postgres|mysql|ftp|operator|manager|super|superuser|weblogic|tomcat|nacos|"
+    r"redis|elastic|grafana|jenkins|support|default"
+)
+#    账号前面是 / 或 . 的（网址路径、代码）不算；口令后面紧跟 / 的（还是路径）不算。
+_PAIR_CHARS = r"[A-Za-z0-9!@#$%^&*_+\-.~]"
+_ACCOUNT_PAIR = re.compile(
+    r"(?i)(?<![A-Za-z0-9_/.\\])(" + _ACCOUNTS + r")\s*[/:：]\s*(" + _PAIR_CHARS + r"{6,})(?![/\\])"
+)
+# ② 登录语境里的口令串（三类字符且含 !@#$ 等符号），例如“用 Abc@12345 登录”“login with P@ssw0rd1”；
+_LOGIN_CONTEXT = re.compile(
+    r"(?i)(?:用|使用|以|输入|凭|通过|with)\s*(" + _SECRET_CHARS + r"{6,})\s*"
+    r"(?:登录|登陆|登入|进入|连接|认证|访问|login|log\s?in|sign\s?in)"
+)
+# ③ 单独出现、同时含大写、小写、数字和特殊符号（@#$%!&* 等）的 8 位以上串，例如“P@ssw0rd”。
+#    连字符、点、下划线不算特殊符号，版本号、标准号、产品型号不会命中；邮箱另行排除。
+#    串只由字母、数字和 !@#$%^&*_+-.~ 组成，前后紧挨 = / ( 的不算（配置项、网址路径、代码）。
+_STRONG_SPECIAL = set("!@#$%^&*")
+_TOKEN = re.compile(
+    r"(?<![A-Za-z0-9!@#$%^&*_+\-.~=/])(" + _PAIR_CHARS + r"{8,64})(?![A-Za-z0-9!@#$%^&*_+\-.~=/(])"
+)
 _CLOUD_KEY = re.compile(r"\b(?:AKIA[0-9A-Z]{16}|LTAI[0-9A-Za-z]{12,20}|sk-[A-Za-z0-9_\-]{20,})\b")
 _IPV4 = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(/\d{1,2})?(?![\d.])")
 _CN_ID = re.compile(r"(?<!\d)(\d{17}[\dXx])(?!\d)")
@@ -77,6 +102,38 @@ def _looks_like_secret(s: str) -> bool:
         any(c in _SECRET_SYMBOLS for c in s),
     )
     return sum(classes) >= 2
+
+
+def _char_classes(s: str) -> int:
+    return sum((
+        any(c.isascii() and c.isupper() for c in s),
+        any(c.isascii() and c.islower() for c in s),
+        any(c.isdigit() for c in s),
+        any(c in _SECRET_SYMBOLS for c in s),
+    ))
+
+
+def _account_secret(s: str) -> bool:
+    """账号后面的串是否像口令：6 位以上且带数字，并且满足其一——
+    纯数字（“root:123456”，弱口令也算口令）、含大写或 !@#$ 等符号（“admin/Abc@12345”）、
+    只有字母和数字（“admin/admin123”）。只有小写、数字和 - . 的不算，
+    这样“admin/agent-grants”这类路径、“redis:7-alpine”“mysql:5.7.44”这类镜像标签和版本号不会命中。"""
+    if len(s) < 6 or not any(c.isdigit() for c in s):
+        return False
+    if s.isdigit() or s.isalnum():
+        return True
+    return any(c.isascii() and c.isupper() for c in s) or any(c in _STRONG_SPECIAL for c in s)
+
+
+def _strong_token(s: str) -> bool:
+    if s.lower().startswith("www.") or _EMAIL.fullmatch(s):
+        return False
+    return (
+        any(c.isascii() and c.isupper() for c in s)
+        and any(c.isascii() and c.islower() for c in s)
+        and any(c.isdigit() for c in s)
+        and any(c in _STRONG_SPECIAL for c in s)
+    )
 
 
 def _valid_cn_id(s: str) -> bool:
@@ -116,6 +173,24 @@ def check(text: str) -> GuardResult:
         if any(s < m.end(2) and m.start(2) < e for s, e in cred_spans):
             continue  # 已被带分隔符的规则命中
         _add(findings, "credential", "账号口令或密钥", m, 2)
+        cred_spans.append(m.span(2))
+
+    def _bare(m: re.Match, group: int) -> None:
+        if any(s < m.end(group) and m.start(group) < e for s, e in cred_spans):
+            return  # 同一串已命中，只报一次
+        _add(findings, "credential", "账号口令或密钥", m, group)
+        cred_spans.append(m.span(group))
+
+    for m in _ACCOUNT_PAIR.finditer(text):
+        if _account_secret(m.group(2)):
+            _bare(m, 2)
+    for m in _LOGIN_CONTEXT.finditer(text):
+        v = m.group(1)
+        if _char_classes(v) >= 3 and any(c in _STRONG_SPECIAL for c in v):  # “使用 Windows10 登录”不算
+            _bare(m, 1)
+    for m in _TOKEN.finditer(text):
+        if _strong_token(m.group(1)):
+            _bare(m, 1)
     for m in _CLOUD_KEY.finditer(text):
         _add(findings, "cloud_key", "云服务访问密钥", m)
 
