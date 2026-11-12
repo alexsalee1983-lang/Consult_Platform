@@ -200,5 +200,12 @@ def test_doc_generate_tool(proj):
                          {"action": "write", "deliverable": "D4", "section": 2, "body": "新的差距", "base_version": 0},
                          code)
         assert e.value.status == 409
+        for bad in ([{"title": "现状梳理"}], ["现状", 2], [["差距"]]):            # 标题只能是字符串，不能 str() 成 Python 写法
+            with pytest.raises(tools.ToolError) as e:
+                tools.invoke(db, user, "report-writer", "doc.generate",
+                             {"action": "outline", "deliverable": "D4", "sections": bad}, code)
+            assert e.value.status == 422
+        assert [s["title"] for s in tools.invoke(db, user, "report-writer", "doc.generate",
+                                                  {"deliverable": "D4"}, code)["sections"]] == ["现状", "差距"]
         with pytest.raises(tools.ToolDenied):                                    # 咨询师 Agent 没有“文档生成”授权
             tools.invoke(db, user, "consultant-lead", "doc.generate", {"deliverable": "D4"}, code)

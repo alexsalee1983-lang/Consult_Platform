@@ -146,6 +146,11 @@ def test_kb_search_tool_is_real(member):
         _invoke(member, "consultant-lead", "kb.search", args={"query": ""})          # 空检索词
     with pytest.raises(tools.ToolError):
         _invoke(member, "consultant-lead", "kb.search", args={"query": "口令 Abc@12345"})   # 机密级
+    assert isinstance(_invoke(member, "consultant-lead", "kb.search", args={"query": "值班", "limit": "3"})["items"], list)
+    for bad in ("abc", 1.5, True, [3]):                                          # 不是整数：422，不能 500
+        with pytest.raises(tools.ToolError) as e:
+            _invoke(member, "consultant-lead", "kb.search", args={"query": "值班", "limit": bad})
+        assert e.value.status == 422
 
 
 def test_tool_calls_are_audited_without_content(member):
