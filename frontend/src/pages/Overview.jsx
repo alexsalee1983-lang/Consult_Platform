@@ -3,7 +3,9 @@ import { Link } from "react-router";
 import { api, DELIV_STATUS, TIER } from "../api.js";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
+import Evidence from "../components/Evidence.jsx";
 import Members from "../components/Members.jsx";
+import RunPanel from "../components/RunPanel.jsx";
 
 function Kpi({ cap, value, sub, color }) {
   return (
@@ -21,15 +23,21 @@ export default function Overview({ code }) {
   const [external, setExternal] = useState(false);   // 当前接的是外部测试模型
   useEffect(() => { api.health().then((h) => setExternal(Boolean(h.llm_external))).catch(() => {}); }, []);
 
+  const [evs, setEvs] = useState(null);
   const load = useCallback(() => {
     setError(null);
     api.project(code).then(setP).catch(setError);
+    api.evidences(code).then(setEvs).catch(() => setEvs([]));
   }, [code]);
   useEffect(load, [load]);
 
   if (!p) return <Loading error={error} />;
   const tier = TIER[p.tier] || TIER.standard;
   const signed = p.deliverables.filter((d) => d.status === "signed").length;
+  const strict = p.tier === "strict";
+  const count = (k) => (evs || []).filter((e) => e.kind === k).length;
+  const pending = p.deliverables.filter((d) => d.status === "review").map((d) => d.code);
+  const drafting = p.deliverables.filter((d) => d.status === "drafting").map((d) => d.code);
 
   return (
     <>
@@ -38,8 +46,9 @@ export default function Overview({ code }) {
       </TopBar>
       {error && <div className="err">{error.message}</div>}
       <div className="kpis">
-        <Kpi cap="态势评分" value={p.posture_score ?? "—"} sub="满分 100" color="var(--amber)" />
-        <Kpi cap="交付件已签署" value={`${signed} / ${p.deliverables.length}`} sub="按 D1～D8 统计" />
+        <Kpi cap="证据" value={evs ? evs.length : "—"} sub={strict ? "严格档不收资料" : `访谈 ${count("interview")} · 资料 ${count("document")} · 观察 ${count("observation")}`} />
+        <Kpi cap="交付件已签署" value={`${signed} / ${p.deliverables.length}`}
+          sub={[pending.length && `${pending.join("、")} 待签署`, drafting.length && `${drafting.join("、")} 起草中`].filter(Boolean).join(" · ") || "按 D1～D8 统计"} />
         <Kpi cap="待你确认" value={p.open_confirmations} sub="Agent 需要你判断的事项" color={p.open_confirmations ? "var(--amber)" : "var(--ok)"} />
         <Kpi cap="数据档位" value={tier.label} sub={p.tier === "strict" ? "资料不出场 · 只收摘要卡" : (external ? "当前为外部测试模型 · 只用虚拟数据" : "模型在公司内部 · 资料不出公司")} color={p.tier === "strict" ? "var(--crim)" : "var(--cyan)"} />
       </div>
@@ -50,6 +59,7 @@ export default function Overview({ code }) {
             <PhaseBar phase={p.phase} />
             <div className="sb sub">{["启动", "调研", "分析", "设计", "汇报", "验收"].map((n) => <span key={n}>{n}</span>)}</div>
           </section>
+          <Evidence code={p.code} strict={strict} items={evs} onChange={load} />
           <section className="pnl pad" aria-label="交付件">
             <h2 className="h2">交付件</h2>
             <ul className="lst" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 16 }}>
@@ -68,6 +78,7 @@ export default function Overview({ code }) {
           </section>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+        <RunPanel code={p.code} strict={strict} onChange={load} />
         <section className="pnl pad" aria-label="待你确认">
           <div className="sb"><h2 className="h2">待你确认</h2><span className="mono" style={{ color: "var(--amber)" }}>{p.confirmations.length}</span></div>
           <ul className="lst">
