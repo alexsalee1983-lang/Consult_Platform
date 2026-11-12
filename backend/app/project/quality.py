@@ -23,7 +23,14 @@
 - 签署后不提供撤销（一期）；需要改动时由负责人另行决定。
 - 严格档一律 422（M4 接入）。
 
-审计只记交付件编号、修订号、各章版本号、评审编号、问题计数、结论和字数，不记正文、问题描述和审核意见。
+驳回阻断（负责人 2026-11-12 定，迁移 0022）：AI 给意见、人来定夺。
+- 项目经理可以逐条驳回质量评审 Agent（by = agent）提出的阻断问题，必须写理由；只追加，不能撤销（要恢复就重新评审）。
+- 平台硬规则（by = rule）判出的阻断不能驳回：缺正文、机密级、测评 / 认证结论用语、来源核对不上。
+- 只能驳回最近一次已完成、且针对当前修订的评审；交付件一改，新评审的阻断要重新处理。
+- Agent 统计的阻断数比问题清单里列出的多（没法逐条驳回）时，多出的部分照样算阻断，要重新评审。
+- 门禁用“未驳回的阻断”判断；驳回记录在签署流程里显示，提交、签署的审计记下驳回条数。
+
+审计只记交付件编号、修订号、各章版本号、评审编号、问题计数、结论和字数，不记正文、问题描述、审核意见和驳回理由。
 """
 from __future__ import annotations
 
@@ -37,7 +44,7 @@ from ..agents import knowledge, runtime, tools
 from ..core import audit
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
-from ..models import Deliverable, Project, QualityReview, SignOff, User
+from ..models import Deliverable, Project, QualityReview, ReviewWaiver, SignOff, User
 from ..services import gateway, guard, jobs, usage
 from . import deliverables
 
@@ -93,6 +100,19 @@ class Gate:
     ok: bool
     reasons: list[str]
     review: QualityReview | None
+    waived: int = 0
+
+
+@dataclass
+class Blocking:
+    rule: int           # 平台硬规则判出的阻断（不能驳回）
+    agent_open: int     # 评审 Agent 提出、还没驳回的阻断
+    unlisted: int       # Agent 统计了但问题清单没列出的阻断（不能逐条驳回）
+    waived: int         # 已驳回的阻断
+
+    @property
+    def remaining(self) -> int:
+        return self.rule + self.agent_open + self.unlisted
 
 
 # ---- 公共 ----
@@ -133,9 +153,27 @@ def list_signoffs(db: Session, d: Deliverable) -> list[SignOff]:
     return list(db.scalars(select(SignOff).where(SignOff.deliverable_id == d.id).order_by(SignOff.id)))
 
 
+def list_waivers(db: Session, r: QualityReview) -> list[ReviewWaiver]:
+    return list(db.scalars(select(ReviewWaiver).where(ReviewWaiver.review_id == r.id).order_by(ReviewWaiver.id)))
+
+
+def waivable(issue: dict) -> bool:
+    return issue.get("by") == "agent" and issue.get("severity") == "阻断"
+
+
+def blocking_of(db: Session, r: QualityReview) -> Blocking:
+    issues = r.issues or []
+    rule = sum(1 for i in issues if i.get("by") == "rule" and i.get("severity") == "阻断")
+    listed = {n for n, i in enumerate(issues) if waivable(i)}
+    agent = max(r.blocking - rule, 0)
+    waived = sum(1 for w in list_waivers(db, r) if w.issue_index in listed)
+    return Blocking(rule=rule, agent_open=len(listed) - waived, unlisted=max(agent - len(listed), 0), waived=waived)
+
+
 def gate(db: Session, d: Deliverable) -> Gate:
     """提交签署 / 签署的门禁。reasons 为空才放行。"""
     reasons: list[str] = []
+    waived = 0
     if not d.sections:
         reasons.append("还没有大纲和正文")
     empty = [str(s.seq) for s in d.sections if not s.current_version]
@@ -147,9 +185,15 @@ def gate(db: Session, d: Deliverable) -> Gate:
     else:
         if r.revision != d.revision:
             reasons.append(f"质量评审针对 v{r.revision}，交付件已改到 v{d.revision}，请重新评审")
-        if r.blocking:
-            reasons.append(f"质量评审有 {r.blocking} 项阻断问题，修改后重新评审")
-    return Gate(ok=not reasons, reasons=reasons, review=r)
+        b = blocking_of(db, r)
+        if b.rule:
+            reasons.append(f"平台规则判出 {b.rule} 项阻断问题，修改后重新评审")
+        if b.agent_open:
+            reasons.append(f"评审 Agent 提出 {b.agent_open} 项阻断问题未处理：修改后重新评审，或由项目经理写理由驳回")
+        if b.unlisted:
+            reasons.append(f"评审 Agent 统计的阻断比问题清单多 {b.unlisted} 项，无法逐条驳回，请重新评审")
+        waived = b.waived
+    return Gate(ok=not reasons, reasons=reasons, review=r, waived=waived)
 
 
 # ---- 质量评审：发起 ----
@@ -430,7 +474,7 @@ def submit(db: Session, user: User, project: Project, d: Deliverable, comment: s
     db.flush()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, revision=d.revision, versions=s.versions, review_id=g.review.id,
-                 major=g.review.major, comment_length=len(comment))
+                 major=g.review.major, waived=g.waived, comment_length=len(comment))
     db.commit()
     db.refresh(s)
     return s
@@ -461,7 +505,7 @@ def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str
     db.flush()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, revision=d.revision, versions=s.versions, review_id=g.review.id,
-                 submit_id=sub.id, comment_length=len(comment))
+                 submit_id=sub.id, waived=g.waived, comment_length=len(comment))
     db.commit()
     db.refresh(s)
     return s
@@ -488,3 +532,41 @@ def send_back(db: Session, user: User, project: Project, d: Deliverable, comment
     db.commit()
     db.refresh(s)
     return s
+
+
+def waive(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview, index: int,
+          reason: str) -> ReviewWaiver:
+    """项目经理驳回评审 Agent 提出的一条阻断问题（必须写理由）。"""
+    action = "quality.waive"
+    reason = _comment(reason)
+    if not reason:
+        raise QualityError(422, "驳回要写理由")
+    if not _is_manager(db, project, user):
+        _refuse(db, user, project, d, action, "not_manager", 403, "只有项目经理能驳回阻断问题")
+    _lock_deliverable(db, d)
+    if project.tier == "strict":
+        _refuse(db, user, project, d, action, "strict_tier", 422, STRICT_REFUSAL)
+    if d.status == "signed":
+        _refuse(db, user, project, d, action, "signed", 409, f"{d.code} 已签署")
+    latest = latest_done_review(db, d)
+    if latest is None or latest.id != r.id or r.revision != d.revision:
+        _refuse(db, user, project, d, action, "stale", 409, "只能驳回最近一次、针对当前修订的质量评审中的问题")
+    issues = r.issues or []
+    if not 0 <= index < len(issues):
+        raise QualityError(404, "问题不存在")
+    if not waivable(issues[index]):
+        reason_code = "rule_issue" if issues[index].get("by") == "rule" else "not_blocking"
+        _refuse(db, user, project, d, action, reason_code, 422,
+                "平台规则判出的阻断不能驳回，请修改正文后重新评审" if reason_code == "rule_issue"
+                else "只有阻断问题需要驳回")
+    if db.scalar(select(ReviewWaiver.id).where(ReviewWaiver.review_id == r.id, ReviewWaiver.issue_index == index)):
+        raise QualityError(409, "这条问题已经驳回过")
+    w = ReviewWaiver(project_id=project.id, review_id=r.id, issue_index=index, reason=reason, actor=user.username)
+    db.add(w)
+    db.flush()
+    audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
+                 deliverable=d.code, review_id=r.id, revision=r.revision, issue=index,
+                 reason_length=len(reason))
+    db.commit()
+    db.refresh(w)
+    return w

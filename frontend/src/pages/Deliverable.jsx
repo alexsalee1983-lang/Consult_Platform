@@ -204,7 +204,37 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   );
 }
 
-function Quality({ code, dcode, so, canReview, onChanged }) {
+// 项目经理驳回评审 Agent 提出的一条阻断（必须写理由；平台规则的阻断不能驳回）
+function Waive({ code, dcode, rid, issue, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit() {
+    setBusy(true);
+    setError("");
+    try {
+      onDone(await api.waive(code, dcode, rid, issue, reason.trim()));
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  }
+  if (!open) return <button className="btn sm" onClick={() => setOpen(true)}>驳回</button>;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <textarea className="inp" rows={2} maxLength={2000} value={reason} placeholder="驳回理由（必填，记入签署记录）"
+        onChange={(e) => setReason(e.target.value)} />
+      {error && <div className="err" role="alert">{error}</div>}
+      <div className="row">
+        <button className="btnp" disabled={busy || !reason.trim()} onClick={submit}>确认驳回</button>
+        <button className="btn" disabled={busy} onClick={() => setOpen(false)}>取消</button>
+      </div>
+    </div>
+  );
+}
+
+function Quality({ code, dcode, so, canReview, isManager, onChanged }) {
   const r = so.latest_review;
   const [detail, setDetail] = useState(null);
   const [open, setOpen] = useState(false);
@@ -239,6 +269,7 @@ function Quality({ code, dcode, so, canReview, onChanged }) {
       {r && r.status === "done" && (
         <div className="row" style={{ flexWrap: "wrap" }}>
           <span className="chip c-r">阻断 {r.blocking}</span><span className="chip c-a">重要 {r.major}</span><span className="chip c-n">建议 {r.minor}</span>
+          {r.waived > 0 && <span className="chip c-n">已驳回阻断 {r.waived}</span>}
         </div>
       )}
       {active && <div className="sub" style={{ color: "var(--cyan)" }}>{r.status === "queued" ? "评审排队中…" : "质量评审 Agent 评审中…"}</div>}
@@ -247,18 +278,26 @@ function Quality({ code, dcode, so, canReview, onChanged }) {
       {r?.status === "done" && <button className="btn sm" onClick={() => setOpen(!open)}>{open ? "收起问题清单" : "查看问题清单"}</button>}
       {open && detail && (
         <ul className="lst issues">
-          {detail.issues.map((x, i) => (
-            <li key={i}>
-              <div className="row" style={{ flexWrap: "wrap" }}>
-                <span className={`chip ${SEVERITY_CLS[x.severity] || "c-n"}`}>{x.severity}</span>
-                <span className="sub">{x.dimension}</span>
-                {x.by === "rule" && <span className="chip c-n">平台规则</span>}
-              </div>
-              {x.location && <div className="sub">{x.location}</div>}
-              <div>{x.problem}</div>
-              {x.suggestion && <div className="sub">建议：{x.suggestion}</div>}
-            </li>
-          ))}
+          {detail.issues.map((x, i) => {
+            const w = detail.waivers.find((v) => v.issue === i);
+            return (
+              <li key={i}>
+                <div className="row" style={{ flexWrap: "wrap" }}>
+                  <span className={`chip ${w ? "c-n" : SEVERITY_CLS[x.severity] || "c-n"}`}>{x.severity}</span>
+                  <span className="sub">{x.dimension}</span>
+                  {x.by === "rule" && <span className="chip c-n">平台规则</span>}
+                  {w && <span className="chip c-n">已驳回</span>}
+                </div>
+                {x.location && <div className="sub">{x.location}</div>}
+                <div>{x.problem}</div>
+                {x.suggestion && <div className="sub">建议：{x.suggestion}</div>}
+                {w && <div className="sub">驳回：{w.actor} · {fmt(w.created_at)} · {w.reason}</div>}
+                {!w && x.waivable && isManager && canReview && !r.stale && (
+                  <Waive code={code} dcode={dcode} rid={r.id} issue={i} onDone={(res) => { setDetail(res); onChanged(); }} />
+                )}
+              </li>
+            );
+          })}
           {detail.issues.length === 0 && <li className="sub">没有问题</li>}
         </ul>
       )}
@@ -277,10 +316,10 @@ function SignFlow({ code, dcode, d, so, isManager, tierStrict, onChanged }) {
   const hist = so.history;
   const lastSubmit = [...hist].reverse().find((h) => h.action === "submit");
   const lastSign = [...hist].reverse().find((h) => h.action === "sign");
-  const reviewed = r?.status === "done" && !r.stale && r.blocking === 0;
+  const reviewed = r?.status === "done" && !r.stale && r.open_blocking === 0;
   const steps = [
     { name: "Agent / 顾问起草", done: d.sections.length > 0 && d.sections.every((s) => s.current_version > 0), info: d.updated_by },
-    { name: "质量评审 Agent", done: reviewed || so.status === "signed", info: r?.status === "done" ? `阻断 ${r.blocking}` : "" },
+    { name: "质量评审 Agent", done: reviewed || so.status === "signed", info: r?.status === "done" ? `阻断 ${r.open_blocking}${r.waived ? `（已驳回 ${r.waived}）` : ""}` : "" },
     { name: "顾问审核，提交签署", done: so.status === "review" || so.status === "signed", info: lastSubmit?.actor || "" },
     { name: "项目经理签署", done: so.status === "signed", info: lastSign?.actor || "" },
   ];
@@ -340,7 +379,7 @@ function SignFlow({ code, dcode, d, so, isManager, tierStrict, onChanged }) {
           {[...hist].reverse().map((h) => (
             <li key={h.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <div className="sb"><span>{ACTION_NAMES[h.action] || h.action} · {h.actor}</span><span className="sub mono">r{h.revision}</span></div>
-              <div className="sub">{fmt(h.created_at)}{h.comment ? ` · ${h.comment}` : ""}</div>
+              <div className="sub">{fmt(h.created_at)}{h.waived ? ` · 项目经理驳回阻断 ${h.waived} 项` : ""}{h.comment ? ` · ${h.comment}` : ""}</div>
             </li>
           ))}
         </ul>
@@ -433,7 +472,7 @@ export default function Deliverable({ code, dcode }) {
             <span className="cap">全文来源构成</span>
             <SourceBar counts={d.totals} />
           </section>
-          <Quality code={code} dcode={dcode} so={so} canReview={editable && d.sections.length > 0} onChanged={load} />
+          <Quality code={code} dcode={dcode} so={so} canReview={editable && d.sections.length > 0} isManager={isManager} onChanged={load} />
         </div>
         <div style={{ minWidth: 0 }}>
           {cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} />

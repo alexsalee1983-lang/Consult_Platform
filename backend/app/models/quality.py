@@ -4,10 +4,12 @@
   记下评审时各章的版本号。问题清单和评审报告属于项目区内容，只有项目成员能看，不进审计和日志。
 - SignOff：签署流程的每一个动作（只追加）：submit 顾问审核完成、提交签署；sign 项目经理签署；
   return 项目经理退回修改。记下动作时的修订号、各章版本号和依据的质量评审。
+- ReviewWaiver（迁移 0022）：项目经理驳回某次评审中质量评审 Agent 提出的某条阻断问题（只追加，必须写理由）。
+  平台硬规则判出的阻断不能驳回。理由属于项目区内容，不进审计。
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..core.db import Base, utcnow
@@ -50,5 +52,18 @@ class SignOff(Base):
     versions: Mapped[dict] = mapped_column(JSON, default=dict)         # {"章节号": 版本号}
     review_id: Mapped[int | None] = mapped_column(ForeignKey("quality_reviews.id"), nullable=True)
     comment: Mapped[str] = mapped_column(Text, default="")             # 审核意见 / 退回理由（项目区内容，不进审计）
+    actor: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReviewWaiver(Base):
+    __tablename__ = "review_waivers"
+    __table_args__ = (UniqueConstraint("review_id", "issue_index", name="uq_review_waivers_issue"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    review_id: Mapped[int] = mapped_column(ForeignKey("quality_reviews.id"), index=True)
+    issue_index: Mapped[int] = mapped_column(Integer)                  # 问题清单中的下标（从 0 开始）
+    reason: Mapped[str] = mapped_column(Text)                          # 驳回理由（项目区内容，不进审计）
     actor: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

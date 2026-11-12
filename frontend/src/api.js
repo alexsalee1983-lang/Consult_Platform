@@ -211,6 +211,8 @@ export const api = {
   reviews: (code, dcode) => request(`${dpath(code, dcode)}/reviews`),
   review: (code, dcode, id) => request(`${dpath(code, dcode)}/reviews/${id}`),
   startReview: (code, dcode) => request(`${dpath(code, dcode)}/reviews`, { method: "POST" }),
+  waive: (code, dcode, id, issue, reason) =>   // 项目经理驳回评审 Agent 的一条阻断
+    request(`${dpath(code, dcode)}/reviews/${id}/waivers`, { method: "POST", body: JSON.stringify({ issue, reason }) }),
   signoff: (code, dcode) => request(`${dpath(code, dcode)}/signoff`),
   signoffAction: (code, dcode, action, comment = "") =>   // submit / sign / return
     request(`${dpath(code, dcode)}/signoff/${action}`, { method: "POST", body: JSON.stringify({ comment }) }),

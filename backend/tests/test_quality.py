@@ -1,6 +1,7 @@
 """质量门禁与签署（M3 ⑤）：评审跑通（Agent 问题表 + 平台硬规则，结论按规则重算）、阻断时门禁不放行、
 评审后改了正文门禁要求重评、提交签署 → 项目经理签署（非项目经理 403、项目经理可签自己提交的）、签署后只读且导出不带草稿页眉、
-退回要写理由、待签署时改正文回到起草中、输出格式不对重试到上限失败、严格档拒绝、成员隔离、审计不记原文。"""
+退回要写理由、待签署时改正文回到起草中、输出格式不对重试到上限失败、严格档拒绝、成员隔离、审计不记原文；
+项目经理写理由驳回评审 Agent 的阻断（平台规则的阻断不能驳回、过期评审不能驳回、统计多于清单的不能放行）。"""
 import io
 import json
 import secrets
@@ -268,3 +269,87 @@ def test_seed_signed_sample_is_idempotent():
         d = next(x for x in p.deliverables if x.code == "D1")
         assert d.status == "signed" and len(d.sections) == 2 and all(s.current_version == 1 for s in d.sections)
         assert [s.action for s in quality.list_signoffs(db, d)] == ["submit", "sign"]
+
+
+AGENT_BLOCK = ("# 评审意见\n评审结论：不通过\n统计：阻断 1 项，重要 1 项，建议 0 项\n\n"
+               "| # | 位置 | 维度 | 严重度 | 问题 | 修改建议 |\n|---|---|---|---|---|---|\n"
+               "| 1 | 第 2 章 | 业务关联 | 阻断 | 托管初筛的成本未论证 | 补充成本比较 |\n"
+               "| 2 | 第 1 章 | 建议质量 | 重要 | 建议缺少验收标准 | 补充验收标准 |\n")
+
+
+def _waive(c, code: str, rid: int, issue: int, reason: str = "成本比较放在 D6 方案里，本报告不展开"):
+    return c.post(_url(code, f"reviews/{rid}/waivers"), json={"issue": issue, "reason": reason})
+
+
+def test_manager_waives_agent_blocker_then_sign(team, model):
+    code, member, mgr_a, _ = team
+    model.reply = AGENT_BLOCK
+    _draft(member, code)
+    rv = _review(member, code)
+    assert (rv["blocking"], rv["open_blocking"], rv["waived"]) == (1, 1, 0)
+    idx = next(n for n, i in enumerate(rv["issues"]) if i["severity"] == "阻断")
+    assert rv["issues"][idx]["waivable"] and not any(i["waivable"] for i in rv["issues"] if i["severity"] != "阻断")
+    r = member.post(_url(code, "signoff/submit"), json={})
+    assert r.status_code == 409 and any("项目经理写理由驳回" in x for x in r.json()["detail"]["reasons"])
+
+    assert _waive(member, code, rv["id"], idx).status_code == 403                    # 只有项目经理
+    assert _waive(mgr_a, code, rv["id"], idx, reason="  ").status_code == 422        # 必须写理由
+    assert _waive(mgr_a, code, rv["id"], idx + 1).status_code == 422                 # 不是阻断
+    assert _waive(mgr_a, code, rv["id"], 99).status_code == 404
+    r = _waive(mgr_a, code, rv["id"], idx)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert (d["blocking"], d["open_blocking"], d["waived"]) == (1, 0, 1)
+    assert d["waivers"][0]["issue"] == idx and d["waivers"][0]["actor"]
+    assert _waive(mgr_a, code, rv["id"], idx).status_code == 409                     # 不重复驳回
+
+    st = member.get(_url(code, "signoff")).json()
+    assert st["gate"] and st["reasons"] == [] and st["latest_review"]["open_blocking"] == 0
+    assert member.post(_url(code, "signoff/submit"), json={}).status_code == 200
+    r = mgr_a.post(_url(code, "signoff/sign"), json={})
+    assert r.status_code == 200 and r.json()["status"] == "signed"
+    assert [h["waived"] for h in r.json()["history"]] == [1, 1]
+
+    with SessionLocal() as db:
+        logs = db.scalars(select(AuditLog).where(AuditLog.project_code == code)).all()
+        waive = [x for x in logs if x.action == "quality.waive" and x.result == "allowed"]
+        assert len(waive) == 1 and json.loads(waive[0].detail)["issue"] == idx
+        signs = [json.loads(x.detail) for x in logs
+                 if x.action in ("deliverable.submit", "deliverable.sign") and x.result == "allowed"]
+        assert [x["waived"] for x in signs] == [1, 1]
+        dump = json.dumps([x.detail for x in logs], ensure_ascii=False)
+        assert "成本比较放在" not in dump and "托管初筛的成本" not in dump
+
+
+def test_rule_blocker_and_stale_review_cannot_be_waived(team, model):
+    code, member, mgr_a, _ = team
+    model.reply = AGENT_BLOCK
+    _draft(member, code, bodies=(BODY1, "夜间无人值守 [D-99]。"))
+    rv = _review(member, code)
+    rule = next(n for n, i in enumerate(rv["issues"]) if i["by"] == "rule" and i["severity"] == "阻断")
+    agent = next(n for n, i in enumerate(rv["issues"]) if i["by"] == "agent" and i["severity"] == "阻断")
+    r = _waive(mgr_a, code, rv["id"], rule)
+    assert r.status_code == 422 and "平台规则" in r.json()["detail"]
+    assert _waive(mgr_a, code, rv["id"], agent).status_code == 200
+    r = member.get(_url(code, "signoff")).json()
+    assert not r["gate"] and any("平台规则判出 1 项" in x for x in r["reasons"])
+    assert r["latest_review"]["open_blocking"] == 1
+
+    # 改了正文，旧评审过期，不能再驳回；新评审的阻断要重新处理
+    assert member.put(_url(code, "sections/2"), json={"body": BODY2}).status_code == 201
+    assert _waive(mgr_a, code, rv["id"], agent, reason="再驳一次").status_code == 409
+    rv2 = _review(member, code)
+    assert rv2["open_blocking"] == 1 and rv2["waived"] == 0
+
+
+def test_unlisted_agent_blockers_keep_gate_closed(team, model):
+    code, member, mgr_a, _ = team
+    model.reply = AGENT_BLOCK.replace("阻断 1 项", "阻断 2 项")
+    _draft(member, code)
+    rv = _review(member, code)
+    assert rv["blocking"] == 2
+    idx = next(n for n, i in enumerate(rv["issues"]) if i["severity"] == "阻断")
+    assert _waive(mgr_a, code, rv["id"], idx).status_code == 200
+    st = member.get(_url(code, "signoff")).json()
+    assert not st["gate"] and st["latest_review"]["open_blocking"] == 1
+    assert any("无法逐条驳回" in x for x in st["reasons"])
