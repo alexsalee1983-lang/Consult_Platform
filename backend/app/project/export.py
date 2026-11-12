@@ -3,7 +3,7 @@
 导出 = 模板 + 各章当前版本正文。规则：
 
 1. 模板从配置位置读取（EXPORT_TEMPLATE，决策记录 2026-11-10）：不配置时用内置默认模板（python-docx 自带的空白文档）；
-   配置了但文件不存在或打不开时拒绝导出（503），不悄悄退回默认模板，避免用错模板交给客户。
+   配置了但文件不存在、打不开或缺页面设置时拒绝导出（503），不悄悄退回默认模板，避免用错模板交给客户。
    模板里可以写占位符，导出时替换（正文段落、表格、页眉页脚都查）：
    {{项目代号}} {{服务}} {{行业}} {{交付件编号}} {{交付件名称}} {{修订}} {{导出日期}} {{状态}}；
    单独一段写 {{正文}} 的，各章正文插在这一段的位置（这一段删去），没有就接在模板正文末尾。
@@ -90,9 +90,12 @@ def _load_template() -> tuple[DocxDocument, str]:
     if not p.is_file():
         raise ExportError(503, "导出模板文件不存在，请系统管理员检查 EXPORT_TEMPLATE 配置")
     try:
-        return Document(str(p)), "configured"
+        doc = Document(str(p))
     except Exception as e:                                   # 不是有效的 .docx
         raise ExportError(503, "导出模板无法打开（需要 .docx 文件），请系统管理员检查 EXPORT_TEMPLATE 配置") from e
+    if not doc.sections:                                     # 缺页面设置（sectPr），表格、页眉页脚都没法写
+        raise ExportError(503, "导出模板缺少页面设置（用 Word 另存一次可修复），请系统管理员检查 EXPORT_TEMPLATE 配置")
+    return doc, "configured"
 
 
 def _default_fonts(doc: DocxDocument) -> None:
