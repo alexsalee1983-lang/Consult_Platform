@@ -77,6 +77,11 @@ class Settings(BaseSettings):
     agents_dir: str = ""
     agent_history_chars: int = 24_000   # 多轮对话时随请求带上的历史消息总字数上限（从最近往前取）
 
+    # 交付件 Word 导出模板（.docx 文件路径，决策记录 2026-11-10）。留空用内置默认模板；部署后管理员把公司模板放到
+    # 部署机上（如 /srv/templates/deliverable.docx，只读挂载进容器）并在 .env 里配置，不需要改代码。
+    # 配置了但文件不存在时拒绝导出，不退回默认模板。
+    export_template: str = ""
+
     # ---- 登录与会话 ----
     session_backend: str = "redis"          # redis；memory 只用于单元测试，生产环境拒绝启动
     session_idle_minutes: int = 30          # 无操作超时

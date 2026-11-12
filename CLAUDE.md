@@ -119,6 +119,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 确认卡约定（M3）：Agent 遇到方案取舍、来源冲突、证据不足、范围确认、入库确认，经工具 `confirm.create` 发卡（选项、推荐和理由、影响，可关联交付件某章），规则只在 `app/project/confirmations.py`：卡片文字过机密级检测；同一 Agent 重复发同标题的未处理卡不新建；顾问经 `POST /api/confirmations/{id}/resolve` 选选项（`choice`）或写意见（`resolution`），处理过的不能再处理。审计不记标题、选项和意见原文。
 
+导出约定（M3 ⑥）：交付件 Word 导出只经 `app/project/export.py`（`GET /api/projects/{code}/deliverables/{dcode}/export`）：模板从 `EXPORT_TEMPLATE` 读（不配用内置默认模板；配了但打不开返回 503，不退回默认），占位符和 `{{正文}}` 锚点见文件头；未签署的每页页眉标草稿，页脚写导出人、时间和导出编号；来源标注保留原样并加 Word 脚注（python-docx 不支持脚注，直接写 `word/footnotes.xml`）；严格档 422、没有大纲 409。审计只记编号、各章版本号、文件大小和哈希、模板类别和导出编号，不记正文、标题和模板路径。
+
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求（POST / PUT / PATCH / DELETE）要带请求头 `X-CSRF-Token`，值取登录接口或 `GET /api/auth/me` 返回体里的 `csrf_token` 字段（**不在 cookie 里**；会话 cookie `cp_session` 是 HttpOnly，脚本读不到）；改口令成功后会换新会话，要用新返回的 `csrf_token`。管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。
