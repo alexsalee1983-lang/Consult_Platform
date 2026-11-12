@@ -188,6 +188,10 @@ def test_parse_conclude_and_qualification_rules():
     assert quality.parse_review("好的，我看过了") is None
     assert quality.qualification_hits("本报告不构成测评结论，仅为差距分析。") == 0
     assert quality.qualification_hits("该系统已通过等保测评；认证结论为合格。") == 2
+    for text in ("项目已通过三级等保测评 [D-99]。", "本系统通过第三级等级保护测评。", "三级等保测评合格。",
+                 "已达到等保三级达标要求。", "密评通过。"):
+        assert quality.qualification_hits(text) >= 1, text
+    assert quality.qualification_hits("按等保三级要求做差距分析，提出整改建议。") == 0
 
 
 def test_edit_after_review_makes_it_stale_and_edit_in_review_returns_to_drafting(team, model):
