@@ -216,6 +216,15 @@ def test_role_change_via_cli_ends_sessions_for_exclusive_roles():
         c.__exit__(None, None, None)
 
 
+def test_cli_help_works(capsys):
+    """顶层和每个子命令的 --help 都能显示（help 文本里的 % 要写成 %%）。"""
+    for argv in (["--help"], *([c, "--help"] for c in ("add-member", "kb-eval", "grant-role", "usage-report"))):
+        with pytest.raises(SystemExit) as e:
+            cli_main(argv)
+        assert e.value.code == 0
+    assert "add-member" in capsys.readouterr().out
+
+
 def test_add_member_via_cli_bootstraps_project_without_manager():
     """没有项目经理的项目，网页上无人能加成员；命令行可指定首位经理，写审计，规则与网页一致。"""
     user = create_user((CONSULTANT,))

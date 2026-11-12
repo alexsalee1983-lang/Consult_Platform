@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 冒烟测试：在部署机上执行 ./scripts/smoke_test.sh
-# 测试地址：第一个参数 > 环境变量 SMOKE_BASE > 默认 http://localhost:8080，例如
+# 测试地址：第一个参数 > 环境变量 SMOKE_BASE > 仓库根目录 .env 的 WEB_PORT（http://localhost:<端口>）> 默认 8080，例如
 #   ./scripts/smoke_test.sh http://127.0.0.1:18080
 #   SMOKE_BASE=http://127.0.0.1:18080 ./scripts/smoke_test.sh
 # 接了模型（含模拟模型）时加 SMOKE_EXPECT_LLM=ok，多检查一项“模型可用”（共 33 项，否则 32 项；向量服务未启用时再少 1 项）。
@@ -9,7 +9,8 @@
 #   TEST_ACCOUNT_USERNAME / TEST_ACCOUNT_PASSWORD / TEST_ACCOUNT_TOTP_SECRET
 # 动态码用 python3 标准库现算，不需要额外安装。
 set -u
-BASE="${1:-${SMOKE_BASE:-http://localhost:8080}}"
+ENV_PORT="$(grep -E '^WEB_PORT=' "$(cd "$(dirname "$0")/.." && pwd)/.env" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '[:space:]"')"
+BASE="${1:-${SMOKE_BASE:-http://localhost:${ENV_PORT:-8080}}}"
 BASE="${BASE%/}"
 echo "测试地址：$BASE"
 # 先确认地址能连上，避免地址填错时每一项都报失败（状态码 000）
