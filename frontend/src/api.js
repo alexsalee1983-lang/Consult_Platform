@@ -15,6 +15,7 @@ export class ApiError extends Error {
   constructor(status, detail) {
     super(typeof detail === "string" ? detail
       : Array.isArray(detail?.reasons) ? detail.reasons.join("；")   // 门禁不过：{gate, reasons}
+      : detail?.blocked && detail.summary ? detail.summary              // 机密级拦截：{blocked, summary, findings}
       : Array.isArray(detail) ? "提交的内容格式不正确" : `HTTP ${status}`);
     this.status = status;
     this.detail = detail;
@@ -122,6 +123,22 @@ export const api = {
     request(`/api/confirmations/${id}/resolve`, { method: "POST", body: JSON.stringify({ choice, resolution }) }),
   projectConfirmations: (code, status = "open") =>
     request(`/api/projects/${encodeURIComponent(code)}/confirmations?status=${status}`),
+  // 项目证据（D 资料 / I 访谈 / O 现场观察）
+  evidences: (code) => request(`/api/projects/${encodeURIComponent(code)}/evidences`),
+  evidence: (code, ev) => request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}`),
+  uploadDocument: (code, file, title = "") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    if (title) fd.append("title", title);
+    return request(`/api/projects/${encodeURIComponent(code)}/documents`, { method: "POST", body: fd });
+  },
+  addNote: (code, note) =>
+    request(`/api/projects/${encodeURIComponent(code)}/notes`, { method: "POST", body: JSON.stringify(note) }),
+  // 交付链运行（标准档 3→4→7）
+  runs: (code) => request(`/api/projects/${encodeURIComponent(code)}/runs`),
+  run: (code, id) => request(`/api/projects/${encodeURIComponent(code)}/runs/${id}`),
+  startRun: (code) => request(`/api/projects/${encodeURIComponent(code)}/runs`, { method: "POST" }),
+  cancelRun: (code, id) => request(`/api/projects/${encodeURIComponent(code)}/runs/${id}/cancel`, { method: "POST" }),
   chat: (project_code, message) =>
     request("/api/chat", { method: "POST", body: JSON.stringify({ project_code, message }) }),
   agents: () => request("/api/agents"),
@@ -216,3 +233,13 @@ export const DELIV_STATUS = {
 export const KIND_CLS = { 方案取舍: "c-a", 来源冲突: "c-v", 证据不足: "c-r", 入库确认: "c-g", 范围确认: "c-c" };
 export const CONCLUSION_CLS = { pass: "c-g", revise: "c-a", fail: "c-r" };
 export const SEVERITY_CLS = { 阻断: "c-r", 重要: "c-a", 建议: "c-n" };
+export const EVIDENCE_STATUS = {
+  received: { label: "待解析", cls: "c-a" }, parsed: { label: "已解析", cls: "c-g" },
+  failed: { label: "解析失败", cls: "c-r" }, ready: { label: "已录入", cls: "c-g" },
+};
+export const RUN_STATUS = {
+  queued: { label: "排队中", cls: "c-c" }, running: { label: "运行中", cls: "c-c" },
+  waiting: { label: "等你确认", cls: "c-a" }, done: { label: "已完成", cls: "c-g" },
+  failed: { label: "失败", cls: "c-r" }, cancelled: { label: "已取消", cls: "c-n" },
+};
+export const RUN_ACTIVE = new Set(["queued", "running", "waiting"]);
