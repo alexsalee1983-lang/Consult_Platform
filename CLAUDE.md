@@ -119,6 +119,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 确认卡约定（M3）：Agent 遇到方案取舍、来源冲突、证据不足、范围确认、入库确认，经工具 `confirm.create` 发卡（选项、推荐和理由、影响，可关联交付件某章），规则只在 `app/project/confirmations.py`：卡片文字过机密级检测；同一 Agent 重复发同标题的未处理卡不新建；顾问经 `POST /api/confirmations/{id}/resolve` 选选项（`choice`）或写意见（`resolution`），处理过的不能再处理。审计不记标题、选项和意见原文。
 
+编排约定（M3 ④）：交付链运行只经 `app/project/runs.py`（平台自写流程控制，不用 LangGraph）：标准档 3→4→7（调研访谈 Agent 读证据写 D3 → 依据与差距分析 Agent 出差距分析、存运行记录 → 报告与汇报 Agent 写 D4 初稿），每步是后台任务 `agent_run.step`，开头看运行状态、不是 queued 就不做；Agent 读写仍只经 `tools.invoke`，模型只经 `gateway.complete`。没有证据发“证据不足”卡停在本步；模型输出里的确认卡照发、停在下一步之前，顾问处理完等待的卡后自动继续（`on_card_resolved`），处理结果作为“顾问已确认事项”交给后续步骤，同一问题本次运行不再问。严格档 422，同一项目同时只能有一个未结束的运行（409）。接口 `/api/projects/{code}/runs`。审计只记编号、步骤、字数和用量。
+
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 
 登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。修改类请求（POST / PUT / PATCH / DELETE）要带请求头 `X-CSRF-Token`，值取登录接口或 `GET /api/auth/me` 返回体里的 `csrf_token` 字段（**不在 cookie 里**；会话 cookie `cp_session` 是 HttpOnly，脚本读不到）；改口令成功后会换新会话，要用新返回的 `csrf_token`。管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。

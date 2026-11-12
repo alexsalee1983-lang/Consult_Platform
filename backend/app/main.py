@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 
 from .api import (admin, agents, audit, auth, chat, conversations, deliverables, directory, evidence, health, kb,
-                  kb_items, projects)
+                  kb_items, projects, runs)
 from .core.auth import authenticate
 from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
@@ -51,6 +51,7 @@ app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(evidence.router)
 app.include_router(deliverables.router)
+app.include_router(runs.router)
 app.include_router(chat.router)
 app.include_router(audit.router)
 app.include_router(admin.router)

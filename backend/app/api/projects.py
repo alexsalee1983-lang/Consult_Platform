@@ -22,6 +22,7 @@ from ..core.permissions import (
 )
 from ..models import Confirmation, Project, ProjectMember, User
 from ..project import confirmations as conf_svc
+from ..project import runs as run_svc
 from ..schemas import PHASES, ConfirmationOut, ProjectDetail, ProjectOut, ResolveIn
 
 router = APIRouter(prefix="/api", tags=["projects"], dependencies=[Depends(require_business)])
@@ -89,6 +90,7 @@ def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db), user: User
         c = conf_svc.resolve(db, user, c, body.choice, body.resolution)
     except conf_svc.ConfirmationError as e:
         raise HTTPException(e.status, e.detail) from e
+    run_svc.on_card_resolved(db, c)   # 交付链在等这张卡时，卡都处理完就继续
     return _conf_out(c)
 
 

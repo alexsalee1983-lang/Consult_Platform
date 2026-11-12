@@ -11,9 +11,10 @@ from .job import Job
 from .kb import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion
 from .project import Confirmation, Deliverable, Project
 from .rbac import ProjectMember, Role, UserRole
+from .run import AgentRun, AgentRunStep
 from .usage import LlmUsage
 from .user import User
 
-__all__ = ["Agent", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "Job", "KbChunk", "KbDeidReport", "KbItem", "KbReview",
+__all__ = ["Agent", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "Job", "KbChunk", "KbDeidReport", "KbItem", "KbReview",
            "KbUpload", "KbVersion", "LlmUsage",
            "Message", "Project", "ProjectDocument", "ProjectMember", "Role", "SectionVersion", "Tool", "User", "UserRole"]
