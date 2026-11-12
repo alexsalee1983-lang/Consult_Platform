@@ -148,6 +148,17 @@ def test_missing_template_refused(proj, tmp_path, monkeypatch):
     bad.write_bytes(b"not a docx")
     monkeypatch.setattr(get_settings(), "export_template", str(bad))
     assert c.get(f"{_base(code)}/export").status_code == 503
+    # 缺页面设置（sectPr）的模板：拒绝导出（503），而不是 500
+    from docx import Document as _Doc
+    d = _Doc()
+    body = d.element.body
+    for sp in body.findall("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}sectPr"):
+        body.remove(sp)
+    nosect = tmp_path / "nosect.docx"
+    d.save(str(nosect))
+    monkeypatch.setattr(get_settings(), "export_template", str(nosect))
+    r = c.get(f"{_base(code)}/export")
+    assert r.status_code == 503 and "页面设置" in r.json()["detail"]
 
 
 def test_no_outline_strict_and_outsider(proj):
