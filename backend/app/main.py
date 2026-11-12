@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 
 from .api import (admin, agents, audit, auth, chat, conversations, deliverables, directory, evidence, health, kb,
-                  kb_items, projects, runs)
+                  kb_items, projects, quality, runs)
 from .core.auth import authenticate
 from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
@@ -13,7 +13,7 @@ from .core.db import SessionLocal
 from .core.errors import validation_error_handler
 from .core.migrate import upgrade_to_head
 from .services import storage
-from .seed import seed
+from .seed import seed, seed_signed_sample
 
 _settings = get_settings()
 check_settings(_settings)  # 配置不安全时直接拒绝启动
@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
         ensure_initial_users(db, _settings)
         if _settings.seed_demo_data:
             seed(db)
+            seed_signed_sample(db)
         ensure_test_memberships(db, _settings)
     if storage.enabled():
         try:
@@ -52,6 +53,7 @@ app.include_router(projects.router)
 app.include_router(evidence.router)
 app.include_router(deliverables.router)
 app.include_router(runs.router)
+app.include_router(quality.router)
 app.include_router(chat.router)
 app.include_router(audit.router)
 app.include_router(admin.router)
