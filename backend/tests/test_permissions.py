@@ -216,6 +216,28 @@ def test_role_change_via_cli_ends_sessions_for_exclusive_roles():
         c.__exit__(None, None, None)
 
 
+def test_add_member_via_cli_bootstraps_project_without_manager():
+    """没有项目经理的项目，网页上无人能加成员；命令行可指定首位经理，写审计，规则与网页一致。"""
+    user = create_user((CONSULTANT,))
+    c = logged_in_client(app, user)
+    try:
+        assert c.get("/api/projects/GRID-B").status_code == 404
+        assert cli_main(["add-member", "--project", "GRID-B", "--username", user[0], "--role", "manager"]) == 0
+        assert c.get("/api/projects/GRID-B").status_code == 200
+        with SessionLocal() as db:
+            row = db.scalars(select(AuditLog).where(AuditLog.action == "project.member")
+                             .order_by(AuditLog.id.desc())).first()
+        assert row.actor == "cli" and user[0] in row.detail
+        # 唯一的项目经理不能被降级
+        assert cli_main(["add-member", "--project", "GRID-B", "--username", user[0], "--role", "member"]) == 1
+    finally:
+        c.__exit__(None, None, None)
+    # 没有业务角色的账号、不存在的项目都拒绝
+    admin, *_ = create_user(("sys_admin",))
+    assert cli_main(["add-member", "--project", "GRID-B", "--username", admin, "--role", "member"]) == 1
+    assert cli_main(["add-member", "--project", "NOPE-X", "--username", user[0], "--role", "member"]) == 1
+
+
 # ---- 项目成员管理：只有本项目的项目经理能调整 ----
 
 def test_manager_adds_member_who_then_sees_project():
