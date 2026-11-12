@@ -4,7 +4,7 @@
 旧版本保留（只追加），可以按版本查看和对比。Agent 经工具 doc.generate 写，顾问经接口改，两者走同一套规则：
 
 1. 严格档项目拒绝（S3 只做标准档；严格档交付件只能基于摘要卡、输出用占位符，M4 接入）。
-2. 已签署的交付件不能再改（签署流程在 S3 第 ⑤ 个 PR）。
+2. 已签署的交付件不能再改；待签署（review）时改了内容，状态回到起草中（签署流程见 app/project/quality.py）。
 3. 正文和章节标题先过机密级检测（guard），命中则不保存，只写审计（命中类别）。
 4. 来源标注（公共规范 4.1）：正文里用方括号标注来源——客户证据 [I-02] [I-02-05] [D-12] [O-05]、
    知识库条目 [L4-OPS-GEN-REF-001]（含依据引用【依据：…｜L4-…】）、模型推断 [推断]。写入时逐个核对：
@@ -140,7 +140,7 @@ def _touch(d: Deliverable, user: User) -> None:
     d.revision += 1
     d.updated_at = utcnow()
     d.updated_by = user.username
-    if d.status == "not_started":
+    if d.status in ("not_started", "review"):    # 待签署时改了内容：提交作废，要重新评审、重新提交（M3 ⑤）
         d.status = "drafting"
 
 
