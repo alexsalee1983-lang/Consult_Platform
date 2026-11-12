@@ -86,6 +86,11 @@ _TOKEN = re.compile(
 )
 _CLOUD_KEY = re.compile(r"\b(?:AKIA[0-9A-Z]{16}|LTAI[0-9A-Za-z]{12,20}|sk-[A-Za-z0-9_\-]{20,})\b")
 _IPV4 = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(/\d{1,2})?(?![\d.])")
+# 标准条款号（GB/T 22239-2019 第 8.1.4.1 条）形如 IPv4，不算 IP：紧挨“第”、后面紧跟“条”或“款”，
+# 或紧跟在标准号后面（标准号与条款号之间只隔年份、空格、“第”）。带 /掩码 的网段写法照常拦截。测试 #38。
+_CLAUSE_BEFORE = re.compile(r"第\s*$")
+_CLAUSE_AFTER = re.compile(r"^\s*(?:条(?!目)|款)")   # 不收“节项章”：10.1.20.1 节点、项目网 仍算 IP
+_STANDARD_REF = re.compile(r"(?:GB(?:/[TZ])?|[A-Z]{2}/T|ISO(?:/IEC)?|IEC)\s*\d+(?:[.\-]\d+)*(?:[-—:：]\d{4})?\s*(?:第\s*)?$")
 _CN_ID = re.compile(r"(?<!\d)(\d{17}[\dXx])(?!\d)")
 _BANK_CARD = re.compile(r"(?<!\d)(\d{16,19})(?!\d)")
 _MOBILE = re.compile(r"(?<!\d)(1[3-9]\d{9})(?!\d)")
@@ -157,6 +162,11 @@ def _add(out: list[Finding], kind: str, label: str, m: re.Match, group: int = 0)
     out.append(Finding(kind, label, mask(m.group(group)), m.start(group), m.end(group)))
 
 
+def _is_clause_number(text: str, m: re.Match) -> bool:
+    before, after = text[max(0, m.start() - 30):m.start()], text[m.end():m.end() + 3]
+    return bool(_CLAUSE_BEFORE.search(before) or _CLAUSE_AFTER.match(after) or _STANDARD_REF.search(before))
+
+
 def check(text: str) -> GuardResult:
     findings: list[Finding] = []
     if not text:
@@ -199,6 +209,8 @@ def check(text: str) -> GuardResult:
             ipaddress.ip_address(m.group(1))
         except ValueError:
             continue  # 例如版本号 1.2.300.4
+        if not m.group(2) and _is_clause_number(text, m):
+            continue
         label = "IP 网段规划" if m.group(2) else "IP 地址"
         _add(findings, "ip", label, m)
 

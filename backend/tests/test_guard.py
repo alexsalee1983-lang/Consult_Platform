@@ -34,6 +34,28 @@ def test_version_number_is_not_ip():
     assert "ip" not in kinds("升级到 2.300.1.4 版本")
 
 
+def test_standard_clause_number_is_not_ip():
+    for text in (
+        "依据 GB/T 22239-2019 第 8.1.4.1 条",
+        "GB/T 22239-2019 8.1.4.1 身份鉴别",
+        "GB/T22239 8.1.4.1",
+        "JR/T 0071-2020 6.2.3.1 访问控制",
+        "ISO/IEC 27001:2022 5.1.2.3",
+        "见 8.1.4.1 条",
+    ):
+        assert not check(text).blocked, text
+    for text in (                                                     # 真 IP 不能因为附近有标准号或“条”字被放过
+        "核心交换机 10.1.20.1",
+        "依据标准把 10.1.20.1 改成",
+        "GB/T 22239 要求 10.1.20.1",
+        "第 8.1.4.1 条要求，核心交换机 10.1.20.1",
+        "10.1.20.1 节点",
+        "10.1.20.1 条目",
+        "网段 第 10.0.0.0/8",
+    ):
+        assert "ip" in kinds(text), text
+
+
 def test_cn_id_checksum():
     assert "cn_id" in kinds("身份证 11010519491231002X")
     assert "cn_id" not in kinds("编号 110105194912310021")  # 校验位不对
@@ -124,11 +146,11 @@ def test_bare_password_rules_do_not_block_ordinary_text():
         "使用 SSL-VPN 登录",
         "使用 Windows10 登录",
         "TCP/IP、I/O、A/B 测试、8:30-17:30 值班",
-        "发到 zhang.san@bank.com",
         "LLM_MODEL=deepseek-v4.1-flash",
         "https://example.com/a?Id=1&b=X2",
         "C++ 与 C# 项目，R&D 部门",
         "等保 2.0 三级，SOC 7x24 值守",
         "user:test 这类说明",
     ):
-        assert "credential" not in kinds(text), text
+        assert not check(text).blocked, text                          # 整句放行，不只是不报口令（测试 #38 漏了 IP 误报）
+    assert "credential" not in kinds("发到 zhang.san@bank.com")       # 邮箱另有规则拦截，这里只看口令规则
