@@ -2,7 +2,8 @@
 
 POST /api/projects/{code}/deliverables/{dcode}/reviews            发起质量评审（202，后台执行）
 GET  /api/projects/{code}/deliverables/{dcode}/reviews            评审列表（新的在前，不含问题清单）
-GET  /api/projects/{code}/deliverables/{dcode}/reviews/{rid}      某次评审：结论、计数、问题清单、评审报告
+GET  /api/projects/{code}/deliverables/{dcode}/reviews/{rid}      某次评审：结论、计数、问题清单、评审报告、驳回记录
+POST /api/projects/{code}/deliverables/{dcode}/reviews/{rid}/waivers  项目经理驳回评审 Agent 提出的一条阻断（必须写理由）
 GET  /api/projects/{code}/deliverables/{dcode}/signoff            签署流程：状态、门禁、最近评审、流程记录
 POST /api/projects/{code}/deliverables/{dcode}/signoff/submit     顾问审核完成，提交签署（门禁不过 409）
 POST /api/projects/{code}/deliverables/{dcode}/signoff/sign       项目经理签署（非项目经理 403）
@@ -19,7 +20,7 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import project_for_member, require_business
-from ..models import QualityReview, SignOff, User
+from ..models import QualityReview, ReviewWaiver, SignOff, User
 from ..project import deliverables as dsvc
 from ..project import quality as svc
 
@@ -36,6 +37,8 @@ class ReviewOut(BaseModel):
     blocking: int
     major: int
     minor: int
+    open_blocking: int           # 未驳回的阻断（门禁按它判断）
+    waived: int                  # 已驳回的阻断
     stale: bool                  # 交付件在评审后有修改
     error: str
     model: str
@@ -45,9 +48,22 @@ class ReviewOut(BaseModel):
     finished_at: datetime | None
 
 
+class WaiverOut(BaseModel):
+    issue: int                   # 问题清单下标
+    reason: str
+    actor: str
+    created_at: datetime
+
+
 class ReviewDetail(ReviewOut):
-    issues: list[dict]
+    issues: list[dict]           # 每条另有 waivable：评审 Agent 提出的阻断，项目经理可以驳回
     report: str
+    waivers: list[WaiverOut]
+
+
+class WaiveIn(BaseModel):
+    issue: int = Field(ge=0)
+    reason: str = Field(max_length=svc.MAX_COMMENT)
 
 
 class SignOffOut(BaseModel):
@@ -56,6 +72,7 @@ class SignOffOut(BaseModel):
     revision: int
     versions: dict
     review_id: int | None
+    waived: int                  # 依据的评审中被驳回的阻断条数
     comment: str
     actor: str
     created_at: datetime
@@ -87,17 +104,30 @@ def _load(db: Session, code: str, dcode: str, user: User):
         _raise(e)
 
 
-def _review(r: QualityReview, revision: int) -> dict:
-    return {"id": r.id, "revision": r.revision, "versions": r.versions or {}, "status": r.status,
+def _review(db: Session, r: QualityReview, revision: int) -> dict:
+    b = svc.blocking_of(db, r)
+    return {"open_blocking": b.remaining, "waived": b.waived, "id": r.id, "revision": r.revision, "versions": r.versions or {}, "status": r.status,
             "conclusion": r.conclusion, "conclusion_name": svc.CONCLUSIONS.get(r.conclusion, ""),
             "blocking": r.blocking, "major": r.major, "minor": r.minor, "stale": r.revision != revision,
             "error": r.error, "model": r.model, "prompt_version": r.prompt_version, "created_by": r.created_by,
             "created_at": r.created_at, "finished_at": r.finished_at}
 
 
-def _signoff(s: SignOff) -> SignOffOut:
+def _signoff(db: Session, s: SignOff) -> SignOffOut:
+    r = db.get(QualityReview, s.review_id) if s.review_id else None
     return SignOffOut(id=s.id, action=s.action, revision=s.revision, versions=s.versions or {}, review_id=s.review_id,
+                      waived=svc.blocking_of(db, r).waived if r else 0,
                       comment=s.comment, actor=s.actor, created_at=s.created_at)
+
+
+def _detail(db: Session, r: QualityReview, revision: int) -> ReviewDetail:
+    issues = [{**i, "waivable": svc.waivable(i)} for i in r.issues or []]
+    return ReviewDetail(**_review(db, r, revision), issues=issues, report=r.report,
+                        waivers=[_waiver(w) for w in svc.list_waivers(db, r)])
+
+
+def _waiver(w: ReviewWaiver) -> WaiverOut:
+    return WaiverOut(issue=w.issue_index, reason=w.reason, actor=w.actor, created_at=w.created_at)
 
 
 @router.post("/{code}/deliverables/{dcode}/reviews", response_model=ReviewOut, status_code=202)
@@ -107,13 +137,13 @@ def request_review(code: str, dcode: str, db: Session = Depends(get_db), user: U
         r = svc.request_review(db, user, p, d)
     except svc.QualityError as e:
         _raise(e)
-    return ReviewOut(**_review(r, d.revision))
+    return ReviewOut(**_review(db, r, d.revision))
 
 
 @router.get("/{code}/deliverables/{dcode}/reviews", response_model=list[ReviewOut])
 def list_reviews(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _, d = _load(db, code, dcode, user)
-    return [ReviewOut(**_review(r, d.revision)) for r in svc.list_reviews(db, d)]
+    return [ReviewOut(**_review(db, r, d.revision)) for r in svc.list_reviews(db, d)]
 
 
 @router.get("/{code}/deliverables/{dcode}/reviews/{rid}", response_model=ReviewDetail)
@@ -122,7 +152,22 @@ def get_review(code: str, dcode: str, rid: int, db: Session = Depends(get_db), u
     r = db.get(QualityReview, rid)
     if r is None or r.deliverable_id != d.id:
         raise HTTPException(404, "评审记录不存在")
-    return ReviewDetail(**_review(r, d.revision), issues=r.issues or [], report=r.report)
+    return _detail(db, r, d.revision)
+
+
+@router.post("/{code}/deliverables/{dcode}/reviews/{rid}/waivers", response_model=ReviewDetail)
+def waive_issue(code: str, dcode: str, rid: int, body: WaiveIn, db: Session = Depends(get_db),
+                user: User = Depends(current_user)):
+    p, d = _load(db, code, dcode, user)
+    r = db.get(QualityReview, rid)
+    if r is None or r.deliverable_id != d.id:
+        raise HTTPException(404, "评审记录不存在")
+    try:
+        svc.waive(db, user, p, d, r, body.issue, body.reason)
+    except svc.QualityError as e:
+        _raise(e)
+    db.refresh(d)
+    return _detail(db, r, d.revision)
 
 
 def _state(db: Session, d) -> SignOffState:
@@ -130,8 +175,8 @@ def _state(db: Session, d) -> SignOffState:
     latest = svc.latest_review(db, d)
     return SignOffState(deliverable=d.code, status=d.status, revision=d.revision,
                         gate=g.ok and d.status != "signed", reasons=g.reasons,
-                        latest_review=ReviewOut(**_review(latest, d.revision)) if latest else None,
-                        history=[_signoff(s) for s in svc.list_signoffs(db, d)])
+                        latest_review=ReviewOut(**_review(db, latest, d.revision)) if latest else None,
+                        history=[_signoff(db, s) for s in svc.list_signoffs(db, d)])
 
 
 @router.get("/{code}/deliverables/{dcode}/signoff", response_model=SignOffState)
