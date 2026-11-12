@@ -1,8 +1,12 @@
+import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
+import { api } from "./api.js";
 import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireSysAdmin } from "./auth.jsx";
+import { Loading } from "./components/common.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
+import Deliverable from "./pages/Deliverable.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
 import KbMap from "./pages/KbMap.jsx";
 import KbReview from "./pages/KbReview.jsx";
@@ -34,6 +38,27 @@ function OverviewPage() {
   return <Overview code={code} />;
 }
 
+function DeliverablePage() {
+  const { code, dcode } = useParams();
+  return <Deliverable code={code} dcode={dcode} />;
+}
+
+// 侧栏“交付件审阅”入口：先打开待签署的，其次起草中的，否则 D1
+function DeliverableHome() {
+  const { code } = useParams();
+  const [target, setTarget] = useState(null);
+  useEffect(() => {
+    api.project(code).then((p) => {
+      const pick = ["review", "drafting"].map((st) => p.deliverables.find((d) => d.status === st)).find(Boolean)
+        || p.deliverables[0];
+      setTarget(pick ? pick.code : "");
+    }).catch(() => setTarget(""));
+  }, [code]);
+  if (target === null) return <Loading />;
+  if (!target) return <Navigate to="/projects" replace />;
+  return <Navigate to={`/project/${encodeURIComponent(code)}/deliverables/${target}`} replace />;
+}
+
 function ChatPage() {
   const { code } = useParams();
   return <Chat code={code} />;
@@ -48,6 +73,8 @@ export default function App() {
         <Route element={<Business />}>
           <Route path="/projects" element={<Projects />} />
           <Route path="/project/:code" element={<OverviewPage />} />
+          <Route path="/project/:code/deliverables" element={<DeliverableHome />} />
+          <Route path="/project/:code/deliverables/:dcode" element={<DeliverablePage />} />
           <Route path="/chat/:code" element={<ChatPage />} />
           <Route path="/kb/search" element={<KbSearch />} />
           <Route path="/kb/intake" element={<KbIntake />} />

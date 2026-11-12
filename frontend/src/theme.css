@@ -154,3 +154,36 @@ textarea.inp { height: auto; padding: 8px 10px; line-height: 1.6; resize: vertic
 
 /* 对话区固定高度：只在消息列表内部滚动，输入框始终在底部，输出时页面不跟着变长 */
 .chat-main { height: calc(100vh - 110px); min-height: 420px; }
+
+/* ---- 交付件审阅（M3 ⑦，设计稿 04） ---- */
+select.sm { height: 28px; padding: 0 6px; border: 1px solid var(--ln2); border-radius: 6px; background: var(--s2); color: var(--tx); font-size: 12px; max-width: 220px; }
+.toc { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.toc button { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--tx2); font-size: 13px; }
+.toc button:hover { background: var(--s2); }
+.toc button.on { background: var(--s3); color: var(--tx); box-shadow: inset 2px 0 0 var(--amber); font-weight: 600; }
+.toc .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srcbar { display: flex; gap: 2px; height: 5px; border-radius: 3px; overflow: hidden; background: var(--s3); }
+.doc-pnl { overflow: hidden; }
+.doc-wrap { padding: 18px 24px 22px; display: flex; flex-direction: column; gap: 12px; }
+.doc { display: flex; flex-direction: column; gap: 10px; color: var(--tx2); font-size: 14px; line-height: 1.85; }
+.doc p, .doc ul, .doc ol { margin: 0; }
+.doc ul, .doc ol { padding-left: 20px; }
+.doc strong { color: var(--tx); }
+.doc-h { margin: 8px 0 0; font-size: 16px; color: var(--tx); }
+.doc-h3 { margin: 4px 0 0; font-size: 14px; color: var(--tx); }
+.doc-tbl td { color: var(--tx2); }
+.src { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; margin: 0 1px; }
+.src-ev { color: var(--ok); } .src-kb { color: var(--cyan); } .src-inf { color: var(--vio); }
+.src-bad { color: var(--crim); text-decoration: underline wavy; }
+.doc-refs { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px solid var(--ln); font-size: 12px; }
+.card { display: flex; flex-direction: column; gap: 7px; }
+.opts { display: flex; flex-direction: column; gap: 5px; }
+.opt { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--ln2); border-radius: 6px; font-size: 12.5px; }
+.opt.rec { border-color: var(--amber); background: var(--amber-d); }
+.flow { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.flow li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 9px; font-size: 13px; color: var(--tx3); }
+.flow li i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ln2); }
+.flow li.done { color: var(--tx); } .flow li.done i { border-color: var(--ok); background: var(--ok); }
+.flow li.now { color: var(--tx); } .flow li.now i { border-color: var(--amber); } .flow li.now .sub { color: var(--amber); }
+.issues > li { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.gate-reasons { margin: 0; padding-left: 18px; color: var(--amber); }
