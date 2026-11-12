@@ -6,7 +6,9 @@
     docker compose exec backend python -m app.cli grant-role --username zhangsan --role consultant
     docker compose exec backend python -m app.cli grant-role --username wangwu --role security_auditor
     docker compose exec backend python -m app.cli list-users
+    docker compose exec backend python -m app.cli add-member --project GRID-B --username zhangsan --role manager
 
+项目成员日常由项目经理在网页上调整；add-member 只用于给还没有项目经理的项目指定第一位经理，或应急。
 安全审计员由单独任命，只能用 grant-role / revoke-role 在服务器上授予或撤销，任何网页接口都做不到。
 口令交互输入，不出现在命令行参数和 shell 历史里。TOTP 密钥只显示一次，请当面交给用户录入认证器。
 所有操作写入审计日志（操作人记为 cli）。
@@ -23,9 +25,10 @@ from .core import audit, sessions
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .core.migrate import upgrade_to_head
-from .core.permissions import EXCLUSIVE_ROLES, ROLE_NAMES, RoleRuleError, roles_of, set_roles
+from .core.permissions import (BUSINESS_ROLES, EXCLUSIVE_ROLES, PROJECT_ROLES, ROLE_NAMES, RoleRuleError,
+                               membership, roles_of, set_roles)
 from .core.security import PasswordPolicyError, check_password_policy, hash_password, new_totp_secret, totp_uri
-from .models import User
+from .models import Project, ProjectMember, User
 
 
 def _ask_password() -> str:
@@ -133,6 +136,42 @@ def grant_role(args: argparse.Namespace) -> int:
 
 def revoke_role(args: argparse.Namespace) -> int:
     return _change_role(args, False)
+
+
+def add_member(args: argparse.Namespace) -> int:
+    """把用户加入项目或调整其项目内身份（不能降级唯一的项目经理）。规则与网页成员管理一致。"""
+    with SessionLocal() as db:
+        project = db.scalar(select(Project).where(Project.code == args.project))
+        if project is None:
+            print(f"项目 {args.project} 不存在", file=sys.stderr)
+            return 1
+        user = _get(db, args.username)
+        if user is None:
+            return 1
+        if not user.is_active:
+            print(f"用户 {args.username} 已停用", file=sys.stderr)
+            return 1
+        if not roles_of(db, user.id) & BUSINESS_ROLES:
+            print("只有持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户能加入项目", file=sys.stderr)
+            return 1
+        m = membership(db, project.id, user.id)
+        if m is not None and m.project_role == args.role:
+            print(f"{args.username} 已是 {args.project} 的{PROJECT_ROLES[args.role]}，未变化")
+            return 0
+        if m is not None and m.project_role == "manager" and len([
+                x for x in db.scalars(select(ProjectMember).where(ProjectMember.project_id == project.id))
+                if x.project_role == "manager"]) == 1:
+            print("项目至少要保留一名项目经理", file=sys.stderr)
+            return 1
+        if m is None:
+            db.add(ProjectMember(project_id=project.id, user_id=user.id, project_role=args.role, added_by="cli"))
+        else:
+            m.project_role = args.role
+        db.commit()
+        audit.record(db, actor="cli", action="project.member", result="allowed", project_code=project.code,
+                     target=args.username, project_role=args.role)
+    print(f"{args.username} 现在是 {args.project} 的{PROJECT_ROLES[args.role]}")
+    return 0
 
 
 def list_users(args: argparse.Namespace) -> int:
@@ -335,6 +374,11 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--role", required=True, choices=sorted(ROLE_NAMES), help=role_help)
     v.set_defaults(func=revoke_role)
     sub.add_parser("list-users", help="列出用户和角色").set_defaults(func=list_users)
+    am = sub.add_parser("add-member", help="把用户加入项目或调整项目内身份（给没有项目经理的项目指定首位经理、应急）")
+    am.add_argument("--project", required=True, help="项目代号，如 GRID-B")
+    am.add_argument("--username", required=True)
+    am.add_argument("--role", required=True, choices=sorted(PROJECT_ROLES), help="manager=项目经理，member=项目成员")
+    am.set_defaults(func=add_member)
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
     a.set_defaults(func=verify_audit)
