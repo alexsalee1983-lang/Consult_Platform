@@ -175,6 +175,30 @@ jobs:
           out=$(docker compose exec -T postgres psql -U consult -d consult -c "DELETE FROM audit_logs WHERE id = 1" 2>&1 || true)
           echo "$out"
           echo "$out" | grep -q "append-only"
+      - name: 备份与恢复演练（备份 → 新增数据 → 恢复 → 新增数据消失、备份时链头仍在链上、冒烟通过）
+        run: |
+          bash -n scripts/backup.sh && bash -n scripts/restore.sh
+          umask 077; head -c 32 /dev/urandom | base64 > /tmp/bk.pass; head -c 32 /dev/urandom | base64 > /tmp/wrong.pass
+          objects() { docker run --rm --volumes-from "$(docker compose ps -aq minio)" --user 0 --entrypoint sh \
+            "$(docker inspect -f '{{.Config.Image}}' "$(docker compose ps -aq minio)")" -c 'find /data -path /data/.minio.sys -prune -o -type f -print | wc -l'; }
+          before=$(objects)
+          BACKUP_PASSPHRASE_FILE=/tmp/bk.pass bash scripts/backup.sh /tmp/bk
+          d=$(ls -d /tmp/bk/20*Z | tail -1); s=$(basename "$d")
+          test -f "$d/objects.tar.gpg" && grep -q '"audit_head"' "$d/manifest.json" && test -s /tmp/bk/audit-heads.log
+          ! grep -aq "audit_logs" "$d/db.dump.gpg"                   # 备份文件是密文
+          docker compose exec -T backend python -m app.cli create-project --code DRILL-A --tier standard \
+            --manager "$(grep -E '^TEST_ACCOUNT_USERNAME=' .env | cut -d= -f2)"
+          # 口令不对：解密失败，服务不受影响
+          ! RESTORE_CONFIRM="$s" BACKUP_PASSPHRASE_FILE=/tmp/wrong.pass bash scripts/restore.sh "$d"
+          curl -fsS http://localhost:8080/api/health >/dev/null
+          RESTORE_CONFIRM="$s" BACKUP_PASSPHRASE_FILE=/tmp/bk.pass bash scripts/restore.sh "$d"
+          n=$(docker compose exec -T postgres psql -U consult -d consult -tAc "select count(*) from projects where code='DRILL-A'")
+          test "$n" = "0"
+          test "$(objects)" = "$before"
+          docker compose exec -T postgres psql -U consult -d consult -tAc \
+            "select count(*) from audit_logs where action in ('backup.create','backup.restore')" | grep -qx 1   # 恢复的是备份时的库，只有恢复这一条
+          bash scripts/smoke_test.sh http://localhost:8080
+          rm -rf /tmp/bk /tmp/bk.pass /tmp/wrong.pass
       - if: failure()
         run: docker compose --profile mock-llm logs --no-color | tail -200
       - if: always()

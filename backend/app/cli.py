@@ -305,6 +305,18 @@ def deletion_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def backup_record(args: argparse.Namespace) -> int:
+    """备份、恢复脚本（scripts/backup.sh、restore.sh）完成后记一条审计：只有时间戳、链头编号和字节数。"""
+    if not re.fullmatch(r"\d{8}T\d{6}Z", args.stamp):
+        print("--stamp 格式为 20270110T020000Z", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        audit.record(db, actor="cli", action=f"backup.{args.op}", result="allowed", stamp=args.stamp,
+                     head_id=args.head_id, bytes=args.bytes)
+    print(f"已记录 backup.{args.op} {args.stamp}")
+    return 0
+
+
 def verify_audit(args: argparse.Namespace) -> int:
     with SessionLocal() as db:
         r = audit.verify_chain(db, args.expect_head)
@@ -549,6 +561,12 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
     ke.add_argument("--out", default="", help="把明细写成 JSON 文件")
     ke.set_defaults(func=kb_eval)
+    br = sub.add_parser("backup-record", help="备份 / 恢复脚本完成后记审计（由 scripts/backup.sh、restore.sh 调用）")
+    br.add_argument("--op", choices=["create", "restore"], required=True)
+    br.add_argument("--stamp", required=True)
+    br.add_argument("--head-id", type=int, default=0)
+    br.add_argument("--bytes", type=int, default=0)
+    br.set_defaults(func=backup_record)
     args = p.parse_args(argv)
     upgrade_to_head()
     return args.func(args)

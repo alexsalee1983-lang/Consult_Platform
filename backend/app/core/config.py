@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # 配置了但文件不存在时拒绝导出，不退回默认模板。
     export_template: str = ""
 
+    # ---- 备份（scripts/backup.sh 读同一个 .env 值）----
+    # 备份保留天数：超过的备份自动删除；删除记录据此写明“备份中的副本最迟清除日”（完成日 + 天数）。
+    backup_keep_days: int = 30
+
     # ---- 登录与会话 ----
     session_backend: str = "redis"          # redis；memory 只用于单元测试，生产环境拒绝启动
     session_idle_minutes: int = 30          # 无操作超时
