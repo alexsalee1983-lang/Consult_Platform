@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!-- 离线工具：禁止任何网络请求（决策记录 2026-11-10、2026-11-13）。不要加外部脚本、字体、图片。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<title>严格档现场工具（离线）</title>
+<style>
+/* 令牌与 frontend/src/theme.css 暗色版一致（测试核对），只用变量，不写硬编码颜色 */
+:root {
+  --obs: #0a0d12; --s1: #10151c; --s2: #161d27; --s3: #1d2633;
+  --ln: #232d3b; --ln2: #2e3a4b;
+  --tx: #e6ebf2; --tx2: #a3aebe; --tx3: #6b7789;
+  --amber: #f5a524; --amber-d: rgba(245,165,36,.12);
+  --crim: #f0454f; --crim-d: rgba(240,69,79,.13);
+  --cyan: #22d3ee; --cyan-d: rgba(34,211,238,.10);
+  --ok: #3dd68c; --ok-d: rgba(61,214,140,.12);
+  --vio: #b49cff; --vio-d: rgba(180,156,255,.12);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--obs); color: var(--tx); font-size: 13px; line-height: 1.55;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--ln); background: var(--s1); }
+h1 { margin: 0; font-size: 16px; }
+h2 { margin: 0 0 8px; font-size: 14px; }
+nav { display: flex; gap: 4px; padding: 8px 18px; border-bottom: 1px solid var(--ln); flex-wrap: wrap; }
+nav button { background: transparent; border: 1px solid transparent; color: var(--tx2); padding: 5px 12px; border-radius: 6px; cursor: pointer; font: inherit; }
+nav button.on { background: var(--s2); border-color: var(--ln2); color: var(--tx); }
+main { padding: 16px 18px; max-width: 1100px; }
+section { display: none; } section.on { display: block; }
+.pnl { background: var(--s1); border: 1px solid var(--ln); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.sub { color: var(--tx3); font-size: 12px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+label { color: var(--tx2); font-size: 12px; display: block; margin: 8px 0 3px; }
+input, textarea, select { width: 100%; background: var(--s2); border: 1px solid var(--ln2); border-radius: 6px; color: var(--tx); padding: 6px 8px; font: inherit; }
+input[type=checkbox] { width: auto; }
+textarea { min-height: 70px; resize: vertical; }
+.btn { background: var(--s2); border: 1px solid var(--ln2); color: var(--tx); border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
+.btn.pri { background: var(--cyan-d); border-color: var(--cyan); color: var(--cyan); }
+.btn.dan { background: var(--crim-d); border-color: var(--crim); color: var(--crim); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-right: 4px; }
+.c-r { background: var(--crim-d); color: var(--crim); } .c-g { background: var(--ok-d); color: var(--ok); }
+.c-a { background: var(--amber-d); color: var(--amber); } .c-n { background: var(--s3); color: var(--tx2); }
+.warn { border-left: 3px solid var(--amber); background: var(--amber-d); padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+.err { border-left: 3px solid var(--crim); background: var(--crim-d); padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+.okm { border-left: 3px solid var(--ok); background: var(--ok-d); padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+table { width: 100%; border-collapse: collapse; }
+td, th { border-bottom: 1px solid var(--ln); padding: 5px 6px; text-align: left; vertical-align: top; }
+th { color: var(--tx3); font-weight: 600; font-size: 12px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mono { font-family: ui-monospace, Consolas, monospace; }
+pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); padding: 8px; border-radius: 6px; max-height: 320px; overflow: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>严格档现场工具</h1>
+  <span class="chip c-g">离线 · 本页不联网</span>
+  <span class="sub" id="hdrProject">未导入模板</span>
+  <span style="flex:1"></span>
+  <span class="sub" id="hdrDirty"></span>
+</header>
+<nav id="tabs">
+  <button data-t="start" class="on">1 模板与工作文件</button>
+  <button data-t="map">2 对照表（只留现场）</button>
+  <button data-t="cards">3 摘要卡</button>
+  <button data-t="export">4 自检与导出上传包</button>
+  <button data-t="fill">5 占位符回填</button>
+  <button data-t="open">6 查看加密包</button>
+</nav>
+<main>
+<section id="t-start" class="on">
+  <div class="pnl">
+    <h2>使用须知</h2>
+    <ul class="sub">
+      <li>本工具只在公司笔记本上离线使用，不联网、不连模型。现场资料、对照表和回填后的正式稿只留在客户现场。</li>
+      <li>工作内容只在本页内存里，不自动保存。离开前请“保存加密工作文件”（含对照表，只留本机，不要上传）。</li>
+      <li>自检规则和平台一致（来自模板），机密级检查只是简化版，以平台上传时的检查为准。</li>
+      <li>不出具等保测评、密评或认证结论，摘要卡只写控制项层面的事实。</li>
+    </ul>
+  </div>
+  <div class="pnl">
+    <h2>空白模板</h2>
+    <div class="sub">离场前（在公司网络）从平台下载本项目的空白模板（<span class="mono">GET /api/projects/{代号}/summary-cards/template</span>，存为 .json），在现场导入。不导入也能用，规则用工具内置的一份。</div>
+    <div class="row" style="margin-top:8px"><input type="file" id="tplFile" accept=".json,application/json" style="width:auto"></div>
+    <div id="tplMsg"></div>
+    <label>项目代号（虚拟代号，例如 GRID-B）</label>
+    <input id="projectCode" maxlength="40" placeholder="导入模板后自动填写">
+  </div>
+  <div class="pnl">
+    <h2>加密工作文件（含对照表，只留本机）</h2>
+    <div class="grid2">
+      <div><label>口令（至少 12 位，不要写在纸上或聊天里）</label><input type="password" id="workPass" autocomplete="new-password"></div>
+      <div><label>再输一次（保存时）</label><input type="password" id="workPass2" autocomplete="new-password"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn pri" id="saveWork">保存加密工作文件</button>
+      <input type="file" id="workFile" accept=".cpwork" style="width:auto">
+      <button class="btn" id="loadWork">打开工作文件</button>
+    </div>
+    <div id="workMsg"></div>
+  </div>
+</section>
+
+<section id="t-map">
+  <div class="pnl">
+    <h2>占位符对照表</h2>
+    <div class="sub">左边是摘要卡和草稿里用的占位符，右边是真实名称。真实名称只在本机：自检时用来发现漏写的真名，回填时用来替换占位符。对照表不会进入上传包。</div>
+    <table style="margin-top:8px"><thead><tr><th style="width:24%">占位符</th><th>真实名称</th><th style="width:14%">类别</th><th style="width:60px"></th></tr></thead><tbody id="mapBody"></tbody></table>
+    <div class="row" style="margin-top:8px"><button class="btn" id="addMap">添加一行</button><span class="sub" id="mapMsg"></span></div>
+  </div>
+</section>
+
+<section id="t-cards">
+  <div class="pnl">
+    <div class="row"><h2 style="margin:0">摘要卡</h2><span class="sub" id="cardStat"></span><span style="flex:1"></span><button class="btn pri" id="addCard">新增一张</button></div>
+    <div class="sub" id="cardHint" style="margin-top:6px"></div>
+  </div>
+  <div id="cardList"></div>
+</section>
+
+<section id="t-export">
+  <div class="pnl">
+    <h2>自检</h2>
+    <div id="checkSummary"></div>
+    <table style="margin-top:8px"><thead><tr><th style="width:60px">第几张</th><th>评估项</th><th>问题</th></tr></thead><tbody id="checkBody"></tbody></table>
+  </div>
+  <div class="pnl">
+    <h2>导出上传包（加密）</h2>
+    <div class="sub">上传包只含摘要卡，不含对照表。离场后经公司网络或 VPN 在平台上传（不走客户网络）。口令另行告知上传人，不随文件传递。</div>
+    <label><input type="checkbox" id="reviewed"> 客户对接人已逐份审阅本批摘要卡并签字确认（《数据处理计划》第四节）</label>
+    <div class="grid2">
+      <div><label>上传包口令（至少 12 位）</label><input type="password" id="upPass" autocomplete="new-password"></div>
+      <div><label>再输一次</label><input type="password" id="upPass2" autocomplete="new-password"></div>
+    </div>
+    <div class="row" style="margin-top:8px"><button class="btn pri" id="exportUp">导出上传包</button></div>
+    <div id="exportMsg"></div>
+  </div>
+</section>
+
+<section id="t-fill">
+  <div class="pnl">
+    <h2>占位符回填（回到客户现场后）</h2>
+    <div class="sub">平台导出的占位符版本 Word 草稿带回现场，按对照表把【客户】【人员1】【系统A】换回真实名称，生成正式稿。正式稿含真实信息，只在客户现场移交，不带回、不上传。</div>
+    <div class="row" style="margin-top:8px"><input type="file" id="docxFile" accept=".docx" style="width:auto"><button class="btn pri" id="fillDocx">回填 Word 并下载</button></div>
+    <div id="fillMsg"></div>
+  </div>
+  <div class="pnl">
+    <h2>文本回填</h2>
+    <textarea id="fillIn" placeholder="粘贴占位符版本的文字"></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" id="fillText">回填</button><span class="sub" id="fillTextMsg"></span></div>
+    <textarea id="fillOut" readonly></textarea>
+  </div>
+</section>
+
+<section id="t-open">
+  <div class="pnl">
+    <h2>查看加密包</h2>
+    <div class="sub">打开本工具导出的上传包，核对内容。正文就是平台上传接口（<span class="mono">POST /api/projects/{代号}/summary-cards</span>）的请求体。</div>
+    <div class="row" style="margin-top:8px"><input type="file" id="openFile" accept=".cpcard,.cpwork" style="width:auto"><input type="password" id="openPass" placeholder="口令" style="width:220px"><button class="btn" id="openBtn">解密查看</button></div>
+    <div id="openMsg"></div>
+    <pre id="openOut" hidden></pre>
+  </div>
+</section>
+</main>
+
+<script id="core">
+/* 核心逻辑：不碰页面，测试（field-tool/test/core.test.mjs）直接执行这一段。 */
+(function (root) {
+  "use strict";
+  /*CHECKS-BEGIN*/const DEFAULT_CHECKS = {"evidence_code": "(?<![A-Za-z0-9])[DIOS]-\\d{2,4}(?:-\\d{2,3})?(?![\\d-])", "generic_latin": ["5x8", "7x24", "7x8", "acl", "ad", "ai", "api", "app", "apt", "att", "bcp", "bgp", "bia", "ca", "cd", "cdn", "cert", "ci", "ck", "cmdb", "cpu", "crm", "csf", "csirt", "ctf", "cti", "cve", "cvss", "cwe", "dast", "db", "dcs", "ddos", "devops", "devsecops", "dhcp", "dl", "dlp", "dlt", "dmz", "dns", "dr", "drp", "dss", "edr", "email", "erp", "excel", "faq", "fte", "ftp", "gb", "gb/t", "gbt", "gdpr", "ha", "hids", "hr", "hsm", "http", "https", "iaas", "iam", "iast", "ics", "id", "idc", "ids", "iec", "imap", "ioc", "iot", "ip", "ips", "ir", "isms", "iso", "it", "itil", "itsm", "jr", "jrt", "kms", "kpi", "kri", "l1", "l2", "l3", "l4", "lan", "ldap", "llm", "mac", "mdr", "mfa", "mitre", "na", "nat", "ndr", "nids", "nist", "noc", "nta", "ntp", "oa", "ok", "okr", "ola", "os", "ot", "p0", "p1", "p2", "p3", "p4", "paas", "pam", "pc", "pci", "pdca", "pdf", "pki", "plc", "poc", "ppt", "pt", "q1", "q2", "q3", "q4", "raci", "rasp", "rdp", "rpo", "rto", "saas", "sast", "sbom", "sca", "scada", "sdl", "sftp", "siem", "sla", "smtp", "snmp", "soar", "soc", "sop", "sox", "sql", "ssh", "ssl", "sso", "syslog", "t1", "t2", "t3", "tbd", "ti", "tls", "ttp", "ttps", "uat", "ueba", "url", "usb", "va", "vip", "vlan", "vpn", "waf", "wan", "web", "wifi", "word", "xdr", "yd", "ydt"], "latin": "(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9_.+-]*[A-Za-z0-9]|[A-Za-z])(?![A-Za-z0-9])", "onsite_ref": "[A-Z]{1,3}-\\d{1,4}(?:-\\d{1,3})?", "org": {"allow": ["上市公司", "中国人民银行", "中央银行", "中小银行", "人民银行", "保险公司", "公安部", "农村商业银行", "分公司", "各银行", "咨询公司", "商业银行", "国家金融监督管理总局", "国有银行", "城市商业银行", "外包公司", "外资银行", "大型银行", "子公司", "安全公司", "工业和信息化部", "开发银行", "总公司", "托管公司", "政策性银行", "本银行", "村镇银行", "某银行", "母公司", "民营银行", "股份制银行", "证券公司", "证监会", "该银行", "银保监会", "集团公司"], "generic_head": ["某", "该", "本", "各", "其", "一家", "这家", "多家", "大型", "中型", "小型", "全国性", "区域性", "地方", "国有", "股份制", "城市", "农村", "外资", "民营", "其他", "相关", "所属", "下属", "我"], "re": "([一-龥A-Za-z]{2,12}?)(股份有限公司|有限责任公司|有限公司|农村商业银行|城市商业银行|农商银行|农商行|城商行|商业银行|银行|信用社|证券|保险|信托|集团|公司|电网|供电局|电力局|医院|大学|学院|研究院|研究所|管理局)", "strip": "^.*?(?:于|在|为|对|向|与|和|及|是|的|给|帮|到|从)(?=[一-龥A-Za-z]{2,})", "tail": ["的", "和", "与", "及", "或"]}, "patterns": [["联系方式", "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "", "【联系方式已删除】"], ["联系方式", "(?<!\\d)1[3-9]\\d{9}(?!\\d)", "", "【联系方式已删除】"], ["联系方式", "(?<!\\d)0\\d{2,3}-?\\d{7,8}(?!\\d)", "", "【联系方式已删除】"], ["网络标识", "https?://[^\\s，。；）)]+", "", "【网络标识】"], ["网络标识", "(?<![\\w.@])(?:[A-Za-z0-9-]+\\.)+(?:com|cn|net|org|gov|edu|io|local|internal|corp)(?:\\.cn)?(?![\\w.])", "i", "【网络标识】"], ["网络标识", "(?<![\\d.])(?:\\d{1,3}\\.){3}\\d{1,3}(?:/\\d{1,2})?(?![\\d.])", "", "【网络标识】"], ["", "[一-龥]{1,8}[〔\\[［(（]\\d{4}[〕\\]］)）]\\s*\\d{1,5}\\s*号", "", "【编号】"], ["", "(?:合同|项目|采购|招标|订单|工单)(?:编号|号)[:：]?\\s*[A-Za-z0-9-]{4,}", "", "【编号】"], ["", "(?<![A-Za-z0-9])[A-Z]{2,6}-\\d{4,}(?:-\\d+)*(?![A-Za-z0-9])", "", "【编号】"], ["", "(?:人民币|￥|¥|RMB)\\s*\\d[\\d,]*(?:\\.\\d+)?\\s*(?:亿|万)?元?", "", "【金额】"], ["", "\\d[\\d,]*(?:\\.\\d+)?\\s*(?:亿元|万元|元)", "", "【金额】"]], "person": ["(?:(?<=^)|(?<=[\\s，。；：、,.;:!?！？（(“\\\"'《的和与及跟同由请让向对给被找叫问是]))([王李张刘陈杨黄赵吴周徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤])(?:[一-龥]{1,2})?(总经理|董事长|副总|总监|经理|主任|部长|处长|科长|局长|行长|组长|主管|老师|工程师)(?![一-龥])", "(?:(?<=^)|(?<=[\\s，。；：、,.;:!?！？（(“\\\"'《的和与及跟同由请让向对给被找叫问是]))([王李张刘陈杨黄赵吴周徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤])(总|处|局|工|经理|主任|行长|部长)(?!体|结|部|计|量|数|共|之|是|监|裁|局|理|长)"], "person_title": "(?:(?<=^)|(?<=[\\s，。；：、,.;:!?！？（(“\\\"'《的和与及跟同由请让向对给被找叫问是]))[王李张刘陈杨黄赵吴周徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕丁任沈姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤](?:总经理|董事长|副总|总监|经理|主任|部长|处长|科长|局长|行长|组长|主管|老师|工程师)", "placeholder": "【[一-龥]{1,12}\\s?(?:[A-Z]|\\d{1,2}|[一二三四五六七八九十])?】", "quote": "[“「『\\\"]([^”」』\\\"]{6,})[”」』\\\"]", "schema": 1, "version_no": "(?<![A-Za-z0-9.])[Vv]?\\d+\\.\\d+\\.\\d+(?![\\d.])|(?<![A-Za-z0-9])[Vv]\\d+(?:\\.\\d+)?(?![\\w.])"};/*CHECKS-END*/
+
+  const MAP_KINDS = { "机构": "机构名称", "人员": "人员姓名", "系统": "系统名称", "其他": "对照表真名" };
+  const KIND_ORDER = ["机构名称", "人员姓名", "联系方式", "网络标识", "系统名称", "原话", "机密级", "对照表真名"];
+  // 机密级简化版（平台 guard 的子集；以平台上传时的检查为准）
+  const SECRET_RES = [
+    /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/,
+    /(?:口令|密码|password|passwd|pwd|密钥|secret|token)\s*(?:为|是|[:：=])\s*\S{4,}/i,
+    /\b(?:AKIA[0-9A-Z]{16}|LTAI[0-9A-Za-z]{12,20}|sk-[A-Za-z0-9_\-]{20,})\b/,
+    /(?<!\d)\d{17}[\dXx](?!\d)/,
+    /(?<!\d)\d{16,19}(?!\d)/,
+  ];
+
+  /* 平台规则是 Python 正则：\w 在 Python 里含汉字，JS 里只有 ASCII，统一换成 Unicode 写法（u 标志）。 */
+  function pyRe(src, flags) {
+    let out = "", inClass = false;
+    for (let i = 0; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === "\\") {
+        const nx = src[i + 1];
+        if (nx === "w") out += inClass ? "\\p{L}\\p{N}_" : "[\\p{L}\\p{N}_]";
+        else if (nx === "W") out += inClass ? "\\P{L}" : "[^\\p{L}\\p{N}_]";
+        else if (/[A-Za-z0-9^$\\.*+?()[\]{}|/]/.test(nx) || (nx === "-" && inClass)) out += ch + nx;
+        else out += nx;   // Python 允许的多余转义（\" \' 等），u 标志下非法
+        i++; continue;
+      }
+      if (ch === "[" && !inClass) inClass = true;
+      else if (ch === "]" && inClass) inClass = false;
+      out += ch;
+    }
+    return new RegExp(out, (flags || "") + "u");
+  }
+
+  function compile(checks) {
+    const c = checks || DEFAULT_CHECKS;
+    return {
+      raw: c,
+      placeholder: pyRe(c.placeholder, "g"),
+      evidence: pyRe(c.evidence_code, "g"),
+      onsiteRef: pyRe("^(?:" + c.onsite_ref + ")$"),
+      patterns: c.patterns.map(([kind, src, flags, ph]) => [kind, pyRe(src, (flags || "") + "g"), ph || "【】"]),
+      org: pyRe(c.org.re, "g"),
+      orgStrip: pyRe(c.org.strip),
+      orgAllow: new Set(c.org.allow),
+      person: c.person.map((s) => pyRe(s, "g")),
+      personTitle: pyRe(c.person_title),
+      quote: pyRe(c.quote),
+      latin: pyRe(c.latin, "g"),
+      version: pyRe(c.version_no),
+      generic: new Set(c.generic_latin),
+    };
+  }
+
+  function isOrg(C, name, suffix) {
+    const full = name + suffix;
+    const o = C.raw.org;
+    if (C.orgAllow.has(full) || o.generic_head.some((h) => name.startsWith(h)) || o.tail.some((t) => name.endsWith(t))) return false;
+    for (const a of C.orgAllow) if (full.endsWith(a) && full.length - a.length <= 1) return false;
+    return true;
+  }
+
+  /** 摘要卡规则检查：返回命中的类别（与平台 cards.card_problems 同一套规则，另加对照表真名）。 */
+  function cardProblems(text, C, mapping) {
+    const found = new Set();
+    text = text || "";
+    if (SECRET_RES.some((r) => r.test(text))) found.add("机密级");
+    for (const m of mapping || []) {
+      const real = (m.real || "").trim();
+      if (real.length >= 2 && text.includes(real)) found.add(MAP_KINDS[m.kind] || "对照表真名");
+    }
+    const s = text.replace(C.placeholder, "【】").replace(C.evidence, " ");
+    // 与平台去标识同序：逐条正则替换 → 机构名 → 人名（后一步看的是前一步替换后的文字）
+    let t = s;
+    for (const [kind, re, ph] of C.patterns) t = t.replace(re, () => { if (kind) found.add(kind); return ph; });
+    t = t.replace(C.org, (all, raw, suffix) => {
+      const name = raw.replace(C.orgStrip, "");
+      if (!isOrg(C, name, suffix)) return all;
+      found.add("机构名称");
+      return raw.slice(0, raw.length - name.length) + "【客户】";
+    });
+    for (const re of C.person) t = t.replace(re, () => { found.add("人员姓名"); return "【人员】"; });
+    if (C.personTitle.test(s)) found.add("人员姓名");
+    if (C.quote.test(s)) found.add("原话");
+    let sys = C.version.test(s);
+    if (!sys) for (const m of s.matchAll(C.latin)) if (m[1].length > 1 && !C.generic.has(m[1].toLowerCase())) { sys = true; break; }
+    if (sys) found.add("系统名称");
+    return KIND_ORDER.filter((k) => found.has(k));
+  }
+
+  const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+
+  function normRefs(v) {
+    const list = Array.isArray(v) ? v : String(v || "").split(/[\s,，、;；]+/);
+    return [...new Set(list.map((x) => String(x).trim().toUpperCase()).filter(Boolean))];
+  }
+
+  /** 一张卡的全部问题：[{field, kinds}]。 */
+  function checkCard(card, C, mapping) {
+    const out = [];
+    const item = (card.item || "").trim(), finding = (card.finding || "").trim();
+    if (!item) out.push({ field: "item", kinds: ["缺内容"] });
+    else if (item.length > 200) out.push({ field: "item", kinds: ["超长"] });
+    if (!finding) out.push({ field: "finding", kinds: ["缺内容"] });
+    else if (finding.length > 2000) out.push({ field: "finding", kinds: ["超长"] });
+    if ((card.magnitude || "").length > 100) out.push({ field: "magnitude", kinds: ["超长"] });
+    for (const f of ["item", "finding", "magnitude"]) {
+      const k = cardProblems(card[f] || "", C, mapping);
+      if (k.length) out.push({ field: f, kinds: k });
+    }
+    const refs = normRefs(card.onsite_refs);
+    if (refs.length > 20 || refs.some((r) => !C.onsiteRef.test(r))) out.push({ field: "onsite_refs", kinds: ["证据编号格式"] });
+    const d = card.client_reviewed_on || "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d > today()) out.push({ field: "client_reviewed_on", kinds: ["审阅日期"] });
+    return out;
+  }
+
+  /** 上传包正文：与平台上传接口的请求体一致。 */
+  function uploadBody(cards) {
+    return { cards: cards.map((c) => ({ item: (c.item || "").trim(), finding: (c.finding || "").trim(),
+      magnitude: (c.magnitude || "").trim(), onsite_refs: normRefs(c.onsite_refs), client_reviewed_on: c.client_reviewed_on })) };
+  }
+
+  // ---- 加密包：PBKDF2-SHA256 派生 AES-256-GCM 密钥 ----
+  const ITERATIONS = 600000;
+  const b64 = (u8) => { let s = ""; for (const x of u8) s += String.fromCharCode(x); return btoa(s); };
+  const unb64 = (s) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
+  async function deriveKey(pass, salt, iterations) {
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, base,
+      { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+  async function encryptPackage(kind, obj, pass, iterations) {
+    if ((pass || "").length < 12) throw new Error("口令至少 12 位");
+    const it = iterations || ITERATIONS;
+    const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(pass, salt, it);
+    const aad = new TextEncoder().encode("cp-field-package:1:" + kind);
+    const data = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad }, key,
+      new TextEncoder().encode(JSON.stringify(obj))));
+    return { format: "cp-field-package", version: 1, kind,
+      kdf: { name: "PBKDF2", hash: "SHA-256", iterations: it, salt: b64(salt) },
+      cipher: { name: "AES-GCM", iv: b64(iv) }, data: b64(data) };
+  }
+  async function decryptPackage(pkg, pass) {
+    if (!pkg || pkg.format !== "cp-field-package" || pkg.version !== 1) throw new Error("不是本工具导出的加密包");
+    const key = await deriveKey(pass || "", unb64(pkg.kdf.salt), pkg.kdf.iterations);
+    const aad = new TextEncoder().encode("cp-field-package:1:" + pkg.kind);
+    let plain;
+    try {
+      plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(pkg.cipher.iv), additionalData: aad }, key, unb64(pkg.data));
+    } catch (e) { throw new Error("口令不对或文件已损坏"); }
+    return { kind: pkg.kind, body: JSON.parse(new TextDecoder().decode(plain)) };
+  }
+
+  // ---- 占位符回填 ----
+  const xmlEsc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const PH_ANY = /【(?!依据)[^【】]{1,20}】/g;
+  function fillText(text, mapping, escape) {
+    const rows = (mapping || []).filter((m) => (m.placeholder || "").trim() && (m.real || "").trim())
+      .sort((a, b) => b.placeholder.trim().length - a.placeholder.trim().length);
+    let count = 0;
+    for (const m of rows) {
+      const ph = m.placeholder.trim(), real = escape ? xmlEsc(m.real.trim()) : m.real.trim();
+      const parts = text.split(ph);
+      count += parts.length - 1;
+      text = parts.join(real);
+    }
+    return { text, count };
+  }
+  function leftovers(text) { return [...new Set(text.match(PH_ANY) || [])]; }
+
+  // ---- 最小 zip 读写（docx）：读支持存储和 deflate，写一律存储（不压缩） ----
+  const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(u8) { let c = 0xffffffff; for (const b of u8) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  async function browserInflate(u8) {
+    const ds = new DecompressionStream("deflate-raw");
+    return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer());
+  }
+  async function readZip(buf, inflate) {
+    const u8 = new Uint8Array(buf), dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    let eocd = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error("不是有效的 Word 文件");
+    const n = dv.getUint16(eocd + 10, true);
+    let p = dv.getUint32(eocd + 16, true);
+    const entries = [];
+    for (let i = 0; i < n; i++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("Word 文件目录损坏");
+      const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+      const nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+      const off = dv.getUint32(p + 42, true);
+      const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nlen));
+      const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+      const comp = u8.subarray(start, start + csize);
+      let data;
+      if (method === 0) data = comp.slice();
+      else if (method === 8) data = await (inflate || browserInflate)(comp);
+      else throw new Error("不支持的压缩方式");
+      entries.push({ name, data });
+      p += 46 + nlen + elen + clen;
+    }
+    return entries;
+  }
+  function writeZip(entries) {
+    const enc = new TextEncoder(), chunks = [], central = [];
+    let off = 0;
+    for (const e of entries) {
+      const name = enc.encode(e.name), crc = crc32(e.data), size = e.data.length;
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+      h.setUint32(14, crc, true); h.setUint32(18, size, true); h.setUint32(22, size, true); h.setUint16(26, name.length, true);
+      chunks.push(new Uint8Array(h.buffer), name, e.data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+      c.setUint32(16, crc, true); c.setUint32(20, size, true); c.setUint32(24, size, true); c.setUint16(28, name.length, true);
+      c.setUint32(42, off, true);
+      central.push(new Uint8Array(c.buffer), name);
+      off += 30 + name.length + size;
+    }
+    const cdSize = central.reduce((a, b) => a + b.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+    const all = [...chunks, ...central, new Uint8Array(end.buffer)];
+    const out = new Uint8Array(all.reduce((a, b) => a + b.length, 0));
+    let q = 0; for (const a of all) { out.set(a, q); q += a.length; }
+    return out;
+  }
+  const TEXT_PART = /^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$/;
+  /** 回填 docx：返回 {bytes, count, leftovers}。占位符被 Word 格式拆开时替换不到，列入 leftovers 提示手工处理。 */
+  async function fillDocx(buf, mapping, inflate) {
+    const entries = await readZip(buf, inflate);
+    let count = 0; const left = new Set();
+    for (const e of entries) {
+      if (!TEXT_PART.test(e.name)) continue;
+      const r = fillText(new TextDecoder().decode(e.data), mapping, true);
+      count += r.count;
+      e.data = new TextEncoder().encode(r.text);
+      const plain = r.text.replace(/<w:p[ >][\s\S]*?<\/w:p>/g, (p) => (p.match(/<w:t(?: [^>]*)?>([^<]*)<\/w:t>/g) || [])
+        .map((t) => t.replace(/<[^>]+>/g, "")).join("") + "\n");
+      for (const l of leftovers(plain.replace(/<[^>]+>/g, ""))) left.add(l);
+    }
+    return { bytes: writeZip(entries), count, leftovers: [...left] };
+  }
+
+  root.FieldCore = { DEFAULT_CHECKS, MAP_KINDS, compile, cardProblems, checkCard, uploadBody, normRefs, today,
+    encryptPackage, decryptPackage, fillText, leftovers, readZip, writeZip, fillDocx, crc32 };
+})(globalThis);
+</script>
+
+<script>
+(function () {
+  "use strict";
+  const F = globalThis.FieldCore;
+  const $ = (id) => document.getElementById(id);
+  const state = { template: null, checks: null, mapping: [], cards: [], dirty: false };
+  let C = F.compile(null);
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const msg = (el, cls, text) => { $(el).innerHTML = text ? `<div class="${cls}">${esc(text)}</div>` : ""; };
+  function dirty(v = true) { state.dirty = v; $("hdrDirty").textContent = v ? "有未保存的修改（保存加密工作文件）" : ""; }
+  window.addEventListener("beforeunload", (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+  function download(name, data, type) {
+    const url = URL.createObjectURL(new Blob([data], { type }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+  const code = () => ($("projectCode").value || "").trim().toUpperCase();
+  const stamp = () => F.today().replace(/-/g, "");
+
+  // 标签页
+  $("tabs").addEventListener("click", (e) => {
+    const t = e.target.dataset && e.target.dataset.t; if (!t) return;
+    for (const b of $("tabs").children) b.classList.toggle("on", b.dataset.t === t);
+    for (const s of document.querySelectorAll("main > section")) s.classList.toggle("on", s.id === "t-" + t);
+    if (t === "export") renderCheck();
+  });
+
+  // 模板
+  function applyTemplate(tpl) {
+    state.template = tpl; state.checks = tpl.checks || null; C = F.compile(state.checks);
+    if (tpl.project_code) $("projectCode").value = tpl.project_code;
+    $("hdrProject").textContent = "项目 " + (tpl.project_code || "") + (tpl.consent_active === false ? " · 模板下载时尚未登记客户同意" : "");
+    $("cardHint").textContent = "可用占位符：" + (tpl.placeholders || []).join(" ") + "。规则：" + (tpl.rules || []).map((r) => r.kind).join("、");
+  }
+  $("tplFile").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const tpl = JSON.parse(await f.text());
+      if (!tpl.fields || !Array.isArray(tpl.rules)) throw new Error("不是摘要卡模板");
+      applyTemplate(tpl); dirty();
+      msg("tplMsg", tpl.consent_active === false ? "warn" : "okm",
+        tpl.consent_active === false ? "已导入。注意：下载模板时平台上还没有有效的客户同意，没有同意不能上传。" : "已导入模板，自检规则以模板为准。");
+      renderAll();
+    } catch (err) { msg("tplMsg", "err", "导入失败：" + err.message); }
+  });
+  $("projectCode").addEventListener("input", () => dirty());
+
+  // 对照表
+  function renderMap() {
+    $("mapBody").innerHTML = state.mapping.map((m, i) => `<tr>
+      <td><input data-i="${i}" data-f="placeholder" value="${esc(m.placeholder)}" placeholder="【系统A】"></td>
+      <td><input data-i="${i}" data-f="real" value="${esc(m.real)}" placeholder="真实名称（只留本机）"></td>
+      <td><select data-i="${i}" data-f="kind">${Object.keys(F.MAP_KINDS).map((k) => `<option${k === m.kind ? " selected" : ""}>${k}</option>`).join("")}</select></td>
+      <td><button class="btn dan" data-del="${i}">删除</button></td></tr>`).join("");
+    const bad = state.mapping.filter((m) => m.placeholder && !/^【[^【】]{1,20}】$/.test(m.placeholder.trim())).length;
+    $("mapMsg").textContent = bad ? `${bad} 行占位符格式不对（要用【】括起来）` : `${state.mapping.length} 行`;
+  }
+  $("addMap").addEventListener("click", () => { state.mapping.push({ placeholder: "", real: "", kind: "机构" }); dirty(); renderMap(); });
+  $("mapBody").addEventListener("input", (e) => { const i = e.target.dataset.i; if (i === undefined) return; state.mapping[i][e.target.dataset.f] = e.target.value; dirty(); });
+  $("mapBody").addEventListener("change", () => { renderMap(); renderCards(); });
+  $("mapBody").addEventListener("click", (e) => { const i = e.target.dataset.del; if (i === undefined) return; state.mapping.splice(+i, 1); dirty(); renderMap(); renderCards(); });
+
+  // 摘要卡
+  const FIELDS = [["item", "评估项", "input"], ["finding", "现状（只写控制项层面的事实，用占位符）", "textarea"], ["magnitude", "数量级（如“约 30 个”）", "input"],
+    ["onsite_refs", "现场证据编号（如 D-03 I-02，原文留在现场）", "input"], ["client_reviewed_on", "客户对接人审阅签字日期", "date"]];
+  function cardStatus(c) { return F.checkCard(c, C, state.mapping); }
+  function renderCards() {
+    $("cardList").innerHTML = state.cards.map((c, i) => {
+      const probs = cardStatus(c);
+      const chips = probs.length ? probs.map((p) => `<span class="chip c-r">${esc(fieldName(p.field))}：${esc(p.kinds.join("、"))}</span>`).join("") : `<span class="chip c-g">自检通过</span>`;
+      return `<div class="pnl"><div class="row"><b>第 ${i + 1} 张</b>${chips}<span style="flex:1"></span><button class="btn dan" data-del="${i}">删除</button></div>
+        <div class="grid2">${FIELDS.map(([k, n, t]) => `<div${k === "finding" ? ' style="grid-column:1/3"' : ""}><label>${n}</label>${t === "textarea"
+          ? `<textarea data-i="${i}" data-f="${k}">${esc(c[k])}</textarea>`
+          : `<input data-i="${i}" data-f="${k}" type="${t === "date" ? "date" : "text"}" value="${esc(Array.isArray(c[k]) ? c[k].join(" ") : c[k])}">`}</div>`).join("")}</div></div>`;
+    }).join("");
+    const bad = state.cards.filter((c) => cardStatus(c).length).length;
+    $("cardStat").textContent = `共 ${state.cards.length} 张，${bad} 张未通过自检`;
+  }
+  const fieldName = (f) => (FIELDS.find((x) => x[0] === f) || [f, f])[1].replace(/（.*$/, "");
+  $("addCard").addEventListener("click", () => { state.cards.push({ item: "", finding: "", magnitude: "", onsite_refs: "", client_reviewed_on: "" }); dirty(); renderCards(); });
+  $("cardList").addEventListener("input", (e) => { const i = e.target.dataset.i; if (i === undefined) return; state.cards[i][e.target.dataset.f] = e.target.value; dirty(); });
+  $("cardList").addEventListener("change", () => renderCards());
+  $("cardList").addEventListener("click", (e) => { const i = e.target.dataset.del; if (i === undefined) return; if (!confirm(`删除第 ${+i + 1} 张？`)) return; state.cards.splice(+i, 1); dirty(); renderCards(); });
+
+  // 自检与导出
+  function renderCheck() {
+    const rows = []; state.cards.forEach((c, i) => { for (const p of cardStatus(c)) rows.push(`<tr><td>${i + 1}</td><td>${esc(c.item)}</td><td>${esc(fieldName(p.field))}：${esc(p.kinds.join("、"))}</td></tr>`); });
+    $("checkBody").innerHTML = rows.join("");
+    msg("checkSummary", rows.length ? "err" : (state.cards.length ? "okm" : "warn"),
+      !state.cards.length ? "还没有摘要卡" : rows.length ? `${rows.length} 处问题，改完才能导出（平台整批检查，任何一张不过整批拒收）` : `${state.cards.length} 张全部通过自检`);
+  }
+  $("exportUp").addEventListener("click", async () => {
+    renderCheck();
+    try {
+      if (!code()) throw new Error("先填写项目代号");
+      if (!state.cards.length) throw new Error("还没有摘要卡");
+      if (state.cards.some((c) => cardStatus(c).length)) throw new Error("有摘要卡没通过自检");
+      if (state.cards.length > 200) throw new Error("一次最多 200 张");
+      if (!$("reviewed").checked) throw new Error("客户对接人审阅签字后才能导出");
+      if ($("upPass").value !== $("upPass2").value) throw new Error("两次口令不一致");
+      $("exportUp").disabled = true; msg("exportMsg", "warn", "正在加密……");
+      const pkg = await F.encryptPackage("upload", { project_code: code(), ...F.uploadBody(state.cards) }, $("upPass").value);
+      download(`${code()}-摘要卡-${stamp()}.cpcard`, JSON.stringify(pkg), "application/json");
+      $("upPass").value = $("upPass2").value = "";
+      msg("exportMsg", "okm", `已导出 ${state.cards.length} 张。上传包不含对照表；口令另行告知上传人。`);
+    } catch (err) { msg("exportMsg", "err", err.message); } finally { $("exportUp").disabled = false; }
+  });
+
+  // 工作文件
+  $("saveWork").addEventListener("click", async () => {
+    try {
+      if ($("workPass").value !== $("workPass2").value) throw new Error("两次口令不一致");
+      msg("workMsg", "warn", "正在加密……");
+      const pkg = await F.encryptPackage("work", { project_code: code(), template: state.template, mapping: state.mapping, cards: state.cards }, $("workPass").value);
+      download(`${code() || "现场"}-工作文件-${stamp()}.cpwork`, JSON.stringify(pkg), "application/json");
+      $("workPass2").value = ""; dirty(false);
+      msg("workMsg", "okm", "已保存。工作文件含对照表，只留本机加密目录，不要上传、不要外发。");
+    } catch (err) { msg("workMsg", "err", err.message); }
+  });
+  $("loadWork").addEventListener("click", async () => {
+    try {
+      const f = $("workFile").files[0]; if (!f) throw new Error("先选择工作文件");
+      const { kind, body } = await F.decryptPackage(JSON.parse(await f.text()), $("workPass").value);
+      if (kind !== "work") throw new Error("这是上传包，不是工作文件");
+      if (body.template) applyTemplate(body.template); else { state.template = null; C = F.compile(null); }
+      $("projectCode").value = body.project_code || "";
+      state.mapping = body.mapping || []; state.cards = body.cards || [];
+      dirty(false); renderAll(); msg("workMsg", "okm", `已打开：${state.cards.length} 张卡，对照表 ${state.mapping.length} 行。`);
+    } catch (err) { msg("workMsg", "err", err.message); }
+  });
+
+  // 回填
+  $("fillText").addEventListener("click", () => {
+    const r = F.fillText($("fillIn").value, state.mapping, false);
+    $("fillOut").value = r.text;
+    const left = F.leftovers(r.text);
+    $("fillTextMsg").textContent = `替换 ${r.count} 处` + (left.length ? `；对照表里没有：${left.join(" ")}` : "");
+  });
+  $("fillDocx").addEventListener("click", async () => {
+    try {
+      const f = $("docxFile").files[0]; if (!f) throw new Error("先选择 Word 草稿");
+      if (!state.mapping.some((m) => m.placeholder && m.real)) throw new Error("对照表是空的");
+      const r = await F.fillDocx(await f.arrayBuffer(), state.mapping);
+      download(f.name.replace(/\.docx$/i, "") + "-正式稿.docx", r.bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      msg("fillMsg", r.leftovers.length ? "warn" : "okm", `替换 ${r.count} 处。` + (r.leftovers.length
+        ? `仍有占位符没替换（对照表里没有，或被 Word 格式拆开）：${r.leftovers.join(" ")}，请在 Word 里手工处理。` : "") +
+        "正式稿含真实信息，只在客户现场移交。另：草稿页眉的“草稿”字样和页脚导出编号保持原样。");
+    } catch (err) { msg("fillMsg", "err", "回填失败：" + err.message); }
+  });
+
+  // 查看加密包
+  $("openBtn").addEventListener("click", async () => {
+    try {
+      const f = $("openFile").files[0]; if (!f) throw new Error("先选择文件");
+      const { kind, body } = await F.decryptPackage(JSON.parse(await f.text()), $("openPass").value);
+      const shown = kind === "work" ? { project_code: body.project_code, cards: body.cards, mapping: `（对照表 ${(body.mapping || []).length} 行，不显示）` } : body;
+      $("openOut").hidden = false; $("openOut").textContent = JSON.stringify(shown, null, 2);
+      msg("openMsg", "okm", kind === "upload" ? `上传包：项目 ${body.project_code}，${body.cards.length} 张卡` : "工作文件（对照表不显示）");
+    } catch (err) { $("openOut").hidden = true; msg("openMsg", "err", err.message); }
+  });
+
+  function renderAll() { renderMap(); renderCards(); renderCheck(); }
+  renderAll();
+})();
+</script>
+</body>
+</html>
