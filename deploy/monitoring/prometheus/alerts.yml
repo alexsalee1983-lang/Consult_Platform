@@ -25,7 +25,7 @@ groups:
         annotations: {summary: "10 分钟内 5xx 超过 5%"}
       - alert: 接口变慢
         # 不含大模型对话（流式，耗时含整个输出）
-        expr: histogram_quantile(0.95, sum by (le) (rate(cp_http_request_duration_seconds_bucket{route!~"/api/chat.*|/api/conversations/\{cid\}/messages|unmatched"}[10m]))) > 1
+        expr: histogram_quantile(0.95, sum by (le) (rate(cp_http_request_duration_seconds_bucket{route!~"/api/chat.*|/api/conversations/[^/]+/messages|unmatched"}[10m]))) > 1
         for: 15m
         labels: {severity: warning}
         annotations: {summary: "普通接口 p95 超过 1 秒（压测阈值）"}
