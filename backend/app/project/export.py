@@ -303,12 +303,12 @@ def _source_labels(db: Session, project: Project, d: Deliverable) -> dict[str, s
             extra = f"（受访者：{e.interviewee_role}）" if e.interviewee_role else ""
             date = f"，{e.occurred_on.isoformat()}" if e.occurred_on else ""
             labels[e.code] = f"{KIND_NAMES.get(e.kind, '证据')}《{e.title}》{extra}{date}"
-        cards = {c for c in codes if c.startswith("S-")}
-        if cards:                                     # 严格档摘要卡：撤下的不给说明（脚注写“未核对到”）
-            for sc in db.scalars(select(SummaryCard).where(SummaryCard.project_id == project.id,
-                                                           SummaryCard.code.in_(cards),
-                                                           SummaryCard.withdrawn.is_(False))):
-                labels[sc.code] = f"去标识摘要卡《{sc.item}》，客户审阅 {sc.client_reviewed_on.isoformat()}"
+    cards = {c for c in codes if c.startswith("S-")}
+    if cards:                                     # 严格档摘要卡：撤下的不给说明（脚注写“未核对到”）
+        for sc in db.scalars(select(SummaryCard).where(SummaryCard.project_id == project.id,
+                                                       SummaryCard.code.in_(cards),
+                                                       SummaryCard.withdrawn.is_(False))):
+            labels[sc.code] = f"去标识摘要卡《{sc.item}》，客户审阅 {sc.client_reviewed_on.isoformat()}"
     if docs:
         for doc_id, layer, title in db.execute(select(KbItem.doc_id, KbItem.layer, KbVersion.title).join(
                 KbVersion, KbVersion.id == KbItem.current_version_id).where(
