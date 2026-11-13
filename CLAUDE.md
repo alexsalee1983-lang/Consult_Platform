@@ -86,6 +86,7 @@ docker compose exec backend python -m app.cli reset-totp --username <名字>
 docker compose exec backend python -m app.cli grant-role --username <名字> --role consultant   # 审计员只能这样授予
 docker compose exec backend python -m app.cli list-users
 docker compose exec backend python -m app.cli add-member --project <项目> --username <名字> --role manager   # 没有项目经理的项目指定首位经理、应急；日常由项目经理在网页调整
+docker compose exec backend python -m app.cli create-project --code <客户代号> --tier standard --manager <名字> [--industry 银行]   # 立项（一期无网页立项）：必须定档，建 D1～D8，指定首位项目经理
 docker compose exec backend python -m app.cli verify-audit          # 校验审计哈希链（问题时退出码 2）
 bash scripts/audit_chain_check.sh                                    # 测试机：多进程并发写审计后校验（生产拒绝执行）
 docker compose exec backend python -m app.cli usage-report --days 30 # 大模型用量（按人、项目、模型）

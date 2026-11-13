@@ -7,8 +7,11 @@
     docker compose exec backend python -m app.cli grant-role --username wangwu --role security_auditor
     docker compose exec backend python -m app.cli list-users
     docker compose exec backend python -m app.cli add-member --project GRID-B --username zhangsan --role manager
+    docker compose exec backend python -m app.cli create-project --code BANK-D --industry 银行 --tier standard --manager zhangsan
 
 项目成员日常由项目经理在网页上调整；add-member 只用于给还没有项目经理的项目指定第一位经理，或应急。
+create-project 立项（一期没有网页立项）：项目代号只用客户代号（不写客户真实名称），立项时必须定档，同时指定首位项目经理；
+自动建 D1～D8 交付件（未开始）。
 安全审计员由单独任命，只能用 grant-role / revoke-role 在服务器上授予或撤销，任何网页接口都做不到。
 口令交互输入，不出现在命令行参数和 shell 历史里。TOTP 密钥只显示一次，请当面交给用户录入认证器。
 所有操作写入审计日志（操作人记为 cli）。
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import re
 import sys
 
 from sqlalchemy import select
@@ -28,7 +32,7 @@ from .core.migrate import upgrade_to_head
 from .core.permissions import (BUSINESS_ROLES, EXCLUSIVE_ROLES, PROJECT_ROLES, ROLE_NAMES, RoleRuleError,
                                membership, roles_of, set_roles)
 from .core.security import PasswordPolicyError, check_password_policy, hash_password, new_totp_secret, totp_uri
-from .models import Project, ProjectMember, User
+from .models import Deliverable, Project, ProjectMember, User
 
 
 def _ask_password() -> str:
@@ -171,6 +175,43 @@ def add_member(args: argparse.Namespace) -> int:
         audit.record(db, actor="cli", action="project.member", result="allowed", project_code=project.code,
                      target=args.username, project_role=args.role)
     print(f"{args.username} 现在是 {args.project} 的{PROJECT_ROLES[args.role]}")
+    return 0
+
+
+PROJECT_CODE = re.compile(r"^[A-Z]{2,8}-[A-Z0-9]{1,6}$")
+TIERS = {"standard": "标准档", "strict": "严格档"}
+
+
+def create_project(args: argparse.Namespace) -> int:
+    """立项：建项目和 D1～D8 交付件，指定首位项目经理。"""
+    from .seed import DELIVERABLES
+
+    code = args.code.strip().upper()
+    if not PROJECT_CODE.match(code):
+        print("项目代号格式为“字母-字母或数字”，如 BANK-D、GRID-B2；只用客户代号，不写客户真实名称", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        if db.scalar(select(Project.id).where(Project.code == code)) is not None:
+            print(f"项目 {code} 已存在", file=sys.stderr)
+            return 1
+        user = _get(db, args.manager)
+        if user is None:
+            return 1
+        if not user.is_active or not roles_of(db, user.id) & BUSINESS_ROLES:
+            print("项目经理必须是启用状态、持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户", file=sys.stderr)
+            return 1
+        p = Project(code=code, service=args.service.strip(), industry=args.industry.strip(), tier=args.tier,
+                    total_weeks=args.weeks)
+        p.deliverables = [Deliverable(code=f"D{i + 1}", title=t, status="not_started")
+                          for i, t in enumerate(DELIVERABLES)]
+        db.add(p)
+        db.flush()
+        db.add(ProjectMember(project_id=p.id, user_id=user.id, project_role="manager", added_by="cli"))
+        db.commit()
+        audit.record(db, actor="cli", action="project.create", result="allowed", project_code=code,
+                     tier=args.tier, manager=args.manager)
+    print(f"已立项 {code}（{TIERS[args.tier]}，{args.service}），项目经理 {args.manager}；"
+          f"其他成员由项目经理在网页上添加")
     return 0
 
 
@@ -379,6 +420,14 @@ def main(argv: list[str] | None = None) -> int:
     am.add_argument("--username", required=True)
     am.add_argument("--role", required=True, choices=sorted(PROJECT_ROLES), help="manager=项目经理，member=项目成员")
     am.set_defaults(func=add_member)
+    cp = sub.add_parser("create-project", help="立项：建项目和 D1～D8 交付件，指定首位项目经理（一期没有网页立项）")
+    cp.add_argument("--code", required=True, help="客户代号，如 BANK-D（不写客户真实名称）")
+    cp.add_argument("--tier", required=True, choices=sorted(TIERS), help="standard=标准档，strict=严格档（立项时必须定档）")
+    cp.add_argument("--manager", required=True, help="首位项目经理的用户名")
+    cp.add_argument("--service", default="SOC 运营体系设计", help="服务产品（默认 SOC 运营体系设计）")
+    cp.add_argument("--industry", default="", help="行业，如 银行")
+    cp.add_argument("--weeks", type=int, default=12, help="计划周数（默认 12）")
+    cp.set_defaults(func=create_project)
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
     a.set_defaults(func=verify_audit)

@@ -223,7 +223,7 @@ def test_role_change_via_cli_ends_sessions_for_exclusive_roles():
 
 def test_cli_help_works(capsys):
     """顶层和每个子命令的 --help 都能显示（help 文本里的 % 要写成 %%）。"""
-    for argv in (["--help"], *([c, "--help"] for c in ("add-member", "kb-eval", "grant-role", "usage-report"))):
+    for argv in (["--help"], *([c, "--help"] for c in ("add-member", "create-project", "kb-eval", "grant-role", "usage-report"))):
         with pytest.raises(SystemExit) as e:
             cli_main(argv)
         assert e.value.code == 0
@@ -250,6 +250,33 @@ def test_add_member_via_cli_bootstraps_project_without_manager():
     admin, *_ = create_user(("sys_admin",))
     assert cli_main(["add-member", "--project", "GRID-B", "--username", admin, "--role", "member"]) == 1
     assert cli_main(["add-member", "--project", "NOPE-X", "--username", user[0], "--role", "member"]) == 1
+
+
+def test_create_project_via_cli():
+    """一期没有网页立项：命令行建项目和 D1～D8，必须定档、指定首位项目经理；只有成员能看到。"""
+    import secrets
+    code = f"QA-{secrets.token_hex(2).upper()}"
+    mgr = create_user((CONSULTANT,))
+    other = create_user((CONSULTANT,))
+    assert cli_main(["create-project", "--code", code, "--tier", "standard", "--manager", mgr[0],
+                     "--industry", "银行"]) == 0
+    assert cli_main(["create-project", "--code", code, "--tier", "standard", "--manager", mgr[0]]) == 1   # 重复
+    assert cli_main(["create-project", "--code", "某银行", "--tier", "standard", "--manager", mgr[0]]) == 1
+    admin, *_ = create_user(("sys_admin",))
+    assert cli_main(["create-project", "--code", code + "X", "--tier", "strict", "--manager", admin]) == 1
+    c, o = logged_in_client(app, mgr), logged_in_client(app, other)
+    try:
+        r = c.get(f"/api/projects/{code}")
+        assert r.status_code == 200 and r.json()["tier"] == "standard"
+        assert [d["code"] for d in r.json()["deliverables"]] == [f"D{i}" for i in range(1, 9)]
+        assert o.get(f"/api/projects/{code}").status_code == 404
+    finally:
+        c.__exit__(None, None, None)
+        o.__exit__(None, None, None)
+    with SessionLocal() as db:
+        row = db.scalars(select(AuditLog).where(AuditLog.action == "project.create")
+                         .order_by(AuditLog.id.desc())).first()
+    assert row.actor == "cli" and row.project_code == code
 
 
 # ---- 项目成员管理：只有本项目的项目经理能调整 ----
