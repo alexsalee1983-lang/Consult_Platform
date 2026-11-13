@@ -12,7 +12,7 @@
    证据写编号、类别和标题（访谈写受访者角色），知识库条目写编号、层级和名称；核对不上的写“未核对到”。
    [推断] 不加脚注。
 4. 正文按常用 Markdown 写法排版：# 标题、- / * 列表、1. 编号列表、> 引用、| 表格 |、**加粗**；其余按普通段落。
-5. 严格档项目拒绝（M4 接入）；没有大纲的交付件不能导出（409）。
+5. 严格档项目导出的是占位符版本（M4 ④b，写入时已查占位符）；没有大纲的交付件不能导出（409）。
 
 审计只记项目、交付件编号、修订号、各章版本号、文件大小和摘要哈希、模板类别（内置 / 配置）、是否草稿和导出编号，
 不记正文、章节标题和模板路径。
@@ -336,11 +336,6 @@ def _mark_pages(doc: DocxDocument, draft: bool, footer_text: str) -> None:
 
 def export_deliverable(db: Session, user: User, project: Project, d: Deliverable) -> ExportResult:
     action = "deliverable.export"
-    if project.tier == "strict":
-        audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
-                     deliverable=d.code, reason="strict_tier")
-        db.commit()
-        raise ExportError(422, dsvc.STRICT_REFUSAL)
     if not d.sections:
         raise ExportError(409, f"{d.code} 还没有大纲，不能导出")
     doc, template_kind = _load_template()

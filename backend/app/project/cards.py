@@ -196,10 +196,50 @@ def revoke_consent(db: Session, user: User, project: Project, consent_id: int, r
     for card in cards:
         _clear(card, user.username)
     c.revoked, c.revoke_ref, c.revoked_on, c.revoked_by, c.revoked_at = True, ref, received_on, user.username, utcnow()
+    derived = clear_derived(db, project, user.username)
     db.commit()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
-                 consent=c.id, received_on=received_on.isoformat(), cards_cleared=len(cards))
+                 consent=c.id, received_on=received_on.isoformat(), cards_cleared=len(cards), **derived)
     return c
+
+
+def clear_derived(db: Session, project: Project, username: str) -> dict:
+    """客户撤回同意（M4 ④b，负责人 11-13 交开发定）：据摘要卡写成的未签署内容一并清空，不可恢复。
+    - 未签署交付件：各章全部版本的正文和来源清空（版本行和编号保留），修订号 +1，待签署的退回起草中；
+    - 这些交付件的质量评审意见和问题清单清空；
+    - 交付链：未结束的运行取消，各步产出（差距分析）清空。
+    已签署的交付件是交给客户的占位符版本，保留，按保留期和删除流程处理。只返回计数。"""
+    from ..models import AgentRun, AgentRunStep, Deliverable, DeliverableSection, QualityReview, SectionVersion
+
+    open_ids = list(db.scalars(select(Deliverable.id).where(Deliverable.project_id == project.id,
+                                                           Deliverable.status != "signed")))
+    versions = list(db.scalars(select(SectionVersion).join(DeliverableSection).where(
+        DeliverableSection.deliverable_id.in_(open_ids), SectionVersion.body != ""))) if open_ids else []
+    for v in versions:
+        v.body, v.sources, v.char_count = "", {}, 0
+    touched = {v.section.deliverable_id for v in versions}
+    for d in db.scalars(select(Deliverable).where(Deliverable.id.in_(touched))) if touched else []:
+        d.revision += 1
+        d.updated_at, d.updated_by = utcnow(), username
+        if d.status == "review":
+            d.status = "drafting"
+    reviews = list(db.scalars(select(QualityReview).where(QualityReview.deliverable_id.in_(open_ids)))) \
+        if open_ids else []
+    for r in reviews:
+        r.report, r.issues = "", []
+    run_ids = list(db.scalars(select(AgentRun.id).where(AgentRun.project_id == project.id)))
+    cancelled = 0
+    for run in db.scalars(select(AgentRun).where(AgentRun.project_id == project.id,
+                                                 AgentRun.status.in_(("queued", "running", "waiting")))):
+        run.status, run.waiting_cards = "cancelled", []
+        run.updated_at = run.finished_at = utcnow()
+        cancelled += 1
+    steps = list(db.scalars(select(AgentRunStep).where(AgentRunStep.run_id.in_(run_ids),
+                                                       AgentRunStep.output != ""))) if run_ids else []
+    for s in steps:
+        s.output = ""
+    return {"versions_cleared": len(versions), "reviews_cleared": len(reviews),
+            "runs_cancelled": cancelled, "run_outputs_cleared": len(steps)}
 
 
 def _norm(s: str) -> str:
@@ -343,6 +383,22 @@ def summary(card: SummaryCard) -> dict:
     return {"code": card.code, "kind": "summary_card", "item": card.item, "magnitude": card.magnitude,
             "onsite_refs": card.onsite_refs, "chars": card.char_count,
             "status": "withdrawn" if card.withdrawn else "ready"}
+
+
+_CITATION_RE = re.compile(r"【依据[：:][^】]*】|【依据待核实】|\[(?:S-\d{2,4}|推断|模型推断)\]|"
+                          r"(?<![A-Za-z0-9])[DIOS]-\d{2,4}(?:-\d{2,3})?(?![\d-])|"
+                          r"[\[｜|]\s*L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5}\s*[\]】]")
+
+
+def placeholder_problems(text: str) -> list[str]:
+    """严格档交付件（占位符版本）的检查：去掉来源标注和依据引用后，按摘要卡规则查真名、IP、系统名、原话。
+    机密级由调用方另走 guard（返回打码摘录），这里不重复。"""
+    return [k for k in card_problems(_CITATION_RE.sub(" ", text)) if k != "机密级"]
+
+
+def active_card_codes(db: Session, project: Project) -> set[str]:
+    return set(db.scalars(select(SummaryCard.code).where(SummaryCard.project_id == project.id,
+                                                         SummaryCard.withdrawn.is_(False))))
 
 
 STRICT_NOTE = ("严格档项目：只有去标识摘要卡（S-xx），没有资料和纪要原文。输出一律用占位符，"

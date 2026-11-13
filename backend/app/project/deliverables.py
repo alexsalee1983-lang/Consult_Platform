@@ -3,7 +3,9 @@
 交付件（D1～D8）按章节存储：先写大纲（章节标题和顺序），再逐章写正文。每次写正文都新建一个版本，
 旧版本保留（只追加），可以按版本查看和对比。Agent 经工具 doc.generate 写，顾问经接口改，两者走同一套规则：
 
-1. 严格档项目拒绝（S3 只做标准档；严格档交付件只能基于摘要卡、输出用占位符，M4 接入）。
+1. 严格档项目（M4 ④b）：交付件是占位符版本，只能基于摘要卡；正文和标题除机密级检测外还按摘要卡规则检查
+   （机构名、人名、联系方式、网络标识、系统名、原话，见 app/project/cards.py placeholder_problems），命中不保存；
+   来源标注写摘要卡编号 [S-02]，核对未撤下的摘要卡。顾问回到客户现场用现场工具按本地对照表回填真名。
 2. 已签署的交付件不能再改；待签署（review）时改了内容，状态回到起草中（签署流程见 app/project/quality.py）。
 3. 正文和章节标题先过机密级检测（guard），命中则不保存，只写审计（命中类别）。
 4. 来源标注（公共规范 4.1）：正文里用方括号标注来源——客户证据 [I-02] [I-02-05] [D-12] [O-05]、
@@ -30,6 +32,7 @@ from ..core.db import utcnow
 from ..kb.meta import LAYERS
 from ..models import Deliverable, DeliverableSection, Evidence, KbItem, Project, SectionVersion, User
 from ..services import guard
+from . import cards
 from . import evidence as evidence_svc
 
 MAX_SECTIONS = 50
@@ -37,9 +40,9 @@ MAX_TITLE = 200
 MAX_BODY_CHARS = 50_000
 MAX_NOTE = 200
 READ_CHARS = 20_000                 # 工具一次最多返回的正文字数，超出的用 offset 分段取
-STRICT_REFUSAL = "严格档项目的交付件只能基于摘要卡、输出用占位符，在 M4 接入；S3 只支持标准档"
+PLACEHOLDER_HINT = "严格档交付件是占位符版本：用【客户】【人员1】【系统A】等占位符，不写真名、IP、系统名和原话"
 
-_EVIDENCE_REF = re.compile(r"\[((?:I|D|O)-\d{2,4})(-\d{1,3})?\]")
+_EVIDENCE_REF = re.compile(r"\[((?:I|D|O|S)-\d{2,4})(-\d{1,3})?\]")
 _KB_REF = re.compile(r"[\[｜|]\s*(L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5})\s*[\]】]")
 _INFERRED = re.compile(r"\[(?:推断|模型推断)\]")
 
@@ -100,6 +103,8 @@ def parse_sources(db: Session, project: Project, body: str) -> dict:
     codes = set(ev_refs.values())
     existing = set(db.scalars(select(Evidence.code).where(Evidence.project_id == project.id,
                                                           Evidence.code.in_(codes)))) if codes else set()
+    if any(c.startswith("S-") for c in codes):     # 严格档摘要卡（撤下的不算）
+        existing |= cards.active_card_codes(db, project) & codes
     layers: dict[str, str] = {}
     if kb_refs:
         layers = dict(db.execute(select(KbItem.doc_id, KbItem.layer).where(
@@ -117,10 +122,11 @@ def parse_sources(db: Session, project: Project, body: str) -> dict:
 
 def _check_writable(db: Session, user: User, project: Project, d: Deliverable, action: str) -> None:
     reason = None
-    if project.tier == "strict":
-        reason, status, detail = "strict_tier", 422, STRICT_REFUSAL
-    elif d.status == "signed":
+    if d.status == "signed":
         reason, status, detail = "signed", 409, f"{d.code} 已签署，不能再修改"
+    elif project.tier == "strict" and cards.active_consent(db, project) is None:
+        reason, status, detail = "no_consent", 422, ("严格档项目没有有效的客户书面同意（未登记或已撤回），"
+                                                     "平台不收交付件内容，工作在客户现场完成")
     if reason:
         audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
                      deliverable=d.code, reason=reason)
@@ -135,6 +141,18 @@ def _guard(db: Session, user: User, project: Project, d: Deliverable, action: st
         raise DeliverableError(422, {"blocked": True, "summary": f"{result.summary()}，没有保存",
                                      "findings": [{"kind": f.kind, "label": f.label, "excerpt": f.excerpt}
                                                   for f in result.findings[:10]]})
+
+
+def _placeholders(db: Session, user: User, project: Project, d: Deliverable, action: str, text: str, **meta) -> None:
+    """严格档：占位符检查（M4 ④b）。命中不保存，只记类别。"""
+    if project.tier != "strict":
+        return
+    kinds = cards.placeholder_problems(text)
+    if kinds:
+        audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
+                     deliverable=d.code, reason="placeholder", categories=kinds, **meta)
+        raise DeliverableError(422, {"blocked": True, "summary": f"严格档内容含{'、'.join(kinds)}，没有保存。"
+                                                                 f"{PLACEHOLDER_HINT}", "kinds": kinds})
 
 
 def _touch(d: Deliverable, user: User) -> None:
@@ -159,6 +177,7 @@ def set_outline(db: Session, user: User, project: Project, d: Deliverable, title
     if any(not t or len(t) > MAX_TITLE for t in titles):
         raise DeliverableError(422, f"章节标题不能为空，且不超过 {MAX_TITLE} 字")
     _guard(db, user, project, d, action, "\n".join(titles))
+    _placeholders(db, user, project, d, action, "\n".join(titles))
     removed = [s for s in d.sections if s.seq > len(titles)]
     kept_content = [s.seq for s in removed if s.current_version]
     if kept_content:
@@ -196,6 +215,7 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
     if len(note) > MAX_NOTE:
         raise DeliverableError(422, f"修改说明不超过 {MAX_NOTE} 字")
     _guard(db, user, project, d, action, f"{body}\n{note}", section=seq)
+    _placeholders(db, user, project, d, action, f"{body}\n{note}", section=seq)
     if base_version is not None and base_version != s.current_version:
         raise DeliverableError(409, f"第 {seq} 章已更新到 v{s.current_version}（你基于 v{base_version} 修改），"
                                     "请先查看最新版本再改")

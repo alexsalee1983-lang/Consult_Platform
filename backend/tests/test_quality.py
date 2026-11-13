@@ -1,6 +1,6 @@
 """质量门禁与签署（M3 ⑤）：评审跑通（Agent 问题表 + 平台硬规则，结论按规则重算）、阻断时门禁不放行、
 评审后改了正文门禁要求重评、提交签署 → 项目经理签署（非项目经理 403、项目经理可签自己提交的）、签署后只读且导出不带草稿页眉、
-退回要写理由、待签署时改正文回到起草中、输出格式不对重试到上限失败、严格档拒绝、成员隔离、审计不记原文；
+退回要写理由、待签署时改正文回到起草中、输出格式不对重试到上限失败、成员隔离、审计不记原文；
 项目经理写理由驳回评审 Agent 的阻断（平台规则的阻断不能驳回、过期评审不能驳回、统计多于清单的不能放行）。"""
 import io
 import json
@@ -241,14 +241,10 @@ def test_bad_format_retries_then_fails_and_duplicate_refused(team, model):
     assert rv["status"] == "failed" and "格式" in rv["error"]
 
 
-def test_empty_and_strict_refused(model):
+def test_empty_refused(model):
     code = _new_project()
     c = logged_in_client(app, create_user(("consultant",), {code: "member"}))
     assert c.post(_url(code, "reviews")).status_code == 409
-    c.__exit__(None, None, None)
-    code = _new_project("strict")
-    c = logged_in_client(app, create_user(("consultant",), {code: "manager"}))
-    assert c.post(_url(code, "reviews")).status_code == 422
     c.__exit__(None, None, None)
 
 

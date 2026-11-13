@@ -141,13 +141,17 @@ def test_guard_blocks_and_audit_has_no_text(proj):
     assert c.put(f"{_base(code)}/outline", json={"titles": ["口令 Abc@12345"]}).status_code == 422
 
 
-def test_strict_tier_and_signed_are_refused():
+def test_strict_placeholder_and_signed_refused():
     strict = _new_project("strict")
-    user = create_user(("consultant",), {strict: "member"})
+    user = create_user(("consultant",), {strict: "manager"})
     with logged_in_client(app, user) as c:
         r = c.put(f"{_base(strict)}/outline", json={"titles": ["现状"]})
-        assert r.status_code == 422 and "M4" in r.json()["detail"]
-        assert c.get(_base(strict)).status_code == 200                       # 能看（空大纲），不能写
+        assert r.status_code == 422 and "同意" in r.json()["detail"]                 # 严格档没有客户同意不收
+        assert c.post(f"/api/projects/{strict}/consents",
+                      json={"doc_ref": "计划-01", "signed_on": "2026-01-05"}).status_code == 201
+        r = c.put(f"{_base(strict)}/outline", json={"titles": ["江北农商银行现状"]})
+        assert r.status_code == 422 and r.json()["detail"]["kinds"] == ["机构名称"]   # 严格档只收占位符版本
+        assert c.put(f"{_base(strict)}/outline", json={"titles": ["现状"]}).status_code == 200
     std = _new_project()
     user = create_user(("consultant",), {std: "member"})
     with logged_in_client(app, user) as c:
