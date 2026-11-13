@@ -165,6 +165,19 @@ export const api = {
   setAcceptance: (code, accepted_on, retention_months) =>
     request(`/api/projects/${encodeURIComponent(code)}/acceptance`,
       { method: "POST", body: JSON.stringify({ accepted_on, retention_months }) }),
+  // 严格档客户同意与摘要卡（M4 ④）
+  consents: (code) => request(`/api/projects/${encodeURIComponent(code)}/consents`),
+  recordConsent: (code, doc_ref, signed_on) =>
+    request(`/api/projects/${encodeURIComponent(code)}/consents`, { method: "POST", body: JSON.stringify({ doc_ref, signed_on }) }),
+  revokeConsent: (code, id, revoke_ref, received_on) =>
+    request(`/api/projects/${encodeURIComponent(code)}/consents/${id}/revoke`,
+      { method: "POST", body: JSON.stringify({ revoke_ref, received_on }) }),
+  summaryCards: (code) => request(`/api/projects/${encodeURIComponent(code)}/summary-cards`),
+  cardTemplate: (code) => request(`/api/projects/${encodeURIComponent(code)}/summary-cards/template`),
+  uploadCards: (code, cards) =>
+    request(`/api/projects/${encodeURIComponent(code)}/summary-cards`, { method: "POST", body: JSON.stringify({ cards }) }),
+  withdrawCard: (code, card) =>
+    request(`/api/projects/${encodeURIComponent(code)}/summary-cards/${encodeURIComponent(card)}/withdraw`, { method: "POST" }),
   // 项目资料删除（M4 ②）：项目经理发起提前删除、标记客户不同意回流；项目负责人确认
   projectDeletions: (code) => request(`/api/projects/${encodeURIComponent(code)}/deletions`),
   requestEarlyDeletion: (code, request_ref, received_on) =>

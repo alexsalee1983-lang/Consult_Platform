@@ -13,7 +13,8 @@ import pytest
 from app.project import cards
 
 ROOT = Path(__file__).resolve().parents[2] / "field-tool"
-needs_tool = pytest.mark.skipif(not (ROOT / "field-tool.html").exists(), reason="没有 field-tool 目录")
+needs_tool = pytest.mark.skipif(not (ROOT / "field-tool.html").exists(),
+                                reason=f"需要仓库根目录的 field-tool/（{ROOT} 不存在；后端镜像里没有，在仓库检出或 CI 里运行）")
 
 
 @needs_tool

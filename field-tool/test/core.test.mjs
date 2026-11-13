@@ -51,6 +51,12 @@ test("整张卡检查：必填、证据编号（含三段）、审阅日期", ()
   assert.deepEqual(F.uploadBody([ok]).cards[0].onsite_refs, ["D-03", "I-04-07", "O-02"]);
 });
 
+test("对照表里没有的占位符会被提醒", () => {
+  const cards = [{ item: "【客户】值班", finding: "【系统A】和【系统C】未复核 [S-01]", magnitude: "" }];
+  assert.deepEqual(F.unmappedPlaceholders(cards, [{ placeholder: "【系统A】", real: "x" }, { placeholder: "【客户】", real: "y" }]), ["【系统C】"]);
+  assert.deepEqual(F.unmappedPlaceholders(cards, []), ["【客户】", "【系统A】", "【系统C】"]);
+});
+
 test("加密包：往返、口令错、类型不能换", async () => {
   const body = { project_code: "GRID-B", cards: [{ item: "x" }] };
   await assert.rejects(F.encryptPackage("upload", body, "short"), /12/);
@@ -99,4 +105,15 @@ test("zip 读取 deflate 压缩的条目，CRC 正确", async () => {
   assert.equal(new TextDecoder().decode(e.data), new TextDecoder().decode(data));
   assert.ok(plain.length > 0);
   assert.equal(F.crc32(new TextEncoder().encode("123456789")), 0xcbf43926);
+});
+
+test("平台上传页（frontend/src/fieldPackage.js）能解密现场工具的上传包，拒收工作文件和别的项目", async () => {
+  const web = await import(new URL("../../frontend/src/fieldPackage.js", here));
+  const ok = { item: "特权账号管理", finding: "【系统A】特权账号未复核", magnitude: "约 30 个", onsite_refs: "D-03 I-04-07", client_reviewed_on: "2026-11-01" };
+  const pkg = await F.encryptPackage("upload", { project_code: "ST-T5", ...F.uploadBody([ok]) }, "correct horse battery", 1000);
+  const { kind, body } = await web.decryptPackage(pkg, "correct horse battery");
+  assert.deepEqual(web.uploadCards(kind, body, "st-t5"), F.uploadBody([ok]).cards);
+  await assert.rejects(web.decryptPackage(pkg, "wrong horse battery"), /口令不对/);
+  assert.throws(() => web.uploadCards(kind, body, "GRID-B"), /ST-T5/);
+  assert.throws(() => web.uploadCards("work", body, "ST-T5"), /工作文件/);
 });

@@ -7,6 +7,7 @@ import Evidence from "../components/Evidence.jsx";
 import Members from "../components/Members.jsx";
 import Retention from "../components/Retention.jsx";
 import RunPanel from "../components/RunPanel.jsx";
+import StrictCards from "../components/StrictCards.jsx";
 
 function Kpi({ cap, value, sub, color }) {
   return (
@@ -47,7 +48,7 @@ export default function Overview({ code }) {
       </TopBar>
       {error && <div className="err">{error.message}</div>}
       <div className="kpis">
-        <Kpi cap="证据" value={evs ? evs.length : "—"} sub={strict ? "严格档不收资料" : `访谈 ${count("interview")} · 资料 ${count("document")} · 观察 ${count("observation")}`} />
+        <Kpi cap="证据" value={evs ? evs.length : "—"} sub={strict ? "严格档只收摘要卡 S-xx" : `访谈 ${count("interview")} · 资料 ${count("document")} · 观察 ${count("observation")}`} />
         <Kpi cap="交付件已签署" value={`${signed} / ${p.deliverables.length}`}
           sub={[pending.length && `${pending.join("、")} 待签署`, drafting.length && `${drafting.join("、")} 起草中`].filter(Boolean).join(" · ") || "按 D1～D8 统计"} />
         <Kpi cap="待你确认" value={p.open_confirmations} sub="Agent 需要你判断的事项" color={p.open_confirmations ? "var(--amber)" : "var(--ok)"} />
@@ -60,7 +61,7 @@ export default function Overview({ code }) {
             <PhaseBar phase={p.phase} />
             <div className="sb sub">{["启动", "调研", "分析", "设计", "汇报", "验收"].map((n) => <span key={n}>{n}</span>)}</div>
           </section>
-          <Evidence code={p.code} strict={strict} items={evs} onChange={load} />
+          {strict ? <StrictCards code={p.code} onChange={load} /> : <Evidence code={p.code} strict={strict} items={evs} onChange={load} />}
           <section className="pnl pad" aria-label="交付件">
             <h2 className="h2">交付件</h2>
             <ul className="lst" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 16 }}>

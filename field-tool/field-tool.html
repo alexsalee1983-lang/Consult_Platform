@@ -341,6 +341,12 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); paddi
     return { text, count };
   }
   function leftovers(text) { return [...new Set(text.match(PH_ANY) || [])]; }
+  /** 卡片里用了、对照表里没有的占位符：不阻断上传（平台本来就只收占位符），但回填时换不回真名，导出前提醒。 */
+  function unmappedPlaceholders(cards, mapping) {
+    const known = new Set((mapping || []).map((m) => (m.placeholder || "").trim()).filter(Boolean));
+    const used = leftovers((cards || []).map((c) => [c.item, c.finding, c.magnitude].join(" ")).join(" "));
+    return used.filter((p) => !known.has(p) && p !== "【】");
+  }
 
   // ---- 最小 zip 读写（docx）：读支持存储和 deflate，写一律存储（不压缩） ----
   const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -417,7 +423,7 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); paddi
   }
 
   root.FieldCore = { DEFAULT_CHECKS, MAP_KINDS, compile, cardProblems, checkCard, uploadBody, normRefs, today,
-    encryptPackage, decryptPackage, fillText, leftovers, readZip, writeZip, fillDocx, crc32 };
+    encryptPackage, decryptPackage, fillText, leftovers, unmappedPlaceholders, readZip, writeZip, fillDocx, crc32 };
 })(globalThis);
 </script>
 
@@ -513,6 +519,8 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); paddi
     $("checkBody").innerHTML = rows.join("");
     msg("checkSummary", rows.length ? "err" : (state.cards.length ? "okm" : "warn"),
       !state.cards.length ? "还没有摘要卡" : rows.length ? `${rows.length} 处问题，改完才能导出（平台整批检查，任何一张不过整批拒收）` : `${state.cards.length} 张全部通过自检`);
+    const un = F.unmappedPlaceholders(state.cards, state.mapping);
+    if (un.length) $("checkSummary").insertAdjacentHTML("beforeend", `<div class="warn">${esc(`对照表里没有：${un.join(" ")}。不影响上传，但回到现场回填时换不回真名，建议先补进对照表。`)}</div>`);
   }
   $("exportUp").addEventListener("click", async () => {
     renderCheck();
@@ -523,6 +531,8 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); paddi
       if (state.cards.length > 200) throw new Error("一次最多 200 张");
       if (!$("reviewed").checked) throw new Error("客户对接人审阅签字后才能导出");
       if ($("upPass").value !== $("upPass2").value) throw new Error("两次口令不一致");
+      const un = F.unmappedPlaceholders(state.cards, state.mapping);
+      if (un.length && !confirm(`对照表里没有 ${un.join(" ")}，回填时换不回真名。仍然导出？`)) return;
       $("exportUp").disabled = true; msg("exportMsg", "warn", "正在加密……");
       const pkg = await F.encryptPackage("upload", { project_code: code(), ...F.uploadBody(state.cards) }, $("upPass").value);
       download(`${code()}-摘要卡-${stamp()}.cpcard`, JSON.stringify(pkg), "application/json");
