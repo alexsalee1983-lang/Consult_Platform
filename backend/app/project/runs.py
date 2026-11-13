@@ -14,7 +14,8 @@
 - 模型调用只经网关 gateway.complete；用量记 usage.record；审计只记编号、步骤、字数、用量，不记提示和产出原文。
 - 停下来问：没有任何证据时发“证据不足”卡、停在本步；模型在输出里提出的确认卡照发，本步产出照写，
   停在下一步之前。顾问把本次运行等待的卡都处理完后自动继续，处理结果作为“顾问已确认事项”交给后续步骤。
-- 严格档不跑（资料不出客户现场，M4 摘要卡）；同一项目同时只能有一个未结束的运行；
+- 严格档（M4 ④b）：证据是去标识摘要卡 S-xx（经 project.evidence），输出加 STRICT_RULES（标 [S-xx]、只用占位符）；
+  写入时平台查占位符，不过的本步失败（不保存）。同一项目同时只能有一个未结束的运行；
   要写入的交付件（D3、D4）已签署的不跑（422，测试 #41）。
 - 取消（测试 #41）：取消与 worker 改运行状态都先锁住运行这一行（SELECT … FOR UPDATE）再判断状态，
   worker 不会把“已取消”改回去。模型返回后、写入交付件和发卡之前再看一次状态，已取消就什么也不写；
@@ -74,6 +75,12 @@ OUTPUT_RULES = (
     "4. 只写客户代号，不写客户真实名称、人名、口令、IP 等机密级内容。"
 )
 
+STRICT_RULES = (
+    "严格档项目（占位符版本）：本项目的证据只有客户审阅过的去标识摘要卡 S-xx。来源标注写 [S-02]；"
+    "摘要卡里的现场证据编号只能写成“现场 D-03”，不加方括号；机构、人员、系统一律用占位符（【客户】【人员1】【系统A】），"
+    "不写真实名称、职务加姓、IP、域名、产品名和版本号，不引用原话。"
+)
+
 INSTRUCTIONS = {
     "facts": "任务：交付链第 3 步。根据下面的本项目证据，整理 D3 事实清单：按 SOC 能力域（组织与人员、流程、"
              "技术平台与数据源、度量与改进等）分章列出已确认的事实，每条带证据编号；另起一章列“待补证据与矛盾点”。"
@@ -117,9 +124,6 @@ def _lock(db: Session, run: AgentRun) -> str:
 
 def start(db: Session, user: User, project: Project) -> AgentRun:
     action = "run.start"
-    if project.tier == "strict":
-        _deny(db, user, project, action, "strict")
-        raise RunError(422, "严格档项目资料不出客户现场，交付链不在平台上运行（M4 摘要卡）")
     active = db.scalar(select(AgentRun).where(AgentRun.project_id == project.id, AgentRun.status.in_(ACTIVE)))
     if active is not None:
         _deny(db, user, project, action, "active_run")
@@ -254,8 +258,13 @@ def _evidence_input(db: Session, user: User, agent: str, project: Project) -> st
                          {"code": e["code"], "limit": min(EVIDENCE_CHARS, INPUT_CHARS - total)}, project.code)
         text = r.get("text", "")
         total += len(text)
-        role = f"，受访角色：{e['interviewee_role']}" if e.get("interviewee_role") else ""
         more = "（正文较长，已截取前部）" if r.get("next_offset") else ""
+        if e.get("kind") == "summary_card":           # 严格档摘要卡：评估项、数量级、现场证据编号
+            extra = "；".join(x for x in (e.get("magnitude") and f"数量级：{e['magnitude']}",
+                                         e.get("onsite_refs") and f"现场 {'、'.join(e['onsite_refs'])}") if x)
+            parts.append(f"### [{e['code']}] {e['item']}{f'（{extra}）' if extra else ''}\n{text}")
+            continue
+        role = f"，受访角色：{e['interviewee_role']}" if e.get("interviewee_role") else ""
         parts.append(f"### [{e['code']}] {e['title']}{role}{more}\n{text}")
     return "\n\n".join(parts)
 
@@ -394,7 +403,8 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
         raise StepFailed(f"工具调用被拒绝（{e.status}）") from e
 
     confirmed = _resolved_cards(db, run)
-    message = "\n\n".join(x for x in (INSTRUCTIONS[step.key], OUTPUT_RULES, confirmed, inputs) if x)
+    strict = STRICT_RULES if project.tier == "strict" else ""
+    message = "\n\n".join(x for x in (INSTRUCTIONS[step.key], OUTPUT_RULES, strict, confirmed, inputs) if x)
     try:
         c = gateway.complete(message, tier=project.tier, project_code=project.code, level=doc.level,
                              system=runtime.system_prompt(doc, card, kb_block))
@@ -468,7 +478,8 @@ def _ask_for_evidence(db: Session, user: User, project: Project, run: AgentRun, 
     if run.status != "running":
         raise StepCancelled()
     r = tools.invoke(db, user, step.agent, "confirm.create", {
-        "kind": "证据不足", "title": "本项目还没有访谈纪要或客户资料，无法整理 D3 事实清单",
+        "kind": "证据不足", "title": "本项目还没有可用的摘要卡，无法整理 D3 事实清单" if project.tier == "strict"
+        else "本项目还没有访谈纪要或客户资料，无法整理 D3 事实清单",
         "options": ["A 已补充访谈纪要或资料，继续整理", "B 暂停交付链"], "recommendation": "A",
         "reason": "第 3 步只能根据本项目证据整理事实，不能推测现状",
         "impact": "选 A 后平台重新读取证据再整理；仍没有证据会再次停下", "deliverable": "D3"}, project.code)

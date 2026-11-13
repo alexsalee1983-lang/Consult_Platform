@@ -21,7 +21,7 @@
 - 退回（return）：项目经理，必须写理由；状态 → drafting。
 - review 状态下任何章节或大纲写入，都把状态改回 drafting（提交作废，要重新评审、重新提交）。
 - 签署后不提供撤销（一期）；需要改动时由负责人另行决定。
-- 严格档一律 422（M4 接入）。
+- 严格档（M4 ④b）：同样评审、签署；另加平台规则“占位符”：正文出现机构名、人名、联系方式、网络标识、系统名、引号原话 → 阻断（不能驳回）。
 
 驳回阻断（负责人 2026-11-12 定，迁移 0022）：AI 给意见、人来定夺。
 - 项目经理可以逐条驳回质量评审 Agent（by = agent）提出的阻断问题，必须写理由（去掉空白至少 10 个字）；只追加，不能撤销（要恢复就重新评审）。
@@ -46,7 +46,7 @@ from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
 from ..models import Deliverable, Project, QualityReview, ReviewWaiver, SignOff, User
 from ..services import gateway, guard, jobs, usage
-from . import deliverables
+from . import cards, deliverables
 from . import evidence as evidence_svc
 
 AGENT = "qa-reviewer"
@@ -59,7 +59,6 @@ MAX_COMMENT = 2000
 MIN_WAIVE_REASON = 10  # 驳回阻断是接受风险的决定，理由不能用“ok”之类打发（去掉空白后计字数）
 SEVERITIES = ("阻断", "重要", "建议")
 CONCLUSIONS = {"pass": "通过", "revise": "修改后通过", "fail": "不通过"}
-STRICT_REFUSAL = deliverables.STRICT_REFUSAL
 
 # 资质边界：测评 / 认证结论用语。前面紧跟否定说明（“不构成测评结论”）的不算。
 # 级别可在前可在后：“通过等保三级测评”“通过三级等保测评”“等保三级达标”“三级等保合格”（测试 #44）。
@@ -208,8 +207,6 @@ def gate(db: Session, d: Deliverable) -> Gate:
 
 def request_review(db: Session, user: User, project: Project, d: Deliverable) -> QualityReview:
     action = "quality.request"
-    if project.tier == "strict":
-        _refuse(db, user, project, d, action, "strict_tier", 422, STRICT_REFUSAL)
     if d.status == "signed":
         _refuse(db, user, project, d, action, "signed", 409, f"{d.code} 已签署，不再评审")
     if not any(s.current_version for s in d.sections):
@@ -250,8 +247,8 @@ def qualification_hits(text: str) -> int:
     return n
 
 
-def rule_issues(d: Deliverable, versions: dict, local_only: set[str] | frozenset[str] = frozenset()
-                ) -> tuple[list[dict], bool]:
+def rule_issues(d: Deliverable, versions: dict, local_only: set[str] | frozenset[str] = frozenset(),
+                strict: bool = False) -> tuple[list[dict], bool]:
     """返回 (问题清单, 是否命中机密级)。只用标注和类别描述，不摘正文。local_only：已标为仅现场使用的证据编号。"""
     issues: list[dict] = []
     confidential = False
@@ -267,6 +264,11 @@ def rule_issues(d: Deliverable, versions: dict, local_only: set[str] | frozenset
             confidential = True
             kinds = "、".join(sorted({f.label for f in g.findings}))
             issues.append(_issue("阻断", loc, "保密", f"命中机密级检测（{kinds}）", "删除机密级内容后重新评审", "rule"))
+        if strict:
+            kinds = cards.placeholder_problems(v.body)
+            if kinds:
+                issues.append(_issue("阻断", loc, "保密", f"严格档正文没有用占位符（{'、'.join(kinds)}）",
+                                     "改用【客户】【人员1】【系统A】这类占位符", "rule"))
         q = qualification_hits(v.body)
         if q:
             issues.append(_issue("阻断", loc, "范围与资质边界", f"出现测评 / 认证结论用语 {q} 处",
@@ -389,7 +391,8 @@ def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverab
 
 
 def _execute(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview) -> None:
-    issues, confidential = rule_issues(d, r.versions, evidence_svc.local_only_codes(db, project))
+    issues, confidential = rule_issues(d, r.versions, evidence_svc.local_only_codes(db, project),
+                                       strict=project.tier == "strict")
     report, counts = "", {s: 0 for s in SEVERITIES}
     if confidential:
         report = "（交付件正文命中机密级检测，未发往模型评审。请先处理阻断项，再重新评审。）"
@@ -471,8 +474,6 @@ def submit(db: Session, user: User, project: Project, d: Deliverable, comment: s
     action = "deliverable.submit"
     comment = _comment(comment)
     _lock_deliverable(db, d)
-    if project.tier == "strict":
-        _refuse(db, user, project, d, action, "strict_tier", 422, STRICT_REFUSAL)
     if d.status == "signed":
         _refuse(db, user, project, d, action, "signed", 409, f"{d.code} 已签署")
     if d.status == "review":
@@ -500,8 +501,6 @@ def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str
     if not _is_manager(db, project, user):
         _refuse(db, user, project, d, action, "not_manager", 403, "只有项目经理能签署")
     _lock_deliverable(db, d)
-    if project.tier == "strict":
-        _refuse(db, user, project, d, action, "strict_tier", 422, STRICT_REFUSAL)
     if d.status != "review":
         _refuse(db, user, project, d, action, "not_submitted", 409,
                 f"{d.code} 已签署" if d.status == "signed" else f"{d.code} 还没有提交签署")
@@ -559,8 +558,6 @@ def waive(db: Session, user: User, project: Project, d: Deliverable, r: QualityR
     if not _is_manager(db, project, user):
         _refuse(db, user, project, d, action, "not_manager", 403, "只有项目经理能驳回阻断问题")
     _lock_deliverable(db, d)
-    if project.tier == "strict":
-        _refuse(db, user, project, d, action, "strict_tier", 422, STRICT_REFUSAL)
     if d.status == "signed":
         _refuse(db, user, project, d, action, "signed", 409, f"{d.code} 已签署")
     latest = latest_done_review(db, d)

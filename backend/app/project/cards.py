@@ -345,6 +345,22 @@ def summary(card: SummaryCard) -> dict:
             "status": "withdrawn" if card.withdrawn else "ready"}
 
 
+_CITATION_RE = re.compile(r"【依据[：:][^】]*】|【依据待核实】|\[(?:S-\d{2,4}|推断|模型推断)\]|"
+                          r"(?<![A-Za-z0-9])[DIOS]-\d{2,4}(?:-\d{2,3})?(?![\d-])|"
+                          r"[\[｜|]\s*L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5}\s*[\]】]")
+
+
+def placeholder_problems(text: str) -> list[str]:
+    """严格档交付件（占位符版本）的检查：去掉来源标注和依据引用后，按摘要卡规则查真名、IP、系统名、原话。
+    机密级由调用方另走 guard（返回打码摘录），这里不重复。"""
+    return [k for k in card_problems(_CITATION_RE.sub(" ", text)) if k != "机密级"]
+
+
+def active_card_codes(db: Session, project: Project) -> set[str]:
+    return set(db.scalars(select(SummaryCard.code).where(SummaryCard.project_id == project.id,
+                                                         SummaryCard.withdrawn.is_(False))))
+
+
 STRICT_NOTE = ("严格档项目：只有去标识摘要卡（S-xx），没有资料和纪要原文。输出一律用占位符，"
                "不得补充摘要卡以外的客户事实，缺少的写“待现场补充”")
 

@@ -1,5 +1,5 @@
 """交付链编排（M3 ④）：3→4→7 跑通（D3、差距分析、D4 初稿），没有证据时发卡停下、补证处理卡后继续，
-模型提出的确认卡让运行停在下一步之前、顾问意见交给后续步骤，严格档和重复发起被拒，取消后任务不再执行，
+模型提出的确认卡让运行停在下一步之前、顾问意见交给后续步骤，重复发起被拒（严格档见 test_strict_draft），取消后任务不再执行，
 模型输出命中机密级时不保存、运行失败，模型暂不可用时重试、到上限失败，成员隔离，审计不记原文。"""
 import json
 import secrets
@@ -178,12 +178,10 @@ def test_resolved_question_is_not_asked_again_in_same_run(proj, model):
     assert run["status"] == "done" and run["card_ids"] == [card]          # 不再发卡、不再停
 
 
-def test_strict_tier_duplicate_start_and_cancel(model):
-    strict = _new_project("strict")
+def test_duplicate_start_and_cancel(model):
     code = _new_project()
-    user = create_user(("consultant",), {strict: "member", code: "member"})
+    user = create_user(("consultant",), {code: "member"})
     with logged_in_client(app, user) as c:
-        assert c.post(f"/api/projects/{strict}/runs").status_code == 422
         rid = c.post(f"/api/projects/{code}/runs").json()["id"]
         assert c.post(f"/api/projects/{code}/runs").status_code == 409            # 已有未结束的运行
         r = c.post(f"/api/projects/{code}/runs/{rid}/cancel")

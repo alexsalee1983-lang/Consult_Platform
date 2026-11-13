@@ -1,5 +1,5 @@
 """交付件 Word 导出（M3 ⑥）：内置模板与配置模板、占位符、草稿页眉与页脚留痕、来源脚注、Markdown 排版、
-严格档与无大纲拒绝、模板缺失 503、成员隔离、审计不记正文。"""
+无大纲拒绝（严格档见 test_strict_draft）、模板缺失 503、成员隔离、审计不记正文。"""
 import io
 import json
 import zipfile
@@ -161,14 +161,10 @@ def test_missing_template_refused(proj, tmp_path, monkeypatch):
     assert r.status_code == 503 and "页面设置" in r.json()["detail"]
 
 
-def test_no_outline_strict_and_outsider(proj):
+def test_no_outline_and_outsider(proj):
     code, c, _ = proj
     assert c.get(f"{_base(code)}/export").status_code == 409
-    strict = _new_project("strict")
-    user = create_user(("consultant",), {strict: "member"})
+    other = _new_project()
+    user = create_user(("consultant",), {other: "member"})
     with logged_in_client(app, user) as c2:
-        r = c2.get(f"{_base(strict)}/export")
-        assert r.status_code == 422
         assert c2.get(f"{_base(code)}/export").status_code == 404           # 非成员 404
-    (a,) = _export_audits(strict)
-    assert a.result == "blocked" and _d(a)["reason"] == "strict_tier"

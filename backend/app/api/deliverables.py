@@ -7,7 +7,7 @@ PUT  /api/projects/{code}/deliverables/{dcode}/sections/{seq}           顾问�
 GET  /api/projects/{code}/deliverables/{dcode}/sections/{seq}/diff      两个版本的差异（?a=1&b=2，统一 diff 格式）
 GET  /api/projects/{code}/deliverables/{dcode}/export                   导出 Word（各章当前版本，套模板；规则见 app/project/export.py）
 
-严格档项目写入 422（M4 接入）；已签署的交付件写入 409；机密级命中 422（不保存）。规则见 app/project/deliverables.py。
+严格档项目只收占位符版本（真名、IP、系统名 422）；已签署的交付件写入 409；机密级命中 422（不保存）。规则见 app/project/deliverables.py。
 """
 from datetime import datetime
 
