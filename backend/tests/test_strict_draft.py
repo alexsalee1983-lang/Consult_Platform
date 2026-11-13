@@ -3,7 +3,9 @@
 写入时查占位符（机构名、人名、联系方式、网络标识、系统名、原话 → 422，不保存、审计只记类别）；
 来源标注 [S-xx] 按有效摘要卡核对，撤下的卡核对不上；交付链读摘要卡起草、提示里带严格档要求；
 没有摘要卡时发“证据不足”卡；质量评审、导出对严格档放开。"""
+import io
 import json
+import zipfile
 from datetime import date, timedelta
 
 import httpx
@@ -87,6 +89,9 @@ def test_write_checks_placeholders_and_resolves_cards(strict):
     assert c.post(f"{_base(code)}/reviews").status_code == 202                 # 质量评审放开
     r = c.get(f"{_base(code)}/export")
     assert r.status_code == 200 and len(r.content) > 1000                     # 导出放开（占位符版本）
+    notes = zipfile.ZipFile(io.BytesIO(r.content)).read("word/footnotes.xml").decode("utf-8")
+    assert "S-01：去标识摘要卡《" in notes                                     # 摘要卡来源也出脚注
+    assert "S-02：未核对到" in notes                                            # 撤下的卡不给说明
 
 
 class _Model:
