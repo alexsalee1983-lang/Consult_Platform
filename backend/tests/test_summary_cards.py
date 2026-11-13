@@ -30,7 +30,7 @@ GOOD = [
 
 @pytest.mark.parametrize("text", [
     "特权账号近 12 个月未复核。", "【客户】的 SOC 7x24 值守，L1 分析员 3 人。", "【系统A】与【系统 B】之间无 SLA。",
-    "依据 GB/T 22239 第 8.1 条做差距分析。",
+    "依据 GB/T 22239 第 8.1 条做差距分析。", "夜间告警无人处理（现场 O-03、D-12）。",
 ])
 def test_clean_text_passes(text):
     assert cards.card_problems(text) == []
