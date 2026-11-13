@@ -278,7 +278,9 @@ def _settings(**kw) -> Settings:
             "test_account_username": "", "test_account_password": "", "test_account_totp_secret": "",
             "bootstrap_admin_username": "", "bootstrap_admin_password": "", "bootstrap_admin_totp_secret": "",
             "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24,
-            "totp_keys": "p1:" + "A" * 43 + "="}
+            "totp_keys": "p1:" + "A" * 43 + "=",
+            "database_url": "postgresql+psycopg://consult:p@postgres:5432/consult",
+            "kb_database_url": "postgresql+psycopg://consult_kb:q@postgres:5432/consult_kb"}
     return Settings(_env_file=None, **{**base, **kw})
 
 
@@ -293,6 +295,16 @@ def test_prod_refuses_memory_sessions_and_insecure_cookie():
     with pytest.raises(BootstrapError):
         check_settings(_settings(cookie_secure=False))
     check_settings(_settings())
+
+
+def test_prod_requires_separate_kb_database_and_account():
+    with pytest.raises(BootstrapError, match="知识区"):
+        check_settings(_settings(kb_database_url=""))
+    with pytest.raises(BootstrapError, match="账号"):   # 同一个账号
+        check_settings(_settings(kb_database_url="postgresql+psycopg://consult:p@postgres:5432/consult_kb"))
+    with pytest.raises(BootstrapError, match="账号"):   # 同一个库
+        check_settings(_settings(kb_database_url="postgresql+psycopg://consult_kb:q@postgres:5432/consult"))
+    check_settings(_settings(app_env="test", kb_database_url=""))   # 测试机可以不分库
 
 
 def test_no_default_accounts_without_config(tmp_path):

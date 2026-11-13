@@ -17,6 +17,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 backend/tests/test.db
+backend/tests/test_kb.db
 backend/*.db
 
 # Node
