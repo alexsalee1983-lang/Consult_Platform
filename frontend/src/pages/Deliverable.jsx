@@ -204,6 +204,8 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   );
 }
 
+const MIN_WAIVE_REASON = 10; // 与后端 quality.MIN_WAIVE_REASON 一致
+
 // 项目经理驳回评审 Agent 提出的一条阻断（必须写理由；平台规则的阻断不能驳回）
 function Waive({ code, dcode, rid, issue, onDone }) {
   const [open, setOpen] = useState(false);
@@ -220,14 +222,15 @@ function Waive({ code, dcode, rid, issue, onDone }) {
       setBusy(false);
     }
   }
+  const short = reason.replace(/\s/g, "").length < MIN_WAIVE_REASON;
   if (!open) return <button className="btn sm" onClick={() => setOpen(true)}>驳回</button>;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <textarea className="inp" rows={2} maxLength={2000} value={reason} placeholder="驳回理由（必填，记入签署记录）"
+      <textarea className="inp" rows={2} maxLength={2000} value={reason} placeholder={`驳回理由（必填，至少 ${MIN_WAIVE_REASON} 个字，写明为什么可以不改；记入签署记录）`}
         onChange={(e) => setReason(e.target.value)} />
       {error && <div className="err" role="alert">{error}</div>}
       <div className="row">
-        <button className="btnp" disabled={busy || !reason.trim()} onClick={submit}>确认驳回</button>
+        <button className="btnp" disabled={busy || short} onClick={submit}>确认驳回</button>
         <button className="btn" disabled={busy} onClick={() => setOpen(false)}>取消</button>
       </div>
     </div>
