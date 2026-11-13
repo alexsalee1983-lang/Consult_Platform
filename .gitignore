@@ -28,3 +28,6 @@ frontend/dist/
 # 客户资料不得进入代码仓
 data/
 uploads/
+
+# 压测账号凭据（loadtest-accounts 生成），不提交
+loadtest/accounts.json
