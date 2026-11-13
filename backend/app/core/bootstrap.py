@@ -48,7 +48,7 @@ def check_settings(s: Settings) -> None:
     except secretbox.SecretBoxError as e:
         raise BootstrapError(str(e)) from e
     if s.is_prod and (not s.kb_database_url or s.kb_database_url == s.database_url):
-        raise BootstrapError("生产环境知识区必须单独建库（KB_DATABASE_URL，账号与主库不同，见 deploy/postgres/README.md）")
+        raise BootstrapError("生产环境知识区必须单独建库（KB_DATABASE_URL，账号与主库不同，见 docs/知识区分库.md）")
     if s.kb_database_url and not s.kb_database_url.startswith("sqlite"):
         main, kb = make_url(s.database_url), make_url(s.kb_database_url)
         if kb.username == main.username or (kb.host, kb.port, kb.database) == (main.host, main.port, main.database):

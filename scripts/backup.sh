@@ -3,6 +3,7 @@
 #   BACKUP_PASSPHRASE_FILE=/etc/consult-platform/backup.pass bash scripts/backup.sh [备份根目录]
 # 备份根目录：第一个参数 > 环境变量 BACKUP_DIR > ./backups。每次备份一个子目录（UTC 时间戳）：
 #   db.dump.gpg       pg_dump 自定义格式，gpg 对称加密（AES-256）
+#   kb.dump.gpg       知识区数据库（M5 ③ 分库后才有），同上
 #   objects.tar.gpg   MinIO 数据卷打包（对象本身已经服务端加密），再 gpg 加密；备份期间暂停 MinIO 几秒，保证一致
 #   manifest.json     时间、迁移版本、审计链头、文件大小和 sha256（不含任何业务内容和密钥）
 # 另把链头追加到 备份根目录/audit-heads.log（链外留存，防止审计记录末尾被删后链仍自洽）。
@@ -44,6 +45,12 @@ head_hash="$(printf '%s\n' "$out" | sed -n 's/^链头：.*hash=\([0-9a-f]*\).*/\
 # 2. 数据库
 alembic="$(docker compose exec -T postgres psql -U consult -d consult -tAc 'select version_num from alembic_version' | tr -d '[:space:]')"
 docker compose exec -T postgres pg_dump -U consult -d consult -Fc | enc "$dir/db.dump.gpg"
+KB_DB="$(env_val KB_POSTGRES_DB)"; KB_DB="${KB_DB:-consult_kb}"
+alembic_kb=""
+if [ "$(docker compose exec -T postgres psql -U consult -d postgres -tAc "select 1 from pg_database where datname='$KB_DB'" | tr -d '[:space:]')" = "1" ]; then
+  alembic_kb="$(docker compose exec -T postgres psql -U consult -d "$KB_DB" -tAc 'select version_num from alembic_version_kb' 2>/dev/null | tr -d '[:space:]' || true)"
+  docker compose exec -T postgres pg_dump -U consult -d "$KB_DB" -Fc | enc "$dir/kb.dump.gpg"
+fi
 
 # 3. 对象存储（没启用对象存储时跳过）
 mid="$(docker compose ps -q minio 2>/dev/null || true)"
@@ -61,7 +68,7 @@ for f in "$dir"/*.gpg; do
   files="$files\"$n\": {\"bytes\": $(stat -c %s "$f"), \"sha256\": \"$(sha256sum "$f" | cut -d' ' -f1)\"}, "
 done
 cat > "$dir/manifest.json" <<EOF
-{"stamp": "$stamp", "alembic": "$alembic", "audit_head": {"id": ${head_id:-null}, "hash": "$head_hash"},
+{"stamp": "$stamp", "alembic": "$alembic", "alembic_kb": "$alembic_kb", "kb_db": "$KB_DB", "audit_head": {"id": ${head_id:-null}, "hash": "$head_hash"},
  "keep_days": $KEEP_DAYS, "files": {${files%, }}}
 EOF
 echo "$stamp id=$head_id hash=$head_hash" >> "$DEST_ROOT/audit-heads.log"

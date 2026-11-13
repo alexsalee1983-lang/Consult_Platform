@@ -5,6 +5,8 @@
 !backend/alembic.ini
 !backend/alembic
 !backend/alembic/**
+!backend/alembic_kb
+!backend/alembic_kb/**
 !backend/app
 !backend/app/**
 !agents

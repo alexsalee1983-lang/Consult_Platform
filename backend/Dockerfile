@@ -14,6 +14,7 @@ RUN pip install -i ${PIP_INDEX_URL} -r requirements.txt
 
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
+COPY backend/alembic_kb ./alembic_kb
 COPY backend/app ./app
 # Agent md：运行时从 /srv/agents 读取（测试机可用只读挂载覆盖，改 md 不用重建镜像）
 COPY agents ./agents

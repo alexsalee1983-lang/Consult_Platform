@@ -36,3 +36,6 @@ COPY --from=builder /usr/lib/postgresql/${PG_MAJOR}/lib/zhparser.so /usr/lib/pos
 COPY --from=builder /usr/share/postgresql/${PG_MAJOR}/extension/zhparser* /usr/share/postgresql/${PG_MAJOR}/extension/
 COPY --from=builder /usr/share/postgresql/${PG_MAJOR}/tsearch_data/dict.utf8.xdb /usr/share/postgresql/${PG_MAJOR}/tsearch_data/
 RUN ldconfig
+# 知识区数据库和账号（M5 ③ 分库）：新数据卷自动建；已有数据卷执行 docker compose exec postgres kb-init.sh
+COPY --chmod=755 kb-init.sh /usr/local/bin/kb-init.sh
+COPY --chmod=755 initdb-kb.sh /docker-entrypoint-initdb.d/20-kb-init.sh
