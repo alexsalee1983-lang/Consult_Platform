@@ -51,6 +51,12 @@ test("整张卡检查：必填、证据编号（含三段）、审阅日期", ()
   assert.deepEqual(F.uploadBody([ok]).cards[0].onsite_refs, ["D-03", "I-04-07", "O-02"]);
 });
 
+test("对照表里没有的占位符会被提醒", () => {
+  const cards = [{ item: "【客户】值班", finding: "【系统A】和【系统C】未复核 [S-01]", magnitude: "" }];
+  assert.deepEqual(F.unmappedPlaceholders(cards, [{ placeholder: "【系统A】", real: "x" }, { placeholder: "【客户】", real: "y" }]), ["【系统C】"]);
+  assert.deepEqual(F.unmappedPlaceholders(cards, []), ["【客户】", "【系统A】", "【系统C】"]);
+});
+
 test("加密包：往返、口令错、类型不能换", async () => {
   const body = { project_code: "GRID-B", cards: [{ item: "x" }] };
   await assert.rejects(F.encryptPackage("upload", body, "short"), /12/);
