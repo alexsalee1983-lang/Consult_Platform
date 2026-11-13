@@ -158,8 +158,15 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    # HTTPS：TLS_DIR 下有 server.crt 和 server.key 时启用（80 只做跳转），没有时只用 HTTP；APP_ENV=prod 没有证书拒绝启动
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      WEB_TLS_PORT: ${WEB_TLS_PORT:-8443}
+    volumes:
+      - ${TLS_DIR:-./deploy/tls}:/etc/nginx/tls:ro
     ports:
       - "${WEB_PORT:-8080}:80"
+      - "${WEB_TLS_PORT:-8443}:443"
 
   # 模拟大模型（OpenAI 兼容），只在 CI 和测试机上按需启动，不对外开放端口：
   #   docker compose --profile mock-llm up -d --build

@@ -107,6 +107,26 @@ jobs:
             sleep 3
           done
           echo "后端重建后经前端访问失败：$code"; docker compose logs --no-color frontend | tail -20; exit 1
+      - name: HTTPS 与安全响应头（自签名证书；80 跳转、HSTS、CSP；生产没有证书拒绝启动）
+        run: |
+          bash scripts/gen_test_cert.sh
+          docker compose up -d --force-recreate --no-deps frontend
+          for i in $(seq 1 30); do curl -sf --cacert deploy/tls/server.crt https://localhost:8443/api/health >/dev/null && break; sleep 2; done
+          h=$(curl -sS --cacert deploy/tls/server.crt -D - -o /dev/null https://localhost:8443/)
+          echo "$h"
+          for want in "strict-transport-security: max-age=31536000" "content-security-policy: default-src 'self'" "x-frame-options: DENY" "x-content-type-options: nosniff"; do
+            echo "$h" | tr -d '\r' | grep -qi "^$want" || { echo "缺少响应头：$want"; exit 1; }
+          done
+          echo "$h" | grep -qi "^server: nginx/" && { echo "响应头泄露 nginx 版本"; exit 1; }
+          loc=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://localhost:8080/login)
+          [ "$loc" = "301 https://localhost:8443/login" ] || { echo "HTTP 未跳转到 HTTPS：$loc"; exit 1; }
+          curl -s -o /dev/null --tlsv1.1 --tls-max 1.1 --cacert deploy/tls/server.crt https://localhost:8443/ && { echo "仍接受 TLS 1.1"; exit 1; }
+          CURL_CA_BUNDLE=deploy/tls/server.crt SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh https://localhost:8443
+          img=$(docker compose images -q frontend | head -1)
+          if docker run --rm -e APP_ENV=prod "$img" nginx -t 2>/dev/null; then echo "生产环境没有证书却启动了"; exit 1; fi
+          echo "生产环境没有证书：拒绝启动（符合预期）"
+          rm -f deploy/tls/server.crt deploy/tls/server.key
+          docker compose up -d --force-recreate --no-deps frontend
       - name: 后台任务链路（worker 执行自检任务：数据库 + 对象存储写读删）
         run: docker compose exec -T backend python -m app.cli selfcheck --wait 90
       - name: TOTP 密钥加密存储（库里没有明文，轮换命令可执行）
