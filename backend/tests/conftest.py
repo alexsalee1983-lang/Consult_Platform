@@ -34,6 +34,8 @@ os.environ["MINIO_ACCESS_KEY"] = os.environ.get("TEST_S3_ACCESS_KEY", "")
 os.environ["MINIO_SECRET_KEY"] = os.environ.get("TEST_S3_SECRET_KEY", "")
 os.environ["SESSION_BACKEND"] = "memory"
 os.environ["COOKIE_SECURE"] = "false"  # TestClient 走 http://testserver
+# TOTP 密钥加密存储（core/secretbox.py）：每次随机生成，测试走加密路径
+os.environ["TOTP_KEYS"] = "t1:" + __import__("base64").b64encode(secrets.token_bytes(32)).decode()
 
 # 测试账号每次随机生成，代码里没有固定口令
 TEST_USER = "tester"
