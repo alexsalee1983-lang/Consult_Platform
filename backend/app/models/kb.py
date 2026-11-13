@@ -16,14 +16,14 @@ from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, Strin
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import false as sql_false
 
-from ..core.db import Base, utcnow
+from ..core.db import KbBase, utcnow
 
 
 def _default_visible_roles() -> list[str]:
     return ["consultant", "admin"]
 
 
-class KbItem(Base):
+class KbItem(KbBase):
     __tablename__ = "kb_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -51,7 +51,7 @@ class KbItem(Base):
         back_populates="item", foreign_keys="KbVersion.item_id", order_by="KbVersion.version")
 
 
-class KbVersion(Base):
+class KbVersion(KbBase):
     __tablename__ = "kb_versions"
     __table_args__ = (UniqueConstraint("item_id", "version", name="uq_kb_versions_item_version"),)
 
@@ -87,7 +87,7 @@ class KbVersion(Base):
     reviews: Mapped[list["KbReview"]] = relationship(back_populates="version", order_by="KbReview.id")
 
 
-class KbChunk(Base):
+class KbChunk(KbBase):
     __tablename__ = "kb_chunks"
     __table_args__ = (UniqueConstraint("version_id", "seq", name="uq_kb_chunks_version_seq"),)
 
@@ -101,7 +101,7 @@ class KbChunk(Base):
     embedding_model: Mapped[str] = mapped_column(String(64), default="")
 
 
-class KbReview(Base):
+class KbReview(KbBase):
     __tablename__ = "kb_reviews"
     __table_args__ = (UniqueConstraint("version_id", "reviewer", "review_role",
                                        name="uq_kb_reviews_version_reviewer_role"),)
@@ -117,7 +117,7 @@ class KbReview(Base):
     version: Mapped[KbVersion] = relationship(back_populates="reviews")
 
 
-class KbUpload(Base):
+class KbUpload(KbBase):
     __tablename__ = "kb_uploads"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -130,7 +130,7 @@ class KbUpload(Base):
     status: Mapped[str] = mapped_column(String(16), default="received", index=True)
     guard_categories: Mapped[list] = mapped_column(JSON, default=list)        # 机密级命中类别，不记命中内容
     error: Mapped[str] = mapped_column(String(200), default="")
-    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # jobs 在主库，分库后不能建外键（迁移 0030）
     uploaded_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     # 解析结果（迁移 0012）：parsed_key 指向对象存储知识区里的解析结果 JSON（章节 + 片段）
@@ -145,7 +145,7 @@ class KbUpload(Base):
     raw_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class KbDeidReport(Base):
+class KbDeidReport(KbBase):
     __tablename__ = "kb_deid_reports"
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -8,6 +8,9 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"   # dev 开发 / test 测试机 / prod 生产
     database_url: str = "postgresql+psycopg://consult:consult@postgres:5432/consult"
+    # 知识区数据库（M5 ③，决策记录 2026-11-09）：单独的库、单独的账号，只放 kb_ 开头的表；
+    # 留空表示与 DATABASE_URL 同库（本地开发、单元测试），生产必须分库（启动自检会拒绝）。
+    kb_database_url: str = ""
     redis_url: str = "redis://redis:6379/0"
 
     # 对象存储（S3 接口，一期为自建 MinIO）；留空表示未启用（本地开发、单元测试）。
