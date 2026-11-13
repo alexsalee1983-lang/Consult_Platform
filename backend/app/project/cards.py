@@ -44,6 +44,7 @@ _PLACEHOLDER_RE = re.compile(r"【[一-龥]{1,12}\s?(?:[A-Z]|\d{1,2}|[一二三�
 _PERSON_TITLE_RE = re.compile(deid._BEFORE + f"[{deid._SURNAMES}](?:" + "|".join(deid._TITLES[:-4]) + ")")
 _QUOTE_RE = re.compile(r"[“「『\"]([^”」』\"]{6,})[”」』\"]")
 _LATIN_RE = re.compile(r"(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9_.+-]*[A-Za-z0-9]|[A-Za-z])(?![A-Za-z0-9])")
+_EVIDENCE_CODE_RE = re.compile(r"(?<![A-Za-z0-9])[DIOS]-\d{2,4}(?:-\d{2,3})?(?![\d-])")
 _VERSION_RE = re.compile(r"(?<![A-Za-z0-9.])[Vv]?\d+\.\d+\.\d+(?![\d.])|(?<![A-Za-z0-9])[Vv]\d+(?:\.\d+)?(?![\w.])")
 # 通用缩写和术语（不是具体系统、产品名），比较时不分大小写
 GENERIC_LATIN = set("""
@@ -89,7 +90,7 @@ def card_problems(text: str) -> list[str]:
     found: set[str] = set()
     if guard.check(text).blocked:
         found.add("机密级")
-    stripped = _PLACEHOLDER_RE.sub("【】", text)
+    stripped = _EVIDENCE_CODE_RE.sub(" ", _PLACEHOLDER_RE.sub("【】", text))   # 证据编号（现场 O-03）不算系统名
     for rep in deid.deidentify([("", stripped)], "").replacements:
         kind = _DEID_KINDS.get(rep.category)
         if kind:
