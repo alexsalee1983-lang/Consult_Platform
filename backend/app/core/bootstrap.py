@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..models import Project, ProjectMember, User
-from . import audit
+from . import audit, secretbox
 from .config import Settings
 from .permissions import CONSULTANT, PROJECT_MANAGER, PROJECT_MEMBER, SYS_ADMIN, roles_of, set_roles
 from .security import check_password_policy, hash_password, is_valid_totp_secret, verify_password
@@ -40,6 +40,11 @@ def check_settings(s: Settings) -> None:
         raise BootstrapError("生产环境必须配置对象存储（MINIO_ENDPOINT）")
     if s.minio_endpoint and (not s.minio_access_key or len(s.minio_secret_key) < 20):
         raise BootstrapError("对象存储的访问密钥未配置或过短（MINIO_ACCESS_KEY、MINIO_SECRET_KEY 至少 20 位）")
+    try:
+        if not secretbox.parse_keys(s.totp_keys) and s.is_prod:
+            raise BootstrapError("生产环境必须配置 TOTP_KEYS（账号 TOTP 密钥加密存储，生成方法见 .env.example）")
+    except secretbox.SecretBoxError as e:
+        raise BootstrapError(str(e)) from e
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
 
@@ -92,6 +97,21 @@ def ensure_initial_users(db: Session, s: Settings) -> None:
             db.commit()
         if not roles_of(db, user.id):  # 登录 PR 时期建的测试账号还没有角色
             set_roles(db, user, {CONSULTANT}, granted_by="system")
+
+
+def encrypt_plaintext_rows(db: Session) -> int:
+    """把加密前存的明文 TOTP 密钥加密（启动时执行，可重复执行）；返回处理的账号数，不记密钥。"""
+    if not secretbox.keys():
+        return 0
+    n = 0
+    for user in db.scalars(select(User).where(~User.totp_secret_enc.startswith(secretbox.PREFIX + ":"))).all():
+        user.totp_secret = user.totp_secret_enc
+        n += 1
+    if n:
+        db.commit()
+        audit.record(db, actor="system", action="user.totp_encrypt", result="allowed", count=n)
+        log.warning("已加密 %d 个账号的 TOTP 密钥（原为明文）", n)
+    return n
 
 
 # 测试账号在演示项目中的身份：BANK-A 项目经理、MFG-C 项目成员，故意不加入 GRID-B，

@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, false
 from sqlalchemy.orm import Mapped, mapped_column
 
+from ..core import secretbox
 from ..core.db import Base, utcnow
 
 
@@ -18,7 +19,8 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     display_name: Mapped[str] = mapped_column(String(64), default="")
     password_hash: Mapped[str] = mapped_column(String(256))          # Argon2id
-    totp_secret: Mapped[str] = mapped_column(String(64))             # Base32；S5 加密存储
+    # TOTP 共享密钥：库里存 AES-256-GCM 密文（core/secretbox.py，等保自查 ②b），代码只经 totp_secret 属性读写明文
+    totp_secret_enc: Mapped[str] = mapped_column("totp_secret", String(255))
     totp_last_step: Mapped[int] = mapped_column(BigInteger, default=0)  # 已用过的最近时间步，防止动态码重放
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # 管理员在网页上建账号或重置口令后为 True：登录后只能改口令，改完才能用其他功能
@@ -27,3 +29,11 @@ class User(Base):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    @property
+    def totp_secret(self) -> str:
+        return secretbox.decrypt(self.totp_secret_enc)
+
+    @totp_secret.setter
+    def totp_secret(self, value: str) -> None:
+        self.totp_secret_enc = secretbox.encrypt(value)

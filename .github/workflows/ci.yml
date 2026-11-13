@@ -70,7 +70,7 @@ jobs:
       - name: 生成 .env（测试账号每次随机生成，不写死口令）
         run: |
           cp .env.example .env
-          sed -i '/^MINIO_SECRET_KEY=$/d; /^MINIO_KMS_SECRET_KEY=$/d' .env   # 下面随机生成
+          sed -i '/^MINIO_SECRET_KEY=$/d; /^MINIO_KMS_SECRET_KEY=$/d; /^TOTP_KEYS=$/d' .env   # 下面随机生成
           python3 - >> .env <<'PY'
           import base64, secrets
           print("TEST_ACCOUNT_USERNAME=ci-smoke")
@@ -78,6 +78,7 @@ jobs:
           print("TEST_ACCOUNT_TOTP_SECRET=" + base64.b32encode(secrets.token_bytes(20)).decode())
           print("MINIO_SECRET_KEY=" + secrets.token_urlsafe(30))
           print("MINIO_KMS_SECRET_KEY=ci-key:" + base64.b64encode(secrets.token_bytes(32)).decode())
+          print("TOTP_KEYS=ci1:" + base64.b64encode(secrets.token_bytes(32)).decode())
           PY
           # 接模拟模型（OpenAI 兼容），走网关的真实 HTTP 路径：重试、流式、可用性检查、用量计量
           sed -i 's|^LLM_BASE_URL=.*|LLM_BASE_URL=http://mock-llm:8000/v1|' .env
@@ -108,6 +109,11 @@ jobs:
           echo "后端重建后经前端访问失败：$code"; docker compose logs --no-color frontend | tail -20; exit 1
       - name: 后台任务链路（worker 执行自检任务：数据库 + 对象存储写读删）
         run: docker compose exec -T backend python -m app.cli selfcheck --wait 90
+      - name: TOTP 密钥加密存储（库里没有明文，轮换命令可执行）
+        run: |
+          n=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT count(*) FROM users WHERE totp_secret NOT LIKE 'v1:ci1:%'")
+          [ "$n" = "0" ] || { echo "有 $n 个账号的 TOTP 密钥没有加密"; exit 1; }
+          docker compose exec -T backend python -m app.cli totp-rekey
       - name: 中文分词可用（zhparser）
         run: |
           out=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT to_tsvector('zh', '安全运营中心的值班制度')")
