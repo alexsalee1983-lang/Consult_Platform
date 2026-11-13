@@ -24,7 +24,7 @@
 - 严格档一律 422（M4 接入）。
 
 驳回阻断（负责人 2026-11-12 定，迁移 0022）：AI 给意见、人来定夺。
-- 项目经理可以逐条驳回质量评审 Agent（by = agent）提出的阻断问题，必须写理由；只追加，不能撤销（要恢复就重新评审）。
+- 项目经理可以逐条驳回质量评审 Agent（by = agent）提出的阻断问题，必须写理由（去掉空白至少 10 个字）；只追加，不能撤销（要恢复就重新评审）。
 - 平台硬规则（by = rule）判出的阻断不能驳回：缺正文、机密级、测评 / 认证结论用语、来源核对不上。
 - 只能驳回最近一次已完成、且针对当前修订的评审；交付件一改，新评审的阻断要重新处理。
 - Agent 统计的阻断数比问题清单里列出的多（没法逐条驳回）时，多出的部分照样算阻断，要重新评审。
@@ -55,6 +55,7 @@ ACTIVE = ("queued", "running")
 INPUT_CHARS = 40000
 MAX_ISSUES = 100
 MAX_COMMENT = 2000
+MIN_WAIVE_REASON = 10  # 驳回阻断是接受风险的决定，理由不能用“ok”之类打发（去掉空白后计字数）
 SEVERITIES = ("阻断", "重要", "建议")
 CONCLUSIONS = {"pass": "通过", "revise": "修改后通过", "fail": "不通过"}
 STRICT_REFUSAL = deliverables.STRICT_REFUSAL
@@ -541,6 +542,8 @@ def waive(db: Session, user: User, project: Project, d: Deliverable, r: QualityR
     reason = _comment(reason)
     if not reason:
         raise QualityError(422, "驳回要写理由")
+    if len("".join(reason.split())) < MIN_WAIVE_REASON:
+        raise QualityError(422, f"驳回理由至少 {MIN_WAIVE_REASON} 个字，写明为什么可以不改")
     if not _is_manager(db, project, user):
         _refuse(db, user, project, d, action, "not_manager", 403, "只有项目经理能驳回阻断问题")
     _lock_deliverable(db, d)

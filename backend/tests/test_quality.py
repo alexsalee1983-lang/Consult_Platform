@@ -294,6 +294,7 @@ def test_manager_waives_agent_blocker_then_sign(team, model):
 
     assert _waive(member, code, rv["id"], idx).status_code == 403                    # 只有项目经理
     assert _waive(mgr_a, code, rv["id"], idx, reason="  ").status_code == 422        # 必须写理由
+    assert _waive(mgr_a, code, rv["id"], idx, reason="o k").status_code == 422       # 理由太短（去空白不足 10 字）
     assert _waive(mgr_a, code, rv["id"], idx + 1).status_code == 422                 # 不是阻断
     assert _waive(mgr_a, code, rv["id"], 99).status_code == 404
     r = _waive(mgr_a, code, rv["id"], idx)
@@ -337,7 +338,7 @@ def test_rule_blocker_and_stale_review_cannot_be_waived(team, model):
 
     # 改了正文，旧评审过期，不能再驳回；新评审的阻断要重新处理
     assert member.put(_url(code, "sections/2"), json={"body": BODY2}).status_code == 201
-    assert _waive(mgr_a, code, rv["id"], agent, reason="再驳一次").status_code == 409
+    assert _waive(mgr_a, code, rv["id"], agent, reason="再驳一次，理由写够十个字").status_code == 409
     rv2 = _review(member, code)
     assert rv2["open_blocking"] == 1 and rv2["waived"] == 0
 
