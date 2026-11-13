@@ -15,7 +15,7 @@ export class ApiError extends Error {
   constructor(status, detail) {
     super(typeof detail === "string" ? detail
       : Array.isArray(detail?.reasons) ? detail.reasons.join("；")   // 门禁不过：{gate, reasons}
-      : detail?.blocked && detail.summary ? detail.summary              // 机密级拦截：{blocked, summary, findings}
+      : detail?.summary ? detail.summary                               // 机密级拦截 {blocked, summary, findings}、摘要卡 {summary, problems | duplicates}
       : Array.isArray(detail) ? "提交的内容格式不正确" : `HTTP ${status}`);
     this.status = status;
     this.detail = detail;

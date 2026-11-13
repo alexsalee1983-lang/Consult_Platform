@@ -61,7 +61,9 @@ export default function StrictCards({ code, onChange }) {
       return true;
     } catch (e) {
       setError(e.message);
-      if (Array.isArray(e.detail?.problems)) setProblems(e.detail.problems);
+      // 平台按第几张（从 1 起）回报：规则问题 {card, field, kinds}，重复 {card, same_as}
+      setProblems([...(e.detail?.problems || []),
+        ...(e.detail?.duplicates || []).map((d) => ({ card: d.card, field: "dup", kinds: [`与 ${d.same_as} 内容相同`] }))]);
       return false;
     } finally {
       setBusy(false);
@@ -206,8 +208,8 @@ export default function StrictCards({ code, onChange }) {
                 <div className="sb"><span><span className="mono sub">第 {i + 1} 张</span> {c.item}</span><span className="sub">{c.magnitude}</span></div>
                 <div className="sub">{c.finding}</div>
                 <div className="sub">现场 {c.onsite_refs.join("、") || "—"} · 审阅 {c.client_reviewed_on || "—"}</div>
-                {problems.filter((p) => p.card === i).map((p) => (
-                  <div key={p.field} className="err sub">{FIELD[p.field] || p.field}：{p.kinds.join("、")}</div>
+                {problems.filter((p) => p.card === i + 1).map((p) => (
+                  <div key={p.field} className="err sub">{p.field === "dup" ? "重复" : FIELD[p.field] || p.field}：{p.kinds.join("、")}</div>
                 ))}
               </li>
             ))}
@@ -219,7 +221,7 @@ export default function StrictCards({ code, onChange }) {
         </div>
       )}
 
-      {error && <div className="err" role="alert">{error}</div>}
+      {error && <div className="err" role="alert">{error}{pending && problems.length > 0 && "；问题已在上面逐张标出"}</div>}
       {ok && <div className="sub" style={{ color: "var(--ok)" }} role="status">{ok}</div>}
 
       <div className="sb">

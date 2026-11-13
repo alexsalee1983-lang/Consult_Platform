@@ -143,7 +143,7 @@ def start(db: Session, user: User, project: Project) -> AgentRun:
         except runtime.AgentNotReady as e:
             _deny(db, user, project, action, "agent_not_ready")
             raise RunError(409, str(e)) from e
-    run = AgentRun(project_id=project.id, status="queued", step_index=0, waiting_cards=[], card_ids=[],
+    run = AgentRun(project_id=project.id, chain=project.tier, status="queued", step_index=0, waiting_cards=[], card_ids=[],
                    created_by=user.username)
     db.add(run)
     db.flush()
