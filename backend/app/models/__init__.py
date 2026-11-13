@@ -4,6 +4,7 @@
 """
 from .agent import Agent, AgentToolGrant, Tool
 from .audit import AuditLog
+from .consent import ProjectConsent, SummaryCard
 from .conversation import Conversation, Message
 from .deliverable import DeliverableSection, SectionVersion
 from .evidence import Evidence, ProjectDocument
@@ -18,4 +19,4 @@ from .user import User
 
 __all__ = ["Agent", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "Job", "KbChunk", "KbDeidReport", "KbItem", "KbReview",
            "KbUpload", "KbVersion", "LlmUsage",
-           "Message", "Project", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityReview", "ReviewWaiver", "Role", "SectionVersion", "SignOff", "Tool", "User", "UserRole"]
+           "Message", "Project", "ProjectConsent", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityReview", "ReviewWaiver", "Role", "SectionVersion", "SignOff", "SummaryCard", "Tool", "User", "UserRole"]

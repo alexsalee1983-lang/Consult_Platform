@@ -40,6 +40,13 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/documents"),
     ("POST", "/api/projects/BANK-A/notes"),
     ("POST", "/api/projects/BANK-A/evidences/I-01/local-only"),
+    ("GET", "/api/projects/BANK-A/consents"),
+    ("POST", "/api/projects/BANK-A/consents"),
+    ("POST", "/api/projects/BANK-A/consents/1/revoke"),
+    ("GET", "/api/projects/BANK-A/summary-cards"),
+    ("GET", "/api/projects/BANK-A/summary-cards/template"),
+    ("POST", "/api/projects/BANK-A/summary-cards"),
+    ("POST", "/api/projects/BANK-A/summary-cards/S-01/withdraw"),
     ("GET", "/api/projects/BANK-A/deliverables/D4"),
     ("GET", "/api/projects/BANK-A/confirmations"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/outline"),
@@ -136,7 +143,8 @@ def test_every_api_route_is_protected_or_public(client):
         if path.startswith("/api") and path not in PUBLIC_PATHS:
             concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x") \
                 .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1") \
-                .replace("{rid}", "1").replace("{deletion_id}", "1")
+                .replace("{rid}", "1").replace("{deletion_id}", "1") \
+                .replace("{consent_id}", "1").replace("{card}", "S-01")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 
