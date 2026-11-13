@@ -129,6 +129,14 @@ jobs:
           docker compose up -d --force-recreate --no-deps frontend
       - name: 后台任务链路（worker 执行自检任务：数据库 + 对象存储写读删）
         run: docker compose exec -T backend python -m app.cli selfcheck --wait 90
+      - name: 审计记录来源地址、容器日志轮转
+        run: |
+          n=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT count(*) FROM audit_logs WHERE action = 'auth.login' AND detail LIKE '%\"ip\": \"%'")
+          echo "带来源地址的登录审计：$n"; [ "$n" -gt 0 ]
+          for c in $(docker compose ps -q); do
+            docker inspect -f '{{.Name}} {{.HostConfig.LogConfig.Type}} {{index .HostConfig.LogConfig.Config "max-size"}}' "$c"
+            [ "$(docker inspect -f '{{index .HostConfig.LogConfig.Config "max-file"}}' "$c")" = "10" ]
+          done
       - name: TOTP 密钥加密存储（库里没有明文，轮换命令可执行）
         run: |
           n=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT count(*) FROM users WHERE totp_secret NOT LIKE 'v1:ci1:%'")
