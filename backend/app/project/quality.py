@@ -47,6 +47,7 @@ from ..core.permissions import PROJECT_MANAGER, membership
 from ..models import Deliverable, Project, QualityReview, ReviewWaiver, SignOff, User
 from ..services import gateway, guard, jobs, usage
 from . import deliverables
+from . import evidence as evidence_svc
 
 AGENT = "qa-reviewer"
 JOB_KIND = "quality.review"
@@ -180,6 +181,12 @@ def gate(db: Session, d: Deliverable) -> Gate:
     empty = [str(s.seq) for s in d.sections if not s.current_version]
     if empty:
         reasons.append(f"第 {'、'.join(empty)} 章还没有正文")
+    local = evidence_svc.local_only_codes(db, d.project)
+    if local:                                  # 评审之后才标为仅现场使用的资料：签署前实时检查
+        cited = sorted({x.get("code") for s in d.sections if (v := deliverables.get_version(s)) is not None
+                        for x in (v.sources or {}).get("evidence", [])} & local)
+        if cited:
+            reasons.append(f"正文引用了已标为仅现场使用的资料 {'、'.join(cited)}，删去后重新评审")
     r = latest_done_review(db, d)
     if r is None:
         reasons.append("还没有完成的质量评审")
@@ -243,8 +250,9 @@ def qualification_hits(text: str) -> int:
     return n
 
 
-def rule_issues(d: Deliverable, versions: dict) -> tuple[list[dict], bool]:
-    """返回 (问题清单, 是否命中机密级)。只用标注和类别描述，不摘正文。"""
+def rule_issues(d: Deliverable, versions: dict, local_only: set[str] | frozenset[str] = frozenset()
+                ) -> tuple[list[dict], bool]:
+    """返回 (问题清单, 是否命中机密级)。只用标注和类别描述，不摘正文。local_only：已标为仅现场使用的证据编号。"""
     issues: list[dict] = []
     confidential = False
     for s in d.sections:
@@ -268,6 +276,10 @@ def rule_issues(d: Deliverable, versions: dict) -> tuple[list[dict], bool]:
         if unresolved:
             issues.append(_issue("阻断", loc, "证据链 / 依据", f"来源标注核对不上：{'、'.join(unresolved[:10])}",
                                  "核对证据编号和知识库条目编号，改正或删除", "rule"))
+        cited = sorted({x.get("code") for x in src.get("evidence", [])} & set(local_only))
+        if cited:
+            issues.append(_issue("阻断", loc, "保密", f"引用了已标为仅现场使用的资料：{'、'.join(cited)}",
+                                 "删去这些标注和据此写的内容", "rule"))
         counts = src.get("counts", {})
         if counts.get("inferred", 0) and not counts.get("evidence", 0) and not counts.get("knowledge", 0):
             issues.append(_issue("重要", loc, "证据链", "本章结论只有推断，没有客户证据或知识库来源",
@@ -377,7 +389,7 @@ def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverab
 
 
 def _execute(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview) -> None:
-    issues, confidential = rule_issues(d, r.versions)
+    issues, confidential = rule_issues(d, r.versions, evidence_svc.local_only_codes(db, project))
     report, counts = "", {s: 0 for s in SEVERITIES}
     if confidential:
         report = "（交付件正文命中机密级检测，未发往模型评审。请先处理阻断项，再重新评审。）"

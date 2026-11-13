@@ -1,13 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { api, EVIDENCE_STATUS } from "../api.js";
+import { useAuth } from "../auth.jsx";
 
 const TABS = [["all", "全部"], ["document", "资料"], ["interview", "访谈"], ["observation", "观察"]];
 
 // 证据详情：纪要 / 观察显示正文，资料显示解析后的前若干节
-function Detail({ code, ev }) {
+function Detail({ code, ev, onChange }) {
+  const { user } = useAuth();
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
+  const [isManager, setIsManager] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const [ref, setRef] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [markErr, setMarkErr] = useState("");
   useEffect(() => { api.evidence(code, ev.code).then(setD).catch(setError); }, [code, ev.code, ev.status]);
+  useEffect(() => {
+    if (ev.kind !== "document") return;
+    api.members(code).then((ms) => setIsManager(ms.some((m) => m.username === user?.username && m.project_role === "manager")))
+      .catch(() => setIsManager(false));
+  }, [code, ev.kind, user]);
+  const mark = () => {
+    setBusy(true);
+    setMarkErr("");
+    api.markLocalOnly(code, ev.code, ref.trim()).then((x) => { setD(null); setMarking(false); onChange(x); })
+      .catch((e) => setMarkErr(e.message)).finally(() => setBusy(false));
+  };
   if (error) return <div className="err sub">{error.message}</div>;
   if (!d) return <div className="sub">加载中…</div>;
   const meta = [d.kind_name, d.interviewee_role && `受访者：${d.interviewee_role}`, d.occurred_on, d.filename,
@@ -21,6 +39,29 @@ function Detail({ code, ev }) {
         <div key={i}>{s.heading && <b>{s.heading}</b>}<div className="ev-text">{s.text}</div></div>
       ))}
       {d.kind === "document" && d.status === "received" && <div className="sub">资料正在后台解析，稍后刷新。</div>}
+      {d.local_only && (
+        <div className="sub" style={{ color: "var(--vio)" }}>
+          仅现场使用（客户通知 {d.local_only_ref} · {d.local_only_by} · {d.local_only_at?.slice(0, 10)}）：平台已删除原件和解析结果，
+          只能在客户现场查阅；Agent 读不到，交付件不能引用。
+        </div>
+      )}
+      {d.kind === "document" && !d.local_only && isManager && !marking && (
+        <div className="row"><button className="btn sm" onClick={() => setMarking(true)}>标为仅现场使用</button></div>
+      )}
+      {marking && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="sub">客户书面要求这份资料只在现场查阅时使用。标注后平台立即删除原件和解析结果，不可撤销；
+            同一文件不能再上传，交付件里已有的引用要删去后重新评审。</div>
+          <label className="sub">客户书面通知的文号（不写客户名称）
+            <input className="inp" maxLength={64} value={ref} onChange={(e) => setRef(e.target.value)} />
+          </label>
+          {markErr && <div className="err sub" role="alert">{markErr}</div>}
+          <div className="row">
+            <button className="btnp" disabled={busy || !ref.trim()} onClick={mark}>确认标注并删除文件</button>
+            <button className="btn" disabled={busy} onClick={() => setMarking(false)}>取消</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -118,7 +159,7 @@ export default function Evidence({ code, strict, items, onChange }) {
                 <span className="sub mono">{e.occurred_on || e.created_at.slice(0, 10)}</span>
                 <span className={`chip ${st.cls}`}>{st.label}</span>
               </button>
-              {open === e.code && <Detail code={code} ev={e} />}
+              {open === e.code && <Detail code={code} ev={e} onChange={onChange} />}
             </li>
           );
         })}

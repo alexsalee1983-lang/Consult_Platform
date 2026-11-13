@@ -8,8 +8,9 @@
 """
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import false as sql_false
 
 from ..core.db import Base, utcnow
 
@@ -39,6 +40,11 @@ class ProjectDocument(Base):
     uploaded_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     parsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 仅现场使用（M4 ③，迁移 0026）：标注后原件和解析结果已从对象存储删除，sha256 保留用于拒绝再次上传
+    local_only: Mapped[bool] = mapped_column(Boolean, server_default=sql_false())
+    local_only_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    local_only_by: Mapped[str] = mapped_column(String(64), server_default="")
+    local_only_ref: Mapped[str] = mapped_column(String(64), server_default="")    # 客户书面通知的文号，不写客户名称
 
 
 class Evidence(Base):
