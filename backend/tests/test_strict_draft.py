@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.main import app
-from app.models import AuditLog, Confirmation, Deliverable, Project
+from app.models import AgentRun, AuditLog, Confirmation, Deliverable, Project, QualityReview
 from app.project import cards, runs
 from app.services import gateway, jobs
 
@@ -40,8 +40,14 @@ def strict():
     c.__exit__(None, None, None)
 
 
+def _consent(c, code: str) -> int:
+    r = c.post(f"/api/projects/{code}/consents", json=CONSENT)
+    assert r.status_code == 201
+    return r.json()["id"]
+
+
 def _with_cards(c, code: str) -> None:
-    assert c.post(f"/api/projects/{code}/consents", json=CONSENT).status_code == 201
+    _consent(c, code)
     assert c.post(f"/api/projects/{code}/summary-cards", json={"cards": CARDS}).status_code == 201
 
 
@@ -113,6 +119,8 @@ def _work() -> None:
 
 def test_run_without_cards_asks_then_drafts_from_cards(strict, model):
     code, c = strict
+    assert c.post(f"/api/projects/{code}/runs").status_code == 422             # 没有客户同意
+    consent = _consent(c, code)
     rid = c.post(f"/api/projects/{code}/runs").json()["id"]
     _work()
     run = c.get(f"/api/projects/{code}/runs/{rid}").json()
@@ -122,7 +130,7 @@ def test_run_without_cards_asks_then_drafts_from_cards(strict, model):
         assert "摘要卡" in card.title
     c.post(f"/api/projects/{code}/runs/{rid}/cancel")
 
-    _with_cards(c, code)
+    assert c.post(f"/api/projects/{code}/summary-cards", json={"cards": CARDS}).status_code == 201
     rid = c.post(f"/api/projects/{code}/runs").json()["id"]
     _work()
     assert c.get(f"/api/projects/{code}/runs/{rid}").json()["status"] == "done"
@@ -132,6 +140,23 @@ def test_run_without_cards_asks_then_drafts_from_cards(strict, model):
         d = db.scalar(select(Deliverable).join(Project).where(Project.code == code, Deliverable.code == "D4"))
         assert d.sections and d.sections[0].current_version
 
+    # 客户撤回同意：未签署交付件正文、评审意见、运行产出清空；之后不能写入、不能运行
+    assert c.post(f"{_base(code)}/reviews").status_code == 202
+    r = c.post(f"/api/projects/{code}/consents/{consent}/revoke", json={"revoke_ref": "撤回-01", "received_on": TODAY})
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        ds = db.scalars(select(Deliverable).where(Deliverable.project_id == p.id)).all()
+        assert all(v.body == "" for d in ds for s in d.sections for v in s.versions)
+        assert all(not q.report and not q.issues for q in db.scalars(select(QualityReview).where(
+            QualityReview.project_id == p.id)))
+        assert all(s.output == "" for run in db.scalars(select(AgentRun).where(AgentRun.project_id == p.id))
+                   for s in run.steps)
+        a = db.scalars(select(AuditLog).where(AuditLog.project_code == code,
+                                              AuditLog.action == "project.consent.revoke")).all()[-1]
+        assert json.loads(a.detail)["versions_cleared"] >= 2 and "撤回-01" not in a.detail
+    assert c.put(f"{_base(code)}/sections/1", json={"body": "【客户】值守 [推断]。"}).status_code == 422
+    assert c.post(f"/api/projects/{code}/runs").status_code == 422
 
 def test_run_output_with_real_names_fails(strict, model, monkeypatch):
     code, c = strict
@@ -146,3 +171,4 @@ def test_run_output_with_real_names_fails(strict, model, monkeypatch):
     with SessionLocal() as db:
         d = db.scalar(select(Deliverable).join(Project).where(Project.code == code, Deliverable.code == "D3"))
         assert not any(s.current_version for s in d.sections)                 # 不保存
+

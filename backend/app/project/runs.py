@@ -38,6 +38,7 @@ from ..core import audit
 from ..core.db import SessionLocal, utcnow
 from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMember, User
 from ..services import gateway, guard, jobs, usage
+from . import cards as cards_svc
 from . import deliverables
 
 JOB_KIND = "agent_run.step"
@@ -124,6 +125,9 @@ def _lock(db: Session, run: AgentRun) -> str:
 
 def start(db: Session, user: User, project: Project) -> AgentRun:
     action = "run.start"
+    if project.tier == "strict" and cards_svc.active_consent(db, project) is None:
+        _deny(db, user, project, action, "no_consent")
+        raise RunError(422, "严格档项目没有有效的客户书面同意（未登记或已撤回），交付链不能运行")
     active = db.scalar(select(AgentRun).where(AgentRun.project_id == project.id, AgentRun.status.in_(ACTIVE)))
     if active is not None:
         _deny(db, user, project, action, "active_run")

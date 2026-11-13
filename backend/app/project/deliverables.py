@@ -124,6 +124,9 @@ def _check_writable(db: Session, user: User, project: Project, d: Deliverable, a
     reason = None
     if d.status == "signed":
         reason, status, detail = "signed", 409, f"{d.code} 已签署，不能再修改"
+    elif project.tier == "strict" and cards.active_consent(db, project) is None:
+        reason, status, detail = "no_consent", 422, ("严格档项目没有有效的客户书面同意（未登记或已撤回），"
+                                                     "平台不收交付件内容，工作在客户现场完成")
     if reason:
         audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
                      deliverable=d.code, reason=reason)
