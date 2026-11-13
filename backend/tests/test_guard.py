@@ -1,3 +1,5 @@
+import pytest
+
 from app.services.guard import check, mask
 
 
@@ -154,3 +156,26 @@ def test_bare_password_rules_do_not_block_ordinary_text():
     ):
         assert not check(text).blocked, text                          # 整句放行，不只是不报口令（测试 #38 漏了 IP 误报）
     assert "credential" not in kinds("发到 zhang.san@bank.com")       # 邮箱另有规则拦截，这里只看口令规则
+
+
+@pytest.mark.parametrize("text, kind, hit", [
+    ("管理口​令 Abc@​12345", "credential", "Abc@​12345"),       # 零宽字符
+    ("管理口令 Ａｂｃ＠１２３４５", "credential", "Ａｂｃ＠１２３４５"),          # 全角
+    ("核心交换机 １０.１２.３.４", "ip", "１０.１２.３.４"),
+    ("核心交换机 10.​12.3.4", "ip", "10.​12.3.4"),
+    ("身份证 １１０１０１１９９００３０７４５１４", "cn_id", "１１０１０１１９９００３０７４５１４"),
+    ("手机 138-1234-5678", "mobile", "138-1234-5678"),
+    ("手机 138 1234 5678", "mobile", "138 1234 5678"),
+    ("卡号 6222 0212 3456 7890 128", "bank_card", "6222 0212 3456 7890 128"),
+])
+def test_normalized_variants_blocked(text, kind, hit):
+    """渗透测试 M5 ⑦：全角、零宽字符、分段写法曾经漏判；命中位置换回原文位置。"""
+    r = check(text)
+    f = next(f for f in r.findings if f.kind == kind)
+    assert text[f.start:f.end] == hit
+
+
+@pytest.mark.parametrize("text", ["2026-11-13 至 2026-12-31", "共 1234 5678 9012 3456 项",
+                                  "ＧＢ／Ｔ 22239-2019 第 8.1.4.1 条"])
+def test_normalized_variants_not_overblocked(text):
+    assert not check(text).blocked
