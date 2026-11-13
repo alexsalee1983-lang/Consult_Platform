@@ -21,15 +21,15 @@ RUN set -eux; \
     echo "${MINIO_SRC_SHA256}  minio.tar.gz" | sha256sum -c -; \
     tar -xzf minio.tar.gz --strip-components=1; rm minio.tar.gz
 # 发行版自带的部分 Go 依赖有已修复的漏洞（trivy 扫描，docs/安全扫描.md）：只升级这些依赖到修复版本，不改 MinIO 源码。
-# 升级 MinIO 版本时先去掉这里的列表，按扫描结果重新确定。
+# 升级 MinIO 版本时先去掉这里的列表，按扫描结果重新确定。go get 改了 go.mod，构建用 -mod=mod 补齐 go.sum（仍经 GOSUMDB 校验）；
+# 不做 go mod tidy（会拉取依赖的测试依赖，部分已不存在）。
 ARG GO_DEP_FIXES="github.com/apache/thrift@v0.23.0 github.com/buger/jsonparser@v1.1.2 github.com/go-jose/go-jose/v4@v4.1.6 \
 github.com/klauspost/compress@v1.18.7 github.com/prometheus/prometheus@v0.311.3 github.com/rabbitmq/amqp091-go@v1.13.0 \
 go.opentelemetry.io/otel/sdk@v1.42.0 golang.org/x/crypto@v0.54.0 golang.org/x/text@v0.41.0 google.golang.org/grpc@v1.79.3"
 RUN --mount=type=cache,target=/root/go/pkg/mod set -eux; \
     export GOPROXY="$GOPROXY" GOTOOLCHAIN=local CGO_ENABLED=0; \
     go get $GO_DEP_FIXES; \
-    go mod tidy; \
-    export GOFLAGS=-mod=readonly; \
+    export GOFLAGS=-mod=mod; \
     go mod download; \
     version="$(echo "$MINIO_RELEASE" | sed -E 's/^RELEASE\.([0-9-]+)T([0-9]+)-([0-9]+)-([0-9]+)Z$/\1T\2:\3:\4Z/')"; \
     go build -tags kqueue -trimpath -o /out/minio -ldflags "-s -w \
