@@ -1,0 +1,66 @@
+# 告警规则（M5 ⑤，docs/监控.md 第 3 节）。一期不接外部通知渠道：在 Grafana“平台运行”看板顶部的“正在告警”面板查看，
+# 运维每天看一次；接公司告警平台时再加 Alertmanager。阈值与压测方案（docs/压测方案.md）一致。
+groups:
+  - name: consult-platform
+    rules:
+      - alert: 后端不可用
+        expr: up{job="backend"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "后端指标端口 2 分钟抓不到，检查 backend 容器"}
+      - alert: 没有在线worker
+        expr: cp_workers_online < 1
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "后台任务（解析、向量化、到期删除）没有 worker 在处理"}
+      - alert: 状态查询失败
+        expr: cp_state_up == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "后端查数据库或 Redis 失败（source 标签指明哪个）"}
+      - alert: 接口5xx比例高
+        expr: sum(rate(cp_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(cp_http_requests_total[5m])), 0.001) > 0.05
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "10 分钟内 5xx 超过 5%"}
+      - alert: 接口变慢
+        # 不含大模型对话（流式，耗时含整个输出）
+        expr: histogram_quantile(0.95, sum by (le) (rate(cp_http_request_duration_seconds_bucket{route!~"/api/chat.*|/api/conversations/\{cid\}/messages|unmatched"}[10m]))) > 1
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "普通接口 p95 超过 1 秒（压测阈值）"}
+      - alert: 上游调用失败多
+        expr: sum by (service) (rate(cp_upstream_requests_total{outcome="error"}[10m])) / clamp_min(sum by (service) (rate(cp_upstream_requests_total[10m])), 0.001) > 0.2
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "模型、向量或重排服务（service 标签）失败超过 20%"}
+      - alert: 后台任务失败
+        expr: sum by (kind) (increase(cp_jobs_total{status="failed"}[1h])) > 0
+        labels: {severity: warning}
+        annotations: {summary: "最近 1 小时有后台任务最终失败，用 python -m app.cli jobs 查看"}
+      - alert: 任务积压
+        expr: sum(cp_jobs_by_status{status="queued"}) > 50
+        for: 30m
+        labels: {severity: warning}
+        annotations: {summary: "排队任务超过 50 条持续 30 分钟"}
+      - alert: 登录失败激增
+        expr: sum(increase(cp_auth_logins_total{result=~"blocked|locked"}[10m])) > 20
+        labels: {severity: warning}
+        annotations: {summary: "10 分钟内登录失败超过 20 次，看审计 auth.login 的来源地址"}
+      - alert: 写审计失败
+        expr: sum(increase(cp_audit_write_failures_total[15m])) > 0
+        labels: {severity: critical}
+        annotations: {summary: "有业务改动已生效但审计没写上，查后端日志和数据库（等保自查 8.1.4.3 d）"}
+      - alert: 审计链校验未通过
+        expr: min(cp_audit_chain_ok) == 0
+        labels: {severity: critical}
+        annotations: {summary: "worker 每小时校验审计哈希链未通过，运行 python -m app.cli verify-audit 查看，按安全事件处理"}
+      - alert: 审计链校验停了
+        expr: time() - max(cp_audit_chain_verified_timestamp_seconds) > 7200
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "超过 2 小时没有完成审计链校验（worker 未运行或校验出错）"}
+      - alert: 机密级拦截激增
+        expr: sum(increase(cp_guard_blocks_total[1h])) > 30
+        labels: {severity: warning}
+        annotations: {summary: "1 小时内机密级检测命中超过 30 次（kind 标签为规则编号），提醒顾问或排查是否有人批量试探"}

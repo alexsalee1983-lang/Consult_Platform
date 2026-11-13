@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     # 配置了但文件不存在时拒绝导出，不退回默认模板。
     export_template: str = ""
 
+    # 运行指标端口（core/metrics.py，docs/监控.md）：容器里设 9100，只在 docker 内部网络；0 = 不开
+    metrics_port: int = 0
+
     # ---- 登录与会话 ----
     session_backend: str = "redis"          # redis；memory 只用于单元测试，生产环境拒绝启动
     session_idle_minutes: int = 30          # 无操作超时
