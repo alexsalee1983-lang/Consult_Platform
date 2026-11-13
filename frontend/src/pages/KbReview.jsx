@@ -74,7 +74,7 @@ function ReviewActions({ v, onDone }) {
   const [error, setError] = useState("");
   const roles = [["content", "knowledge_expert", "内容审核"], ["compliance", "knowledge_admin", "合规审核"]]
     .filter(([, r]) => hasRole(user, r));
-  const mine = [v.created_by, v.submitted_by].includes(user?.username);
+  const mine = [v.created_by, v.submitted_by].includes(user?.username) && !v.self_review_allowed;
   const done = new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role));
 
   async function act(role, decision) {
@@ -278,6 +278,7 @@ export default function KbReview() {
                   {v.applicability && <span className="chip c-n">适用：{v.applicability}</span>}
                   {v.ref_document && <span className="chip c-v">依据：{v.ref_document} {v.ref_version}</span>}
                   {v.review_date && <span className="chip c-n">复审 {v.review_date}</span>}
+                  {v.single_review && <span className="chip c-a">单人发布 · 待补复审</span>}
                 </div>
               </div>
               <div className="pad" style={{ gap: 14 }}>
@@ -309,7 +310,7 @@ export default function KbReview() {
                   ))}
                   {v.reviews.length === 0 && <li className="sub">还没有审核记录</li>}
                 </ul>
-                <div className="sub">双人审核 · 第 {new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.reviewer)).size} / 2 人</div>
+                <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>
                 {v.status === "in_review" && <ReviewActions v={v} onDone={refresh} />}
                 {v.status === "published" && <PublishedActions v={v} onDone={refresh} />}
               </section>

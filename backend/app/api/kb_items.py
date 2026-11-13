@@ -11,7 +11,7 @@ PATCH /api/kb/versions/{id}              修改草稿
 POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
-GET  /api/kb/review-due                  30 天内到期待复审的条目（知识专家、知识管理员）
+GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
 GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
 GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
 GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵、待复审、本月运营（知识专家、知识管理员）
@@ -114,6 +114,7 @@ class VersionBrief(BaseModel):
     submitted_by: str
     published_at: datetime | None
     review_date: date | None
+    single_review: bool = False         # 单人发布，待补复审
 
 
 class ReviewOut(BaseModel):
@@ -137,6 +138,7 @@ class VersionOut(VersionBrief):
     ref_status: str
     deid_status: str
     effective_date: date | None
+    self_review_allowed: bool = False   # 公开资料单人发布开关允许作者本人审核这个版本
     reviews: list[ReviewOut] = []
     diff: list[str] = []
     similar: list[dict] = []
@@ -201,6 +203,7 @@ def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
                                                    "source_detail", "ref_document", "ref_version", "ref_status",
                                                    "deid_status", "effective_date")})
     if rv.is_knowledge_user(db, user):          # 审核信息只给知识侧角色
+        out.self_review_allowed = rv.self_review_allowed(v)
         out.reviews = [ReviewOut.model_validate(r, from_attributes=True) for r in v.reviews]
         out.diff = rv.diff_with_current(db, v)
         out.similar = rv.similar_items(db, v) if v.status in ("draft", "in_review") else []
