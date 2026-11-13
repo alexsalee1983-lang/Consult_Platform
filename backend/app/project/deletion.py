@@ -38,6 +38,8 @@ from ..models import (
     Deliverable,
     DeliverableSection,
     Evidence,
+    ProjectConsent,
+    SummaryCard,
     KbUpload,
     Message,
     Project,
@@ -64,7 +66,7 @@ OPEN = (PENDING, CONFIRMED)
 FLOWBACK = {"done": "已回流", "none": "无可回流内容", "client_refused": "客户不同意回流"}
 KIND_NAMES = {EXPIRY: "保留期到期", EARLY: "客户书面要求提前删除"}
 
-SCOPE = ("对象存储中的客户资料原件与解析结果", "证据（资料、访谈纪要、现场观察）", "交付件（含已签署的最终版本）及全部章节版本",
+SCOPE = ("对象存储中的客户资料原件与解析结果", "证据（资料、访谈纪要、现场观察）", "严格档摘要卡与客户同意记录", "交付件（含已签署的最终版本）及全部章节版本",
          "质量评审、签署与驳回记录", "确认卡", "交付链运行记录", "顾问与 Agent 的对话", "项目成员关系")
 KEPT = ("项目代号、档位、验收日和保留期", "本删除记录", "审计日志（只有编号、计数和哈希，不含客户内容）",
         "大模型用量统计（只有次数和字数）")
@@ -282,6 +284,8 @@ def purge(db: Session, p: Project) -> dict:
     drop(DeliverableSection, DeliverableSection.deliverable_id.in_(dels))
     counts["deliverables"] = drop(Deliverable, Deliverable.project_id == pid)
     counts["evidences"] = drop(Evidence, Evidence.project_id == pid)
+    counts["summary_cards"] = drop(SummaryCard, SummaryCard.project_id == pid)
+    counts["consents"] = drop(ProjectConsent, ProjectConsent.project_id == pid)
     counts["documents"] = drop(ProjectDocument, ProjectDocument.project_id == pid)
     counts["members"] = drop(ProjectMember, ProjectMember.project_id == pid)
     return counts
@@ -352,6 +356,7 @@ def pending_counts(db: Session, p: Project) -> dict:
 
     return {"documents": n(ProjectDocument, ProjectDocument.project_id == pid),
             "evidences": n(Evidence, Evidence.project_id == pid),
+            "summary_cards": n(SummaryCard, SummaryCard.project_id == pid),
             "deliverables_with_content": n(Deliverable, Deliverable.project_id == pid, Deliverable.revision > 0),
             "signed_deliverables": n(Deliverable, Deliverable.project_id == pid, Deliverable.status == "signed"),
             "section_versions": n(SectionVersion, SectionVersion.section_id.in_(

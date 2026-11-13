@@ -286,7 +286,7 @@ export const DELETION_STATUS = {
 export const DELETION_KIND = { expiry: "保留期到期", early: "客户书面要求提前删除" };
 export const FLOWBACK = { done: "已回流", none: "无可回流内容", client_refused: "客户不同意回流" };
 export const DELETION_COUNTS = {
-  files: "对象存储文件", evidences: "证据", documents: "资料", deliverables: "交付件",
+  files: "对象存储文件", evidences: "证据", summary_cards: "摘要卡", consents: "客户同意记录", documents: "资料", deliverables: "交付件",
   signed_deliverables: "其中已签署", section_versions: "章节版本", conversations: "对话", messages: "消息",
   runs: "交付链运行", confirmations: "确认卡", quality_reviews: "质量评审", sign_offs: "签署记录", members: "成员关系",
 };

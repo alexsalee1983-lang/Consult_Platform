@@ -81,8 +81,9 @@ def _project_read(ctx: ToolContext, args: dict) -> dict:
     card = {"code": p.code, "service": p.service, "industry": p.industry, "tier": p.tier,
             "phase": PHASES[p.phase] if 0 <= p.phase < len(PHASES) else "", "week": p.week,
             "total_weeks": p.total_weeks}
-    if p.tier == "strict":  # 严格档：只给项目画像，事实只来自摘要卡（M4）
-        return {"project": card, "note": "严格档项目：Agent 只能使用摘要卡，摘要卡在 M4 接入"}
+    if p.tier == "strict":  # 严格档：只给项目画像，事实只来自摘要卡（M4 ④，经 project.evidence 读取）
+        return {"project": card, "note": "严格档项目：客户事实只来自去标识摘要卡（经 project.evidence 读取 S-xx），"
+                                         "输出一律用占位符"}
     return {"project": card,
             "deliverables": [{"code": d.code, "title": d.title, "status": d.status} for d in p.deliverables],
             "open_confirmations": [{"id": c.id, "kind": c.kind, "title": c.title} for c in p.confirmations

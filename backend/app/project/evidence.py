@@ -1,7 +1,7 @@
 """项目区资料与证据编号。
 
 上传客户资料（请求内，同步）：
-1. 严格档项目一律拒绝（资料不出客户现场，只收去标识摘要卡，M4 接入）。
+1. 严格档项目一律拒绝（资料不出客户现场，只收去标识摘要卡，见 app/project/cards.py）。
 2. 按文件内容判断类型并解析出文字；扫描件、加密文件、超限文件直接拒绝（与知识投料共用 app/kb/parse.py）。
 3. 文件名和全文过机密级检测（guard）；命中则**不存档**，只写审计（命中类别），返回打码的命中摘录。
 4. 同一项目里同一文件（sha256 相同）不重复上传。
@@ -42,7 +42,7 @@ AREA = "project"
 MAX_NOTE_CHARS = 100_000
 READ_CHARS = 20_000            # 工具一次最多返回的正文字数，超出的用 offset 分段取
 LOCAL_ONLY_NOTE = "已标为仅现场使用：平台没有原文，只能在客户现场查阅，不能引用"
-STRICT_REFUSAL = "严格档项目的资料不出客户现场，平台不保存资料和纪要原文；摘要卡流程在 M4 接入"
+STRICT_REFUSAL = "严格档项目的资料不出客户现场，平台不保存资料和纪要原文；客户书面同意后只上传去标识摘要卡"
 
 
 class EvidenceError(ValueError):
@@ -246,7 +246,8 @@ def read_for_agent(db: Session, project: Project, code: str = "", offset: int = 
                    limit: int = READ_CHARS) -> dict:
     """工具 project.evidence 的实现：不带 code 返回证据清单；带 code 返回该证据正文（分段）。"""
     if project.tier == "strict":
-        return {"evidences": [], "note": "严格档项目：平台没有资料和纪要原文，Agent 只能使用摘要卡（M4 接入）"}
+        from . import cards                      # 严格档：只有去标识摘要卡（M4 ④）
+        return cards.read_for_agent(db, project, code)
     if not code:
         return {"evidences": [summary(e) for e in list_evidences(db, project)]}
     ev = get_evidence(db, project, code)
