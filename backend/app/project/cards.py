@@ -35,7 +35,7 @@ from ..services import guard
 
 MAX_CARDS = 200                 # 一次最多上传多少张
 ITEM_MAX, FINDING_MAX, MAGNITUDE_MAX, REFS_MAX = 200, 2000, 100, 20
-ONSITE_REF_RE = re.compile(r"[A-Z]{1,3}-\d{1,4}")
+ONSITE_REF_RE = re.compile(r"[A-Z]{1,3}-\d{1,4}(?:-\d{1,3})?")   # D-03、I-02、纪要某条 I-04-07
 STANDARD_REFUSAL = "标准档项目不使用摘要卡：资料和纪要直接录入项目区"
 
 # 占位符：【客户】【甲方】【人员1】【系统A】【信息科技部负责人】……
@@ -377,7 +377,27 @@ def template(db: Session, project: Project) -> dict:
                        {"key": "client_reviewed_on", "name": "客户对接人审阅签字日期", "required": True}],
             "rules": [{"kind": k, "text": t} for k, t in CARD_RULES],
             "placeholders": ["【客户】", "【甲方】", "【人员1】", "【信息科技部负责人】", "【系统A】", "【供应商A】"],
-            "items": []}
+            "items": [], "checks": field_checks()}
+
+
+def field_checks() -> dict:
+    """现场工具（field-tool/）离线自检用的规则：直接导出本模块和去标识规则的正则与词表，两边不会走样。
+    现场工具内置一份（DEFAULT_CHECKS，测试核对一致），导入模板时以模板里的为准。机密级检测现场工具只做简化版，
+    以平台上传时的检查为准。"""
+    return {
+        "schema": 1,
+        "placeholder": _PLACEHOLDER_RE.pattern, "evidence_code": _EVIDENCE_CODE_RE.pattern,
+        "onsite_ref": ONSITE_REF_RE.pattern,
+        # 去标识规则按顺序逐条替换（替换后的文字再查机构名、人名），现场工具照同样顺序执行；kind 为空的只替换不报
+        "patterns": [[_DEID_KINDS.get(c, ""), p.pattern, "i" if p.flags & re.I else "", f"【{deid.CATEGORIES[c]}】"]
+                     for c, p in deid._PATTERNS],
+        "org": {"re": deid._ORG_RE.pattern, "strip": deid._ORG_STRIP_RE.pattern,
+                "allow": sorted(deid._ORG_ALLOW), "generic_head": list(deid._ORG_GENERIC_HEAD),
+                "tail": ["的", "和", "与", "及", "或"]},
+        "person": [deid._PERSON_RE.pattern, deid._PERSON_SHORT_RE.pattern], "person_title": _PERSON_TITLE_RE.pattern,
+        "quote": _QUOTE_RE.pattern, "latin": _LATIN_RE.pattern, "version_no": _VERSION_RE.pattern,
+        "generic_latin": sorted(GENERIC_LATIN),
+    }
 
 
 def summary(card: SummaryCard) -> dict:

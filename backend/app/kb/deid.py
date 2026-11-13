@@ -34,6 +34,8 @@ _ORG_ALLOW = {
 _ORG_GENERIC_HEAD = ("某", "该", "本", "各", "其", "一家", "这家", "多家", "大型", "中型", "小型", "全国性", "区域性", "地方",
                      "国有", "股份制", "城市", "农村", "外资", "民营", "其他", "相关", "所属", "下属", "我")
 _ORG_RE = re.compile(r"([一-龥A-Za-z]{2,12}?)(" + "|".join(_ORG_SUFFIX) + r")")
+# 去掉机构名前面粘连的动词、介词等，例如“服务于某某银行”的“服务于”
+_ORG_STRIP_RE = re.compile(r"^.*?(?:于|在|为|对|向|与|和|及|是|的|给|帮|到|从)(?=[一-龥A-Za-z]{2,})")
 
 _SURNAMES = ("王李张刘陈杨黄赵吴周徐孙马朱胡郭何高林罗郑梁谢宋唐许韩冯邓曹彭曾肖田董袁潘于蒋蔡余杜叶程苏魏吕丁任沈"
              "姚卢姜崔钟谭陆汪范金石廖贾夏韦付方白邹孟熊秦邱江尹薛闫段雷侯龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤")
@@ -136,7 +138,7 @@ def _apply(text: str, mapper: _Mapper, terms: list[Term], section: int) -> str:
     def org(m: re.Match) -> str:
         name, suffix = m.group(1), m.group(2)
         # 去掉前面粘连的动词、介词等，例如“服务于某某银行”的“服务于”
-        name = re.sub(r"^.*?(?:于|在|为|对|向|与|和|及|是|的|给|帮|到|从)(?=[一-龥A-Za-z]{2,})", "", name)
+        name = _ORG_STRIP_RE.sub("", name)
         if not _is_org(name, suffix):
             return m.group(0)
         prefix = m.group(1)[: len(m.group(1)) - len(name)]
