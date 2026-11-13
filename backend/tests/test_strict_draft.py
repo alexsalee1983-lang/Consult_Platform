@@ -125,6 +125,7 @@ def test_run_without_cards_asks_then_drafts_from_cards(strict, model):
     _work()
     run = c.get(f"/api/projects/{code}/runs/{rid}").json()
     assert run["status"] == "waiting" and not model.requests
+    assert run["chain"] == "strict"                                            # 按项目档位记
     with SessionLocal() as db:
         card = db.get(Confirmation, run["card_ids"][0])
         assert "摘要卡" in card.title

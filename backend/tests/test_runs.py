@@ -111,6 +111,7 @@ def test_chain_runs_3_4_7_end_to_end(proj, model):
     _work()
     run = _run(c, code, rid)
     assert run["status"] == "done" and run["next_step"] == "end" and run["finished_at"]
+    assert run["chain"] == "standard"
     assert [s["step"] for s in run["steps"]] == ["facts", "gap", "draft"]
     assert all(s["status"] == "done" and s["prompt_version"] and s["model"] == "mock-model" for s in run["steps"])
     assert run["steps"][0]["refs"]["deliverable"] == "D3" and run["steps"][2]["refs"]["deliverable"] == "D4"
