@@ -174,7 +174,7 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
         {edit ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <textarea className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
-              placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [L4-…] [推断]" />
+              placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]" />
             <input className="inp" maxLength={500} value={edit.note} placeholder="修改说明（可选）" onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
             <div className="sub">保存会新建一个版本，旧版本保留。正文先过机密级检测，命中不保存。{signed ? "" : "待签署时修改会退回起草中。"}</div>
             {saveError && <div className="err" role="alert">{saveError}</div>}
@@ -310,7 +310,7 @@ function Quality({ code, dcode, so, canReview, isManager, onChanged }) {
   );
 }
 
-function SignFlow({ code, dcode, d, so, isManager, tierStrict, onChanged }) {
+function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
   const [comment, setComment] = useState("");
   const [returning, setReturning] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -357,8 +357,7 @@ function SignFlow({ code, dcode, d, so, isManager, tierStrict, onChanged }) {
         <ul className="sub gate-reasons">{so.reasons.map((x) => <li key={x}>{x}</li>)}</ul>
       )}
       {error && <div className="err" role="alert">{error}</div>}
-      {tierStrict ? <div className="sub">严格档项目的交付件不在平台起草和签署。</div>
-        : so.status === "signed" ? <div className="sub" style={{ color: "var(--ok)" }}>已签署，正文只读。</div>
+      {so.status === "signed" ? <div className="sub" style={{ color: "var(--ok)" }}>已签署，正文只读。</div>
         : so.status === "review" ? (
           isManager ? (returning ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -449,7 +448,7 @@ export default function Deliverable({ code, dcode }) {
   const tier = TIER[p.tier] || TIER.standard;
   const strict = p.tier === "strict";
   const signed = d.status === "signed";
-  const editable = !signed && !strict;
+  const editable = !signed;
   const isManager = members.some((m) => m.username === user?.username && m.project_role === "manager");
   const st = DELIV_STATUS[d.status] || DELIV_STATUS.not_started;
   const cur = d.sections.find((s) => s.seq === seq) ? seq : d.sections[0]?.seq;
@@ -462,11 +461,11 @@ export default function Deliverable({ code, dcode }) {
         <select className="sm" aria-label="切换交付件" value={d.code} onChange={(e) => navigate(`/project/${encodeURIComponent(code)}/deliverables/${e.target.value}`)}>
           {p.deliverables.map((x) => <option key={x.code} value={x.code}>{x.code} {x.title}</option>)}
         </select>
-        <button className="btn" disabled={exporting || !d.sections.length || strict} onClick={exportWord}>{exporting ? "导出中…" : "导出 Word"}</button>
+        <button className="btn" disabled={exporting || !d.sections.length} onClick={exportWord}>{exporting ? "导出中…" : "导出 Word"}</button>
       </TopBar>
       {notice && <div className={notice.startsWith("导出失败") ? "err" : "sub"} role="status">{notice}</div>}
       {error && <div className="err">{error.message}</div>}
-      {strict && <div className="note-amber">严格档项目：资料不出客户现场，交付件不在平台起草、评审和签署（M4 接入摘要卡流程）。</div>}
+      {strict && <div className="note-amber">严格档项目：这里只写占位符版本（【客户】【系统A】【人员1】），来源标 [S-xx]，不写真名、IP、产品名和原话，平台写入时检查。导出的 Word 带回现场，用现场工具按对照表回填成正式稿。</div>}
       <div className="kb3">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
           <Toc d={d} seq={cur} onPick={setSeq} editable={editable}
@@ -489,7 +488,7 @@ export default function Deliverable({ code, dcode }) {
               {cards.length === 0 && <li className="sub">本交付件没有待确认事项。<Link to={`/project/${encodeURIComponent(code)}`}>回驾驶舱</Link></li>}
             </ul>
           </section>
-          <SignFlow code={code} dcode={dcode} d={d} so={so} isManager={isManager} tierStrict={strict} onChanged={load} />
+          <SignFlow code={code} dcode={dcode} d={d} so={so} isManager={isManager} onChanged={load} />
         </div>
       </div>
     </>

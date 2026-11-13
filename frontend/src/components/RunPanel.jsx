@@ -62,10 +62,7 @@ export default function RunPanel({ code, strict, onChange }) {
         <h2 className="h2">交付链 · Agent 组</h2>
         {st && <span className={`chip ${st.cls}`}>#{run.id} {st.label}</span>}
       </div>
-      {strict ? (
-        <div className="sub">严格档：资料不出客户现场，交付链不在平台上运行。</div>
-      ) : (
-        <>
+      <>
           <ol className="run-steps">
             {STEPS.map((s) => {
               const ss = run ? stepState(run, s.key) : { label: "未开始", cls: "c-n" };
@@ -101,9 +98,10 @@ export default function RunPanel({ code, strict, onChange }) {
               </button>
             )}
           </div>
-          <div className="sub">读项目证据写 D3 事实清单 → 差距分析 → 写 D4 现状评估初稿。产出是草稿，需顾问审阅和质量评审后签署。</div>
-        </>
-      )}
+          <div className="sub">{strict
+            ? "读摘要卡（S-xx）写 D3 事实清单 → 差距分析 → 写 D4 现状评估初稿，全文只用占位符。需要有效的客户同意和摘要卡。"
+            : "读项目证据写 D3 事实清单 → 差距分析 → 写 D4 现状评估初稿。"}产出是草稿，需顾问审阅和质量评审后签署。</div>
+      </>
     </section>
   );
 }
