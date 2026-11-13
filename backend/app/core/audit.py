@@ -13,8 +13,10 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import threading
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -28,6 +30,43 @@ GENESIS_ACTION = "audit.genesis"
 GENESIS_PREV = "0" * 64
 _LOCK_ID = 774_201_002  # 审计链专用的 advisory lock 编号（迁移用 774_201_001）
 _thread_lock = threading.Lock()
+
+# 当前请求的来源地址（等保自查 ②c）：由 ClientIPMiddleware 设置，record() 自动写进 detail 的 ip 字段。
+# 后台任务、命令行没有来源地址，不写。
+_client_ip: ContextVar[str] = ContextVar("audit_client_ip", default="")
+
+
+def client_ip_from_scope(scope: dict) -> str:
+    """取请求来源地址：前端 nginx 用 X-Real-IP 覆盖为真实对端地址（客户端自带的同名头会被覆盖）；
+    没有经过 nginx（本机调试端口）时用直连地址。不是合法 IP 的一律丢弃，免得把任意文本写进审计。"""
+    raw = ""
+    for k, v in scope.get("headers") or []:
+        if k == b"x-real-ip":
+            raw = v.decode("latin-1").strip()
+            break
+    if not raw and scope.get("client"):
+        raw = str(scope["client"][0])
+    try:
+        return str(ipaddress.ip_address(raw))
+    except ValueError:
+        return ""
+
+
+class ClientIPMiddleware:
+    """纯 ASGI 中间件：把来源地址放进上下文变量，同步接口在线程池里也能读到（anyio 复制上下文）。"""
+
+    def __init__(self, app) -> None:  # noqa: ANN001
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:  # noqa: ANN001
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        token = _client_ip.set(client_ip_from_scope(scope))
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            _client_ip.reset(token)
 
 
 def digest(text: str) -> str:
@@ -56,6 +95,9 @@ def _row_hash(row: AuditLog) -> str:
 def record(db: Session, *, actor: str, action: str, result: str, project_code: str = "", **detail) -> None:
     """追加一条审计记录并提交。调用前应已提交业务改动（本函数会提交当前事务）。"""
     actor = actor[:64]  # 操作人取自服务端会话中的用户名，不信任客户端传来的值
+    ip = _client_ip.get()
+    if ip and "ip" not in detail:
+        detail["ip"] = ip
     detail_text = json.dumps(detail, ensure_ascii=False)
     with _thread_lock:
         try:

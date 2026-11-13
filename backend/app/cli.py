@@ -3,6 +3,7 @@
     docker compose exec backend python -m app.cli create-user --username zhangsan --display-name 张三
     docker compose exec backend python -m app.cli unlock --username zhangsan
     docker compose exec backend python -m app.cli reset-totp --username zhangsan
+    docker compose exec backend python -m app.cli totp-rekey      # 轮换 TOTP_KEYS 后重新加密全部账号的 TOTP 密钥
     docker compose exec backend python -m app.cli grant-role --username zhangsan --role consultant
     docker compose exec backend python -m app.cli grant-role --username wangwu --role security_auditor
     docker compose exec backend python -m app.cli list-users
@@ -32,7 +33,7 @@ import sys
 
 from sqlalchemy import select
 
-from .core import audit, sessions
+from .core import audit, secretbox, sessions
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .core.migrate import upgrade_to_head
@@ -112,6 +113,29 @@ def reset_totp(args: argparse.Namespace) -> int:
     _show_totp(secret, args.username)
     print(f"已重置 {args.username} 的动态码，该用户的现有会话已全部失效")
     return 0
+
+
+def totp_rekey(args: argparse.Namespace) -> int:
+    """用 TOTP_KEYS 的第一把密钥重新加密全部账号的 TOTP 密钥（含加密前的明文）。不打印密钥。"""
+    if not secretbox.keys():
+        print("没有配置 TOTP_KEYS，无法加密", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        users = db.scalars(select(User)).all()
+        todo = [u for u in users if secretbox.needs_rekey(u.totp_secret_enc)]
+        failed = 0
+        for user in todo:
+            try:
+                user.totp_secret = user.totp_secret
+            except secretbox.SecretBoxError as e:
+                failed += 1
+                print(f"{user.username}：{e}", file=sys.stderr)
+        db.commit()
+        audit.record(db, actor="cli", action="user.totp_rekey", result="allowed" if not failed else "error",
+                     count=len(todo) - failed, failed=failed, key_id=secretbox.keys()[0][0])
+    print(f"已用密钥 {secretbox.keys()[0][0]} 重新加密 {len(todo) - failed} 个账号（共 {len(users)} 个）"
+          + (f"，{failed} 个失败" if failed else ""))
+    return 0 if not failed else 2
 
 
 def _change_role(args: argparse.Namespace, grant: bool) -> int:
@@ -555,6 +579,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--username", required=True)
     r.set_defaults(func=reset_totp)
     role_help = "，".join(f"{k}={v}" for k, v in ROLE_NAMES.items())
+    sub.add_parser("totp-rekey", help="用 TOTP_KEYS 第一把密钥重新加密全部账号的 TOTP 密钥（密钥轮换后执行）")         .set_defaults(func=totp_rekey)
     g = sub.add_parser("grant-role", help="授予系统角色（安全审计员只能用此命令授予）")
     g.add_argument("--username", required=True)
     g.add_argument("--role", required=True, choices=sorted(ROLE_NAMES), help=role_help)

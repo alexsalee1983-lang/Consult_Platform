@@ -6,8 +6,9 @@ from fastapi.exceptions import RequestValidationError
 
 from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health,
                   kb, kb_items, projects, quality, runs)
+from .core import audit as core_audit
 from .core.auth import authenticate
-from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
+from .core.bootstrap import check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .core.errors import validation_error_handler
@@ -23,6 +24,7 @@ check_settings(_settings)  # 配置不安全时直接拒绝启动
 async def lifespan(app: FastAPI):
     upgrade_to_head()
     with SessionLocal() as db:
+        encrypt_plaintext_rows(db)
         ensure_initial_users(db, _settings)
         if _settings.seed_demo_data:
             seed(db)
@@ -47,6 +49,8 @@ app = FastAPI(
 )
 # 422 不回显请求原文（口令、客户原文），见 core/errors.py
 app.add_exception_handler(RequestValidationError, validation_error_handler)
+# 审计记录来源地址（core/audit.py）
+app.add_middleware(core_audit.ClientIPMiddleware)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)
