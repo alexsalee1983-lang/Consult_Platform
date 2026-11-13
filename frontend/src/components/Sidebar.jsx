@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { api } from "../api.js";
-import { hasBusinessRole, isAuditor, isKnowledge, isSysAdmin, PASSWORD_PATH, ROLE_NAMES, useAuth } from "../auth.jsx";
+import { hasBusinessRole, hasRole, isAuditor, isKnowledge, isSysAdmin, PASSWORD_PATH, ROLE_NAMES, useAuth } from "../auth.jsx";
 
 const ICONS = {
   chat: <path d="M4 5h16v11H8l-4 4z" />,
@@ -13,6 +13,7 @@ const ICONS = {
   key: <><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M17 6l3 3M15 8l2 2" /></>,
   search: <><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.2-4.2" /></>,
   inbox: <><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1.5 2.5h5L16 13h5" /></>,
+  trash: <><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></>,
   review: <><path d="M9 11l2.5 2.5L16 9" /><rect x="4" y="3" width="16" height="18" rx="2" /></>,
   map: <><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" /><path d="M9 4v14M15 6v14" /></>,
 };
@@ -63,6 +64,7 @@ export default function Sidebar() {
       { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
       { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
       { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
+      ...(hasRole(user, "project_lead") ? [{ to: "/deletions", icon: "trash", label: "资料删除" }] : []),
     ] : []),
     ...(hasBusinessRole(user) ? [
       { group: "知识" },

@@ -61,6 +61,13 @@ PROTECTED = [
     ("PUT", "/api/projects/BANK-A/members/x"),
     ("DELETE", "/api/projects/BANK-A/members/x"),
     ("POST", "/api/projects/BANK-A/acceptance"),
+    ("GET", "/api/deletions"),
+    ("GET", "/api/deletions/1"),
+    ("POST", "/api/deletions/1/confirm"),
+    ("POST", "/api/deletions/1/cancel"),
+    ("GET", "/api/projects/BANK-A/deletions"),
+    ("POST", "/api/projects/BANK-A/deletions"),
+    ("PUT", "/api/projects/BANK-A/flowback"),
     ("GET", "/api/admin/roles"),
     ("GET", "/api/admin/users"),
     ("PUT", "/api/admin/users/x/roles"),
@@ -128,7 +135,7 @@ def test_every_api_route_is_protected_or_public(client):
         if path.startswith("/api") and path not in PUBLIC_PATHS:
             concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x") \
                 .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1") \
-                .replace("{rid}", "1")
+                .replace("{rid}", "1").replace("{deletion_id}", "1")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 

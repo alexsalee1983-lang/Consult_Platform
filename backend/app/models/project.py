@@ -1,7 +1,8 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import true as sql_true
 
 from ..core.db import Base, utcnow as _now
 
@@ -24,6 +25,9 @@ class Project(Base):
     accepted_on: Mapped[date | None] = mapped_column(Date, nullable=True)          # 验收日，未验收为空
     retention_months: Mapped[int] = mapped_column(Integer, server_default="6")  # 只用库默认值（M0 迁移测试按旧表结构插入）
     deletion_due_on: Mapped[date | None] = mapped_column(Date, nullable=True)      # 到期日 = 验收日 + 保留月数
+    # 删除（M4 ②，迁移 0025，规则见 app/project/deletion.py）
+    flowback_allowed: Mapped[bool] = mapped_column(Boolean, server_default=sql_true())   # 客户不同意回流时为 False
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     deliverables: Mapped[list["Deliverable"]] = relationship(
         back_populates="project", order_by="Deliverable.code", cascade="all, delete-orphan"
@@ -82,3 +86,35 @@ class Confirmation(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     project: Mapped[Project] = relationship(back_populates="confirmations")
+
+
+class ProjectDeletion(Base):
+    """项目资料删除申请与删除记录（M4 ②）。完成后就是可交给客户的删除记录：只记编号、日期、计数、确认人和回流情况。
+
+    kind：expiry 到期（平台规则发起，requested_by="platform"）/ early 客户书面要求提前删除（项目经理发起）。
+    status：pending 待项目负责人确认 / confirmed 已确认、删除执行中 / done 已删除 / cancelled 已撤销。
+    flowback：done 已回流（flowback_refs 为投料编号）/ none 无可回流内容 / client_refused 客户不同意回流。
+    """
+
+    __tablename__ = "project_deletions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    requested_by: Mapped[str] = mapped_column(String(64))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    request_ref: Mapped[str] = mapped_column(String(64), default="")          # 客户书面要求的文号（不写客户名称）
+    received_on: Mapped[date | None] = mapped_column(Date, nullable=True)     # 收到书面要求的日期
+    due_by: Mapped[date] = mapped_column(Date)                                # 应完成日期
+    confirmed_by: Mapped[str] = mapped_column(String(64), default="")
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    flowback: Mapped[str] = mapped_column(String(16), default="")
+    flowback_refs: Mapped[list] = mapped_column(JSON, default=list)
+    cancelled_by: Mapped[str] = mapped_column(String(64), default="")
+    cancel_reason: Mapped[str] = mapped_column(String(200), default="")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    counts: Mapped[dict] = mapped_column(JSON, default=dict)                  # 删除了多少：文件、证据、交付件版本……
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
+
+    project: Mapped[Project] = relationship()

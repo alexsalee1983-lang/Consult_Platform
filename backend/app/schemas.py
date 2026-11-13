@@ -54,6 +54,7 @@ class ProjectOut(BaseModel):
     deletion_due_on: date | None = None
     retention_state: str = "active"
     days_to_deletion: int | None = None
+    flowback_allowed: bool = True           # False：客户不同意回流（M4 ②）
 
 
 class ProjectDetail(ProjectOut):

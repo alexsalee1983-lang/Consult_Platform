@@ -9,11 +9,15 @@
     docker compose exec backend python -m app.cli add-member --project GRID-B --username zhangsan --role manager
     docker compose exec backend python -m app.cli create-project --code BANK-D --industry 银行 --tier standard --manager zhangsan
     docker compose exec backend python -m app.cli retention-report
+    docker compose exec backend python -m app.cli deletion-scan
+    docker compose exec backend python -m app.cli deletion-report [--all]
 
 项目成员日常由项目经理在网页上调整；add-member 只用于给还没有项目经理的项目指定第一位经理，或应急。
 create-project 立项（一期没有网页立项）：项目代号只用客户代号（不写客户真实名称），立项时必须定档，同时指定首位项目经理；
 自动建 D1～D8 交付件（未开始）。
 retention-report 列出已验收项目的保留期和到期状态（只有代号和日期，不含客户内容），供负责人跟踪到期删除。
+deletion-scan 立即为已到期项目发起删除申请（worker 每小时自动做）；deletion-report 列出删除申请和删除记录。
+删除本身只能由项目负责人在网页上确认（规则见 app/project/deletion.py），命令行不提供直接删除。
 安全审计员由单独任命，只能用 grant-role / revoke-role 在服务器上授予或撤销，任何网页接口都做不到。
 口令交互输入，不出现在命令行参数和 shell 历史里。TOTP 密钥只显示一次，请当面交给用户录入认证器。
 所有操作写入审计日志（操作人记为 cli）。
@@ -151,6 +155,9 @@ def add_member(args: argparse.Namespace) -> int:
         if project is None:
             print(f"项目 {args.project} 不存在", file=sys.stderr)
             return 1
+        if project.deleted_at is not None:
+            print(f"项目 {args.project} 的资料已删除，不能再加成员", file=sys.stderr)
+            return 1
         user = _get(db, args.username)
         if user is None:
             return 1
@@ -240,8 +247,37 @@ def retention_report(args: argparse.Namespace) -> int:
         due = p.deletion_due_on.isoformat() if p.deletion_due_on else "-"
         acc = p.accepted_on.isoformat() if p.accepted_on else "-"
         left = f"{st.days_left} 天" if st.days_left is not None else "-"
+        state = "已删除" if p.deleted_at is not None else names[st.state]
         print(f"{p.code:<12} {p.tier:<8} 验收 {acc}  保留 {p.retention_months} 个月  到期 {due}  "
-              f"剩余 {left:<8} {names[st.state]}")
+              f"剩余 {left:<8} {state}")
+    return 0
+
+
+def deletion_scan(args: argparse.Namespace) -> int:
+    """立即执行一次到期扫描（worker 每小时自动执行），为已到期的项目发起删除申请。"""
+    from .project import deletion
+    with SessionLocal() as db:
+        made = deletion.scan_due(db)
+        print(f"发起到期删除申请 {len(made)} 个" + ("：" + "、".join(d.project.code for d in made) if made else ""))
+    return 0
+
+
+def deletion_report(args: argparse.Namespace) -> int:
+    """删除申请与删除记录（只有代号、日期、计数和回流情况）。"""
+    from .project import deletion
+    names = {"pending": "待确认", "confirmed": "执行中", "done": "已删除", "cancelled": "已撤销"}
+    with SessionLocal() as db:
+        rows = db.scalars(select(deletion.ProjectDeletion).order_by(deletion.ProjectDeletion.id)).all()
+        if not args.all:
+            rows = [d for d in rows if d.status in deletion.OPEN]
+        if not rows:
+            print("没有删除申请" if args.all else "没有未完成的删除申请（--all 含已完成）")
+            return 0
+        for d in rows:
+            done = d.completed_at.date().isoformat() if d.completed_at else "-"
+            print(f"#{d.id:<4} {d.project.code:<12} {deletion.KIND_NAMES[d.kind]:<12} {names[d.status]:<4} "
+                  f"应完成 {d.due_by.isoformat()}  确认 {d.confirmed_by or '-'}  完成 {done}  "
+                  f"回流 {deletion.FLOWBACK.get(d.flowback, '-')}")
     return 0
 
 
@@ -453,6 +489,10 @@ def main(argv: list[str] | None = None) -> int:
     rr = sub.add_parser("retention-report", help="已验收项目的保留期与到期状态（--all 含未验收）")
     rr.add_argument("--all", action="store_true")
     rr.set_defaults(func=retention_report)
+    sub.add_parser("deletion-scan", help="立即扫描到期项目并发起删除申请（worker 每小时自动执行）")         .set_defaults(func=deletion_scan)
+    dr = sub.add_parser("deletion-report", help="未完成的删除申请（--all 含已删除、已撤销）")
+    dr.add_argument("--all", action="store_true")
+    dr.set_defaults(func=deletion_report)
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
     a.set_defaults(func=verify_audit)
