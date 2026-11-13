@@ -9,7 +9,7 @@
 （响应不缓存，审计不记），由管理员线下转交本人。初始口令登录后必须先修改（must_change_password）。
 命令行 create-user 仍可用（口令由本人当场输入，不要求修改）。
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session
 
 from ..core import audit, sessions
 from ..services import jobs, usage
-from ..core.auth import current_user
+from ..core.auth import current_user, password_expired
+from ..core.config import get_settings
 from ..core.db import get_db, utcnow
 from ..core.permissions import (
     ROLE_NAMES,
@@ -44,6 +45,8 @@ class UserOut(BaseModel):
     must_change_password: bool
     last_login_at: datetime | None
     created_at: datetime | None
+    password_expired: bool = False
+    inactive: bool = False   # 超过 INACTIVE_ACCOUNT_DAYS 天没登录（从没登录过按建号时间算），供管理员决定是否停用
 
 
 class RolesIn(BaseModel):
@@ -67,12 +70,20 @@ class Credentials(BaseModel):
     totp_uri: str = ""
 
 
+def _aware(dt: datetime | None) -> datetime | None:
+    return dt if dt is None or dt.tzinfo else dt.replace(tzinfo=utcnow().tzinfo)  # SQLite 读回不带时区
+
+
 def _out(db: Session, u: User) -> UserOut:
-    lu = u.locked_until
-    locked = bool(lu and (lu if lu.tzinfo else lu.replace(tzinfo=utcnow().tzinfo)) > utcnow())
+    lu = _aware(u.locked_until)
+    locked = bool(lu and lu > utcnow())
+    seen = _aware(u.last_login_at or u.created_at)
+    days = get_settings().inactive_account_days
+    inactive = bool(u.is_active and days > 0 and seen and utcnow() - seen > timedelta(days=days))
     return UserOut(username=u.username, display_name=u.display_name or u.username, is_active=u.is_active,
                    locked=locked, roles=sorted(roles_of(db, u.id)), must_change_password=u.must_change_password,
-                   last_login_at=u.last_login_at, created_at=u.created_at)
+                   last_login_at=u.last_login_at, created_at=u.created_at,
+                   password_expired=password_expired(u), inactive=inactive)
 
 
 def _no_store(response: Response) -> None:
@@ -198,7 +209,7 @@ def reset_password(username: str, response: Response, db: Session = Depends(get_
     """生成新的初始口令（同时解除锁定），结束该用户全部会话；下次登录须先改口令。"""
     target = _target(db, admin, username, "user.reset_password")
     password = generate_initial_password()
-    target.password_hash = hash_password(password)
+    target.set_password_hash(hash_password(password))
     target.must_change_password = True
     target.failed_logins = 0
     target.locked_until = None

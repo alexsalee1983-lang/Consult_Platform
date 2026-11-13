@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     login_max_failures: int = 5             # 连续失败次数达到后锁定
     login_lock_minutes: int = 15
     password_min_length: int = 12
+    password_max_age_days: int = 90         # 口令有效期（等保自查 ②d），到期登录后只能改口令；0 = 不限
+    inactive_account_days: int = 90         # 超过这么多天没登录的账号在用户页标出，供管理员停用（不自动停用）
 
     # 第一个管理员：库里还没有任何用户时，启动时按这里创建一次。也可以用命令行创建：
     #   python -m app.cli create-user --username <名字>
