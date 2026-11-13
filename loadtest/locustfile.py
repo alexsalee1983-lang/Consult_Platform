@@ -13,11 +13,18 @@ import hmac
 import itertools
 import json
 import os
+import secrets
+import string
 import struct
 import threading
 import time
 
 from locust import HttpUser, between, events, task
+
+
+def _tag() -> str:
+    """上传文本的唯一标记：只用字母。带长串数字会被机密级检测当成银行卡号拦截（#78 首轮测试）。"""
+    return "".join(secrets.choice(string.ascii_lowercase) for _ in range(12))
 
 ACCOUNTS = os.environ.get("LOADTEST_ACCOUNTS", os.path.join(os.path.dirname(__file__), "accounts.json"))
 API_P95_MS = int(os.environ.get("API_P95_MS", "1000"))
@@ -108,7 +115,7 @@ class Consultant(HttpUser):
     @task(1)
     def upload(self) -> None:
         self.n += 1
-        text = f"压测用的虚拟资料 {self.username}-{self.n}-{time.time_ns()}：值班表按周排班，交接班有签字记录。"
+        text = f"压测用的虚拟资料 {self.username}-{self.n}-{_tag()}：值班表按周排班，交接班有签字记录。"
         self.client.post(f"/api/projects/{PROJECT}/documents", name="documents.upload", headers=self._h(),
                          files={"file": ("loadtest.txt", text.encode("utf-8"), "text/plain")},
                          data={"title": "压测资料"})
