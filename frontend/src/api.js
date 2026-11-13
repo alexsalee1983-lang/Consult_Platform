@@ -126,6 +126,10 @@ export const api = {
   // 项目证据（D 资料 / I 访谈 / O 现场观察）
   evidences: (code) => request(`/api/projects/${encodeURIComponent(code)}/evidences`),
   evidence: (code, ev) => request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}`),
+  // 仅现场使用（M4 ③）：项目经理凭客户书面通知标注，平台删除原件和解析结果，不可撤销
+  markLocalOnly: (code, ev, request_ref) =>
+    request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}/local-only`,
+      { method: "POST", body: JSON.stringify({ request_ref }) }),
   uploadDocument: (code, file, title = "") => {
     const fd = new FormData();
     fd.append("file", file);
@@ -255,6 +259,7 @@ export const SEVERITY_CLS = { 阻断: "c-r", 重要: "c-a", 建议: "c-n" };
 export const EVIDENCE_STATUS = {
   received: { label: "待解析", cls: "c-a" }, parsed: { label: "已解析", cls: "c-g" },
   failed: { label: "解析失败", cls: "c-r" }, ready: { label: "已录入", cls: "c-g" },
+  local_only: { label: "仅现场使用", cls: "c-v" },
 };
 export const RUN_STATUS = {
   queued: { label: "排队中", cls: "c-c" }, running: { label: "运行中", cls: "c-c" },

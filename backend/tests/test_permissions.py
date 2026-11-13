@@ -54,6 +54,9 @@ MATRIX = [
     (("POST", "/api/projects/BANK-A/notes", NOTE),      (201, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/evidences/O-01", None), (200, 404, 403, 403, 403)),   # 上一行建的第一条观察
     (("POST", "/api/projects/GRID-B/notes", NOTE),      (404, 404, 403, 403, 403)),
+    # 仅现场使用（M4 ③）：member 是 BANK-A 项目经理，对观察 O-01 标注 → 422（只有资料能标，不改数据）；非成员 404
+    (("POST", "/api/projects/BANK-A/evidences/O-01/local-only", {"request_ref": "函-1"}), (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/evidences/D-01/local-only", {"request_ref": "函-1"}), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7", None), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/BANK-A/deliverables/D7/outline", OUTLINE), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/BANK-A/deliverables/D7/sections/1", SECTION), (201, 404, 403, 403, 403)),

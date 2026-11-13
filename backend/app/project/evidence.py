@@ -10,7 +10,12 @@
 
 录入访谈纪要 / 现场观察：只写受访者角色、不写姓名；正文过机密级检测后存数据库项目区表，分配 I-xx / O-xx。
 
-审计只记项目、证据编号、类别、大小和命中类别，不记文件名和正文。
+仅现场使用（M4 ③）：客户书面要求某份资料只在客户现场查阅时，项目经理把它标为仅现场使用（写客户通知的文号，
+不写客户名称）。平台立即删除对象存储里的原件和解析结果、清空文件名，证据编号保留不复用；之后同一文件（sha256）
+不能再上传，Agent 经 project.evidence 读不到，交付件写入时引用它会被拒绝，质量评审把已有引用判为阻断。
+标注不可撤销（文件已删除）。告知书附件一第 4 条、合同条款：收到通知后 5 个工作日内落实。
+
+审计只记项目、证据编号、类别、大小和命中类别，不记文件名、正文和文号。
 """
 from __future__ import annotations
 
@@ -25,6 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..core import audit
+from ..core.permissions import PROJECT_MANAGER, membership
 from ..core.db import SessionLocal, utcnow
 from ..kb import parse
 from ..kb.intake import clean_filename
@@ -35,6 +41,7 @@ from ..services import guard, jobs, storage
 AREA = "project"
 MAX_NOTE_CHARS = 100_000
 READ_CHARS = 20_000            # 工具一次最多返回的正文字数，超出的用 offset 分段取
+LOCAL_ONLY_NOTE = "已标为仅现场使用：平台没有原文，只能在客户现场查阅，不能引用"
 STRICT_REFUSAL = "严格档项目的资料不出客户现场，平台不保存资料和纪要原文；摘要卡流程在 M4 接入"
 
 
@@ -108,6 +115,10 @@ def upload_document(db: Session, user: User, project: Project, filename: str, da
     sha = hashlib.sha256(data).hexdigest()
     dup = db.scalar(select(Evidence).join(ProjectDocument, Evidence.document_id == ProjectDocument.id)
                     .where(ProjectDocument.project_id == project.id, ProjectDocument.sha256 == sha))
+    if dup is not None and dup.document.local_only:
+        audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
+                     reason="local_only", evidence=dup.code)
+        raise EvidenceError(422, f"这份资料已标为仅现场使用（证据编号 {dup.code}），不能上传")
     if dup is not None:
         raise EvidenceError(409, f"这个文件已经上传过（证据编号 {dup.code}）")
 
@@ -152,6 +163,49 @@ def add_note(db: Session, user: User, project: Project, kind: str, title: str, c
     return ev
 
 
+def mark_local_only(db: Session, user: User, project: Project, ev: Evidence, request_ref: str) -> Evidence:
+    """把一份客户资料标为仅现场使用（项目经理）。先删对象存储里的文件，删成功才标注。"""
+    action = "project.document.local_only"
+    m = membership(db, project.id, user.id)
+    if m is None or m.project_role != PROJECT_MANAGER:
+        audit.record(db, actor=user.username, action=action, result="denied", project_code=project.code,
+                     evidence=ev.code, reason="not_manager")
+        raise EvidenceError(403, "只有本项目的项目经理能把资料标为仅现场使用")
+    d = ev.document
+    if ev.kind != "document" or d is None:
+        raise EvidenceError(422, "只有客户资料（D 编号）能标为仅现场使用；纪要和观察请直接修改或不引用")
+    if d.local_only:
+        raise EvidenceError(409, f"{ev.code} 已经标为仅现场使用")
+    ref = request_ref.strip()
+    if not ref:
+        raise EvidenceError(422, "请填写客户书面通知的文号或编号（不写客户名称）")
+    result = guard.check(ref)
+    if result.blocked:
+        audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
+                     evidence=ev.code, reason="guard", categories=sorted({f.kind for f in result.findings}))
+        raise EvidenceError(422, "文号命中机密级检测，请只写编号")
+    db.refresh(d, with_for_update=True)
+    if d.local_only:
+        raise EvidenceError(409, f"{ev.code} 已经标为仅现场使用")
+    keys = [k for k in (d.object_key, d.parsed_key) if k]
+    if not storage.enabled():
+        raise EvidenceError(503, "对象存储未启用，暂时不能删除资料文件，请稍后再试")
+    for k in keys:
+        storage.delete(AREA, k)
+    d.local_only, d.local_only_at, d.local_only_by, d.local_only_ref = True, utcnow(), user.username, ref[:64]
+    d.parsed_key, d.filename, d.status, d.error = "", "", "local_only", ""
+    db.commit()
+    audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
+                 evidence=ev.code, files=len(keys))
+    return ev
+
+
+def local_only_codes(db: Session, project: Project) -> set[str]:
+    """本项目已标为仅现场使用的证据编号。"""
+    return set(db.scalars(select(Evidence.code).join(ProjectDocument, Evidence.document_id == ProjectDocument.id)
+                          .where(Evidence.project_id == project.id, ProjectDocument.local_only.is_(True))))
+
+
 def list_evidences(db: Session, project: Project) -> list[Evidence]:
     return list(db.scalars(select(Evidence).where(Evidence.project_id == project.id)
                            .order_by(Evidence.kind, Evidence.seq)))
@@ -172,6 +226,8 @@ def full_text(ev: Evidence) -> str | None:
     """证据正文：纪要 / 观察取数据库；文档取解析结果（按章节拼接）。文档还没解析完返回 None。"""
     if ev.kind != "document":
         return ev.content
+    if ev.document is not None and ev.document.local_only:
+        return None
     sections = document_sections(ev.document) if ev.document else None
     if sections is None:
         return None
@@ -183,7 +239,7 @@ def summary(ev: Evidence) -> dict:
     return {"code": ev.code, "kind": ev.kind, "title": ev.title, "interviewee_role": ev.interviewee_role,
             "occurred_on": ev.occurred_on.isoformat() if ev.occurred_on else None,
             "chars": d.char_count if d else ev.char_count,
-            "status": d.status if d else "ready"}
+            "status": d.status if d else "ready", **({"note": LOCAL_ONLY_NOTE} if d and d.local_only else {})}
 
 
 def read_for_agent(db: Session, project: Project, code: str = "", offset: int = 0,
@@ -196,6 +252,8 @@ def read_for_agent(db: Session, project: Project, code: str = "", offset: int = 
     ev = get_evidence(db, project, code)
     if ev is None:
         return {"error": f"本项目没有证据 {code}"}
+    if ev.document is not None and ev.document.local_only:
+        return {**summary(ev), "text": "", "error": f"{ev.code} {LOCAL_ONLY_NOTE}"}
     text = full_text(ev)
     if text is None:
         return {**summary(ev), "text": "", "note": "文档还在解析，稍后再取"}
@@ -214,6 +272,8 @@ def _parse_job(payload: dict, ctx: jobs.JobContext) -> None:
         d = db.get(ProjectDocument, int(payload["document_id"]))
         if d is None:
             raise jobs.JobError("资料记录不存在", retry=False)
+        if d.local_only:                       # 解析前已标为仅现场使用：文件已删，不再解析
+            return
         data = storage.get(AREA, d.object_key)
         try:
             doc = parse.parse(d.filename, data)
@@ -221,6 +281,10 @@ def _parse_job(payload: dict, ctx: jobs.JobContext) -> None:
             d.status, d.error = "failed", str(e)[:200]
             db.commit()
             raise jobs.JobError(str(e), retry=False) from e
+        db.refresh(d, with_for_update=True)     # 与“仅现场使用”标注串行：解析期间被标注的不写结果
+        if d.local_only:
+            db.commit()
+            return
         key = d.object_key.rsplit("/", 1)[0] + "/parsed.json"
         storage.put(AREA, key, json.dumps(doc.to_json(), ensure_ascii=False).encode(), "application/json")
         d.parsed_key, d.status, d.error = key, "parsed", ""
