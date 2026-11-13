@@ -108,6 +108,14 @@ jobs:
           echo "后端重建后经前端访问失败：$code"; docker compose logs --no-color frontend | tail -20; exit 1
       - name: 后台任务链路（worker 执行自检任务：数据库 + 对象存储写读删）
         run: docker compose exec -T backend python -m app.cli selfcheck --wait 90
+      - name: 审计记录来源地址、容器日志轮转
+        run: |
+          n=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT count(*) FROM audit_logs WHERE action = 'auth.login' AND detail LIKE '%\"ip\": \"%'")
+          echo "带来源地址的登录审计：$n"; [ "$n" -gt 0 ]
+          for c in $(docker compose ps -q); do
+            docker inspect -f '{{.Name}} {{.HostConfig.LogConfig.Type}} {{index .HostConfig.LogConfig.Config "max-size"}}' "$c"
+            [ "$(docker inspect -f '{{index .HostConfig.LogConfig.Config "max-file"}}' "$c")" = "10" ]
+          done
       - name: 中文分词可用（zhparser）
         run: |
           out=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT to_tsvector('zh', '安全运营中心的值班制度')")
