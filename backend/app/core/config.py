@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     test_account_password: str = ""
     test_account_totp_secret: str = ""
 
+    # TOTP 密钥加密存储（core/secretbox.py）：编号:base64(32 字节)，逗号分隔，第一把加密、其余只解密；生产必须配置
+    totp_keys: str = ""
+
     @property
     def is_prod(self) -> bool:
         return self.app_env == "prod"
