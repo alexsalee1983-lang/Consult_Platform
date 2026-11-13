@@ -25,7 +25,7 @@ RUN set -eux; \
 # 不做 go mod tidy（会拉取依赖的测试依赖，部分已不存在）。
 ARG GO_DEP_FIXES="github.com/apache/thrift@v0.24.0 github.com/buger/jsonparser@v1.1.2 github.com/go-jose/go-jose/v4@v4.1.6 \
 github.com/klauspost/compress@v1.18.7 github.com/prometheus/prometheus@v0.311.3 github.com/rabbitmq/amqp091-go@v1.13.0 \
-go.opentelemetry.io/otel/sdk@v1.44.0 golang.org/x/crypto@v0.58.0 golang.org/x/text@v0.41.0 golang.org/x/net@v0.62.0 google.golang.org/grpc@v1.83.2"
+go.opentelemetry.io/otel/sdk@v1.44.0 golang.org/x/crypto@v0.58.0 golang.org/x/text@v0.43.0 golang.org/x/net@v0.62.0 google.golang.org/grpc@v1.83.2"
 RUN --mount=type=cache,target=/root/go/pkg/mod set -eux; \
     export GOPROXY="$GOPROXY" GOTOOLCHAIN=local CGO_ENABLED=0; \
     go get $GO_DEP_FIXES; \
