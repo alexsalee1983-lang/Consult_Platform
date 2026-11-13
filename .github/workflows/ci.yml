@@ -152,11 +152,11 @@ jobs:
           $dl "$base/trivy_${TRIVY_VERSION}_checksums.txt" -o trivy_checksums.txt
           grep " $tarball\$" trivy_checksums.txt | sha256sum -c -
           tar -xzf "$tarball" trivy
-          # 模拟模型只用于 CI 和测试机，不扫；误报或暂无法修复的写进 .trivyignore 并注明理由（docs/安全扫描.md）
+          # 模拟模型只用于 CI 和测试机，不扫；误报或暂无法修复的写进 .trivyignore.yaml 并注明理由（docs/安全扫描.md）
           fail=0
           for img in $(docker compose config --images | sort -u); do
             echo "== $img"
-            ./trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --ignorefile .trivyignore --exit-code 1 "$img" || fail=1
+            ./trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --ignorefile .trivyignore.yaml --exit-code 1 "$img" || fail=1
           done
           exit $fail
       - if: failure()

@@ -35,4 +35,5 @@ COPY --from=builder /usr/local/lib/libscws.so* /usr/local/lib/
 COPY --from=builder /usr/lib/postgresql/${PG_MAJOR}/lib/zhparser.so /usr/lib/postgresql/${PG_MAJOR}/lib/
 COPY --from=builder /usr/share/postgresql/${PG_MAJOR}/extension/zhparser* /usr/share/postgresql/${PG_MAJOR}/extension/
 COPY --from=builder /usr/share/postgresql/${PG_MAJOR}/tsearch_data/dict.utf8.xdb /usr/share/postgresql/${PG_MAJOR}/tsearch_data/
-RUN ldconfig
+# 打上基础镜像发布后的系统安全更新（trivy 扫描，docs/安全扫描.md）
+RUN set -eux; apt-get update; apt-get upgrade -y --no-install-recommends; rm -rf /var/lib/apt/lists/*; ldconfig
