@@ -9,7 +9,7 @@ from .deliverable import DeliverableSection, SectionVersion
 from .evidence import Evidence, ProjectDocument
 from .job import Job
 from .kb import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion
-from .project import Confirmation, Deliverable, Project
+from .project import Confirmation, Deliverable, Project, ProjectDeletion
 from .quality import QualityReview, ReviewWaiver, SignOff
 from .rbac import ProjectMember, Role, UserRole
 from .run import AgentRun, AgentRunStep
@@ -18,4 +18,4 @@ from .user import User
 
 __all__ = ["Agent", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "Job", "KbChunk", "KbDeidReport", "KbItem", "KbReview",
            "KbUpload", "KbVersion", "LlmUsage",
-           "Message", "Project", "ProjectDocument", "ProjectMember", "QualityReview", "ReviewWaiver", "Role", "SectionVersion", "SignOff", "Tool", "User", "UserRole"]
+           "Message", "Project", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityReview", "ReviewWaiver", "Role", "SectionVersion", "SignOff", "Tool", "User", "UserRole"]

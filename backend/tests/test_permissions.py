@@ -38,6 +38,18 @@ MATRIX = [
     # 验收与保留期（M4 ①）：member 是 BANK-A 项目经理，验收日写在将来 → 422（不改 BANK-A）；非成员 404
     (("POST", "/api/projects/BANK-A/acceptance", {"accepted_on": "2999-01-01"}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/acceptance", {"accepted_on": "2026-01-01"}), (404, 404, 403, 403, 403)),
+    # 删除（M4 ②）：确认队列只给项目负责人（矩阵里没有这个角色，负责人的 200 在 test_deletion 里测）；
+    # member 是 BANK-A 项目经理：收到日期写在将来 → 422（不在 BANK-A 留下申请）；非成员 404
+    (("GET", "/api/deletions", None),                   (403, 403, 403, 403, 403)),
+    (("GET", "/api/deletions/999999", None),            (403, 403, 403, 403, 403)),
+    (("POST", "/api/deletions/999999/confirm", {"flowback": "none"}), (403, 403, 403, 403, 403)),
+    (("POST", "/api/deletions/999999/cancel", {"reason": "客户书面撤回"}), (403, 403, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deletions", None),   (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/deletions", {"request_ref": "函-1", "received_on": "2999-01-01"}),
+     (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deletions", {"request_ref": "函-1", "received_on": "2026-01-01"}),
+     (404, 404, 403, 403, 403)),
+    (("PUT", "/api/projects/GRID-B/flowback", {"allowed": False}), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/evidences", None),   (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/notes", NOTE),      (201, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/evidences/O-01", None), (200, 404, 403, 403, 403)),   # 上一行建的第一条观察
@@ -226,7 +238,7 @@ def test_role_change_via_cli_ends_sessions_for_exclusive_roles():
 
 def test_cli_help_works(capsys):
     """顶层和每个子命令的 --help 都能显示（help 文本里的 % 要写成 %%）。"""
-    for argv in (["--help"], *([c, "--help"] for c in ("add-member", "create-project", "retention-report", "kb-eval", "grant-role", "usage-report"))):
+    for argv in (["--help"], *([c, "--help"] for c in ("add-member", "create-project", "retention-report", "deletion-scan", "deletion-report", "kb-eval", "grant-role", "usage-report"))):
         with pytest.raises(SystemExit) as e:
             cli_main(argv)
         assert e.value.code == 0

@@ -144,6 +144,14 @@ def stat(area: str, key: str) -> StoredObject | None:
     return StoredObject(area=area, key=key, size=o.size, etag=o.etag, content_type=o.content_type or "")
 
 
+def list_keys(area: str, prefix: str) -> list[str]:
+    """列出某个前缀下的全部对象键（项目资料删除时清点用）。prefix 必须以 / 结尾，避免 BANK-A 误匹配 BANK-AB。"""
+    if not prefix.endswith("/"):
+        raise ValueError("前缀必须以 / 结尾")
+    name, prefix = bucket(area), check_key(prefix)
+    return [o.object_name for o in _get_client().list_objects(name, prefix=prefix, recursive=True)]
+
+
 def delete(area: str, key: str) -> None:
     """删除对象（不存在时不报错）。项目区到期删除、知识下线时调用，调用方负责写审计。"""
     _get_client().remove_object(bucket(area), check_key(key))

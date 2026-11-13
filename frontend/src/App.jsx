@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
 import { api } from "./api.js";
-import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireSysAdmin } from "./auth.jsx";
+import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireLead, RequireSysAdmin } from "./auth.jsx";
 import { Loading } from "./components/common.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
+import Deletions from "./pages/Deletions.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
 import KbMap from "./pages/KbMap.jsx";
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/project/:code/deliverables" element={<DeliverableHome />} />
           <Route path="/project/:code/deliverables/:dcode" element={<DeliverablePage />} />
           <Route path="/chat/:code" element={<ChatPage />} />
+          <Route path="/deletions" element={<RequireLead><Deletions /></RequireLead>} />
           <Route path="/kb/search" element={<KbSearch />} />
           <Route path="/kb/intake" element={<KbIntake />} />
           <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />

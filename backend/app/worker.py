@@ -4,6 +4,7 @@
 - 心跳：每轮写 Redis 键 worker:heartbeat:<编号>（30 秒过期，/api/health 据此显示 worker 是否在线），
   并更新本地文件 /tmp/worker.alive 的时间（容器健康检查用，不依赖 Redis）。
 - 收到 SIGTERM / SIGINT 时做完当前任务再退出。
+- 每 SCAN_SECONDS 秒扫描一次到期项目，自动发起删除申请（app/project/deletion.py）。
 - 不做数据库迁移（由 backend 启动时完成），compose 里 worker 在 backend 健康后才启动。
 """
 from __future__ import annotations
@@ -18,10 +19,11 @@ from pathlib import Path
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .kb import deid_flow, intake, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed 等任务处理器
-from .project import evidence, quality, runs  # noqa: F401  注册 project.parse、quality.review、agent_run.step
+from .project import deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs
 
 POLL_SECONDS = 5
+SCAN_SECONDS = 3600        # 到期删除扫描间隔（平台规则自动发起到期删除，M4 ②）
 HEARTBEAT_TTL = 30
 HEARTBEAT_PREFIX = "worker:heartbeat:"
 ALIVE_FILE = Path(os.environ.get("WORKER_ALIVE_FILE", "/tmp/worker.alive"))
@@ -79,6 +81,17 @@ def _handle_signal(signum, frame) -> None:  # noqa: ARG001
     log.info("收到停止信号，做完当前任务后退出")
 
 
+def _scan_due() -> None:
+    """平台规则：为保留期已到期的项目发起删除申请，等项目负责人确认（可重复执行，多个 worker 同时跑也不会重复发起）。"""
+    try:
+        with SessionLocal() as db:
+            made = deletion.scan_due(db)
+        if made:
+            log.info("发起到期删除申请 %d 个", len(made))
+    except Exception as e:  # noqa: BLE001
+        log.warning("到期删除扫描出错：%s", type(e).__name__)
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -86,8 +99,12 @@ def main() -> None:
     wid = worker_id()
     r = _redis()
     log.info("worker %s 启动，任务种类：%s", wid, ", ".join(jobs.registered()))
+    last_scan = 0.0
     while not _stop:
         heartbeat(r, wid)
+        if time.monotonic() - last_scan >= SCAN_SECONDS:
+            last_scan = time.monotonic()
+            _scan_due()
         try:
             with SessionLocal() as db:
                 status = jobs.run_once(db, wid)

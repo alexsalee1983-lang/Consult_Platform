@@ -88,6 +88,8 @@ docker compose exec backend python -m app.cli list-users
 docker compose exec backend python -m app.cli add-member --project <项目> --username <名字> --role manager   # 没有项目经理的项目指定首位经理、应急；日常由项目经理在网页调整
 docker compose exec backend python -m app.cli create-project --code <客户代号> --tier standard --manager <名字> [--industry 银行]   # 立项（一期无网页立项）：必须定档，建 D1～D8，指定首位项目经理
 docker compose exec backend python -m app.cli retention-report      # 已验收项目的保留期与到期状态（--all 含未验收）
+docker compose exec backend python -m app.cli deletion-scan         # 立即扫描到期项目并发起删除申请（worker 每小时自动扫描）
+docker compose exec backend python -m app.cli deletion-report       # 未完成的删除申请（--all 含已删除、已撤销）
 docker compose exec backend python -m app.cli verify-audit          # 校验审计哈希链（问题时退出码 2）
 bash scripts/audit_chain_check.sh                                    # 测试机：多进程并发写审计后校验（生产拒绝执行）
 docker compose exec backend python -m app.cli usage-report --days 30 # 大模型用量（按人、项目、模型）
@@ -128,7 +130,9 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 编排约定（M3 ④）：交付链运行只经 `app/project/runs.py`（平台自写流程控制，不用 LangGraph）：标准档 3→4→7（调研访谈 Agent 读证据写 D3 → 依据与差距分析 Agent 出差距分析、存运行记录 → 报告与汇报 Agent 写 D4 初稿），每步是后台任务 `agent_run.step`，开头看运行状态、不是 queued 就不做；Agent 读写仍只经 `tools.invoke`，模型只经 `gateway.complete`。没有证据发“证据不足”卡停在本步；模型输出里的确认卡照发、停在下一步之前，顾问处理完等待的卡后自动继续（`on_card_resolved`），处理结果作为“顾问已确认事项”交给后续步骤，同一问题本次运行不再问。严格档、要写的 D3 / D4 已签署都 422，同一项目同时只能有一个未结束的运行（409）；取消和 worker 改运行状态都先锁行再判断，模型返回后、写入前再看一次状态，已取消就不写；最后一步的卡处理完直接结束。接口 `/api/projects/{code}/runs`。审计只记编号、步骤、字数和用量。
 
-保留期约定（M4 ①）：项目验收与保留期只经 `app/project/retention.py`（接口 `POST /api/projects/{code}/acceptance`，项目经理）：登记验收日（不晚于今天）和保留月数（0～24，默认 6，按合同约定或客户制度调整），平台算到期日（月末顺延到当月最后一天），项目列表和详情带 `retention_state`（active / retained / due_soon 到期前 30 天 / due）；可更正，每次进审计（只记日期和月数）。运维用 `python -m app.cli retention-report` 看到期情况。删除在 M4 ②。
+保留期约定（M4 ①）：项目验收与保留期只经 `app/project/retention.py`（接口 `POST /api/projects/{code}/acceptance`，项目经理）：登记验收日（不晚于今天）和保留月数（0～24，默认 6，按合同约定或客户制度调整），平台算到期日（月末顺延到当月最后一天），项目列表和详情带 `retention_state`（active / retained / due_soon 到期前 30 天 / due）；可更正，每次进审计（只记日期和月数）。运维用 `python -m app.cli retention-report` 看到期情况。更正保留期后不再到期的，待确认的到期删除申请自动撤销。
+
+删除约定（M4 ②）：项目资料删除只经 `app/project/deletion.py`（决策记录 2026-11-13）。到期由 worker 每小时扫描自动发起（`requested_by=platform`，也可 `python -m app.cli deletion-scan`）；客户书面要求提前删除由项目经理发起（`POST /api/projects/{code}/deletions`，写文号不写客户名，10 个工作日内完成，周一至周五计，不含节假日）；都由项目负责人确认（`/api/deletions`，不必是成员，不能是发起人），提前删除可由负责人写理由撤销，到期申请不能撤销。确认时必选经验回流情况（已回流填投料编号 / 无可回流 / 客户不同意回流），项目经理可标记“客户不同意回流”（`PUT /api/projects/{code}/flowback`），标记后只能选客户不同意；回流不阻断删除。确认后后台任务 `project.delete` 删对象存储 `{code}/` 下全部文件和证据、资料、交付件（含已签署）及章节版本、评审、签署、确认卡、对话、运行和成员关系，项目行保留（代号不复用、所有项目接口 404）；完成后的申请就是可交给客户的删除记录（只有编号、日期、计数、确认人和回流情况）。审计只记编号、日期和计数，不记文号和内容。运维 `python -m app.cli deletion-report [--all]`。
 
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 

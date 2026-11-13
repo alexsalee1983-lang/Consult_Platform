@@ -161,6 +161,19 @@ export const api = {
   setAcceptance: (code, accepted_on, retention_months) =>
     request(`/api/projects/${encodeURIComponent(code)}/acceptance`,
       { method: "POST", body: JSON.stringify({ accepted_on, retention_months }) }),
+  // 项目资料删除（M4 ②）：项目经理发起提前删除、标记客户不同意回流；项目负责人确认
+  projectDeletions: (code) => request(`/api/projects/${encodeURIComponent(code)}/deletions`),
+  requestEarlyDeletion: (code, request_ref, received_on) =>
+    request(`/api/projects/${encodeURIComponent(code)}/deletions`,
+      { method: "POST", body: JSON.stringify({ request_ref, received_on }) }),
+  setFlowback: (code, allowed) =>
+    request(`/api/projects/${encodeURIComponent(code)}/flowback`, { method: "PUT", body: JSON.stringify({ allowed }) }),
+  deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
+  deletion: (id) => request(`/api/deletions/${id}`),
+  confirmDeletion: (id, flowback, flowback_refs) =>
+    request(`/api/deletions/${id}/confirm`, { method: "POST", body: JSON.stringify({ flowback, flowback_refs }) }),
+  cancelDeletion: (id, reason) =>
+    request(`/api/deletions/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
   lookupUsers: (q) => request(`/api/users/lookup?q=${encodeURIComponent(q)}`),
   // 系统管理员：账号与角色
   adminUsers: () => request("/api/admin/users"),
@@ -256,4 +269,19 @@ export const RETENTION = {
   retained: { label: "保留中", cls: "c-c" },
   due_soon: { label: "即将到期", cls: "c-a" },
   due: { label: "已到期", cls: "c-r" },
+};
+
+// 删除申请（M4 ②）
+export const DELETION_STATUS = {
+  pending: { label: "待确认", cls: "c-a" },
+  confirmed: { label: "删除中", cls: "c-c" },
+  done: { label: "已删除", cls: "c-n" },
+  cancelled: { label: "已撤销", cls: "c-n" },
+};
+export const DELETION_KIND = { expiry: "保留期到期", early: "客户书面要求提前删除" };
+export const FLOWBACK = { done: "已回流", none: "无可回流内容", client_refused: "客户不同意回流" };
+export const DELETION_COUNTS = {
+  files: "对象存储文件", evidences: "证据", documents: "资料", deliverables: "交付件",
+  signed_deliverables: "其中已签署", section_versions: "章节版本", conversations: "对话", messages: "消息",
+  runs: "交付链运行", confirmations: "确认卡", quality_reviews: "质量评审", sign_offs: "签署记录", members: "成员关系",
 };
