@@ -1,8 +1,11 @@
 """知识审批流程：草稿 → 提交待审 → 双人审核 → 发布 → 复审 / 修订 / 下线（架构设计第五节“知识”生命周期）。
 
-规则（决策记录 2026-11-08）：
-- 双人审核：知识专家审内容（content），知识管理员审合规（compliance）；两个角色各要一人通过，且是两个不同的人。
-- 提交人、草稿创建人都不能审核自己的版本；同一人对同一版本只能审一次。
+规则（决策记录 2026-11-08，2026-11-13 调整为两人原则）：
+- 两项审核：知识专家审内容（content），知识管理员审合规（compliance）；两项各要一次通过。
+- 两人原则：提交人、草稿创建人都不能审核自己的版本；同一人同时持有两个角色时，可以一人完成两项审核。
+  人多了只要把角色分给不同的人，自然回到两人分审，不需要开关。
+- 公开资料单人发布：KB_SINGLE_REVIEWER_PUBLIC=true 时，来源为公开资料、无需去标识的版本，作者本人也可审核；
+  这样发布的版本标记 single_review，由作者以外的知识专家复审确认（补复审）后清除。项目回流等其他来源不适用。
 - 任一审核人退回，版本即“已退回”（终态）；要修改就基于它建新版本再提交，审核记录始终对应被审的那一版。
 - 来源：投料来的草稿必须是去标识已通过的投料；不经投料直接写的草稿只允许“公开资料”（deid_status=not_needed），
   正文同样先过机密级检测。
@@ -16,10 +19,11 @@ import difflib
 import json
 from datetime import date
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
 from ..core import audit
+from ..core.config import get_settings
 from ..core.db import utcnow
 from ..core.permissions import KNOWLEDGE_ADMIN, KNOWLEDGE_EXPERT, roles_of
 from ..models import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion, User
@@ -170,6 +174,16 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
     return v
 
 
+def self_review_allowed(v: KbVersion) -> bool:
+    """公开资料单人发布：开关打开、来源为公开资料且无需去标识时，作者本人可以审核。"""
+    return (get_settings().kb_single_reviewer_public and v.source_type == "public"
+            and v.deid_status == "not_needed")
+
+
+def _authors(v: KbVersion) -> set[str]:
+    return {u for u in (v.submitted_by, v.created_by) if u}
+
+
 def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comment: str = "") -> KbVersion:
     def deny(status: int, reason: str, message: str):
         audit.record(db, actor=user.username, action="kb.review", result="blocked", doc_id=v.item.doc_id,
@@ -182,11 +196,8 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
         deny(403, "role_mismatch", "内容审核须由知识专家、合规审核须由知识管理员进行")
     if v.status != "in_review":
         raise ReviewError(409, "这个版本不在待审状态")
-    if user.username in (v.submitted_by, v.created_by):
+    if user.username in _authors(v) and not self_review_allowed(v):
         deny(403, "self_review", "不能审核自己提交或创建的版本")
-    done = {r.reviewer: r for r in v.reviews}
-    if user.username in done:
-        deny(409, "duplicate", "你已经审核过这个版本")
     if any(r.review_role == role and r.decision == "approve" for r in v.reviews):
         deny(409, "role_done", "这个审核角色已有人通过，请由另一角色审核")
 
@@ -199,8 +210,9 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
     audit.record(db, actor=user.username, action="kb.review", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, role=role, decision=decision)
     approved = {r.review_role for r in v.reviews if r.decision == "approve"}
-    reviewers = {r.reviewer for r in v.reviews if r.decision == "approve"}
-    if v.status == "in_review" and approved == set(ROLE_OF) and len(reviewers) == 2:
+    if v.status == "in_review" and approved == set(ROLE_OF):
+        reviewers = {r.reviewer for r in v.reviews if r.decision == "approve"}
+        v.single_review = not (reviewers - _authors(v))     # 没有作者以外的人通过（只在开关允许时可能）
         publish(db, v)
     return v
 
@@ -223,7 +235,8 @@ def publish(db: Session, v: KbVersion) -> None:
     item.current_version_id, item.updated_at = v.id, utcnow()
     db.commit()
     audit.record(db, actor="kb-review", action="kb.publish", result="allowed", doc_id=item.doc_id, version=v.version,
-                 chunks=len(chunks))
+                 chunks=len(chunks), single_review=v.single_review,
+                 single_reviewer_public=get_settings().kb_single_reviewer_public)
     from .search import enqueue_embedding          # 发布后后台向量化（未启用向量服务时跳过）
 
     enqueue_embedding(db, v.id, created_by=v.submitted_by or "kb-review")
@@ -245,26 +258,34 @@ def retire(db: Session, user: User, item: KbItem, reason: str) -> KbItem:
 
 
 def reconfirm(db: Session, user: User, item: KbItem) -> KbVersion:
-    """复审确认内容仍然有效：不改正文，复审日期从今天起顺延一个周期。内容要改就建新版本。"""
+    """复审确认内容仍然有效：不改正文，复审日期从今天起顺延一个周期。内容要改就建新版本。
+
+    单人发布的版本须由作者以外的知识专家复审确认（补复审），确认后清除单人发布标记。"""
     if KNOWLEDGE_EXPERT not in roles_of(db, user.id):
         raise ReviewError(403, "复审确认须由知识专家进行")
     v = db.get(KbVersion, item.current_version_id) if item.current_version_id else None
     if v is None or v.status != "published" or item.retired:
         raise ReviewError(409, "条目没有现行版本")
+    if v.single_review and user.username in _authors(v):
+        raise ReviewError(403, "单人发布的条目须由作者以外的知识专家补复审")
+    backfilled = v.single_review
     v.review_date = meta.default_review_date(item.layer, date.today())
+    v.single_review = False
     db.commit()
     audit.record(db, actor=user.username, action="kb.reconfirm", result="allowed", doc_id=item.doc_id,
-                 version=v.version, review_date=v.review_date.isoformat())
+                 version=v.version, review_date=v.review_date.isoformat(), backfilled=backfilled)
     return v
 
 
 def review_due(db: Session, within_days: int = 30) -> list[KbVersion]:
+    """到期待复审的现行版本，加上单人发布、待补复审的版本。"""
     from datetime import timedelta
 
     limit = date.today() + timedelta(days=within_days)
     return list(db.scalars(select(KbVersion).join(KbItem, KbItem.current_version_id == KbVersion.id)
                            .where(KbVersion.status == "published", KbItem.retired.is_(False),
-                                  KbVersion.review_date <= limit).order_by(KbVersion.review_date)))
+                                  or_(KbVersion.review_date <= limit, KbVersion.single_review.is_(True)))
+                           .order_by(KbVersion.review_date)))
 
 
 # ---- 审核辅助：版本差异、相似条目 ----

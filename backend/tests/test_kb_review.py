@@ -26,7 +26,8 @@ def _payload(title="值班管理规程", body=BODY, source_type="public", **meta
 def people():
     made = {name: logged_in_client(app, create_user(roles)) for name, roles in {
         "author": ("knowledge_expert",), "expert2": ("knowledge_expert",), "expert3": ("knowledge_expert",),
-        "admin": ("knowledge_admin",), "admin2": ("knowledge_admin",), "consultant": ("consultant",)}.items()}
+        "admin": ("knowledge_admin",), "admin2": ("knowledge_admin",), "consultant": ("consultant",),
+        "both": ("knowledge_expert", "knowledge_admin"), "both2": ("knowledge_expert", "knowledge_admin")}.items()}
     yield made
     for c in made.values():
         c.__exit__(None, None, None)
@@ -82,7 +83,7 @@ def test_two_person_review_rules_then_publish(people):
     assert review("consultant", "content").status_code == 404                    # 顾问看不到待审版本
     r = review("expert2", "content")
     assert r.status_code == 200 and r.json()["status"] == "in_review"            # 一人通过还不发布
-    assert review("expert2", "content").status_code == 409                       # 同一人不能审两次
+    assert review("expert2", "content").status_code == 409                       # 同一项不能再审
     assert review("expert3", "content").status_code == 409                       # 内容审核已有人通过
     r = review("admin", "compliance")
     assert r.json()["status"] == "published"
@@ -94,10 +95,65 @@ def test_two_person_review_rules_then_publish(people):
         assert [c.heading for c in chunks] == ["交接班", "夜间"]
         reasons = [json.loads(a.detail).get("reason") for a in db.scalars(
             select(AuditLog).where(AuditLog.action == "kb.review", AuditLog.result == "blocked"))]
-    assert {"self_review", "role_mismatch", "duplicate", "role_done"} <= set(reasons)
+    assert {"self_review", "role_mismatch", "role_done"} <= set(reasons)
     # 发布后顾问能看到
     assert people["consultant"].get(f"/api/kb/versions/{vid}").json()["reviews"] == []   # 审核信息不给顾问
     assert people["consultant"].get(f"/api/kb/items/{r.json()['doc_id']}").status_code == 200
+
+
+def test_one_person_with_both_roles_reviews_both(people):
+    """两人原则：作者以外的一人同时持两个角色，可以完成两项审核；作者本人仍不能审。"""
+    v = people["author"].post("/api/kb/items", json=_payload(title="告警研判记录要求")).json()
+    vid = v["id"]
+    people["author"].post(f"/api/kb/versions/{vid}/submit")
+    r = people["both"].post(f"/api/kb/versions/{vid}/review", json={"role": "content", "decision": "approve"})
+    assert r.status_code == 200 and r.json()["status"] == "in_review"
+    r = people["both"].post(f"/api/kb/versions/{vid}/review", json={"role": "compliance", "decision": "approve"})
+    assert r.json()["status"] == "published" and r.json()["single_review"] is False
+    # 持两个角色的作者，开关关闭时不能审自己的版本
+    v = people["both"].post("/api/kb/items", json=_payload(title="日志留存检查要点")).json()
+    people["both"].post(f"/api/kb/versions/{v['id']}/submit")
+    assert people["both"].get(f"/api/kb/versions/{v['id']}").json()["self_review_allowed"] is False
+    assert people["both"].post(f"/api/kb/versions/{v['id']}/review",
+                               json={"role": "content", "decision": "approve"}).status_code == 403
+
+
+def test_single_reviewer_public_switch(people, monkeypatch):
+    """KB_SINGLE_REVIEWER_PUBLIC=true：公开资料可由作者本人审核发布，标记单人发布，作者以外的知识专家补复审后清除。"""
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "kb_single_reviewer_public", True)
+    both = people["both"]
+    v = both.post("/api/kb/items", json=_payload(title="漏洞扫描周期建议")).json()
+    vid, doc_id = v["id"], v["doc_id"]
+    both.post(f"/api/kb/versions/{vid}/submit")
+    assert both.get(f"/api/kb/versions/{vid}").json()["self_review_allowed"] is True
+    assert both.post(f"/api/kb/versions/{vid}/review", json={"role": "content", "decision": "approve"}).status_code == 200
+    r = both.post(f"/api/kb/versions/{vid}/review", json={"role": "compliance", "decision": "approve"})
+    assert r.json()["status"] == "published" and r.json()["single_review"] is True
+    assert doc_id in [x["doc_id"] for x in people["expert2"].get("/api/kb/review-due").json()]   # 待补复审
+    assert both.post(f"/api/kb/items/{doc_id}/reconfirm").status_code == 403                     # 作者不能补复审
+    assert people["expert2"].post(f"/api/kb/items/{doc_id}/reconfirm").json()["single_review"] is False
+    assert doc_id not in [x["doc_id"] for x in people["expert2"].get("/api/kb/review-due").json()]
+    with SessionLocal() as db:
+        pub = [json.loads(a.detail) for a in db.scalars(select(AuditLog).where(AuditLog.action == "kb.publish"))]
+        rec = [json.loads(a.detail) for a in db.scalars(select(AuditLog).where(AuditLog.action == "kb.reconfirm"))]
+    assert any(d.get("doc_id") == doc_id and d["single_review"] and d["single_reviewer_public"] for d in pub)
+    assert any(d.get("doc_id") == doc_id and d["backfilled"] for d in rec)
+
+    # 作者另有其人审了一项：两个人参与，不算单人发布
+    v = people["both2"].post("/api/kb/items", json=_payload(title="账号清理周期建议")).json()
+    people["both2"].post(f"/api/kb/versions/{v['id']}/submit")
+    people["both2"].post(f"/api/kb/versions/{v['id']}/review", json={"role": "content", "decision": "approve"})
+    r = people["admin"].post(f"/api/kb/versions/{v['id']}/review", json={"role": "compliance", "decision": "approve"})
+    assert r.json()["status"] == "published" and r.json()["single_review"] is False
+
+    # 非公开资料（专家萃取）开关打开也不能自审
+    v = both.post("/api/kb/items", json=_payload(title="专家经验：夜间值守", source_type="expert")).json()
+    if v.get("id"):
+        both.post(f"/api/kb/versions/{v['id']}/submit")
+        assert both.post(f"/api/kb/versions/{v['id']}/review",
+                         json={"role": "content", "decision": "approve"}).status_code == 403
 
 
 def test_reject_is_final_and_revision_supersedes(people):

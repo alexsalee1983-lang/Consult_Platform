@@ -14,6 +14,7 @@ from datetime import date, datetime
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import false as sql_false
 
 from ..core.db import Base, utcnow
 
@@ -79,6 +80,8 @@ class KbVersion(Base):
     submitted_by: Mapped[str] = mapped_column(String(64), default="")
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 单人发布（公开资料、KB_SINGLE_REVIEWER_PUBLIC 开启时作者本人审核发布），其他知识专家补复审后清除
+    single_review: Mapped[bool] = mapped_column(Boolean, server_default=sql_false())
 
     item: Mapped[KbItem] = relationship(back_populates="versions", foreign_keys=[item_id])
     reviews: Mapped[list["KbReview"]] = relationship(back_populates="version", order_by="KbReview.id")
@@ -100,7 +103,8 @@ class KbChunk(Base):
 
 class KbReview(Base):
     __tablename__ = "kb_reviews"
-    __table_args__ = (UniqueConstraint("version_id", "reviewer", name="uq_kb_reviews_version_reviewer"),)
+    __table_args__ = (UniqueConstraint("version_id", "reviewer", "review_role",
+                                       name="uq_kb_reviews_version_reviewer_role"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     version_id: Mapped[int] = mapped_column(ForeignKey("kb_versions.id"), index=True)
