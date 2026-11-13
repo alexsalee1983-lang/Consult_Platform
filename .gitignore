@@ -32,3 +32,6 @@ frontend/dist/
 # 客户资料不得进入代码仓
 data/
 uploads/
+
+# 本地备份目录（scripts/backup.sh 默认位置），不提交
+backups/

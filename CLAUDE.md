@@ -93,6 +93,8 @@ docker compose exec backend python -m app.cli deletion-report       # 未完成�
 docker compose exec backend python -m app.cli verify-audit          # 校验审计哈希链（问题时退出码 2）
 bash scripts/audit_chain_check.sh                                    # 测试机：多进程并发写审计后校验（生产拒绝执行）
 docker compose exec backend python -m app.cli usage-report --days 30 # 大模型用量（按人、项目、模型）
+BACKUP_PASSPHRASE_FILE=/etc/consult-platform/backup.pass bash scripts/backup.sh /srv/backups/consult-platform   # 每日备份（docs/备份与恢复.md）
+BACKUP_PASSPHRASE_FILE=... bash scripts/restore.sh <备份目录>          # 恢复：清空并覆盖当前数据，要输入目录名确认
 
 # 知识批量入库与评测（条目文件格式见 backend/app/kb/files.py，示范见 knowledge/）
 docker compose exec backend python -m app.cli kb-import /srv/knowledge/samples --as <知识专家> [--submit]
