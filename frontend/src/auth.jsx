@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
     setState({ status: "authed", user: {
       username: me.username, displayName: me.display_name, roles: me.roles || [],
       mustChangePassword: Boolean(me.must_change_password),
+      passwordExpired: Boolean(me.password_expired),
     } });
   }, []);
 

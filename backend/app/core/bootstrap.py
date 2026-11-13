@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from ..models import Project, ProjectMember, User
 from . import audit, secretbox
+from .auth import password_expired
+from .db import utcnow
 from .config import Settings
 from .permissions import CONSULTANT, PROJECT_MANAGER, PROJECT_MEMBER, SYS_ADMIN, roles_of, set_roles
 from .security import check_password_policy, hash_password, is_valid_totp_secret, verify_password
@@ -91,9 +93,12 @@ def ensure_initial_users(db: Session, s: Settings) -> None:
         elif not verify_password(user.password_hash, s.test_account_password) or \
                 user.totp_secret != s.test_account_totp_secret:
             # 测试机改了 .env 里的测试账号口令或密钥时同步过来
-            user.password_hash = hash_password(s.test_account_password)
+            user.set_password_hash(hash_password(s.test_account_password))
             user.totp_secret = s.test_account_totp_secret
             user.totp_last_step = 0
+            db.commit()
+        if password_expired(user):  # 测试账号口令由 .env 管，不让有效期卡住冒烟测试
+            user.password_changed_at = utcnow()
             db.commit()
         if not roles_of(db, user.id):  # 登录 PR 时期建的测试账号还没有角色
             set_roles(db, user, {CONSULTANT}, granted_by="system")
