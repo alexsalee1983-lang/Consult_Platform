@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -48,6 +48,12 @@ class ProjectOut(BaseModel):
     posture_score: int | None
     next_milestone: str
     open_confirmations: int = 0
+    # 保留与删除（M4 ①）：retention_state = active 未验收 / retained / due_soon 到期前 30 天内 / due 已到期
+    accepted_on: date | None = None
+    retention_months: int = 6
+    deletion_due_on: date | None = None
+    retention_state: str = "active"
+    days_to_deletion: int | None = None
 
 
 class ProjectDetail(ProjectOut):

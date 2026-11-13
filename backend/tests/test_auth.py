@@ -60,6 +60,7 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/runs/1/cancel"),
     ("PUT", "/api/projects/BANK-A/members/x"),
     ("DELETE", "/api/projects/BANK-A/members/x"),
+    ("POST", "/api/projects/BANK-A/acceptance"),
     ("GET", "/api/admin/roles"),
     ("GET", "/api/admin/users"),
     ("PUT", "/api/admin/users/x/roles"),

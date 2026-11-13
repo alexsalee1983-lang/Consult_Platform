@@ -3,7 +3,12 @@
 确认卡（M3）：GET /api/confirmations 我参与的项目里待处理的卡；GET /api/projects/{code}/confirmations?status=
 某项目的卡（open 待处理 / resolved 已处理 / all）；POST /api/confirmations/{id}/resolve 处理（选选项或写意见），
 规则见 app/project/confirmations.py。
+
+保留期（M4 ①）：POST /api/projects/{code}/acceptance 项目经理登记验收日和保留月数；项目列表和详情带
+retention_state、deletion_due_on、days_to_deletion，到期前 30 天显示提醒。规则见 app/project/retention.py。
 """
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -22,15 +27,23 @@ from ..core.permissions import (
 )
 from ..models import Confirmation, Project, ProjectMember, User
 from ..project import confirmations as conf_svc
+from ..project import retention
 from ..project import runs as run_svc
 from ..schemas import PHASES, ConfirmationOut, ProjectDetail, ProjectOut, ResolveIn
 
 router = APIRouter(prefix="/api", tags=["projects"], dependencies=[Depends(require_business)])
 
 
+def _retention(data, p: Project):
+    st = retention.status(p)
+    data.retention_state, data.days_to_deletion = st.state, st.days_left
+    return data
+
+
 def _out(p: Project, cls=ProjectOut):
     data = cls.model_validate(p, from_attributes=True)
     data.phase_name = PHASES[p.phase] if 0 <= p.phase < len(PHASES) else ""
+    _retention(data, p)
     data.open_confirmations = sum(1 for c in p.confirmations if c.status == "open")
     return data
 
@@ -59,7 +72,24 @@ def get_project(code: str, db: Session = Depends(get_db), user: User = Depends(c
     detail.phase_name = PHASES[p.phase] if 0 <= p.phase < len(PHASES) else ""
     detail.open_confirmations = sum(1 for c in p.confirmations if c.status == "open")
     detail.confirmations = [_conf_out(c) for c in p.confirmations if c.status == "open"]
-    return detail
+    return _retention(detail, p)
+
+
+class AcceptanceIn(BaseModel):
+    accepted_on: date
+    retention_months: int = Field(default=retention.DEFAULT_MONTHS)
+
+
+@router.post("/projects/{code}/acceptance", response_model=ProjectOut)
+def set_acceptance(code: str, body: AcceptanceIn, db: Session = Depends(get_db),
+                   user: User = Depends(current_user)):
+    """项目经理登记（或更正）验收日和保留期；规则见 app/project/retention.py。"""
+    p = project_for_member(db, code, user, selectinload(Project.confirmations))
+    try:
+        retention.accept(db, user, p, body.accepted_on, body.retention_months)
+    except retention.RetentionError as e:
+        raise HTTPException(e.status, e.detail) from None
+    return _out(p)
 
 
 @router.get("/confirmations", response_model=list[ConfirmationOut])

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { api, KIND_CLS, TIER } from "../api.js";
+import { api, KIND_CLS, RETENTION, TIER } from "../api.js";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 
 function ProjectCard({ p }) {
@@ -25,6 +25,11 @@ function ProjectCard({ p }) {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
         <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: scoreColor }}>{p.posture_score ?? "—"}</span>
         {p.open_confirmations > 0 && <span className="chip c-a">待你确认 {p.open_confirmations}</span>}
+        {["due_soon", "due"].includes(p.retention_state) && (
+          <span className={`chip ${RETENTION[p.retention_state].cls}`} title={`到期日 ${p.deletion_due_on}`}>
+            {p.retention_state === "due" ? "保留期已到期" : `${p.days_to_deletion} 天后到期`}
+          </span>
+        )}
       </div>
     </Link>
   );

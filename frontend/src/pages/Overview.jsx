@@ -5,6 +5,7 @@ import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Evidence from "../components/Evidence.jsx";
 import Members from "../components/Members.jsx";
+import Retention from "../components/Retention.jsx";
 import RunPanel from "../components/RunPanel.jsx";
 
 function Kpi({ cap, value, sub, color }) {
@@ -86,6 +87,7 @@ export default function Overview({ code }) {
             {p.confirmations.length === 0 && <li className="sub">没有待确认事项</li>}
           </ul>
         </section>
+        <Retention p={p} onChange={load} />
         <Members code={p.code} />
         </div>
       </div>

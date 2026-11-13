@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..core.db import Base, utcnow as _now
@@ -20,6 +20,10 @@ class Project(Base):
     posture_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     next_milestone: Mapped[str] = mapped_column(String(128), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    # 保留与删除（M4 ①，迁移 0023，规则见 app/project/retention.py）
+    accepted_on: Mapped[date | None] = mapped_column(Date, nullable=True)          # 验收日，未验收为空
+    retention_months: Mapped[int] = mapped_column(Integer, server_default="6")  # 只用库默认值（M0 迁移测试按旧表结构插入）
+    deletion_due_on: Mapped[date | None] = mapped_column(Date, nullable=True)      # 到期日 = 验收日 + 保留月数
 
     deliverables: Mapped[list["Deliverable"]] = relationship(
         back_populates="project", order_by="Deliverable.code", cascade="all, delete-orphan"

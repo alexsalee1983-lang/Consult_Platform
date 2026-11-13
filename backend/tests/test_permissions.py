@@ -35,6 +35,9 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A", None),             (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
+    # 验收与保留期（M4 ①）：member 是 BANK-A 项目经理，验收日写在将来 → 422（不改 BANK-A）；非成员 404
+    (("POST", "/api/projects/BANK-A/acceptance", {"accepted_on": "2999-01-01"}), (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/acceptance", {"accepted_on": "2026-01-01"}), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/evidences", None),   (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/notes", NOTE),      (201, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/evidences/O-01", None), (200, 404, 403, 403, 403)),   # 上一行建的第一条观察
@@ -223,7 +226,7 @@ def test_role_change_via_cli_ends_sessions_for_exclusive_roles():
 
 def test_cli_help_works(capsys):
     """顶层和每个子命令的 --help 都能显示（help 文本里的 % 要写成 %%）。"""
-    for argv in (["--help"], *([c, "--help"] for c in ("add-member", "create-project", "kb-eval", "grant-role", "usage-report"))):
+    for argv in (["--help"], *([c, "--help"] for c in ("add-member", "create-project", "retention-report", "kb-eval", "grant-role", "usage-report"))):
         with pytest.raises(SystemExit) as e:
             cli_main(argv)
         assert e.value.code == 0

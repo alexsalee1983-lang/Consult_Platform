@@ -157,6 +157,10 @@ export const api = {
       { method: "PUT", body: JSON.stringify({ project_role }) }),
   removeMember: (code, username) =>
     request(`/api/projects/${encodeURIComponent(code)}/members/${encodeURIComponent(username)}`, { method: "DELETE" }),
+  // 验收与保留期（M4 ①）：项目经理登记验收日和保留月数
+  setAcceptance: (code, accepted_on, retention_months) =>
+    request(`/api/projects/${encodeURIComponent(code)}/acceptance`,
+      { method: "POST", body: JSON.stringify({ accepted_on, retention_months }) }),
   lookupUsers: (q) => request(`/api/users/lookup?q=${encodeURIComponent(q)}`),
   // 系统管理员：账号与角色
   adminUsers: () => request("/api/admin/users"),
@@ -245,3 +249,11 @@ export const RUN_STATUS = {
   failed: { label: "失败", cls: "c-r" }, cancelled: { label: "已取消", cls: "c-n" },
 };
 export const RUN_ACTIVE = new Set(["queued", "running", "waiting"]);
+
+// 保留期状态（M4 ①）：到期前 30 天提醒，到期后待人工确认删除
+export const RETENTION = {
+  active: { label: "未验收", cls: "c-n" },
+  retained: { label: "保留中", cls: "c-c" },
+  due_soon: { label: "即将到期", cls: "c-a" },
+  due: { label: "已到期", cls: "c-r" },
+};
