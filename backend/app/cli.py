@@ -8,10 +8,12 @@
     docker compose exec backend python -m app.cli list-users
     docker compose exec backend python -m app.cli add-member --project GRID-B --username zhangsan --role manager
     docker compose exec backend python -m app.cli create-project --code BANK-D --industry 银行 --tier standard --manager zhangsan
+    docker compose exec backend python -m app.cli retention-report
 
 项目成员日常由项目经理在网页上调整；add-member 只用于给还没有项目经理的项目指定第一位经理，或应急。
 create-project 立项（一期没有网页立项）：项目代号只用客户代号（不写客户真实名称），立项时必须定档，同时指定首位项目经理；
 自动建 D1～D8 交付件（未开始）。
+retention-report 列出已验收项目的保留期和到期状态（只有代号和日期，不含客户内容），供负责人跟踪到期删除。
 安全审计员由单独任命，只能用 grant-role / revoke-role 在服务器上授予或撤销，任何网页接口都做不到。
 口令交互输入，不出现在命令行参数和 shell 历史里。TOTP 密钥只显示一次，请当面交给用户录入认证器。
 所有操作写入审计日志（操作人记为 cli）。
@@ -223,6 +225,26 @@ def list_users(args: argparse.Namespace) -> int:
     return 0
 
 
+def retention_report(args: argparse.Namespace) -> int:
+    from .project import retention
+    names = {retention.ACTIVE: "未验收", retention.RETAINED: "保留中", retention.DUE_SOON: "即将到期",
+             retention.DUE: "已到期"}
+    with SessionLocal() as db:
+        rows = [(p, retention.status(p)) for p in db.scalars(select(Project).order_by(Project.deletion_due_on,
+                                                                                         Project.code))]
+    rows = [(p, st) for p, st in rows if args.all or st.state != retention.ACTIVE]
+    if not rows:
+        print("没有已验收的项目")
+        return 0
+    for p, st in rows:
+        due = p.deletion_due_on.isoformat() if p.deletion_due_on else "-"
+        acc = p.accepted_on.isoformat() if p.accepted_on else "-"
+        left = f"{st.days_left} 天" if st.days_left is not None else "-"
+        print(f"{p.code:<12} {p.tier:<8} 验收 {acc}  保留 {p.retention_months} 个月  到期 {due}  "
+              f"剩余 {left:<8} {names[st.state]}")
+    return 0
+
+
 def verify_audit(args: argparse.Namespace) -> int:
     with SessionLocal() as db:
         r = audit.verify_chain(db, args.expect_head)
@@ -428,6 +450,9 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("--industry", default="", help="行业，如 银行")
     cp.add_argument("--weeks", type=int, default=12, help="计划周数（默认 12）")
     cp.set_defaults(func=create_project)
+    rr = sub.add_parser("retention-report", help="已验收项目的保留期与到期状态（--all 含未验收）")
+    rr.add_argument("--all", action="store_true")
+    rr.set_defaults(func=retention_report)
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
     a.set_defaults(func=verify_audit)
