@@ -34,7 +34,7 @@ class SplitResult:
 def _counts(engine: Engine) -> dict[str, int]:
     with engine.connect() as conn:
         names = set(inspect(conn).get_table_names())
-        return {t: conn.execute(text(f"SELECT count(*) FROM {t}")).scalar_one()  # noqa: S608  表名是常量
+        return {t: conn.execute(text(f"SELECT count(*) FROM {t}")).scalar_one()  # noqa: S608  # nosec B608  表名是常量
                 for t in KB_TABLES if t in names}
 
 
@@ -65,7 +65,7 @@ def _copy(main: Engine, kb: Engine) -> None:
                 dst.execute(text("UPDATE kb_chunks SET embedding = CAST(:v AS vector), embedding_model = :m "
                                  "WHERE id = :id"), {"v": vec, "m": model, "id": cid})
             for t in KB_TABLES:
-                dst.execute(text(f"SELECT setval(pg_get_serial_sequence('{t}', 'id'), "
+                dst.execute(text(f"SELECT setval(pg_get_serial_sequence('{t}', 'id'), "  # nosec B608  表名是常量
                                  f"coalesce((SELECT max(id) FROM {t}), 0) + 1, false)"))
 
 
