@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import select
 
-from app.core.db import SessionLocal
+from app.core.db import KB_BIND, SessionLocal
 from app.kb import meta
 from app.main import app
 from app.models import AuditLog, KbChunk, KbItem, KbVersion
@@ -232,7 +232,8 @@ def test_published_chunks_searchable_and_similar_items(people):
     _publish(people, _payload(title="夜间值守与升级路径"))
     with SessionLocal() as db:
         n = db.execute(text("SELECT count(*) FROM kb_chunks c JOIN kb_versions v ON v.id = c.version_id "
-                            "WHERE v.status = 'published' AND c.tsv @@ plainto_tsquery('zh', '夜间 升级')")).scalar()
+                            "WHERE v.status = 'published' AND c.tsv @@ plainto_tsquery('zh', '夜间 升级')"),
+                       bind_arguments=KB_BIND).scalar()
     assert n >= 1
     v = people["author"].post("/api/kb/items", json=_payload(title="夜间值守升级")).json()
     similar = people["expert2"].get(f"/api/kb/versions/{v['id']}").json()["similar"]

@@ -92,6 +92,9 @@ def _locked(conn: Connection) -> None:
 
 def _unlock(conn: Connection) -> None:
     if conn.dialect.name == "postgresql":
+        # 升级失败时事务已中止：先回滚，否则解锁语句报 InFailedSqlTransaction，盖掉真实报错（测试 #82 建议）。
+        # 需要保存的改动在此之前都已提交；咨询锁是会话级的，回滚不会释放。
+        conn.rollback()
         conn.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": _LOCK_ID})
         conn.commit()
 
