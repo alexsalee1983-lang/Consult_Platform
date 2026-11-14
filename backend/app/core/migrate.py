@@ -76,6 +76,11 @@ def _upgrade_kb_chain(conn: Connection) -> None:
 
 
 def drop_main_kb_tables(conn: Connection) -> None:
+    # kb_items.current_version_id 与 kb_versions.item_id 互相引用，逐张删在 PostgreSQL 上会被外键挡住；
+    # PostgreSQL 一条语句删全部（同一语句内的互相引用不挡），SQLite 不支持多表 DROP、也不检查这类外键
+    if conn.dialect.name == "postgresql":
+        conn.execute(text("DROP TABLE IF EXISTS " + ", ".join(KB_TABLES)))
+        return
     for t in KB_TABLES:
         conn.execute(text(f"DROP TABLE IF EXISTS {t}"))
 

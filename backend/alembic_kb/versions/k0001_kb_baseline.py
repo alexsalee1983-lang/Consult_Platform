@@ -144,7 +144,7 @@ def upgrade() -> None:
     sa.Column('submitted_by', sa.String(length=64), nullable=False),
     sa.Column('submitted_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('published_at', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('single_review', sa.Boolean(), server_default=sa.text('0'), nullable=False),
+    sa.Column('single_review', sa.Boolean(), server_default=sa.false(), nullable=False),
     sa.ForeignKeyConstraint(['deid_report_id'], ['kb_deid_reports.id'], ),
     sa.ForeignKeyConstraint(['item_id'], ['kb_items.id'], ),
     sa.ForeignKeyConstraint(['upload_id'], ['kb_uploads.id'], ),
