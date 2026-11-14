@@ -35,6 +35,10 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A", None),             (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
+    # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
+    (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
+    (("POST", "/api/projects", {"code": "QA-MTX", "tier": "standard", "product": "SOC"}),
+                                                        (403, 403, 403, 403, 403)),
     # 验收与保留期（M4 ①）：member 是 BANK-A 项目经理，验收日写在将来 → 422（不改 BANK-A）；非成员 404
     (("POST", "/api/projects/BANK-A/acceptance", {"accepted_on": "2999-01-01"}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/acceptance", {"accepted_on": "2026-01-01"}), (404, 404, 403, 403, 403)),

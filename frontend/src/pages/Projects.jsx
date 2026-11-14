@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api, KIND_CLS, RETENTION, TIER } from "../api.js";
+import { hasRole, useAuth } from "../auth.jsx";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
+import NewProject from "../components/NewProject.jsx";
 
 function ProjectCard({ p }) {
   const tier = TIER[p.tier] || TIER.standard;
@@ -36,25 +38,29 @@ function ProjectCard({ p }) {
 }
 
 export default function Projects() {
+  const { user } = useAuth();
+  const [creating, setCreating] = useState(false);
   const [projects, setProjects] = useState(null);
   const [confs, setConfs] = useState([]);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    Promise.all([api.projects(), api.confirmations()])
-      .then(([p, c]) => { setProjects(p); setConfs(c); })
-      .catch(setError);
-  }, []);
+  const load = () => Promise.all([api.projects(), api.confirmations()])
+    .then(([p, c]) => { setProjects(p); setConfs(c); })
+    .catch(setError);
+  useEffect(() => { load(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!projects) return <Loading error={error} />;
 
   return (
     <>
       <TopBar cap={`交付 · ${projects.length} 个进行中项目`} title="我的项目">
-        <button className="btnp" disabled title="M1 开放">＋ 新建项目</button>
+        {hasRole(user, "project_lead")
+          ? <button className="btnp" disabled={creating} onClick={() => setCreating(true)}>＋ 新建项目</button>
+          : <button className="btnp" disabled title="立项需要“项目负责人”角色">＋ 新建项目</button>}
       </TopBar>
       <div className="grid-main">
         <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+          {creating && <NewProject onClose={() => { setCreating(false); load(); }} />}
           <div className="sb sub" style={{ padding: "0 4px" }}><span>项目 · 阶段 · 态势评分</span><span>点击进入项目驾驶舱</span></div>
           {projects.map((p) => <ProjectCard key={p.code} p={p} />)}
           <div className="sub" style={{ padding: "4px" }}>严格档项目的资料不出客户现场，平台只接收客户书面同意后的去标识摘要卡。</div>

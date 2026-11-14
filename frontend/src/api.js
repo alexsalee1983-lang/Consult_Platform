@@ -116,6 +116,9 @@ export const api = {
   me: () => request("/api/auth/me", { skipAuthRedirect: true }),
   health: () => request("/api/health"),
   projects: () => request("/api/projects"),
+  // 网页立项（二期 A3）：可选的产品和模块；项目负责人立项
+  catalogProducts: () => request("/api/catalog/products"),
+  createProject: (body) => request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   confirmations: () => request("/api/confirmations"),
   // 处理确认卡：选一个选项（choice）或写意见（resolution），或两者都有
