@@ -70,8 +70,8 @@ class Settings(BaseSettings):
     # 虚拟客户数据；查询和知识片段原样发出（片段已去标识，查询先过机密级检测），不做假名化。生产环境开启即拒绝启动。
     rerank_external: bool = False
     # 送去重排的候选片段数（RRF 融合后的前 N 个）和每个片段的字数上限。CPU 上重排耗时大致与“个数 × 字数”成正比。
-    kb_rerank_candidates: int = 20
-    kb_rerank_max_chars: int = 400
+    kb_rerank_candidates: int = 10   # 决策记录 2026-11-13：压测 CPU 重排为瓶颈，20×400 → 10×300
+    kb_rerank_max_chars: int = 300
     # 依据查询门槛（重排分数，0～1，sigmoid 后）：启用重排时取代 KB_BASIS_MIN_SIMILARITY。初值按开发电脑上的
     # 示范评测：正例最低 0.14（B004），该查不到的题最高 0.001，取 0.05。正式评测题编好后重新校准（交接文档 S2 第 5 步）。
     kb_basis_min_rerank: float = 0.05

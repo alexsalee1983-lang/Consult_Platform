@@ -98,10 +98,10 @@ def get_evidence(code: str, evidence: str, db: Session = Depends(get_db), user: 
 
 
 @router.post("/{code}/documents", response_model=EvidenceOut, status_code=201)
-async def upload_document(code: str, file: UploadFile = File(...), title: str = Form(default="", max_length=200),
+def upload_document(code: str, file: UploadFile = File(...), title: str = Form(default="", max_length=200),
                           db: Session = Depends(get_db), user: User = Depends(current_user)):
     p = project_for_member(db, code, user)
-    data = await file.read(parse.MAX_BYTES + 1)
+    data = file.file.read(parse.MAX_BYTES + 1)   # 同步端点在线程池执行，不阻塞事件循环
     if len(data) > parse.MAX_BYTES:
         raise HTTPException(413, f"文件超过 {parse.MAX_BYTES // 1024 // 1024}MB")
     try:
