@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from ..core import audit
 from ..core.config import get_settings
+from ..core.db import KB_BIND
 from ..models import KbChunk, KbItem, KbVersion, User
 from ..services import gateway, guard, jobs, usage
 from . import review
@@ -101,7 +102,7 @@ JOIN kb_items i ON i.current_version_id = v.id AND NOT i.retired"""
 def _fulltext_pg(db: Session, q: str, where: str, params: dict) -> list[int]:
     rows = db.execute(text(f"""SELECT c.id {_BASE},
         CAST(replace(CAST(plainto_tsquery('zh', :q) AS text), '&', '|') AS tsquery) tq
-        WHERE c.tsv @@ tq {where} ORDER BY ts_rank_cd(c.tsv, tq) DESC, c.id LIMIT {POOL}"""), {**params, "q": q})
+        WHERE c.tsv @@ tq {where} ORDER BY ts_rank_cd(c.tsv, tq) DESC, c.id LIMIT {POOL}"""), {**params, "q": q}, bind_arguments=KB_BIND)
     return [r[0] for r in rows]
 
 
@@ -120,7 +121,7 @@ def _similarity_of(db: Session, vec: list[float], model: str, ids: list[int]) ->
         return {}
     rows = db.execute(text("""SELECT c.id, 1 - (c.embedding <=> CAST(:vec AS vector)) FROM kb_chunks c
         WHERE c.id = ANY(:ids) AND c.embedding IS NOT NULL AND c.embedding_model = :model"""),
-                      {"vec": _vec_literal(vec), "ids": ids, "model": embed_marker(model)})
+                      {"vec": _vec_literal(vec), "ids": ids, "model": embed_marker(model)}, bind_arguments=KB_BIND)
     return {r[0]: float(r[1]) for r in rows}
 
 
@@ -129,7 +130,7 @@ def _vector_pg(db: Session, vec: list[float], model: str, where: str, params: di
     rows = db.execute(text(f"""SELECT c.id, 1 - (c.embedding <=> CAST(:vec AS vector)) AS sim {_BASE}
         WHERE c.embedding IS NOT NULL AND c.embedding_model = :model {where}
         ORDER BY c.embedding <=> CAST(:vec AS vector) LIMIT {POOL}"""),
-                      {**params, "vec": _vec_literal(vec), "model": embed_marker(model)})
+                      {**params, "vec": _vec_literal(vec), "model": embed_marker(model)}, bind_arguments=KB_BIND)
     return [(r[0], float(r[1])) for r in rows]
 
 
@@ -137,7 +138,7 @@ def _fulltext_simple(db: Session, q: str, where: str, params: dict) -> list[int]
     """SQLite 简化实现：查询切成二字词，按命中数排序。"""
     words = {m for w in re.findall(r"[一-龥]+|[A-Za-z0-9]{2,}", q)
              for m in ([w[i:i + 2] for i in range(len(w) - 1)] if re.match(r"[一-龥]", w) else [w.lower()])}
-    rows = db.execute(text(f"SELECT c.id, c.heading, c.text {_BASE} WHERE 1=1 {where}"), params).all()
+    rows = db.execute(text(f"SELECT c.id, c.heading, c.text {_BASE} WHERE 1=1 {where}"), params, bind_arguments=KB_BIND).all()
     scored = [(sum(1 for w in words if w in (h + t).lower()), cid) for cid, h, t in rows]
     return [cid for s, cid in sorted(scored, key=lambda x: (-x[0], x[1])) if s > 0][:POOL]
 
@@ -196,7 +197,7 @@ def _exact_match(db: Session, query: str, where: str, params: dict) -> _Exact | 
     if not codes and not articles:
         return None
     rows = db.execute(text(f"SELECT c.id, c.heading, v.ref_document {_BASE} WHERE i.layer = 'L4' {where} "
-                           "ORDER BY c.id"), params).all()
+                           "ORDER BY c.id"), params, bind_arguments=KB_BIND).all()
     q = _norm(query)
 
     def doc_hit(ref: str) -> bool:
@@ -242,7 +243,7 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
     s = get_settings()
     limit = max(1, min(limit, MAX_LIMIT))
     where, params = _filters(layer, product, stage, doc_type, include_general)
-    postgres = db.get_bind().dialect.name == "postgresql"
+    postgres = db.get_bind(KbChunk).dialect.name == "postgresql"
     full = (_fulltext_pg if postgres else _fulltext_simple)(db, query, where, params)
 
     # 两套候选：*_loose 给重排用（依据查询不按余弦相似度预先过滤，够不够格由重排分数判断）；
@@ -398,14 +399,14 @@ def embed_version(db: Session, version_id: int) -> int:
         emb = gateway.embed(["\n".join(x for x in (prefix, h, t) if x) for _, h, t in batch])
         for (cid, _, _), vec in zip(batch, emb.vectors, strict=True):
             db.execute(text("UPDATE kb_chunks SET embedding = CAST(:v AS vector), embedding_model = :m WHERE id = :id"),
-                       {"v": _vec_literal(vec), "m": embed_marker(emb.model), "id": cid})
+                       {"v": _vec_literal(vec), "m": embed_marker(emb.model), "id": cid}, bind_arguments=KB_BIND)
         db.commit()
         done += len(batch)
     return done
 
 
 def enqueue_embedding(db: Session, version_id: int, created_by: str) -> int | None:
-    if db.get_bind().dialect.name != "postgresql" or not gateway.embedding_enabled():
+    if db.get_bind(KbChunk).dialect.name != "postgresql" or not gateway.embedding_enabled():
         return None
     return jobs.enqueue(db, "kb.embed", {"version_id": version_id}, created_by=created_by, max_attempts=5)
 

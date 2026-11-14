@@ -10,6 +10,7 @@ from __future__ import annotations
 import ipaddress
 import re
 import string
+import unicodedata
 from dataclasses import dataclass, field
 
 
@@ -94,6 +95,9 @@ _STANDARD_REF = re.compile(r"(?:GB(?:/[TZ])?|[A-Z]{2}/T|ISO(?:/IEC)?|IEC)\s*\d+(
 _CN_ID = re.compile(r"(?<!\d)(\d{17}[\dXx])(?!\d)")
 _BANK_CARD = re.compile(r"(?<!\d)(\d{16,19})(?!\d)")
 _MOBILE = re.compile(r"(?<!\d)(1[3-9]\d{9})(?!\d)")
+# 分段写法：138-1234-5678、138 1234 5678；银行卡 6222 0212 3456 7890 123（渗透测试 M5 ⑦）
+_MOBILE_SPLIT = re.compile(r"(?<![\d-])(1[3-9]\d[- ]\d{4}[- ]\d{4})(?![\d-])")
+_BANK_CARD_SPLIT = re.compile(r"(?<![\d-])(\d{4}(?:[- ]\d{4}){3}(?:[- ]\d{1,3})?)(?![\d-])")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 _ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
@@ -167,10 +171,40 @@ def _is_clause_number(text: str, m: re.Match) -> bool:
     return bool(_CLAUSE_BEFORE.search(before) or _CLAUSE_AFTER.match(after) or _STANDARD_REF.search(before))
 
 
+def _normalize(text: str) -> tuple[str, list[int]]:
+    """全角字母数字符号转半角、全角空格转空格，去掉零宽字符等格式字符（Unicode Cf 类）。
+
+    中文输入法打出的全角 IP、身份证号，复制粘贴带进来的零宽字符，都会让规则漏判（渗透测试 M5 ⑦）。
+    返回规范化文本和每个字符在原文里的位置，命中位置据此换回原文位置。
+    """
+    out: list[str] = []
+    pos: list[int] = []
+    for i, ch in enumerate(text):
+        o = ord(ch)
+        if 0xFF01 <= o <= 0xFF5E:
+            ch = chr(o - 0xFEE0)
+        elif o == 0x3000:
+            ch = " "
+        elif unicodedata.category(ch) == "Cf":
+            continue
+        out.append(ch)
+        pos.append(i)
+    return "".join(out), pos
+
+
 def check(text: str) -> GuardResult:
-    findings: list[Finding] = []
     if not text:
-        return GuardResult(False, findings)
+        return GuardResult(False, [])
+    norm, pos = _normalize(text)
+    result = _check(norm)
+    if norm != text:
+        for f in result.findings:
+            f.start, f.end = pos[f.start], (pos[f.end - 1] + 1 if f.end > f.start else pos[f.start])
+    return result
+
+
+def _check(text: str) -> GuardResult:
+    findings: list[Finding] = []
 
     for m in _PRIVATE_KEY.finditer(text):
         _add(findings, "private_key", "私钥", m)
@@ -224,7 +258,12 @@ def check(text: str) -> GuardResult:
             continue
         if _luhn(m.group(1)):
             _add(findings, "bank_card", "银行卡号", m, 1)
+    for m in _BANK_CARD_SPLIT.finditer(text):
+        if _luhn(re.sub(r"\D", "", m.group(1))):
+            _add(findings, "bank_card", "银行卡号", m, 1)
     for m in _MOBILE.finditer(text):
+        _add(findings, "mobile", "手机号", m, 1)
+    for m in _MOBILE_SPLIT.finditer(text):
         _add(findings, "mobile", "手机号", m, 1)
     for m in _EMAIL.finditer(text):
         _add(findings, "email", "电子邮箱", m)

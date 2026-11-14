@@ -123,8 +123,14 @@ class Consultant(HttpUser):
     @task(2)
     def section(self) -> None:
         self.n += 1
-        self.client.put(f"/api/projects/{PROJECT}/deliverables/D5/sections/{self.seq}", name="sections.write",
-                        headers=self._h(), json={"body": f"压测正文第 {self.n} 稿：夜间值守安排需补充交接记录。[推断]"})
+        with self.client.put(f"/api/projects/{PROJECT}/deliverables/D5/sections/{self.seq}", name="sections.write",
+                             headers=self._h(), catch_response=True,
+                             json={"body": f"压测正文第 {self.n} 稿：夜间值守安排需补充交接记录。[推断]"}) as r:
+            # 409 是业务上的版本冲突（同章同时修改），接口正确拒绝，不算失败
+            if r.status_code in (200, 201, 409):
+                r.success()
+            else:
+                r.failure(f"HTTP {r.status_code}")
 
     @task(1)
     def export(self) -> None:

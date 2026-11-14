@@ -100,7 +100,9 @@ def test_rotation_with_rekey(client, keys):
 
 
 def test_prod_requires_valid_keys():
-    base = {"app_env": "prod", "session_backend": "redis", "cookie_secure": True,
+    base = {"database_url": "postgresql+psycopg://consult:x@db:5432/consult",
+            "kb_database_url": "postgresql+psycopg://consult_kb:x@db:5432/consult_kb",
+            "app_env": "prod", "session_backend": "redis", "cookie_secure": True,
             "test_account_username": "", "test_account_password": "", "test_account_totp_secret": "",
             "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24}
     with pytest.raises(BootstrapError, match="TOTP_KEYS"):

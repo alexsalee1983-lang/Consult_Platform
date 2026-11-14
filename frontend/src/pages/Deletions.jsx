@@ -28,6 +28,7 @@ function Record({ rec }) {
       <Counts counts={rec.counts} />
       <span>已删除：{rec.scope.join("；")}</span>
       <span>保留：{rec.kept.join("；")}</span>
+      {rec.backups_purged_by && <span>备份中的副本随备份轮换清除，最迟 {rec.backups_purged_by}</span>}
     </div>
   );
 }

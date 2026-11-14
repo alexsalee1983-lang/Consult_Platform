@@ -28,6 +28,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..core import audit
+from ..core.config import get_settings
 from ..core.db import utcnow
 from ..core.permissions import PROJECT_LEAD, PROJECT_MANAGER, membership, roles_of
 from ..models import (
@@ -374,6 +375,8 @@ def record(d: ProjectDeletion) -> dict:
             "requested_by": d.requested_by, "requested_at": d.requested_at, "due_by": d.due_by,
             "confirmed_by": d.confirmed_by, "confirmed_at": d.confirmed_at, "completed_at": d.completed_at,
             "on_time": d.completed_at is not None and d.completed_at.date() <= d.due_by,
+            "backups_purged_by": (d.completed_at.date() + timedelta(days=get_settings().backup_keep_days)
+                                  if d.completed_at else None),
             "status": d.status, "flowback": d.flowback, "flowback_name": FLOWBACK.get(d.flowback, ""),
             "flowback_refs": d.flowback_refs, "counts": d.counts, "scope": list(SCOPE), "kept": list(KEPT)}
 

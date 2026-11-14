@@ -25,6 +25,25 @@ else:
     if _db_file.exists():
         _db_file.unlink()
     os.environ["DATABASE_URL"] = f"sqlite:///{_db_file}"
+# 知识区分库（M5 ③）：设了 TEST_KB_DATABASE_URL（CI 用同一 PostgreSQL 里的第二个库）或 TEST_KB_SPLIT=1（第二个 SQLite 文件）
+# 就把知识区表放到单独的库里跑全部测试；都不设则同库
+TEST_KB_DATABASE_URL = os.environ.get("TEST_KB_DATABASE_URL", "")
+if TEST_KB_DATABASE_URL:
+    from sqlalchemy import create_engine, text
+
+    _eng = create_engine(TEST_KB_DATABASE_URL)
+    with _eng.begin() as _conn:
+        _conn.execute(text("DROP SCHEMA public CASCADE"))
+        _conn.execute(text("CREATE SCHEMA public"))
+    _eng.dispose()
+    os.environ["KB_DATABASE_URL"] = TEST_KB_DATABASE_URL
+elif os.environ.get("TEST_KB_SPLIT") == "1":
+    _kb_file = Path(__file__).parent / "test_kb.db"
+    if _kb_file.exists():
+        _kb_file.unlink()
+    os.environ["KB_DATABASE_URL"] = f"sqlite:///{_kb_file}"
+else:
+    os.environ["KB_DATABASE_URL"] = ""
 os.environ["APP_ENV"] = "test"
 os.environ["LLM_BASE_URL"] = ""
 os.environ["REDIS_URL"] = "redis://127.0.0.1:1/0"

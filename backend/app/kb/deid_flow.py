@@ -130,7 +130,7 @@ def _deid_job(payload: dict, ctx: jobs.JobContext) -> None:
     with SessionLocal() as db:
         up = db.get(KbUpload, int(payload["upload_id"]))
         if up is None:
-            raise jobs.JobError("投料记录不存在", retry=False)
+            return                      # 投料已删除（去标识确认后清理），任务无事可做
         if up.status != "parsed":          # 已经做过（任务重复执行）或状态已变化
             return
         try:

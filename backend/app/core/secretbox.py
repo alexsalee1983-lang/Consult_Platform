@@ -15,7 +15,7 @@ import re
 import secrets
 from functools import lru_cache
 
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES  # nosec B413  用的是 pycryptodome（持续维护），不是已停维护的 pycrypto
 
 from .config import get_settings
 

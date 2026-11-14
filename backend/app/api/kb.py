@@ -57,8 +57,8 @@ def _out(up: KbUpload) -> UploadOut:
 
 
 @router.post("/intake", response_model=UploadOut, status_code=201)
-async def submit(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(current_user)):
-    data = await file.read(parse.MAX_BYTES + 1)
+def submit(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(current_user)):
+    data = file.file.read(parse.MAX_BYTES + 1)   # 同步端点在线程池执行，不阻塞事件循环
     if len(data) > parse.MAX_BYTES:
         raise HTTPException(413, f"文件超过 {parse.MAX_BYTES // 1024 // 1024}MB")
     try:

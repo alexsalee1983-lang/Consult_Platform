@@ -17,6 +17,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 backend/tests/test.db
+backend/tests/test_kb.db
 backend/*.db
 
 # Node
@@ -34,3 +35,6 @@ uploads/
 
 # 压测账号凭据（loadtest-accounts 生成），不提交
 loadtest/accounts.json
+# 本地备份目录（scripts/backup.sh 默认位置），不提交
+backups/
+backend/tests/test_kb.db
