@@ -222,6 +222,24 @@ jobs:
             "select count(*) from audit_logs where action in ('backup.create','backup.restore')" | grep -qx 1   # 恢复的是备份时的库，只有恢复这一条
           bash scripts/smoke_test.sh http://localhost:8080
           rm -rf /tmp/bk /tmp/bk.pass /tmp/wrong.pass
+      - name: 镜像漏洞扫描（trivy，整套已构建镜像；有修复版本的高危、严重漏洞即失败）
+        env:
+          TRIVY_VERSION: "0.76.2"
+        run: |
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          dl="curl -sSfL --connect-timeout 20 --max-time 120 --retry 5 --retry-delay 15 --retry-all-errors"
+          $dl "$base/$tarball" -o "$tarball"
+          $dl "$base/trivy_${TRIVY_VERSION}_checksums.txt" -o trivy_checksums.txt
+          grep " $tarball\$" trivy_checksums.txt | sha256sum -c -
+          tar -xzf "$tarball" trivy
+          # 模拟模型只用于 CI 和测试机，不扫；误报或暂无法修复的写进 .trivyignore.yaml 并注明理由（docs/安全扫描.md）
+          fail=0
+          for img in $(docker compose config --images | sort -u); do
+            echo "== $img"
+            ./trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --ignorefile .trivyignore.yaml --exit-code 1 "$img" || fail=1
+          done
+          exit $fail
       - if: failure()
         run: docker compose --profile mock-llm logs --no-color | tail -200
       - if: always()
@@ -247,6 +265,11 @@ jobs:
         run: |
           pip install pip-audit==2.7.3
           pip-audit -r backend/requirements-dev.txt
+
+      - name: Python 代码静态检查（bandit，中危及以上即失败）
+        run: |
+          pip install bandit==1.9.4
+          bandit -q -r backend/app -ll
 
       - name: 前端依赖漏洞扫描（npm audit）
         working-directory: frontend

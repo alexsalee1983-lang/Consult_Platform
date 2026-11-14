@@ -1,4 +1,5 @@
 fastapi==0.141.1
 starlette==1.10.0
 uvicorn==0.32.1
-fastembed==0.9.0      # ONNX 推理的文本向量化（Apache-2.0），CPU 运行，不需要 PyTorch
+fastembed==0.9.1      # ONNX 推理的文本向量化（Apache-2.0），CPU 运行，不需要 PyTorch
+pillow==13.0.0        # fastembed 的依赖；固定到修复了 CVE-2026-112393 等漏洞的版本（trivy 扫描，M5 ①）

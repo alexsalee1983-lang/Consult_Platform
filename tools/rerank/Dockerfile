@@ -9,6 +9,8 @@
 # onnx-community/bge-reranker-v2-m3-ONNX 下载：完整版取 onnx/model.onnx，int8 取 onnx/model_int8.onnx。
 # 所以在 HuggingFace 上查不到“BAAI/bge-reranker-v2-m3-int8”仓库是正常的；下载失败请查网络和代理。
 FROM python:3.12-slim
+# 打上基础镜像发布后的系统安全更新（trivy 扫描，docs/安全扫描.md）
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /srv
 ARG PIP_INDEX_URL=https://pypi.org/simple
