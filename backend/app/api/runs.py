@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import project_for_member, require_business
-from ..models import AgentRun, User
+from ..models import AgentRun, Project, User
 from ..project import runs as svc
 
 router = APIRouter(prefix="/api/projects", tags=["runs"], dependencies=[Depends(require_business)])
@@ -55,20 +55,20 @@ class RunDetail(RunOut):
     steps: list[StepOut]
 
 
-def _out(run: AgentRun) -> dict:
-    return {"id": run.id, "chain": run.chain, "status": run.status, "next_step": svc._step_key(run),
+def _out(db: Session, project: Project, run: AgentRun) -> dict:
+    return {"id": run.id, "chain": run.chain, "status": run.status, "next_step": svc._step_key(db, project, run),
             "waiting_cards": run.waiting_cards or [], "card_ids": run.card_ids or [], "error": run.error,
             "created_by": run.created_by, "created_at": run.created_at, "updated_at": run.updated_at,
             "finished_at": run.finished_at}
 
 
-def _detail(run: AgentRun) -> RunDetail:
-    names = svc.step_names()
+def _detail(db: Session, project: Project, run: AgentRun) -> RunDetail:
+    names = svc.step_names(db, project)
     steps = [StepOut(step=s.step, name=names.get(s.step, s.step), agent_code=s.agent_code, status=s.status,
                      output=s.output, refs=s.refs or {}, prompt_version=s.prompt_version, model=s.model,
                      prompt_tokens=s.prompt_tokens, completion_tokens=s.completion_tokens, started_at=s.started_at,
                      finished_at=s.finished_at) for s in run.steps]
-    return RunDetail(**_out(run), steps=steps)
+    return RunDetail(**_out(db, project, run), steps=steps)
 
 
 def _run(db: Session, code: str, rid: int, user: User) -> tuple:
@@ -86,19 +86,19 @@ def start(code: str, db: Session = Depends(get_db), user: User = Depends(current
         run = svc.start(db, user, project)
     except svc.RunError as e:
         raise HTTPException(e.status, str(e)) from e
-    return _out(run)
+    return _out(db, project, run)
 
 
 @router.get("/{code}/runs", response_model=list[RunOut])
 def list_runs(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     project = project_for_member(db, code, user)
-    return [_out(r) for r in svc.list_runs(db, project)]
+    return [_out(db, project, r) for r in svc.list_runs(db, project)]
 
 
 @router.get("/{code}/runs/{rid}", response_model=RunDetail)
 def get_run(code: str, rid: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _, run = _run(db, code, rid, user)
-    return _detail(run)
+    project, run = _run(db, code, rid, user)
+    return _detail(db, project, run)
 
 
 @router.post("/{code}/runs/{rid}/cancel", response_model=RunOut)
@@ -108,4 +108,4 @@ def cancel(code: str, rid: int, db: Session = Depends(get_db), user: User = Depe
         run = svc.cancel(db, user, project, run)
     except svc.RunError as e:
         raise HTTPException(e.status, str(e)) from e
-    return _out(run)
+    return _out(db, project, run)
