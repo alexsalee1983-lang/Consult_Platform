@@ -112,7 +112,7 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 运行时约定：Agent 的系统提示 = `agents/01_公共规范.md` + 角色 md 正文 + 平台生成的项目卡（`app/agents/runtime.py`）；项目卡经工具层 `project.read` 读取。md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier`、`tools`（仅作说明）、`service_modules`。每条对话和回复记下提示词版本（md 内容哈希）。后端镜像以仓库根目录为构建范围，`agents/` 打进镜像（`backend/Dockerfile`、根目录 `.dockerignore`）；测试机可只读挂载 `./agents:/srv/agents:ro`，md 改了自动重新加载。
 
-网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。测试里用 `gateway.set_transport(httpx.MockTransport(...))` 模拟模型，不要连真实地址。
+网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。测试里用 `gateway.set_transport(httpx.MockTransport(...))` 模拟模型，不要连真实地址。系统管理员在“模型配置状态”页（`GET /api/admin/models`，只读）看大模型、向量、重排的地址、模型名、是否外部和连通状态；不返回密钥，地址去掉账号口令和查询参数。
 
 对象存储约定：文件只经 `app/services/storage.py` 读写（S3 协议，一期为自建 MinIO，见 `deploy/minio/README.md`）；只有 project（项目区）和 knowledge（知识区）两个区，分桶存放、默认服务端加密；哪个 Agent 能碰哪个区由工具层硬规则判断。测试里设 `TEST_S3_ENDPOINT` 才连真实存储，否则相关测试跳过。
 
