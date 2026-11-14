@@ -72,19 +72,18 @@ def test_bad_cards_rejected(proj, args, msg):
 
 
 def test_tool_channel_keeps_status_and_detail(proj):
-    """经接口调用工具时，业务错误的状态码和机密级拦截详情原样返回（测试 #35/#36：曾统一成 400、只剩一句话）。"""
+    """写入类工具不能经接口直接调用（渗透测试 M5 ⑦：真人可冒用 Agent 身份发卡）；业务错误的详情仍由 invoke 原样带出。"""
     code, name = proj
-    url = "/api/agents/solution-designer/tools/confirm.create"
     with logged_in_client(app, name) as c:
-        bad = c.post(url, json={"project_code": code, "args": {**CARD, "recommendation": "C"}})
-        assert bad.status_code == 422 and isinstance(bad.json()["detail"], str)
-        blocked = c.post(url, json={"project_code": code, "args": {**CARD, "reason": "管理口令 Abc@12345"}})
-        assert blocked.status_code == 422
-        detail = blocked.json()["detail"]
-        assert detail["blocked"] and detail["findings"] and "Abc@12345" not in blocked.text
-        assert c.post(url, json={"project_code": code, "args": CARD}).status_code == 200
-        assert c.post("/api/agents/kb-builder/tools/confirm.create",
-                      json={"project_code": code, "args": CARD}).status_code == 403
+        for agent in ("solution-designer", "kb-builder"):
+            r = c.post(f"/api/agents/{agent}/tools/confirm.create", json={"project_code": code, "args": CARD})
+            assert r.status_code == 403
+        assert c.post("/api/agents/report-writer/tools/doc.generate",
+                      json={"project_code": code, "args": {"deliverable": "D4"}}).status_code == 403
+        assert c.get(f"/api/projects/{code}/confirmations").json() == []
+    with pytest.raises(tools.ToolError) as e:
+        _send(name, code, {**CARD, "reason": "管理口令 Abc@12345"})
+    assert e.value.status == 422 and "Abc@12345" not in str(e.value.detail)
 
 
 def test_knowledge_agents_cannot_send_cards(proj):
