@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import func, make_url, select
+from sqlalchemy import Engine, func, make_url, select, text
 from sqlalchemy.orm import Session
 
 from ..models import Project, ProjectMember, User
@@ -52,10 +52,26 @@ def check_settings(s: Settings) -> None:
     if s.kb_database_url and not s.kb_database_url.startswith("sqlite"):
         main, kb = make_url(s.database_url), make_url(s.kb_database_url)
         # 库必须不同；账号不同只在生产强制（CI、本地测试的两个测试库用同一个账号）
-        if (kb.host, kb.port, kb.database) == (main.host, main.port, main.database)                 or (s.is_prod and kb.username == main.username):
+        if (kb.host, kb.port, kb.database) == (main.host, main.port, main.database) \
+                or (s.is_prod and kb.username == main.username):
             raise BootstrapError("知识区要用单独的数据库和单独的账号（KB_DATABASE_URL 的库名、用户名都要与主库不同）")
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
+
+
+def check_db_accounts(s: Settings, engines: list[Engine]) -> None:
+    """生产环境数据库账号不能是超级用户（M5 ⑧）：主库用 consult_app，知识区用 consult_kb。
+    在迁移之前检查，迁移也不以超级用户身份执行。"""
+    if not s.is_prod:
+        return
+    for eng in engines:
+        if eng.dialect.name != "postgresql":
+            continue
+        with eng.connect() as conn:
+            user, su = conn.execute(text("SELECT current_user, rolsuper FROM pg_roles WHERE rolname = current_user")).one()
+        if su:
+            raise BootstrapError(f"生产环境后端不能用数据库超级用户（{user}）连库：主库改用应用账号 consult_app，"
+                                 "见 docs/部署手册.md")
 
 
 def _validate(s: Settings, label: str, username: str, password: str, totp_secret: str) -> None:

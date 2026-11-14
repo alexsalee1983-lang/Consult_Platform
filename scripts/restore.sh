@@ -53,6 +53,7 @@ docker compose stop backend worker frontend >/dev/null
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U consult -d postgres -qc 'DROP DATABASE IF EXISTS consult WITH (FORCE)'
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U consult -d postgres -qc 'CREATE DATABASE consult OWNER consult'
 docker compose exec -T postgres pg_restore -U consult -d consult --exit-on-error < "$tmp/db.dump"
+docker compose exec -T postgres app-init.sh >/dev/null   # 主库和库内对象归应用账号（v1.0 之前的备份里属超级用户）
 # 知识区数据库（M5 ③）：同样删库重建；账号是集群级的，不随库删除。最后重跑 kb-init.sh 补回库级权限（pg_dump 不带）
 if [ -f "$tmp/kb.dump" ]; then
   kbdb="$(manifest kb_db)"; kbdb="${kbdb:-consult_kb}"

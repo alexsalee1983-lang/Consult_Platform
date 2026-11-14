@@ -75,7 +75,7 @@ jobs:
       - name: 生成 .env（测试账号每次随机生成，不写死口令）
         run: |
           cp .env.example .env
-          sed -i '/^MINIO_SECRET_KEY=$/d; /^MINIO_KMS_SECRET_KEY=$/d; /^TOTP_KEYS=$/d; /^KB_POSTGRES_PASSWORD=/d' .env   # 下面随机生成
+          sed -i '/^MINIO_SECRET_KEY=$/d; /^MINIO_KMS_SECRET_KEY=$/d; /^TOTP_KEYS=$/d; /^KB_POSTGRES_PASSWORD=/d; /^APP_POSTGRES_PASSWORD=/d' .env   # 下面随机生成
           python3 - >> .env <<'PY'
           import base64, secrets
           print("TEST_ACCOUNT_USERNAME=ci-smoke")
@@ -85,6 +85,7 @@ jobs:
           print("MINIO_KMS_SECRET_KEY=ci-key:" + base64.b64encode(secrets.token_bytes(32)).decode())
           print("TOTP_KEYS=ci1:" + base64.b64encode(secrets.token_bytes(32)).decode())
           print("KB_POSTGRES_PASSWORD=" + secrets.token_hex(16))
+          print("APP_POSTGRES_PASSWORD=" + secrets.token_hex(16))
           PY
           # 接模拟模型（OpenAI 兼容），走网关的真实 HTTP 路径：重试、流式、可用性检查、用量计量
           sed -i 's|^LLM_BASE_URL=.*|LLM_BASE_URL=http://mock-llm:8000/v1|' .env
@@ -166,6 +167,15 @@ jobs:
           docker compose exec -T -e PGPASSWORD="$kbpw" postgres psql -h 127.0.0.1 -U consult_kb -d consult_kb -Atc "select count(*) from kb_items"
           curl -fsS http://localhost:8080/api/health | python3 -c "import json,sys; c=json.load(sys.stdin)['checks']; assert c['kb_database']=='ok', c"
           docker compose exec -T postgres kb-init.sh   # 可重复执行
+      - name: 主库应用账号（后端用非超级用户 consult_app 连库，库内对象都归它；生产覆盖文件去掉调试端口）
+        run: |
+          q() { docker compose exec -T postgres psql -U consult -d consult -Atc "$1"; }
+          test "$(q "select rolsuper::text from pg_roles where rolname='consult_app'")" = "false"
+          test "$(q "select pg_get_userbyid(datdba) from pg_database where datname='consult'")" = "consult_app"
+          test "$(q "select count(*) from pg_tables where schemaname='public' and tableowner<>'consult_app'")" = "0"
+          docker compose exec -T backend python -c "from sqlalchemy import text; from app.core.db import engine; c=engine.connect(); u=c.execute(text('select current_user, (select rolsuper from pg_roles where rolname=current_user)')).one(); print(u); assert u==('consult_app', False), u"
+          docker compose exec -T postgres app-init.sh   # 可重复执行
+          docker compose -f docker-compose.yml -f deploy/prod/docker-compose.override.yml config --format json             | python3 -c "import json,sys; s=json.load(sys.stdin)['services']; assert not s['backend'].get('ports'), s['backend'].get('ports'); assert s['frontend'].get('ports')"
       - name: 网关重试（模拟模型第一次返回 503）
         run: |
           docker compose exec -T backend python - <<'PY'

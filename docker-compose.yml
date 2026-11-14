@@ -29,6 +29,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-consult}
       # 知识区单独的库和账号（M5 ③），首次初始化由 kb-init.sh 建；已有数据卷执行 docker compose exec postgres kb-init.sh
       KB_POSTGRES_PASSWORD: ${KB_POSTGRES_PASSWORD:?要在 .env 设置 KB_POSTGRES_PASSWORD}
+      # 主库应用账号（非超级用户，M5 ⑧），首次初始化由 app-init.sh 建；已有数据卷执行 docker compose exec postgres app-init.sh
+      APP_POSTGRES_PASSWORD: ${APP_POSTGRES_PASSWORD:?要在 .env 设置 APP_POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -111,7 +113,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg://consult:${POSTGRES_PASSWORD:-consult}@postgres:5432/consult
+      DATABASE_URL: postgresql+psycopg://consult_app:${APP_POSTGRES_PASSWORD}@postgres:5432/consult
       KB_DATABASE_URL: postgresql+psycopg://consult_kb:${KB_POSTGRES_PASSWORD}@postgres:5432/consult_kb
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
@@ -129,7 +131,7 @@ services:
       minio:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${BACKEND_DEBUG_PORT:-8000}:8000"   # 接口调试端口，只在本机访问；正式访问走 WEB_PORT
+      - "127.0.0.1:${BACKEND_DEBUG_PORT:-8000}:8000"   # 接口调试端口，只在本机访问；正式访问走 WEB_PORT。生产用 deploy/prod/docker-compose.override.yml 去掉
     # 测试机在 Agent 冲刺期间想让 md 改了立刻生效，可在 docker-compose.override.yml 里加：
     #   volumes:
     #     - ./agents:/srv/agents:ro
@@ -147,7 +149,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg://consult:${POSTGRES_PASSWORD:-consult}@postgres:5432/consult
+      DATABASE_URL: postgresql+psycopg://consult_app:${APP_POSTGRES_PASSWORD}@postgres:5432/consult
       KB_DATABASE_URL: postgresql+psycopg://consult_kb:${KB_POSTGRES_PASSWORD}@postgres:5432/consult_kb
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000

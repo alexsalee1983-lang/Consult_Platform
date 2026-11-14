@@ -21,6 +21,7 @@
 | 交付链（M3） | `docs/Agent组开发项目方案.md`（D1～D8、交付链 7 步、确认卡） |
 | 删除、告知、严格档（M4） | `docs/客户数据告知模板与合同条款.md`：这是对客户的承诺，平台功能必须能兑现 |
 | 测试与回报 | `docs/测试交接规范.md` |
+| 生产部署、运维 | `docs/部署手册.md`、`docs/运维手册.md` |
 
 `agents/` 下的 md 是 Agent 组的正式版本，修改须经负责人同意（`01_公共规范.md` 的修改影响所有 Agent）。
 
@@ -120,6 +121,8 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 知识库约定：知识区表结构在 `app/models/kb.py`（继承 `KbBase`），元数据取值和校验在 `app/kb/meta.py`（依据公共规范第 7 节，改取值要同步公共规范并经负责人同意）；建条目、建版本只经 `app/kb/items.py`。条目的 doc_id 固定不变，内容变化一律建新版本，历史版本保留。知识区只收去标识后的做法：去标识报告只记类别、占位符和次数，上传记录只记机密级命中类别，都不记原文。去标识只经 `app/kb/deid_flow.py`：规则词库（`deid.py`）→ 脱敏审查 Agent 复查（`deid_agent.py`，经网关，返回的漏网名称只在内存里用）→ 知识管理员确认（不能是上传者）；确认后原件和未去标识的解析结果从对象存储删除。发布审核按两人原则（`app/kb/review.py`，决策记录 2026-11-13）：作者不能审自己的版本；内容审核要知识专家、合规审核要知识管理员，一人持两个角色可以审两项；`KB_SINGLE_REVIEWER_PUBLIC=true` 时公开资料可由作者本人审核发布，标记 `single_review`，作者以外的知识专家复审确认后清除。
 
 分库约定（M5 ③）：知识区表（`kb_` 开头）在单独的库 `KB_DATABASE_URL`（compose 为 `consult_kb`，账号 `consult_kb` 非超级用户、连不上主库；不配则同库，生产不分库拒绝启动）。会话按 `KbBase` 自动把知识区读写发往知识区库；原生 SQL 查知识区表要带 `bind_arguments=KB_BIND`，知识区和主库的表不能 JOIN、不能建跨库外键，一次提交跨两库不是原子的。知识区表结构只经知识区迁移链 `backend/alembic_kb`（版本表 `alembic_version_kb`，`alembic -n kb revision --autogenerate --rev-id k0002_xxx`）修改，主迁移链不再动 `kb_` 表。旧库搬迁：`docker compose exec postgres kb-init.sh` → `python -m app.cli kb-split` → 核对后 `kb-split --drop-source`（删数据，先经负责人同意），见 `docs/知识区分库.md`。
+
+数据库账号约定（M5 ⑧）：后端和 worker 用主库应用账号 `consult_app`（非超级用户，主库和库内对象的属主，`deploy/postgres/app-init.sh` 建立和转属主，可重复执行）和知识区账号 `consult_kb` 连库；超级用户 `consult` 只给本机运维（备份、恢复、`app-init.sh` / `kb-init.sh`）。迁移里需要超级用户的操作（装扩展）放进这两个脚本，迁移只写 `IF NOT EXISTS`。生产后端以超级用户连库拒绝启动（`bootstrap.check_db_accounts`）。生产部署和运维见 `docs/部署手册.md`、`docs/运维手册.md`；生产用 `deploy/prod/docker-compose.override.yml` 去掉后端调试端口。
 
 检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。重排只经网关 `gateway.rerank()`（tools/rerank 服务，默认 bge-reranker-v2-m3 int8；查询过机密级检测，命中的候选不发出、记 0 分），RRF 后前 `KB_RERANK_CANDIDATES` 个切片按重排分数排序，依据查询门槛用 `KB_BASIS_MIN_RERANK`；重排不可用时退回 RRF 排序和余弦相似度门槛，返回体 `rerank` 字段注明。查询写了标准号或法规条号时先按 L4 元数据精确匹配（`search._exact_match`）。向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
 
