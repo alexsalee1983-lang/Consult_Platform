@@ -704,6 +704,8 @@ def main(argv: list[str] | None = None) -> int:
     br.add_argument("--bytes", type=int, default=0)
     br.set_defaults(func=backup_record)
     args = p.parse_args(argv)
+    if args.func is catalog_check:      # 只读配置文件，不连数据库（开发线 2 本地校验用）
+        return args.func(args)
     try:
         upgrade_to_head()
     except KbSplitPending:
