@@ -198,6 +198,7 @@ jobs:
           assert "consultant-lead" in ready and "solution-designer" in ready, infos
           PY
           docker compose exec -T backend sh -c 'test -f /srv/agents/01_公共规范.md && test ! -e /srv/.env && test ! -e /srv/.git && test ! -e /srv/backend'
+          docker compose exec -T backend python -m app.cli catalog-check
       - name: 审计哈希链：多进程并发写入后校验（PostgreSQL）
         run: bash scripts/audit_chain_check.sh 4 50
       - name: 审计表只能追加（数据库触发器）
