@@ -50,7 +50,7 @@ export default function Overview({ code }) {
       <div className="kpis">
         <Kpi cap="证据" value={evs ? evs.length : "—"} sub={strict ? "严格档只收摘要卡 S-xx" : `访谈 ${count("interview")} · 资料 ${count("document")} · 观察 ${count("observation")}`} />
         <Kpi cap="交付件已签署" value={`${signed} / ${p.deliverables.length}`}
-          sub={[pending.length && `${pending.join("、")} 待签署`, drafting.length && `${drafting.join("、")} 起草中`].filter(Boolean).join(" · ") || "按 D1～D8 统计"} />
+          sub={[pending.length && `${pending.join("、")} 待签署`, drafting.length && `${drafting.join("、")} 起草中`].filter(Boolean).join(" · ") || "按本项目交付件统计"} />
         <Kpi cap="待你确认" value={p.open_confirmations} sub="Agent 需要你判断的事项" color={p.open_confirmations ? "var(--amber)" : "var(--ok)"} />
         <Kpi cap="数据档位" value={tier.label} sub={p.tier === "strict" ? "资料不出场 · 只收摘要卡" : (external ? "当前为外部测试模型 · 只用虚拟数据" : "模型在公司内部 · 资料不出公司")} color={p.tier === "strict" ? "var(--crim)" : "var(--cyan)"} />
       </div>
