@@ -44,6 +44,7 @@ trap 'rm -rf "$tmp"' EXIT
 dec() { gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$PASS_FILE" -d "$1" > "$2"; }
 dec "$SRC/db.dump.gpg" "$tmp/db.dump" || die "解密失败（口令不对或文件损坏）"
 [ -f "$SRC/objects.tar.gpg" ] && { dec "$SRC/objects.tar.gpg" "$tmp/objects.tar" || die "对象存储备份解密失败"; }
+[ -f "$SRC/kb.dump.gpg" ] && { dec "$SRC/kb.dump.gpg" "$tmp/kb.dump" || die "知识区数据库备份解密失败"; }
 
 started_at="$(date +%s)"
 docker compose stop backend worker frontend >/dev/null
@@ -52,6 +53,15 @@ docker compose stop backend worker frontend >/dev/null
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U consult -d postgres -qc 'DROP DATABASE IF EXISTS consult WITH (FORCE)'
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U consult -d postgres -qc 'CREATE DATABASE consult OWNER consult'
 docker compose exec -T postgres pg_restore -U consult -d consult --exit-on-error < "$tmp/db.dump"
+# 知识区数据库（M5 ③）：同样删库重建；账号是集群级的，不随库删除。最后重跑 kb-init.sh 补回库级权限（pg_dump 不带）
+if [ -f "$tmp/kb.dump" ]; then
+  kbdb="$(manifest kb_db)"; kbdb="${kbdb:-consult_kb}"
+  docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U consult -d postgres -qc "DROP DATABASE IF EXISTS \"$kbdb\" WITH (FORCE)"
+  docker compose exec -T postgres kb-init.sh >/dev/null   # 建空库、装扩展
+  docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U consult -d "$kbdb" -qc     "DROP TEXT SEARCH CONFIGURATION IF EXISTS zh; DROP EXTENSION IF EXISTS zhparser; DROP EXTENSION IF EXISTS vector"
+  docker compose exec -T postgres pg_restore -U consult -d "$kbdb" --exit-on-error < "$tmp/kb.dump"
+fi
+docker compose exec -T postgres kb-init.sh >/dev/null   # 主库重建后补回“收回 PUBLIC 连接权限”
 
 # 对象存储：停 MinIO，清空数据卷后解包
 if [ -f "$tmp/objects.tar" ]; then

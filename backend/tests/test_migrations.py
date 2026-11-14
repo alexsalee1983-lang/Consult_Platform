@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, insert, inspect, select, text
 
 from app import models
 from app.core.db import Base
-from app.core.migrate import BASELINE, alembic_config, upgrade_to_head
+from app.core.migrate import BASELINE, KB_TABLES, KbSplitPending, alembic_config, upgrade_to_head
 
 
 @pytest.fixture()
@@ -38,8 +38,49 @@ def test_fresh_database_upgrades_to_head(engine):
 def test_models_match_migrations(engine):
     upgrade_to_head(engine)
     with engine.connect() as conn:
-        diffs = compare_metadata(MigrationContext.configure(conn), Base.metadata)
+        ctx = MigrationContext.configure(conn, opts={"include_object": lambda o, n, t, r, c: n != "alembic_version_kb"})
+        diffs = compare_metadata(ctx, Base.metadata)
     assert diffs == [], f"app/models 与迁移脚本不一致，请补迁移：{diffs}"
+
+
+def _kb_engine(tmp_path: Path):
+    return create_engine(f"sqlite:///{tmp_path / 'kb.db'}")
+
+
+def test_kb_chain_stamped_on_shared_database(engine):
+    upgrade_to_head(engine)
+    with engine.connect() as conn:
+        assert MigrationContext.configure(conn, opts={"version_table": "alembic_version_kb"}).get_current_revision()             == ScriptDirectory.from_config(alembic_config(chain="kb")).get_current_head()
+
+
+def test_split_fresh_databases(engine, tmp_path):
+    """分库：知识区表只在知识区库，主库里旧迁移建出的空 kb_ 表被删掉；两边结构都与模型一致。"""
+    kb = _kb_engine(tmp_path)
+    upgrade_to_head(engine, kb)
+    main_tables = set(inspect(engine).get_table_names())
+    kb_tables = set(inspect(kb).get_table_names())
+    assert not {t for t in main_tables if t.startswith("kb_")}
+    assert set(KB_TABLES) <= kb_tables and "projects" not in kb_tables
+    with kb.connect() as conn:
+        ctx = MigrationContext.configure(conn, opts={"include_object": lambda o, n, t, r, c: (
+            (n if t == "table" else o.table.name).startswith("kb_"))})
+        assert compare_metadata(ctx, Base.metadata) == []
+    upgrade_to_head(engine, kb)   # 再启动一次不出错
+    kb.dispose()
+
+
+def test_split_refuses_when_data_still_in_main(engine, tmp_path):
+    upgrade_to_head(engine)
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO kb_uploads (object_key, filename, content_type, size, sha256, status, "
+                          "guard_categories, error, uploaded_by, created_at, kind, parsed_key, page_count, "
+                          "section_count) VALUES ('k1', 'f', '', 0, 'x', 'received', '[]', '', 'u', "
+                          "'2026-11-13 00:00:00', '', '', 0, 0)"))
+    kb = _kb_engine(tmp_path)
+    with pytest.raises(KbSplitPending):
+        upgrade_to_head(engine, kb)
+    assert "kb_uploads" in inspect(engine).get_table_names()   # 不会删有数据的表
+    kb.dispose()
 
 
 def test_unversioned_m0_database_is_stamped_and_keeps_data(engine):

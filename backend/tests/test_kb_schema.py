@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 from sqlalchemy import select, text
 
-from app.core.db import SessionLocal
+from app.core.db import KB_BIND, SessionLocal
 from app.kb import meta
 from app.kb.items import ItemMeta, VersionContent, create_draft, create_item, next_doc_id
 from app.models import KbChunk, KbItem, KbVersion
@@ -137,9 +137,11 @@ def test_chunk_fulltext_index_generated():
                             text="无夜班客户由托管方初筛，一级事件电话升级轮值负责人。")])
         db.commit()
         hits = db.execute(text("SELECT seq FROM kb_chunks WHERE version_id = :v AND tsv @@ plainto_tsquery('zh', :q) "
-                               "ORDER BY seq"), {"v": v.id, "q": "交接班 一级事件"}).scalars().all()
+                               "ORDER BY seq"), {"v": v.id, "q": "交接班 一级事件"},
+                          bind_arguments=KB_BIND).scalars().all()
         assert hits == [1]
-        assert db.execute(text("SELECT count(*) FROM pg_indexes WHERE indexname = 'ix_kb_chunks_tsv'")).scalar() == 1
+        assert db.execute(text("SELECT count(*) FROM pg_indexes WHERE indexname = 'ix_kb_chunks_tsv'"),
+                          bind_arguments=KB_BIND).scalar() == 1
 
 
 @on_postgres
