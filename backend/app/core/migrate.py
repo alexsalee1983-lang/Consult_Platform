@@ -64,7 +64,7 @@ def kb_row_count(conn: Connection) -> int | None:
     present = [t for t in KB_TABLES if t in tables]
     if not present:
         return None
-    return sum(conn.execute(text(f"SELECT count(*) FROM {t}")).scalar_one() for t in present)  # noqa: S608  表名是常量
+    return sum(conn.execute(text(f"SELECT count(*) FROM {t}")).scalar_one() for t in present)  # noqa: S608  # nosec B608  表名是常量
 
 
 def _upgrade_kb_chain(conn: Connection) -> None:
