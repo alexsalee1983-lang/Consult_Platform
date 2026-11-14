@@ -115,3 +115,28 @@ vulnerabilities:
     paths: ["usr/bin/prometheus", "usr/bin/promtool", "usr/share/grafana/data/plugins-bundled/**"]
     statement: 监控组件只在内部网络、不解析外部 HTML，最坏影响为监控不可用；等上游发版升级
     expired_at: 2027-01-15
+  # Grafana 自带的 mysql、tempo 数据源插件里的 Go 依赖漏洞：平台不配置这两个数据源，插件不加载。
+  - id: CVE-2026-78669
+    paths: ["usr/share/grafana/data/plugins-bundled/mysql/**"]
+    statement: Grafana 自带的 mysql 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-111943
+    paths: ["usr/share/grafana/data/plugins-bundled/mysql/**"]
+    statement: Grafana 自带的 mysql 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-78667
+    paths: ["usr/share/grafana/data/plugins-bundled/mysql/**"]
+    statement: Grafana 自带的 mysql 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-97031
+    paths: ["usr/share/grafana/data/plugins-bundled/mysql/**"]
+    statement: Grafana 自带的 mysql 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-21728
+    paths: ["usr/share/grafana/data/plugins-bundled/tempo/**"]
+    statement: Grafana 自带的 tempo 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-28377
+    paths: ["usr/share/grafana/data/plugins-bundled/tempo/**"]
+    statement: Grafana 自带的 tempo 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
