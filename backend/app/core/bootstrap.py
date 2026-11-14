@@ -51,7 +51,8 @@ def check_settings(s: Settings) -> None:
         raise BootstrapError("生产环境知识区必须单独建库（KB_DATABASE_URL，账号与主库不同，见 docs/知识区分库.md）")
     if s.kb_database_url and not s.kb_database_url.startswith("sqlite"):
         main, kb = make_url(s.database_url), make_url(s.kb_database_url)
-        if kb.username == main.username or (kb.host, kb.port, kb.database) == (main.host, main.port, main.database):
+        # 库必须不同；账号不同只在生产强制（CI、本地测试的两个测试库用同一个账号）
+        if (kb.host, kb.port, kb.database) == (main.host, main.port, main.database)                 or (s.is_prod and kb.username == main.username):
             raise BootstrapError("知识区要用单独的数据库和单独的账号（KB_DATABASE_URL 的库名、用户名都要与主库不同）")
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
