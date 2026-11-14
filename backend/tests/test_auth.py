@@ -31,6 +31,7 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/conversations"),
     ("GET", "/api/conversations/1"),
     ("POST", "/api/conversations/1/messages"),
+    ("POST", "/api/conversations/1/handoff"),
     ("POST", "/api/gateway/check"),
     ("GET", "/api/audit"),
     ("GET", "/api/audit/verify"),

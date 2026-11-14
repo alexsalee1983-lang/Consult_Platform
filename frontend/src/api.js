@@ -154,6 +154,8 @@ export const api = {
   createConversation: (code, agent_code) =>
     request(`/api/projects/${encodeURIComponent(code)}/conversations`, { method: "POST", body: JSON.stringify({ agent_code }) }),
   conversation: (id) => request(`/api/conversations/${id}`),
+  handoff: (id, message_id, agent_code) =>
+    request(`/api/conversations/${id}/handoff`, { method: "POST", body: JSON.stringify({ message_id, agent_code }) }),
   audit: (params) => request(`/api/audit?${new URLSearchParams(
     Object.entries(params).filter(([, v]) => v !== "" && v != null))}`),
   changePassword: (old_password, new_password) =>

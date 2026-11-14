@@ -4,6 +4,7 @@ POST /api/projects/{code}/conversations          以某个 Agent 新建对话
 GET  /api/projects/{code}/conversations          我在这个项目里的对话
 GET  /api/conversations/{id}                     对话和消息
 POST /api/conversations/{id}/messages            发一条消息，SSE 流式返回（event: delta / done / error）
+POST /api/conversations/{id}/handoff             按某条回复里的交接信息转交专业 Agent（二期 C2，app/agents/handoff.py）
 
 被机密级拦截的消息不存，只记审计（不含原文）；通过拦截的提问和 Agent 回复存入项目区。
 """
@@ -16,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..agents import knowledge, runtime, tools
+from ..agents import handoff, knowledge, runtime, tools
 from ..core import audit
 from ..core.auth import current_user
 from ..core.db import SessionLocal, get_db, utcnow
@@ -49,6 +50,7 @@ class MessageOut(BaseModel):
     prompt_version: str
     created_at: datetime
     references: list[dict] = []     # 本条回复附给 Agent 的知识库条目（doc_id、标题、章节、引用格式）
+    handoffs: list[dict] = []       # 本条回复里可转交的目标（agent_code、agent_name），只有有转交授权的 Agent 才有
 
 
 class ConversationOut(BaseModel):
@@ -60,6 +62,17 @@ class ConversationOut(BaseModel):
     prompt_version: str
     updated_at: datetime
     message_count: int = 0
+    handoff_from: int | None = None   # 转交来源对话
+
+
+class HandoffIn(BaseModel):
+    message_id: int
+    agent_code: str = Field(max_length=32)
+
+
+class HandoffOut(BaseModel):
+    conversation: ConversationOut
+    draft: str                        # 交接说明草稿，顾问可修改后发送
 
 
 class ConversationDetail(ConversationOut):
@@ -70,7 +83,8 @@ def _out(db: Session, c: Conversation, project_code: str) -> ConversationOut:
     count = db.scalar(select(func.count(Message.id)).where(Message.conversation_id == c.id))
     return ConversationOut(id=c.id, project_code=project_code, agent_code=c.agent_code,
                            agent_name=db.get(Agent, c.agent_code).name, title=c.title,
-                           prompt_version=c.prompt_version, updated_at=c.updated_at, message_count=count)
+                           prompt_version=c.prompt_version, updated_at=c.updated_at, message_count=count,
+                           handoff_from=c.handoff_from)
 
 
 def _mine(db: Session, cid: int, user: User) -> tuple[Conversation, Project]:
@@ -110,10 +124,39 @@ def list_mine(code: str, db: Session = Depends(get_db), user: User = Depends(cur
 def get(cid: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     c, project = _mine(db, cid, user)
     base = _out(db, c, project.code)
+    can_handoff = HANDOFF_TOOL in tools.granted_tools(db, c.agent_code)
     return ConversationDetail(**base.model_dump(), messages=[
         MessageOut(id=m.id, role=m.role, content=m.content, status=m.status, model=m.model,
-                   prompt_version=m.prompt_version, created_at=m.created_at, references=m.kb_refs or [])
+                   prompt_version=m.prompt_version, created_at=m.created_at, references=m.kb_refs or [],
+                   handoffs=_handoffs(db, c, m) if can_handoff else [])
         for m in c.messages])
+
+
+HANDOFF_TOOL = "agent.handoff"
+
+
+def _handoffs(db: Session, c: Conversation, m: Message) -> list[dict]:
+    if m.role != "assistant" or m.status != "ok":
+        return []
+    return [{"agent_code": h.agent_code, "agent_name": h.agent_name} for h in handoff.parse(db, m.content, c.agent_code)]
+
+
+@router.post("/conversations/{cid}/handoff", response_model=HandoffOut, status_code=201)
+def hand_off(cid: int, body: HandoffIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """顾问点“转交”：找到这条回复里给该 Agent 的交接信息，经工具层 agent.handoff 新建对话（授权、成员检查、审计）。"""
+    c, project = _mine(db, cid, user)
+    m = db.get(Message, body.message_id)
+    if m is None or m.conversation_id != c.id or m.role != "assistant" or m.status != "ok":
+        raise HTTPException(404, "消息不存在")
+    picked = next((h for h in handoff.parse(db, m.content, c.agent_code) if h.agent_code == body.agent_code), None)
+    if picked is None:
+        raise HTTPException(422, "这条回复里没有转交给该 Agent 的交接信息")
+    try:
+        r = tools.invoke(db, user, c.agent_code, HANDOFF_TOOL,
+                         {"from_conversation": c.id, "target": picked.agent_code, "brief": picked.brief}, project.code)
+    except tools.ToolError as e:
+        raise HTTPException(e.status, e.detail) from e
+    return HandoffOut(conversation=_out(db, db.get(Conversation, r["conversation_id"]), project.code), draft=r["draft"])
 
 
 @router.post("/conversations/{cid}/messages")

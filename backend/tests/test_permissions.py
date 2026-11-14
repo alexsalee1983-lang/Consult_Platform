@@ -136,6 +136,9 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/conversations", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/conversations", {"agent_code": "consultant-lead"}),
                                                         (201, 404, 403, 403, 403)),
+    # 对话转交（二期 C2）：对话只有发起人能用，别人的或不存在的一律 404；正常转交在 test_handoff 里测
+    (("POST", "/api/conversations/999999/handoff", {"message_id": 1, "agent_code": "research-interview"}),
+                                                        (404, 404, 403, 403, 403)),
     (("POST", "/api/agents/consultant-lead/tools/project.read", {"project_code": "BANK-A"}),
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
