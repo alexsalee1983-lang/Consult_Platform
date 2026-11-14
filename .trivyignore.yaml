@@ -1,0 +1,110 @@
+# trivy 忽略清单（docs/安全扫描.md）：每条写 statement（理由与影响评估）、paths（只对这个文件生效）和 expired_at（复查日期，到期自动失效）。
+#
+# gosu（pgvector 基础镜像自带，usr/local/bin/gosu）：用旧版 Go 编译，扫描报 Go 标准库漏洞。
+# gosu 只在容器启动时把进程从 root 切到 postgres 用户后立即 exec，不处理网络、文件解析、TLS 和外部输入，
+# 这些标准库漏洞的触发路径都用不到（gosu 项目 SECURITY.md 对这类扫描结果的说明相同）。基础镜像更新 gosu 后删除。
+vulnerabilities:
+  - id: CVE-2025-61726
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2025-61729
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2025-68121
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-111943
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-25679
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-27145
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-32280
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-32281
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-32283
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-33811
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-33814
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-33818
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-39820
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-39821
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-39822
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-39836
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-42499
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-42504
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-56853
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-56858
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-56859
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-56860
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-56862
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-78667
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-78669
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-97031
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
+    expired_at: 2027-03-01

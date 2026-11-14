@@ -8,7 +8,9 @@ RUN npm config set registry ${NPM_REGISTRY} && npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.30.6-alpine
+# 打上基础镜像发布后的系统安全更新（trivy 扫描，docs/安全扫描.md）
+RUN apk upgrade --no-cache
 # 站点配置：启动时由 select-conf.sh 按是否挂载证书选 HTTP 或 HTTPS（生产必须 HTTPS）
 RUN rm -f /etc/nginx/conf.d/default.conf
 COPY nginx/app.inc /etc/nginx/app.inc
