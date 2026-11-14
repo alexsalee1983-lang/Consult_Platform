@@ -9,9 +9,9 @@ from .api import (admin, agents, audit, auth, cards, chat, conversations, deleti
                   kb, kb_items, projects, quality, runs)
 from .core import audit as core_audit
 from .core.auth import authenticate
-from .core.bootstrap import check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
+from .core.bootstrap import check_db_accounts, check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
-from .core.db import SessionLocal
+from .core.db import SessionLocal, engine, kb_engine
 from .core.errors import out_of_range_handler, reject_control_chars, validation_error_handler
 from .core.metrics import MetricsMiddleware, register_state_collector, start_server
 from .core.migrate import upgrade_to_head
@@ -24,6 +24,7 @@ check_settings(_settings)  # 配置不安全时直接拒绝启动
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    check_db_accounts(_settings, [engine, kb_engine])  # 生产不用超级用户连库，迁移之前检查
     upgrade_to_head()
     with SessionLocal() as db:
         encrypt_plaintext_rows(db)

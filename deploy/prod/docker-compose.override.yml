@@ -1,0 +1,14 @@
+# 生产覆盖文件（M5 ⑧，docs/部署手册.md）：复制到仓库根目录，docker compose 自动叠加
+#   cp deploy/prod/docker-compose.override.yml docker-compose.override.yml
+# 需要 Docker Compose 2.24 及以上（!reset 语法）。
+services:
+  backend:
+    # 去掉接口调试端口 8000：生产只经前端 nginx（WEB_PORT / WEB_TLS_PORT）访问
+    ports: !reset []
+  # 集中收集日志（公司日志平台）时，在这里改各服务的 logging 驱动，例如：
+  # backend:
+  #   logging:
+  #     driver: syslog
+  #     options:
+  #       syslog-address: "tcp://日志平台地址:514"
+  #       tag: consult-backend

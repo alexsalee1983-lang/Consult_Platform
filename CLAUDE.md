@@ -21,6 +21,7 @@
 | 交付链（M3） | `docs/Agent组开发项目方案.md`（D1～D8、交付链 7 步、确认卡） |
 | 删除、告知、严格档（M4） | `docs/客户数据告知模板与合同条款.md`：这是对客户的承诺，平台功能必须能兑现 |
 | 测试与回报 | `docs/测试交接规范.md` |
+| 生产部署、运维 | `docs/部署手册.md`、`docs/运维手册.md` |
 
 `agents/` 下的 md 是 Agent 组的正式版本，修改须经负责人同意（`01_公共规范.md` 的修改影响所有 Agent）。
 
@@ -121,7 +122,9 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 分库约定（M5 ③）：知识区表（`kb_` 开头）在单独的库 `KB_DATABASE_URL`（compose 为 `consult_kb`，账号 `consult_kb` 非超级用户、连不上主库；不配则同库，生产不分库拒绝启动）。会话按 `KbBase` 自动把知识区读写发往知识区库；原生 SQL 查知识区表要带 `bind_arguments=KB_BIND`，知识区和主库的表不能 JOIN、不能建跨库外键，一次提交跨两库不是原子的。知识区表结构只经知识区迁移链 `backend/alembic_kb`（版本表 `alembic_version_kb`，`alembic -n kb revision --autogenerate --rev-id k0002_xxx`）修改，主迁移链不再动 `kb_` 表。旧库搬迁：`docker compose exec postgres kb-init.sh` → `python -m app.cli kb-split` → 核对后 `kb-split --drop-source`（删数据，先经负责人同意），见 `docs/知识区分库.md`。
 
-检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。重排只经网关 `gateway.rerank()`（tools/rerank 服务，默认 bge-reranker-v2-m3 int8；查询过机密级检测，命中的候选不发出、记 0 分），RRF 后前 `KB_RERANK_CANDIDATES` 个切片按重排分数排序，依据查询门槛用 `KB_BASIS_MIN_RERANK`；重排不可用时退回 RRF 排序和余弦相似度门槛，返回体 `rerank` 字段注明。查询写了标准号或法规条号时先按 L4 元数据精确匹配（`search._exact_match`）。向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
+数据库账号约定（M5 ⑧）：后端和 worker 用主库应用账号 `consult_app`（非超级用户，主库和库内对象的属主，`deploy/postgres/app-init.sh` 建立和转属主，可重复执行）和知识区账号 `consult_kb` 连库；超级用户 `consult` 只给本机运维（备份、恢复、`app-init.sh` / `kb-init.sh`）。迁移里需要超级用户的操作（装扩展）放进这两个脚本，迁移只写 `IF NOT EXISTS`。生产后端以超级用户连库拒绝启动（`bootstrap.check_db_accounts`）。生产部署和运维见 `docs/部署手册.md`、`docs/运维手册.md`；生产用 `deploy/prod/docker-compose.override.yml` 去掉后端调试端口。
+
+检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。重排只经网关 `gateway.rerank()`（tools/rerank 服务，默认 bge-reranker-v2-m3 int8；查询过机密级检测，命中的候选不发出、记 0 分），RRF 后前 `KB_RERANK_CANDIDATES` 个切片按重排分数排序，依据查询门槛用 `KB_BASIS_MIN_RERANK`；重排不可用时退回 RRF 排序和余弦相似度门槛，返回体 `rerank` 字段注明。外部重排服务（`RERANK_EXTERNAL=true`，决策记录 2026-11-14）同外部模型，只限开发测试、虚拟数据，生产拒绝启动。查询写了标准号或法规条号时先按 L4 元数据精确匹配（`search._exact_match`）。向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
 
 项目区约定（M3）：客户资料、访谈纪要、现场观察只经 `app/project/evidence.py` 进入平台（先过机密级检测；严格档一律拒收），按项目分配证据编号 D-xx / I-xx / O-xx，编号不变、不复用；访谈纪要只写受访者角色。资料原件和解析结果存对象存储项目区，键里不用原文件名；文件名和正文不进审计。Agent 经工具 `project.evidence` 读证据。仅现场使用（M4 ③）：项目经理凭客户书面通知把资料 D-xx 标为仅现场使用（`POST /api/projects/{code}/evidences/{ev}/local-only`，写文号不写客户名，不可撤销），平台立即删除对象存储里的原件和解析结果、清空文件名，编号和 sha256 保留；同一文件再上传 422，`project.evidence` 读不到，交付件写入引用 422，已有引用在签署门禁和质量评审平台规则里判阻断；审计不记文号。
 
