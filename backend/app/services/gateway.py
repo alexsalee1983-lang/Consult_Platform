@@ -90,6 +90,7 @@ def set_transport(transport: httpx.BaseTransport | None) -> None:
     global _transport
     _transport = transport
     _health_cache.clear()
+    _rerank_last.clear()
 
 
 def _client() -> httpx.Client:
@@ -295,6 +296,9 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
 
 # ---- 可用性检查 ----
 _health_cache: dict[str, tuple[float, str]] = {}
+# 最近一次真实重排调用的结果（地址 -> 失败原因，成功为 None）：欠费（402）、密钥失效时
+# 模型列表照样能取到，只有实际调用才看得出来；健康检查据此报异常。
+_rerank_last: dict[str, str | None] = {}
 
 
 # ---- 向量化 ----
@@ -398,35 +402,57 @@ def rerank(query: str, documents: list[str]) -> Rerank:
     if not send:
         return Rerank(scores=scores, model=s.rerank_model, attempts=0)
     payload = {"model": s.rerank_model, "query": query, "documents": [docs[i] for i in send]}
-    with _client() as client:
-        resp, attempts = _send(client, payload, stream=False, url=s.rerank_base_url.rstrip("/") + "/rerank",
-                               headers=_rerank_headers())
-        try:
-            by_index = {int(r["index"]): float(r["relevance_score"]) for r in resp.json()["results"]}
-        except (ValueError, KeyError, TypeError) as e:
-            raise GatewayError("重排服务返回的结果无法解析", attempts) from e
-    if sorted(by_index) != list(range(len(send))):
-        raise GatewayError("重排服务返回的条数不对", attempts)
+    try:
+        with _client() as client:
+            resp, attempts = _send(client, payload, stream=False, url=s.rerank_base_url.rstrip("/") + "/rerank",
+                                   headers=_rerank_headers())
+            try:
+                by_index = {int(r["index"]): float(r["relevance_score"]) for r in resp.json()["results"]}
+            except (ValueError, KeyError, TypeError) as e:
+                raise GatewayError("重排服务返回的结果无法解析", attempts) from e
+        if sorted(by_index) != list(range(len(send))):
+            raise GatewayError("重排服务返回的条数不对", attempts)
+    except GatewayError as e:
+        _rerank_last[s.rerank_base_url] = str(e)
+        raise
+    _rerank_last[s.rerank_base_url] = None
     for j, i in enumerate(send):
         scores[i] = by_index[j]
     return Rerank(scores=scores, model=s.rerank_model, attempts=attempts)
 
 
 def rerank_availability() -> str:
+    """ok / not enabled / down: 原因。最近一次真实重排调用失败（如欠费 HTTP 402）直接报 down，下一次调用成功后恢复。
+    外部平台的模型列表可能不列重排模型、欠费时也照样返回，所以外部模式再发一次最小的重排请求探测，
+    结果缓存 LLM_HEALTH_TTL_SECONDS 秒，避免健康检查频繁打到收费接口。"""
     s = get_settings()
     if not s.rerank_base_url:
         return "not enabled"
+    base = s.rerank_base_url.rstrip("/")
+    failed = _rerank_last.get(s.rerank_base_url)
+    if failed:
+        return f"down: 最近一次重排失败（{failed}）"
+    key = "rerank:" + s.rerank_base_url
+    cached = _health_cache.get(key)
+    if cached and time.monotonic() - cached[0] < s.llm_health_ttl_seconds:
+        return cached[1]
     try:
         with httpx.Client(timeout=httpx.Timeout(3.0, connect=2.0), transport=_transport) as client:
-            resp = client.get(s.rerank_base_url.rstrip("/") + "/models", headers=_rerank_headers())
-        if resp.status_code != 200:
-            return f"down: HTTP {resp.status_code}"
-        ids = {m.get("id") for m in (resp.json().get("data") or [])}
-        if s.rerank_model in ids or s.rerank_external:   # 外部平台的模型列表默认可能不列重排模型，能连通即算可用
-            return "ok"
-        return f"down: 重排服务上没有 {s.rerank_model}"
+            resp = client.get(base + "/models", headers=_rerank_headers())
+            if resp.status_code != 200:
+                status = f"down: HTTP {resp.status_code}"
+            elif s.rerank_model in {m.get("id") for m in (resp.json().get("data") or [])}:
+                status = "ok"
+            elif not s.rerank_external:
+                status = f"down: 重排服务上没有 {s.rerank_model}"
+            else:
+                probe = client.post(base + "/rerank", headers=_rerank_headers(),
+                                    json={"model": s.rerank_model, "query": "健康检查", "documents": ["健康检查"]})
+                status = "ok" if probe.status_code == 200 else f"down: 重排请求被拒绝 HTTP {probe.status_code}"
     except (httpx.HTTPError, ValueError) as e:
-        return f"down: {type(e).__name__}"
+        status = f"down: {type(e).__name__}"
+    _health_cache[key] = (time.monotonic(), status)
+    return status
 
 
 def availability() -> str:

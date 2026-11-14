@@ -128,14 +128,59 @@ def test_prod_refuses_external_rerank():
 
 
 def test_external_rerank_availability_without_model_list(monkeypatch):
-    """外部平台（如硅基流动）的模型列表默认可能不列重排模型：外部模式下能连通即算可用。"""
+    """外部平台（如硅基流动）的模型列表默认可能不列重排模型、欠费时也照样返回：外部模式再发一次最小重排请求探测。"""
     s = get_settings()
     monkeypatch.setattr(s, "rerank_base_url", "https://rerank.example/v1")
     monkeypatch.setattr(s, "rerank_model", "Qwen/Qwen3-Reranker-8B")
-    gateway.set_transport(httpx.MockTransport(lambda req: httpx.Response(200, json={"data": [{"id": "chat-model"}]})))
+    state = {"rerank": 200, "probes": 0}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/rerank"):
+            state["probes"] += 1
+            if state["rerank"] != 200:
+                return httpx.Response(state["rerank"], json={"message": "余额不足"})
+            return httpx.Response(200, json={"results": [{"index": 0, "relevance_score": 0.9}]})
+        return httpx.Response(200, json={"data": [{"id": "chat-model"}]})
+
+    gateway.set_transport(httpx.MockTransport(handler))
     try:
         assert gateway.rerank_availability().startswith("down")
         monkeypatch.setattr(s, "rerank_external", True)
+        gateway._health_cache.clear()
+        assert gateway.rerank_availability() == "ok"
+        assert gateway.rerank_availability() == "ok" and state["probes"] == 1   # 探测结果有缓存，不频繁打收费接口
+
+        state["rerank"] = 402                                                    # 欠费：模型列表照常，重排被拒
+        gateway._health_cache.clear()
+        assert gateway.rerank_availability() == "down: 重排请求被拒绝 HTTP 402"
+    finally:
+        gateway.set_transport(None)
+
+
+def test_rerank_failure_shows_in_health_until_next_success(monkeypatch):
+    """真实重排调用失败（如欠费 402），健康检查立即报 down 并写明原因，不等缓存过期；下一次调用成功后恢复。"""
+    s = get_settings()
+    monkeypatch.setattr(s, "rerank_base_url", "https://rerank.example/v1")
+    monkeypatch.setattr(s, "rerank_model", "bge-reranker-v2-m3")
+    state = {"rerank": 200}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/rerank"):
+            if state["rerank"] != 200:
+                return httpx.Response(state["rerank"], json={"message": "余额不足"})
+            return httpx.Response(200, json={"results": [{"index": 0, "relevance_score": 0.9}]})
+        return httpx.Response(200, json={"data": [{"id": "bge-reranker-v2-m3"}]})
+
+    gateway.set_transport(httpx.MockTransport(handler))
+    try:
+        assert gateway.rerank_availability() == "ok"
+        state["rerank"] = 402
+        with pytest.raises(gateway.GatewayError):
+            gateway.rerank("值班", ["交接"])
+        status = gateway.rerank_availability()
+        assert status.startswith("down: 最近一次重排失败") and "402" in status
+        state["rerank"] = 200
+        gateway.rerank("值班", ["交接"])
         assert gateway.rerank_availability() == "ok"
     finally:
         gateway.set_transport(None)
