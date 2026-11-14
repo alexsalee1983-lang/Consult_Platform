@@ -13,7 +13,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 DEST_ROOT="${1:-${BACKUP_DIR:-$ROOT/backups}}"
-env_val() { grep -E "^$1=" "$ROOT/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '[:space:]"'; }
+env_val() { { grep -E "^$1=" "$ROOT/.env" 2>/dev/null || true; } | tail -1 | cut -d= -f2- | tr -d '[:space:]"'; }   # 没有这一项时返回空（pipefail 下 grep 不报错退出）
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-$(env_val BACKUP_KEEP_DAYS)}"
 KEEP_DAYS="${KEEP_DAYS:-30}"   # 与后端同一个 .env 值：删除记录据此写“备份中的副本最迟清除日”
 PASS_FILE="${BACKUP_PASSPHRASE_FILE:-}"
