@@ -35,7 +35,7 @@ from sqlalchemy import select
 from .core import audit, secretbox, sessions
 from .core.config import get_settings
 from .core.db import SessionLocal
-from .core.migrate import upgrade_to_head
+from .core.migrate import KbSplitPending, upgrade_to_head
 from .core.permissions import (BUSINESS_ROLES, EXCLUSIVE_ROLES, PROJECT_ROLES, ROLE_NAMES, RoleRuleError,
                                membership, roles_of, set_roles)
 from .core.security import PasswordPolicyError, check_password_policy, hash_password, new_totp_secret, totp_uri
@@ -305,6 +305,18 @@ def deletion_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def backup_record(args: argparse.Namespace) -> int:
+    """备份、恢复脚本（scripts/backup.sh、restore.sh）完成后记一条审计：只有时间戳、链头编号和字节数。"""
+    if not re.fullmatch(r"\d{8}T\d{6}Z", args.stamp):
+        print("--stamp 格式为 20270110T020000Z", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        audit.record(db, actor="cli", action=f"backup.{args.op}", result="allowed", stamp=args.stamp,
+                     head_id=args.head_id, bytes=args.bytes)
+    print(f"已记录 backup.{args.op} {args.stamp}")
+    return 0
+
+
 def verify_audit(args: argparse.Namespace) -> int:
     with SessionLocal() as db:
         r = audit.verify_chain(db, args.expect_head)
@@ -371,6 +383,25 @@ def selfcheck(args: argparse.Namespace) -> int:
         time.sleep(1)
     print("超时：worker 没有执行，检查 docker compose ps 和 docker compose logs worker", file=sys.stderr)
     return 3
+
+
+def kb_split(args: argparse.Namespace) -> int:
+    from .core import kb_split as ks
+    from .core.db import engine, kb_engine
+
+    try:
+        r = ks.split(engine, kb_engine, drop_source=args.drop_source)
+    except ks.SplitError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        audit.record(db, actor="cli", action="kb.split", result="allowed",
+                     rows=r.counts, copied=r.copied, dropped=r.dropped)
+    for t, n in r.counts.items():
+        print(f"{t}	{n}")
+    print(("已复制并核对一致" if r.copied else "两边行数一致") + ("，主库里的知识区表已删除" if r.dropped else
+          "；主库里的旧副本保留，确认无误后加 --drop-source 删除"))
+    return 0
 
 
 def kb_reembed(args: argparse.Namespace) -> int:
@@ -549,8 +580,21 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
     ke.add_argument("--out", default="", help="把明细写成 JSON 文件")
     ke.set_defaults(func=kb_eval)
+    ks = sub.add_parser("kb-split", help="分库：把知识区数据从主库搬到知识区数据库并核对行数")
+    ks.add_argument("--drop-source", action="store_true", help="核对一致后删掉主库里的知识区表（删数据，先经负责人同意）")
+    ks.set_defaults(func=kb_split)
+    br = sub.add_parser("backup-record", help="备份 / 恢复脚本完成后记审计（由 scripts/backup.sh、restore.sh 调用）")
+    br.add_argument("--op", choices=["create", "restore"], required=True)
+    br.add_argument("--stamp", required=True)
+    br.add_argument("--head-id", type=int, default=0)
+    br.add_argument("--bytes", type=int, default=0)
+    br.set_defaults(func=backup_record)
     args = p.parse_args(argv)
-    upgrade_to_head()
+    try:
+        upgrade_to_head()
+    except KbSplitPending:
+        if args.func is not kb_split:
+            raise
     return args.func(args)
 
 

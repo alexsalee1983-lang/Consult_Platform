@@ -12,7 +12,7 @@ from sqlalchemy import select, text
 
 from app.agents import tools
 from app.core.config import get_settings
-from app.core.db import SessionLocal
+from app.core.db import KB_BIND, SessionLocal
 from app.kb import review as rv
 from app.kb import search
 from app.kb.items import ItemMeta, VersionContent
@@ -223,7 +223,8 @@ def test_publish_embeds_and_hybrid_search(people, embedder):
         while jobs.run_once(db, "test-worker", kinds=["kb.embed"]):
             pass
         n = db.execute(text("SELECT count(*) FROM kb_chunks WHERE version_id = :v AND embedding IS NOT NULL "
-                            "AND embedding_model = :m"), {"v": v.id, "m": search.embed_marker(get_settings().embed_model)}).scalar()
+                            "AND embedding_model = :m"), {"v": v.id, "m": search.embed_marker(get_settings().embed_model)},
+                       bind_arguments=KB_BIND).scalar()
     assert n >= 1 and e.calls >= 1
     out = _search(people, "consultant", "托管方 夜间值守")
     assert out["vector"] == "ok"
@@ -279,7 +280,8 @@ def test_reembed_after_text_version_change(people, embedder):
         assert search.embed_version(db, v.id) >= 1
         assert search.embed_version(db, v.id) == 0                          # 已是当前版本，不重复
         db.execute(text("UPDATE kb_chunks SET embedding_model = :m WHERE version_id = :v"),
-                   {"m": get_settings().embed_model, "v": v.id})             # 模拟旧版本（不带 #t2）
+                   {"m": get_settings().embed_model, "v": v.id},
+                   bind_arguments=KB_BIND)                                   # 模拟旧版本（不带 #t2）
         db.commit()
         assert search.embed_version(db, v.id) >= 1
 

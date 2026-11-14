@@ -27,6 +27,8 @@ class User(Base):
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 口令最近一次设置的时间（口令有效期 ②d）；改口令一律经 set_password_hash
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -37,3 +39,7 @@ class User(Base):
     @totp_secret.setter
     def totp_secret(self, value: str) -> None:
         self.totp_secret_enc = secretbox.encrypt(value)
+
+    def set_password_hash(self, value: str) -> None:
+        self.password_hash = value
+        self.password_changed_at = utcnow()

@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit, metrics, sessions
-from ..core.auth import current_user
+from ..core.auth import current_user, password_change_required, password_expired
 from ..core.config import get_settings
 from ..core.db import get_db, utcnow
 from ..core.permissions import roles_of
@@ -36,7 +36,8 @@ class MeOut(BaseModel):
     display_name: str
     roles: list[str]
     csrf_token: str
-    must_change_password: bool = False
+    must_change_password: bool = False   # 初始口令未改或口令已过有效期：前端转到改口令页
+    password_expired: bool = False
 
 
 class PasswordIn(BaseModel):
@@ -55,7 +56,8 @@ def _set_cookie(response: Response, token: str) -> None:
 def _me(db: Session, user: User, csrf: str) -> MeOut:
     return MeOut(username=user.username, display_name=user.display_name or user.username,
                  roles=sorted(roles_of(db, user.id)), csrf_token=csrf,
-                 must_change_password=user.must_change_password)
+                 must_change_password=password_change_required(user),
+                 password_expired=password_expired(user) and not user.must_change_password)
 
 
 def _as_aware(dt):
@@ -154,7 +156,7 @@ def change_password(body: PasswordIn, request: Request, response: Response, db: 
     if verify_password(user.password_hash, body.new_password):
         raise HTTPException(422, "新口令不能与当前口令相同")
 
-    user.password_hash = hash_password(body.new_password)
+    user.set_password_hash(hash_password(body.new_password))
     user.must_change_password = False
     user.failed_logins = 0
     db.commit()

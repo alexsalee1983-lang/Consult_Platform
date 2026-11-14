@@ -136,6 +136,8 @@ function Status({ u }) {
       <span className={`chip ${u.is_active ? "c-g" : "c-n"}`}>{u.is_active ? "启用" : "已停用"}</span>
       {u.locked && <span className="chip c-r">已锁定</span>}
       {u.must_change_password && <span className="chip c-a">待改初始口令</span>}
+      {!u.must_change_password && u.password_expired && <span className="chip c-a">口令已过期</span>}
+      {u.inactive && <span className="chip c-a" title="长期没有登录，确认不再使用的请停用">长期未登录</span>}
     </span>
   );
 }

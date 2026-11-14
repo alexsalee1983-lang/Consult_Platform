@@ -5,6 +5,8 @@
 # 模型文件在构建时下载一次并打进镜像，运行时不联网（HF_HUB_OFFLINE=1）。
 # 构建机连不上外网时：HF_ENDPOINT 指向公司内部的模型镜像站。
 FROM python:3.12-slim
+# 打上基础镜像发布后的系统安全更新（trivy 扫描，docs/安全扫描.md）
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /srv
 ARG PIP_INDEX_URL=https://pypi.org/simple

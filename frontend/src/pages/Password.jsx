@@ -18,6 +18,7 @@ export default function Password() {
   const { user, changePassword } = useAuth();
   const navigate = useNavigate();
   const forced = Boolean(user?.mustChangePassword);
+  const expired = forced && Boolean(user?.passwordExpired);  // 口令过了有效期（不是初始口令）
   const [form, setForm] = useState({ old: "", next: "", again: "" });
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -52,13 +53,18 @@ export default function Password() {
       <section className="pnl pad" style={{ maxWidth: 520 }} aria-label="修改口令">
         {forced && (
           <div className="blocked" role="note">
-            <div style={{ fontWeight: 700, color: "var(--amber)" }}>请先把初始口令改成只有你自己知道的口令</div>
-            <div className="sub" style={{ marginTop: 2 }}>初始口令由系统管理员转交，改完才能使用平台的其他功能。动态码不变。</div>
+            {expired ? <>
+              <div style={{ fontWeight: 700, color: "var(--amber)" }}>口令已超过有效期，请先修改</div>
+              <div className="sub" style={{ marginTop: 2 }}>平台要求定期更换口令，改完才能使用其他功能。动态码不变。</div>
+            </> : <>
+              <div style={{ fontWeight: 700, color: "var(--amber)" }}>请先把初始口令改成只有你自己知道的口令</div>
+              <div className="sub" style={{ marginTop: 2 }}>初始口令由系统管理员转交，改完才能使用平台的其他功能。动态码不变。</div>
+            </>}
           </div>
         )}
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <label className="field">
-            <span>{forced ? "初始口令" : "当前口令"}</span>
+            <span>{forced && !expired ? "初始口令" : "当前口令"}</span>
             <input type="password" autoComplete="current-password" value={form.old} onChange={set("old")} required autoFocus />
           </label>
           <label className="field">

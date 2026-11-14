@@ -8,6 +8,9 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"   # dev 开发 / test 测试机 / prod 生产
     database_url: str = "postgresql+psycopg://consult:consult@postgres:5432/consult"
+    # 知识区数据库（M5 ③，决策记录 2026-11-09）：单独的库、单独的账号，只放 kb_ 开头的表；
+    # 留空表示与 DATABASE_URL 同库（本地开发、单元测试），生产必须分库（启动自检会拒绝）。
+    kb_database_url: str = ""
     redis_url: str = "redis://redis:6379/0"
 
     # 对象存储（S3 接口，一期为自建 MinIO）；留空表示未启用（本地开发、单元测试）。
@@ -87,6 +90,9 @@ class Settings(BaseSettings):
 
     # 运行指标端口（core/metrics.py，docs/监控.md）：容器里设 9100，只在 docker 内部网络；0 = 不开
     metrics_port: int = 0
+    # ---- 备份（scripts/backup.sh 读同一个 .env 值）----
+    # 备份保留天数：超过的备份自动删除；删除记录据此写明“备份中的副本最迟清除日”（完成日 + 天数）。
+    backup_keep_days: int = 30
 
     # ---- 登录与会话 ----
     session_backend: str = "redis"          # redis；memory 只用于单元测试，生产环境拒绝启动
@@ -96,6 +102,8 @@ class Settings(BaseSettings):
     login_max_failures: int = 5             # 连续失败次数达到后锁定
     login_lock_minutes: int = 15
     password_min_length: int = 12
+    password_max_age_days: int = 90         # 口令有效期（等保自查 ②d），到期登录后只能改口令；0 = 不限
+    inactive_account_days: int = 90         # 超过这么多天没登录的账号在用户页标出，供管理员停用（不自动停用）
 
     # 第一个管理员：库里还没有任何用户时，启动时按这里创建一次。也可以用命令行创建：
     #   python -m app.cli create-user --username <名字>

@@ -19,15 +19,15 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements-dev.txt
-      - run: ruff check app tests alembic
+      - run: ruff check app tests alembic alembic_kb
       # 接口测试跑在平台数据库镜像上（PostgreSQL 16 + pgvector + zhparser），与生产一致
       - name: 构建并启动测试数据库
         working-directory: .
         run: |
           docker build -t consult-platform-postgres:ci deploy/postgres
           docker run -d --name testdb -e POSTGRES_DB=consult_test -e POSTGRES_USER=consult             -e POSTGRES_PASSWORD=consult -p 127.0.0.1:5432:5432 consult-platform-postgres:ci
-          for i in $(seq 1 30); do docker exec testdb pg_isready -U consult -d consult_test && exit 0; sleep 2; done
-          exit 1
+          for i in $(seq 1 30); do docker exec testdb pg_isready -U consult -d consult_test && break; sleep 2; done
+          docker exec testdb psql -U consult -d consult_test -qc "CREATE DATABASE consult_kb_test"   # 知识区分库（M5 ③）
       # 对象存储测试跑在平台 MinIO 镜像上（源码自建，开启服务端加密）；密钥每次随机生成
       - name: 构建并启动测试对象存储
         working-directory: .
@@ -42,10 +42,15 @@ jobs:
       - run: pytest -q
         env:
           TEST_DATABASE_URL: postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_test
+          TEST_KB_DATABASE_URL: postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_kb_test   # 知识区表在单独的库
           TEST_S3_ENDPOINT: 127.0.0.1:9000
           TEST_S3_ACCESS_KEY: ci-storage
       - name: 本地快速测试（SQLite）也要能通过
         run: pytest -q -x
+      - name: SQLite 分库（知识区表在第二个文件）也要能通过
+        run: pytest -q -x
+        env:
+          TEST_KB_SPLIT: "1"
 
   frontend:
     runs-on: ubuntu-latest
@@ -70,7 +75,7 @@ jobs:
       - name: 生成 .env（测试账号每次随机生成，不写死口令）
         run: |
           cp .env.example .env
-          sed -i '/^MINIO_SECRET_KEY=$/d; /^MINIO_KMS_SECRET_KEY=$/d; /^TOTP_KEYS=$/d' .env   # 下面随机生成
+          sed -i '/^MINIO_SECRET_KEY=$/d; /^MINIO_KMS_SECRET_KEY=$/d; /^TOTP_KEYS=$/d; /^KB_POSTGRES_PASSWORD=/d' .env   # 下面随机生成
           python3 - >> .env <<'PY'
           import base64, secrets
           print("TEST_ACCOUNT_USERNAME=ci-smoke")
@@ -80,6 +85,7 @@ jobs:
           print("MINIO_KMS_SECRET_KEY=ci-key:" + base64.b64encode(secrets.token_bytes(32)).decode())
           print("TOTP_KEYS=ci1:" + base64.b64encode(secrets.token_bytes(32)).decode())
           print("GRAFANA_ADMIN_PASSWORD=" + secrets.token_urlsafe(18))
+          print("KB_POSTGRES_PASSWORD=" + secrets.token_hex(16))
           PY
           # 接模拟模型（OpenAI 兼容），走网关的真实 HTTP 路径：重试、流式、可用性检查、用量计量
           sed -i 's|^LLM_BASE_URL=.*|LLM_BASE_URL=http://mock-llm:8000/v1|' .env
@@ -130,6 +136,14 @@ jobs:
           docker compose up -d --force-recreate --no-deps frontend
       - name: 后台任务链路（worker 执行自检任务：数据库 + 对象存储写读删）
         run: docker compose exec -T backend python -m app.cli selfcheck --wait 90
+      - name: 审计记录来源地址、容器日志轮转
+        run: |
+          n=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT count(*) FROM audit_logs WHERE action = 'auth.login' AND detail LIKE '%\"ip\": \"%'")
+          echo "带来源地址的登录审计：$n"; [ "$n" -gt 0 ]
+          for c in $(docker compose ps -q); do
+            docker inspect -f '{{.Name}} {{.HostConfig.LogConfig.Type}} {{index .HostConfig.LogConfig.Config "max-size"}}' "$c"
+            [ "$(docker inspect -f '{{index .HostConfig.LogConfig.Config "max-file"}}' "$c")" = "10" ]
+          done
       - name: TOTP 密钥加密存储（库里没有明文，轮换命令可执行）
         run: |
           n=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT count(*) FROM users WHERE totp_secret NOT LIKE 'v1:ci1:%'")
@@ -137,9 +151,22 @@ jobs:
           docker compose exec -T backend python -m app.cli totp-rekey
       - name: 中文分词可用（zhparser）
         run: |
-          out=$(docker compose exec -T postgres psql -U consult -d consult -Atc "SELECT to_tsvector('zh', '安全运营中心的值班制度')")
+          out=$(docker compose exec -T postgres psql -U consult -d consult_kb -Atc "SELECT to_tsvector('zh', '安全运营中心的值班制度')")
           echo "$out"
           echo "$out" | grep -q "值班"
+      - name: 知识区分库（知识区表只在 consult_kb；知识区账号不是超级用户、连不上主库；健康检查含知识区库）
+        run: |
+          q() { docker compose exec -T postgres psql -U consult -d "$1" -Atc "$2"; }
+          test "$(q consult "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "0"
+          test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "6"
+          test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename in ('projects','users','audit_logs')")" = "0"
+          test "$(q consult "select rolsuper::text from pg_roles where rolname='consult_kb'")" = "false"
+          kbpw=$(grep -E '^KB_POSTGRES_PASSWORD=' .env | cut -d= -f2)
+          if docker compose exec -T -e PGPASSWORD="$kbpw" postgres psql -h 127.0.0.1 -U consult_kb -d consult -Atc "select 1"; then
+            echo "知识区账号连上了主库"; exit 1; fi
+          docker compose exec -T -e PGPASSWORD="$kbpw" postgres psql -h 127.0.0.1 -U consult_kb -d consult_kb -Atc "select count(*) from kb_items"
+          curl -fsS http://localhost:8080/api/health | python3 -c "import json,sys; c=json.load(sys.stdin)['checks']; assert c['kb_database']=='ok', c"
+          docker compose exec -T postgres kb-init.sh   # 可重复执行
       - name: 网关重试（模拟模型第一次返回 503）
         run: |
           docker compose exec -T backend python - <<'PY'
@@ -207,6 +234,52 @@ jobs:
               assert e.code == 401, e.code
           print("监控就绪：", sorted(up), len(rules), "条告警规则")
           PY
+      - name: 备份与恢复演练（备份 → 新增数据 → 恢复 → 新增数据消失、备份时链头仍在链上、冒烟通过）
+        run: |
+          bash -n scripts/backup.sh && bash -n scripts/restore.sh
+          umask 077; head -c 32 /dev/urandom | base64 > /tmp/bk.pass; head -c 32 /dev/urandom | base64 > /tmp/wrong.pass
+          objects() { docker run --rm --volumes-from "$(docker compose ps -aq minio)" --user 0 --entrypoint sh \
+            "$(docker inspect -f '{{.Config.Image}}' "$(docker compose ps -aq minio)")" -c 'find /data -path /data/.minio.sys -prune -o -type f -print | wc -l'; }
+          before=$(objects)
+          BACKUP_PASSPHRASE_FILE=/tmp/bk.pass bash scripts/backup.sh /tmp/bk
+          d=$(ls -d /tmp/bk/20*Z | tail -1); s=$(basename "$d")
+          test -f "$d/objects.tar.gpg" && test -f "$d/kb.dump.gpg" && grep -q '"alembic_kb": "k0' "$d/manifest.json"
+          grep -q '"audit_head"' "$d/manifest.json" && test -s /tmp/bk/audit-heads.log
+          docker compose exec -T postgres psql -U consult -d consult_kb -qc "CREATE TABLE drill_marker (id int)"   # 备份后才有，恢复后应消失
+          ! grep -aq "audit_logs" "$d/db.dump.gpg"                   # 备份文件是密文
+          docker compose exec -T backend python -m app.cli create-project --code DRILL-A --tier standard \
+            --manager "$(grep -E '^TEST_ACCOUNT_USERNAME=' .env | cut -d= -f2)"
+          # 口令不对：解密失败，服务不受影响
+          ! RESTORE_CONFIRM="$s" BACKUP_PASSPHRASE_FILE=/tmp/wrong.pass bash scripts/restore.sh "$d"
+          curl -fsS http://localhost:8080/api/health >/dev/null
+          RESTORE_CONFIRM="$s" BACKUP_PASSPHRASE_FILE=/tmp/bk.pass bash scripts/restore.sh "$d"
+          n=$(docker compose exec -T postgres psql -U consult -d consult -tAc "select count(*) from projects where code='DRILL-A'")
+          test "$n" = "0"
+          test "$(objects)" = "$before"
+          test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename='drill_marker'")" = "0"
+          test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename like 'kb\_%'")" = "6"
+          docker compose exec -T postgres psql -U consult -d consult -tAc \
+            "select count(*) from audit_logs where action in ('backup.create','backup.restore')" | grep -qx 1   # 恢复的是备份时的库，只有恢复这一条
+          bash scripts/smoke_test.sh http://localhost:8080
+          rm -rf /tmp/bk /tmp/bk.pass /tmp/wrong.pass
+      - name: 镜像漏洞扫描（trivy，整套已构建镜像；有修复版本的高危、严重漏洞即失败）
+        env:
+          TRIVY_VERSION: "0.76.2"
+        run: |
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          dl="curl -sSfL --connect-timeout 20 --max-time 120 --retry 5 --retry-delay 15 --retry-all-errors"
+          $dl "$base/$tarball" -o "$tarball"
+          $dl "$base/trivy_${TRIVY_VERSION}_checksums.txt" -o trivy_checksums.txt
+          grep " $tarball\$" trivy_checksums.txt | sha256sum -c -
+          tar -xzf "$tarball" trivy
+          # 模拟模型只用于 CI 和测试机，不扫；误报或暂无法修复的写进 .trivyignore.yaml 并注明理由（docs/安全扫描.md）
+          fail=0
+          for img in $(docker compose --profile monitoring config --images | sort -u); do
+            echo "== $img"
+            ./trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --ignorefile .trivyignore.yaml --exit-code 1 "$img" || fail=1
+          done
+          exit $fail
       - if: failure()
         run: docker compose --profile mock-llm --profile monitoring logs --no-color | tail -200
       - if: always()
@@ -232,6 +305,11 @@ jobs:
         run: |
           pip install pip-audit==2.7.3
           pip-audit -r backend/requirements-dev.txt
+
+      - name: Python 代码静态检查（bandit，中危及以上即失败）
+        run: |
+          pip install bandit==1.9.4
+          bandit -q -r backend/app -ll
 
       - name: 前端依赖漏洞扫描（npm audit）
         working-directory: frontend

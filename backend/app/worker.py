@@ -27,7 +27,7 @@ POLL_SECONDS = 5
 SCAN_SECONDS = 3600        # 到期删除扫描间隔（平台规则自动发起到期删除，M4 ②）
 HEARTBEAT_TTL = 30
 HEARTBEAT_PREFIX = "worker:heartbeat:"
-ALIVE_FILE = Path(os.environ.get("WORKER_ALIVE_FILE", "/tmp/worker.alive"))
+ALIVE_FILE = Path(os.environ.get("WORKER_ALIVE_FILE", "/tmp/worker.alive"))  # nosec B108  容器内存活标记，不含数据
 
 log = logging.getLogger("worker")
 _stop = False

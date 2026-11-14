@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import func, select
+from sqlalchemy import func, make_url, select
 from sqlalchemy.orm import Session
 
 from ..models import Project, ProjectMember, User
 from . import audit, secretbox
+from .auth import password_expired
+from .db import utcnow
 from .config import Settings
 from .permissions import CONSULTANT, PROJECT_MANAGER, PROJECT_MEMBER, SYS_ADMIN, roles_of, set_roles
 from .security import check_password_policy, hash_password, is_valid_totp_secret, verify_password
@@ -45,6 +47,13 @@ def check_settings(s: Settings) -> None:
             raise BootstrapError("生产环境必须配置 TOTP_KEYS（账号 TOTP 密钥加密存储，生成方法见 .env.example）")
     except secretbox.SecretBoxError as e:
         raise BootstrapError(str(e)) from e
+    if s.is_prod and (not s.kb_database_url or s.kb_database_url == s.database_url):
+        raise BootstrapError("生产环境知识区必须单独建库（KB_DATABASE_URL，账号与主库不同，见 docs/知识区分库.md）")
+    if s.kb_database_url and not s.kb_database_url.startswith("sqlite"):
+        main, kb = make_url(s.database_url), make_url(s.kb_database_url)
+        # 库必须不同；账号不同只在生产强制（CI、本地测试的两个测试库用同一个账号）
+        if (kb.host, kb.port, kb.database) == (main.host, main.port, main.database)                 or (s.is_prod and kb.username == main.username):
+            raise BootstrapError("知识区要用单独的数据库和单独的账号（KB_DATABASE_URL 的库名、用户名都要与主库不同）")
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
 
@@ -91,9 +100,12 @@ def ensure_initial_users(db: Session, s: Settings) -> None:
         elif not verify_password(user.password_hash, s.test_account_password) or \
                 user.totp_secret != s.test_account_totp_secret:
             # 测试机改了 .env 里的测试账号口令或密钥时同步过来
-            user.password_hash = hash_password(s.test_account_password)
+            user.set_password_hash(hash_password(s.test_account_password))
             user.totp_secret = s.test_account_totp_secret
             user.totp_last_step = 0
+            db.commit()
+        if password_expired(user):  # 测试账号口令由 .env 管，不让有效期卡住冒烟测试
+            user.password_changed_at = utcnow()
             db.commit()
         if not roles_of(db, user.id):  # 登录 PR 时期建的测试账号还没有角色
             set_roles(db, user, {CONSULTANT}, granted_by="system")

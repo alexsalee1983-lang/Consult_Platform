@@ -1,6 +1,8 @@
 # 构建范围是仓库根目录（docker-compose.yml 里 context: .），这样 agents/ 的 md 能打进镜像：
 # 镜像 = 某个版本的代码 + 同一版本的 Agent md，可追溯。根目录的 .dockerignore 限定只带入需要的文件。
 FROM python:3.12-slim
+# 打上基础镜像发布后的系统安全更新（trivy 扫描，docs/安全扫描.md）
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,6 +16,7 @@ RUN pip install -i ${PIP_INDEX_URL} -r requirements.txt
 
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
+COPY backend/alembic_kb ./alembic_kb
 COPY backend/app ./app
 # Agent md：运行时从 /srv/agents 读取（测试机可用只读挂载覆盖，改 md 不用重建镜像）
 COPY agents ./agents
