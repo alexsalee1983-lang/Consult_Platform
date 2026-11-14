@@ -4,6 +4,7 @@ GET  /api/kb/items                       条目列表（筛选：layer、product
 POST /api/kb/items                       新建条目和第 1 版草稿（从去标识通过的投料，或公开资料直接填写）
 GET  /api/kb/items/{doc_id}              条目详情：元数据、现行版本、版本历史
 POST /api/kb/items/{doc_id}/versions     基于现行版本建新草稿（修订）
+GET  /api/kb/items/{doc_id}/usage        被引用情况：引用它的项目数、交付件数、章节数（知识侧角色；不返回项目代号，二期 B4）
 POST /api/kb/items/{doc_id}/retire       下线（知识管理员）
 POST /api/kb/items/{doc_id}/reconfirm    复审确认仍有效，复审日期顺延一个周期（知识专家）
 GET  /api/kb/versions/{id}               版本详情：正文、审核记录、与现行版本的差异、相似条目
@@ -34,6 +35,7 @@ from ..kb import meta as kb_meta
 from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
+from ..project import kb_impact
 from ..models import KbItem, KbVersion, User
 
 router = APIRouter(prefix="/api/kb", tags=["kb"], dependencies=[Depends(require_business)])
@@ -246,6 +248,20 @@ def get_item(doc_id: str, db: Session = Depends(get_db), user: User = Depends(cu
     versions = item.versions if rv.is_knowledge_user(db, user) else [
         v for v in item.versions if v.id == item.current_version_id]
     return _item_out(db, item, ItemDetail, versions)
+
+
+class UsageOut(BaseModel):
+    projects: int
+    deliverables: int
+    sections: int
+
+
+@router.get("/items/{doc_id}/usage", response_model=UsageOut)
+def item_usage(doc_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    if not rv.is_knowledge_user(db, user):
+        raise HTTPException(403, "只有知识专家、知识管理员能查看条目的引用情况")
+    item = _item(db, doc_id, user)
+    return kb_impact.usage_counts(db, item.doc_id)
 
 
 @router.post("/items/{doc_id}/versions", response_model=VersionOut, status_code=201)
