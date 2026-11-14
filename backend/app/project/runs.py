@@ -1,10 +1,16 @@
-"""交付链编排（M3 ④）：标准档交付链 3→4→7，平台自写流程控制（决策记录 2026-11-10，不用 LangGraph）。
+"""交付链编排（M3 ④；二期 A2～A5 起步骤来自项目配置快照），平台自写流程控制（决策记录 2026-11-10，不用 LangGraph）。
 
-步骤（《Agent组开发项目方案》第五节）：
-  ③ facts  调研访谈 Agent：读本项目证据（纪要、资料、现场观察）→ 写 D3 事实清单
-  ④ gap    依据与差距分析 Agent：读 D3、检索依据库 → 差距分析表、业务影响 TOP 5、依据库缺口
-           （该 Agent 没有写交付件的授权，产出存在运行记录里，作为下一步输入）
-  ⑦ draft  报告与汇报 Agent：读差距分析和 D3 → 写 D4 现状评估报告初稿
+SOC 的步骤（《Agent组开发项目方案》第五节，配置在 products/soc.yaml）：
+  ③ facts       调研访谈 Agent：读本项目证据（纪要、资料、现场观察）→ 写 D3 事实清单
+  ④ gap         依据与差距分析 Agent：读 D3、检索依据库 → 差距分析表、业务影响 TOP 5、依据库缺口（存运行记录）
+  ⑤ design      方案设计 Agent：读差距分析和 D3 → 目标运营模型、路线图草案（存运行记录；方案取舍发卡暂停）
+  ⑥ policy      制度起草 Agent：读目标运营模型和 D3 → 写 D6 制度文件包
+  ⑦ draft       报告与汇报 Agent：读差距分析和 D3 → 写 D4 现状评估报告初稿
+  ⑦ design_doc  报告与汇报 Agent：读目标运营模型和差距分析 → 写 D5 设计方案
+  ⑦ roadmap     报告与汇报 Agent：同上 → 写 D7 实施路线图
+  ⑦ briefing    报告与汇报 Agent：读 D4、D5、D7 → 写 D8 高层汇报
+  没有 doc.generate 授权的 Agent（依据与差距分析、方案设计）产出存运行记录，按 inputs 的 run:<key> 交给后续步骤。
+  输入按配置 inputs 拼（_step_inputs）：第一项是主输入，没有内容本步失败。
 
 规则：
 - 每一步是一个后台任务（jobs 种类 agent_run.step），可重复执行：任务开始先看运行状态，不是 queued 就什么也不做。
@@ -16,7 +22,7 @@
   停在下一步之前。顾问把本次运行等待的卡都处理完后自动继续，处理结果作为“顾问已确认事项”交给后续步骤。
 - 严格档（M4 ④b）：证据是去标识摘要卡 S-xx（经 project.evidence），输出加 STRICT_RULES（标 [S-xx]、只用占位符）；
   写入时平台查占位符，不过的本步失败（不保存）。同一项目同时只能有一个未结束的运行；
-  要写入的交付件（D3、D4）已签署的不跑（422，测试 #41）。
+  要写入的交付件（任何一步的 output）已签署的不跑（422，测试 #41）。
 - 取消（测试 #41）：取消与 worker 改运行状态都先锁住运行这一行（SELECT … FOR UPDATE）再判断状态，
   worker 不会把“已取消”改回去。模型返回后、写入交付件和发卡之前再看一次状态，已取消就什么也不写；
   正在写入的那一小段里取消的，本步写完即停，运行保持“已取消”，不再发下一步。
@@ -283,9 +289,38 @@ def _evidence_input(db: Session, user: User, agent: str, project: Project) -> st
     return "\n\n".join(parts)
 
 
-def _doc_input(step: Step) -> str:
-    """这一步读的交付件（配置 inputs 里不是 run: 开头的第一项）。"""
-    return next(i for i in step.inputs if i not in ("evidence",) and not i.startswith("run:"))
+def _step_inputs(db: Session, project: Project, run: AgentRun, step: Step) -> tuple[str, str]:
+    """按配置 inputs 拼这一步的输入材料和检索词（二期 A5：不再按步骤 key 写死）。
+
+    run:<key> 是本次运行里那一步的产出，Dx 是交付件当前版本。第一项是主输入：没有内容本步失败，
+    检索词 = 配置的 query + 主输入前 200 字；其余输入没有内容就略过。小标题与一期 3→4→7 的写法一致。
+    """
+    chain = {s.key: s for s in steps(db, project)}
+    blocks: list[str] = []
+    head = ""
+    for i, inp in enumerate(step.inputs):
+        if inp.startswith("run:"):
+            src = chain.get(inp[4:])
+            label = src.name if src else inp[4:]
+            text = _last_output(run, inp[4:])
+            if not text and i == 0:
+                raise StepFailed(f"没有{label}结果")
+            title = f"{label}（第 {src.number if src else '?'} 步产出）"
+        else:
+            d = deliverables.get_deliverable(db, project, inp)
+            label = d.title if d else inp
+            text = _deliverable_text(db, project, inp)
+            if not text and i == 0:
+                raise StepFailed(f"{inp} {label}还没有正文")
+            title = f"{inp} {label}（当前版本）"
+        if i == 0:
+            head = text
+        if text or i > 0:
+            blocks.append(f"# {title}\n\n{text}")
+    joined = "\n\n".join(blocks)
+    if len(blocks) > 1:
+        joined = joined[:INPUT_CHARS * max(2, len(blocks))]
+    return joined, f"{step.query} {head[:200]}"
 
 
 def _deliverable_text(db: Session, project: Project, code: str) -> str:
@@ -404,26 +439,14 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     record = AgentRunStep(run_id=run.id, step=step.key, agent_code=step.agent, status="done",
                           prompt_version=doc.version, refs={})
     try:
-        if step.key == "facts":
+        if "evidence" in step.inputs:
             material = _evidence_input(db, user, step.agent, project)
             if not material:
                 _ask_for_evidence(db, user, project, run, step, record)
                 return
             inputs, query = f"# 本项目证据\n\n{material}", step.query
-        elif step.key == "gap":
-            src = _doc_input(step)
-            facts = _deliverable_text(db, project, src)
-            if not facts:
-                raise StepFailed(f"{src} 事实清单还没有正文")
-            inputs, query = f"# {src} 事实清单（当前版本）\n\n{facts}", f"{step.query} {facts[:200]}"
         else:
-            gap = _last_output(run, "gap")
-            if not gap:
-                raise StepFailed("没有差距分析结果")
-            src = _doc_input(step)
-            facts = _deliverable_text(db, project, src)
-            inputs = f"# 差距分析（第 4 步产出）\n\n{gap}\n\n# {src} 事实清单（当前版本）\n\n{facts}"[:INPUT_CHARS * 2]
-            query = f"{step.query} {gap[:200]}"
+            inputs, query = _step_inputs(db, project, run, step)
         kb_block, refs = knowledge.retrieve(db, user, step.agent, project, query)
     except tools.ToolError as e:
         raise StepFailed(f"工具调用被拒绝（{e.status}）") from e

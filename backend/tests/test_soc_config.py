@@ -1,4 +1,4 @@
-"""SOC 搬进配置（二期 A2，“只搬不改”）：products/soc.yaml 渲染出来的交付链必须和一期写在代码里的完全一致。
+"""SOC 搬进配置（二期 A2，“只搬不改”）：products/soc.yaml 渲染出来的一期三步必须和一期写在代码里的完全一致。
 
 下面的常量是一期 runs.py 里的原文（v1.0），只用于核对，改配置时这里不跟着改——要改提示词就是改行为，需另行验收。
 """
@@ -30,12 +30,15 @@ OLD_INSTRUCTIONS = {
 
 
 def test_soc_chain_unchanged() -> None:
-    chain = runs.chain_of(config.compose_codes("SOC"))
+    """一期的 3→4→7 三步原样保留；A5 补的步骤（第 5、6 步和第 7 步 D5、D7、D8）另行验收，这里只核对位置。"""
+    chain = [s for s in runs.chain_of(config.compose_codes("SOC")) if s.key in OLD_QUERIES]
+    assert [s.key for s in runs.chain_of(config.compose_codes("SOC"))] == [
+        "facts", "gap", "design", "policy", "draft", "design_doc", "roadmap", "briefing"]
     assert [(s.key, s.number, s.agent, s.deliverable, s.name) for s in chain] == OLD_STEPS
     assert {s.key: s.instruction for s in chain} == OLD_INSTRUCTIONS
     assert {s.key: s.query for s in chain} == OLD_QUERIES
     assert {s.key: f"第 {s.number} 步 {s.name}" for s in chain} == {"facts": "第 3 步 整理事实清单", "gap": "第 4 步 差距分析", "draft": "第 7 步 现状评估报告初稿"}
-    assert [runs._doc_input(s) for s in chain[1:]] == ["D3", "D3"]
+    assert [s.inputs for s in chain] == [("evidence",), ("D3",), ("run:gap", "D3")]
 
 
 def test_soc_deliverables_match_seed() -> None:

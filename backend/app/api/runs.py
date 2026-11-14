@@ -1,6 +1,7 @@
 """交付链运行（M3 ④ Agent 编排）。要求业务角色；只有项目成员能看能发起，非成员一律 404。
 
-POST /api/projects/{code}/runs                 发起一次标准档交付链运行（3→4→7），202，后台执行
+POST /api/projects/{code}/runs                 发起一次交付链运行（步骤按项目配置快照），202，后台执行
+GET  /api/projects/{code}/chain                本项目交付链的步骤（驾驶舱进度条用）
 GET  /api/projects/{code}/runs                 本项目的运行列表（新的在前）
 GET  /api/projects/{code}/runs/{rid}           某次运行：状态、每步记录、发过的确认卡、差距分析产出
 POST /api/projects/{code}/runs/{rid}/cancel    取消未结束的运行
@@ -11,12 +12,14 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import project_for_member, require_business
-from ..models import AgentRun, Project, User
+from ..models import Agent, AgentRun, Project, User
+from ..products import config
 from ..project import runs as svc
 
 router = APIRouter(prefix="/api/projects", tags=["runs"], dependencies=[Depends(require_business)])
@@ -87,6 +90,27 @@ def start(code: str, db: Session = Depends(get_db), user: User = Depends(current
     except svc.RunError as e:
         raise HTTPException(e.status, str(e)) from e
     return _out(db, project, run)
+
+
+class ChainStepOut(BaseModel):
+    key: str
+    number: int
+    name: str
+    agent: str
+    agent_name: str
+    output: str                  # 写入的交付件；空 = 产出存运行记录
+
+
+@router.get("/{code}/chain", response_model=list[ChainStepOut])
+def chain(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    project = project_for_member(db, code, user)
+    try:
+        chain_steps = svc.steps(db, project)
+    except config.CatalogError as e:
+        raise HTTPException(503, "服务产品配置有问题，交付链暂不可用") from e
+    names = {a.code: a.name for a in db.scalars(select(Agent))}
+    return [ChainStepOut(key=s.key, number=s.number, name=s.name, agent=s.agent,
+                         agent_name=f"{names.get(s.agent, s.agent)} Agent", output=s.deliverable) for s in chain_steps]
 
 
 @router.get("/{code}/runs", response_model=list[RunOut])
