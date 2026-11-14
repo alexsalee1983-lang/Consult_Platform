@@ -438,6 +438,22 @@ def usage_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def catalog_check(args: argparse.Namespace) -> int:
+    """校验 products/、modules/ 下的服务产品与模块配置（二期 A1，docs/接口约定.md）。"""
+    from .products import config
+
+    cat = config.load()
+    for prod in cat.products.values():
+        print(f"产品 {prod.code} {prod.name}（{prod.status}，版本 {prod.version}）：交付件 {len(prod.deliverables)} 个、"
+              f"交付链 {len(prod.chain)} 步、门禁 {len(prod.gates)} 条")
+    for mod in cat.modules.values():
+        print(f"模块 {mod.code} {mod.name}（{mod.status}，版本 {mod.version}）：可挂 {'、'.join(mod.products)}")
+    for problem in cat.problems:
+        print(f"问题：{problem}", file=sys.stderr)
+    print(f"共 {len(cat.products)} 个产品、{len(cat.modules)} 个模块、{len(cat.problems)} 个问题")
+    return 1 if cat.problems else 0
+
+
 def jobs_status(args: argparse.Namespace) -> int:
     from .models import Job
     from .services import jobs
@@ -649,6 +665,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="汇总维度，逗号分隔：username / project_code / model")
     us.set_defaults(func=usage_report)
     sub.add_parser("jobs", help="后台任务状态").set_defaults(func=jobs_status)
+    sub.add_parser("catalog-check", help="校验服务产品与模块配置（products/、modules/）").set_defaults(func=catalog_check)
     sc = sub.add_parser("selfcheck", help="排一个 worker 自检任务并等待结果（成功退出码 0）")
     sc.add_argument("--wait", type=int, default=60)
     sc.set_defaults(func=selfcheck)
