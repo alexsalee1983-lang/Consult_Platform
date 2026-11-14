@@ -3,6 +3,7 @@
     docker compose exec backend python -m app.cli create-user --username zhangsan --display-name 张三
     docker compose exec backend python -m app.cli unlock --username zhangsan
     docker compose exec backend python -m app.cli reset-totp --username zhangsan
+    docker compose exec backend python -m app.cli totp-rekey      # 轮换 TOTP_KEYS 后重新加密全部账号的 TOTP 密钥
     docker compose exec backend python -m app.cli grant-role --username zhangsan --role consultant
     docker compose exec backend python -m app.cli grant-role --username wangwu --role security_auditor
     docker compose exec backend python -m app.cli list-users
@@ -31,7 +32,7 @@ import sys
 
 from sqlalchemy import select
 
-from .core import audit, sessions
+from .core import audit, secretbox, sessions
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .core.migrate import upgrade_to_head
@@ -111,6 +112,29 @@ def reset_totp(args: argparse.Namespace) -> int:
     _show_totp(secret, args.username)
     print(f"已重置 {args.username} 的动态码，该用户的现有会话已全部失效")
     return 0
+
+
+def totp_rekey(args: argparse.Namespace) -> int:
+    """用 TOTP_KEYS 的第一把密钥重新加密全部账号的 TOTP 密钥（含加密前的明文）。不打印密钥。"""
+    if not secretbox.keys():
+        print("没有配置 TOTP_KEYS，无法加密", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        users = db.scalars(select(User)).all()
+        todo = [u for u in users if secretbox.needs_rekey(u.totp_secret_enc)]
+        failed = 0
+        for user in todo:
+            try:
+                user.totp_secret = user.totp_secret
+            except secretbox.SecretBoxError as e:
+                failed += 1
+                print(f"{user.username}：{e}", file=sys.stderr)
+        db.commit()
+        audit.record(db, actor="cli", action="user.totp_rekey", result="allowed" if not failed else "error",
+                     count=len(todo) - failed, failed=failed, key_id=secretbox.keys()[0][0])
+    print(f"已用密钥 {secretbox.keys()[0][0]} 重新加密 {len(todo) - failed} 个账号（共 {len(users)} 个）"
+          + (f"，{failed} 个失败" if failed else ""))
+    return 0 if not failed else 2
 
 
 def _change_role(args: argparse.Namespace, grant: bool) -> int:
@@ -278,6 +302,18 @@ def deletion_report(args: argparse.Namespace) -> int:
             print(f"#{d.id:<4} {d.project.code:<12} {deletion.KIND_NAMES[d.kind]:<12} {names[d.status]:<4} "
                   f"应完成 {d.due_by.isoformat()}  确认 {d.confirmed_by or '-'}  完成 {done}  "
                   f"回流 {deletion.FLOWBACK.get(d.flowback, '-')}")
+    return 0
+
+
+def backup_record(args: argparse.Namespace) -> int:
+    """备份、恢复脚本（scripts/backup.sh、restore.sh）完成后记一条审计：只有时间戳、链头编号和字节数。"""
+    if not re.fullmatch(r"\d{8}T\d{6}Z", args.stamp):
+        print("--stamp 格式为 20270110T020000Z", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        audit.record(db, actor="cli", action=f"backup.{args.op}", result="allowed", stamp=args.stamp,
+                     head_id=args.head_id, bytes=args.bytes)
+    print(f"已记录 backup.{args.op} {args.stamp}")
     return 0
 
 
@@ -464,6 +500,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--username", required=True)
     r.set_defaults(func=reset_totp)
     role_help = "，".join(f"{k}={v}" for k, v in ROLE_NAMES.items())
+    sub.add_parser("totp-rekey", help="用 TOTP_KEYS 第一把密钥重新加密全部账号的 TOTP 密钥（密钥轮换后执行）")         .set_defaults(func=totp_rekey)
     g = sub.add_parser("grant-role", help="授予系统角色（安全审计员只能用此命令授予）")
     g.add_argument("--username", required=True)
     g.add_argument("--role", required=True, choices=sorted(ROLE_NAMES), help=role_help)
@@ -524,6 +561,12 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
     ke.add_argument("--out", default="", help="把明细写成 JSON 文件")
     ke.set_defaults(func=kb_eval)
+    br = sub.add_parser("backup-record", help="备份 / 恢复脚本完成后记审计（由 scripts/backup.sh、restore.sh 调用）")
+    br.add_argument("--op", choices=["create", "restore"], required=True)
+    br.add_argument("--stamp", required=True)
+    br.add_argument("--head-id", type=int, default=0)
+    br.add_argument("--bytes", type=int, default=0)
+    br.set_defaults(func=backup_record)
     args = p.parse_args(argv)
     upgrade_to_head()
     return args.func(args)

@@ -6,6 +6,9 @@
 *.env
 *.pem
 *.key
+# TLS 证书目录只提交说明
+deploy/tls/*
+!deploy/tls/README.md
 
 # Python
 __pycache__/
@@ -28,3 +31,7 @@ frontend/dist/
 # 客户资料不得进入代码仓
 data/
 uploads/
+
+# 本地备份目录（scripts/backup.sh 默认位置），不提交
+backups/
+backend/tests/test_kb.db

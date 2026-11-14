@@ -3,14 +3,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import DataError
 
 from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health,
                   kb, kb_items, projects, quality, runs)
+from .core import audit as core_audit
 from .core.auth import authenticate
-from .core.bootstrap import check_settings, ensure_initial_users, ensure_test_memberships
+from .core.bootstrap import check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
 from .core.config import get_settings
 from .core.db import SessionLocal
-from .core.errors import validation_error_handler
+from .core.errors import out_of_range_handler, reject_control_chars, validation_error_handler
 from .core.migrate import upgrade_to_head
 from .services import storage
 from .seed import seed, seed_signed_sample
@@ -23,6 +25,7 @@ check_settings(_settings)  # 配置不安全时直接拒绝启动
 async def lifespan(app: FastAPI):
     upgrade_to_head()
     with SessionLocal() as db:
+        encrypt_plaintext_rows(db)
         ensure_initial_users(db, _settings)
         if _settings.seed_demo_data:
             seed(db)
@@ -40,13 +43,18 @@ async def lifespan(app: FastAPI):
 # 生产环境不开放接口文档
 app = FastAPI(
     title="安全咨询 Agent 平台", version="0.1.0", lifespan=lifespan,
-    dependencies=[Depends(authenticate)],
+    dependencies=[Depends(authenticate), Depends(reject_control_chars)],
     docs_url=None if _settings.is_prod else "/docs",
     redoc_url=None,
     openapi_url=None if _settings.is_prod else "/openapi.json",
 )
 # 422 不回显请求原文（口令、客户原文），见 core/errors.py
 app.add_exception_handler(RequestValidationError, validation_error_handler)
+# 超出数据库列范围的输入按 422 处理（渗透测试 M5 ⑦）
+app.add_exception_handler(OverflowError, out_of_range_handler)
+app.add_exception_handler(DataError, out_of_range_handler)
+# 审计记录来源地址（core/audit.py）
+app.add_middleware(core_audit.ClientIPMiddleware)
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)

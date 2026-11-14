@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # 配置了但文件不存在时拒绝导出，不退回默认模板。
     export_template: str = ""
 
+    # ---- 备份（scripts/backup.sh 读同一个 .env 值）----
+    # 备份保留天数：超过的备份自动删除；删除记录据此写明“备份中的副本最迟清除日”（完成日 + 天数）。
+    backup_keep_days: int = 30
+
     # ---- 登录与会话 ----
     session_backend: str = "redis"          # redis；memory 只用于单元测试，生产环境拒绝启动
     session_idle_minutes: int = 30          # 无操作超时
@@ -93,6 +97,8 @@ class Settings(BaseSettings):
     login_max_failures: int = 5             # 连续失败次数达到后锁定
     login_lock_minutes: int = 15
     password_min_length: int = 12
+    password_max_age_days: int = 90         # 口令有效期（等保自查 ②d），到期登录后只能改口令；0 = 不限
+    inactive_account_days: int = 90         # 超过这么多天没登录的账号在用户页标出，供管理员停用（不自动停用）
 
     # 第一个管理员：库里还没有任何用户时，启动时按这里创建一次。也可以用命令行创建：
     #   python -m app.cli create-user --username <名字>
@@ -105,6 +111,9 @@ class Settings(BaseSettings):
     test_account_username: str = ""
     test_account_password: str = ""
     test_account_totp_secret: str = ""
+
+    # TOTP 密钥加密存储（core/secretbox.py）：编号:base64(32 字节)，逗号分隔，第一把加密、其余只解密；生产必须配置
+    totp_keys: str = ""
 
     @property
     def is_prod(self) -> bool:

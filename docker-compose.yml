@@ -4,8 +4,17 @@ name: consult-platform
 # 数据库、缓存只在内部网络可达；调试端口绑定在 127.0.0.1。
 # 对象存储（项目区 / 知识区文件）：MinIO 源码自建镜像，只在内部网络可达，见 deploy/minio/README.md。
 
+# 容器日志轮转（等保自查 ②c）：每个服务最多保留 10 个 20 MB 的日志文件，避免占满磁盘。
+# 日志不记客户原文；集中收集（公司日志平台）由部署方在 docker-compose.override.yml 里改 logging 驱动，见部署手册。
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "${LOG_MAX_SIZE:-20m}"
+    max-file: "${LOG_MAX_FILE:-10}"
+
 services:
   postgres:
+    logging: *default-logging
     # PostgreSQL 16 + pgvector + zhparser 中文分词，见 deploy/postgres/README.md
     build:
       context: ./deploy/postgres
@@ -27,6 +36,7 @@ services:
       retries: 20
 
   redis:
+    logging: *default-logging
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
@@ -39,6 +49,7 @@ services:
       retries: 20
 
   minio:
+    logging: *default-logging
     # 对象存储（S3 接口），见 deploy/minio/README.md。不映射端口，只有后端在内部网络访问
     build:
       context: ./deploy/minio
@@ -59,6 +70,7 @@ services:
       - miniodata:/data
 
   embed:
+    logging: *default-logging
     # 向量服务：CPU 上运行小型中文向量模型（BAAI/bge-small-zh-v1.5，512 维），OpenAI 兼容 /v1/embeddings，
     # 见 tools/embed。模型在构建时下载进镜像，运行时不联网；不映射端口。公司模型平台的 embedding 就绪后，
     # 在 .env 设 EMBED_BASE_URL / EMBED_MODEL 指向它，可以不再启动本服务（决策记录 2026-11-08）。
@@ -71,6 +83,7 @@ services:
     restart: unless-stopped
 
   rerank:
+    logging: *default-logging
     # 重排服务（决策记录 2026-11-11）：CPU 上运行交叉编码重排模型 bge-reranker-v2-m3（默认 int8 量化版，约 0.6 GB），
     # /v1/rerank，见 tools/rerank。知识检索在 RRF 融合后用它给候选片段重新打分；模型在构建时下载进镜像，运行时不联网；不映射端口。
     # 换完整版：.env 设 RERANK_MODEL=BAAI/bge-reranker-v2-m3 和 RERANK_IMAGE_TAG=bge-reranker-v2-m3，重新构建 rerank 并重建 backend。
@@ -87,6 +100,7 @@ services:
     restart: unless-stopped
 
   backend:
+    logging: *default-logging
     build:
       context: .                      # 仓库根目录：带上 agents/ 的 md（见 backend/Dockerfile、.dockerignore）
       dockerfile: backend/Dockerfile
@@ -119,6 +133,7 @@ services:
     # 运行时按文件修改时间自动重新加载，git pull 后不用重建镜像。生产环境不要挂载，md 随镜像发版。
 
   worker:
+    logging: *default-logging
     # 后台任务（解析、向量化、到期删除），与 backend 同一镜像，见 backend/app/worker.py。
     # 不开放端口；等 backend 健康（迁移已完成）后再启动。可用 --scale worker=2 起多个，任务不会重复执行。
     build:
@@ -150,6 +165,7 @@ services:
       start_period: 20s
 
   frontend:
+    logging: *default-logging
     build:
       context: ./frontend
       args:
@@ -158,13 +174,21 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    # HTTPS：TLS_DIR 下有 server.crt 和 server.key 时启用（80 只做跳转），没有时只用 HTTP；APP_ENV=prod 没有证书拒绝启动
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      WEB_TLS_PORT: ${WEB_TLS_PORT:-8443}
+    volumes:
+      - ${TLS_DIR:-./deploy/tls}:/etc/nginx/tls:ro
     ports:
       - "${WEB_PORT:-8080}:80"
+      - "${WEB_TLS_PORT:-8443}:443"
 
   # 模拟大模型（OpenAI 兼容），只在 CI 和测试机上按需启动，不对外开放端口：
   #   docker compose --profile mock-llm up -d --build
   # 并在 .env 设 LLM_BASE_URL=http://mock-llm:8000/v1。生产环境不要启用这个 profile。
   mock-llm:
+    logging: *default-logging
     profiles: ["mock-llm"]
     build:
       context: ./tools/mock_llm

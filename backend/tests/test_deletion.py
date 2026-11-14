@@ -113,6 +113,7 @@ def test_early_deletion_flow(monkeypatch):
         assert rec["project_code"] == code and rec["flowback"] == "done" and rec["flowback_refs"] == [up_id]
         assert rec["counts"]["evidences"] == 1 and rec["counts"]["section_versions"] == 1
         assert rec["counts"]["messages"] == 1 and rec["counts"]["members"] == 2 and rec["on_time"] is True
+        assert rec["backups_purged_by"] == (date.fromisoformat(rec["completed_at"][:10]) + timedelta(days=30)).isoformat()
         assert "交付件（含已签署的最终版本）及全部章节版本" in rec["scope"]
     finally:
         for x in (c, m, ld):

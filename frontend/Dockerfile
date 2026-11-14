@@ -11,6 +11,10 @@ RUN npm run build
 FROM nginx:1.30.6-alpine
 # 打上基础镜像发布后的系统安全更新（trivy 扫描，docs/安全扫描.md）
 RUN apk upgrade --no-cache
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# 站点配置：启动时由 select-conf.sh 按是否挂载证书选 HTTP 或 HTTPS（生产必须 HTTPS）
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY nginx/app.inc /etc/nginx/app.inc
+COPY nginx/http.conf nginx/https.conf /etc/nginx/sites/
+COPY --chmod=0755 nginx/select-conf.sh /docker-entrypoint.d/40-select-conf.sh
 COPY --from=build /web/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 80 443
