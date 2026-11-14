@@ -117,10 +117,11 @@ services:
       MINIO_ENDPOINT: minio:9000
       EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
       RERANK_BASE_URL: ${RERANK_BASE_URL-http://rerank:8000/v1}
+      METRICS_PORT: 9100              # 运行指标（docs/监控.md），只在内部网络，不映射
       # 内部服务一律直连：宿主机若在 ~/.docker/config.json 配了代理，Docker 会把 HTTP_PROXY 注入容器，
       # 不列在这里的内部地址会被绕到外部代理上。新增内部服务时同步加到这里。
-      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend
-      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend,prometheus,grafana
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend,prometheus,grafana
     depends_on:
       postgres:
         condition: service_healthy
@@ -153,10 +154,11 @@ services:
       MINIO_ENDPOINT: minio:9000
       EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
       RERANK_BASE_URL: ${RERANK_BASE_URL-http://rerank:8000/v1}
+      METRICS_PORT: 9100              # 运行指标（docs/监控.md），只在内部网络，不映射
       # 内部服务一律直连：宿主机若在 ~/.docker/config.json 配了代理，Docker 会把 HTTP_PROXY 注入容器，
       # 不列在这里的内部地址会被绕到外部代理上。新增内部服务时同步加到这里。
-      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend
-      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend,prometheus,grafana
+      no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend,prometheus,grafana
     command: ["python", "-m", "app.worker"]
     depends_on:
       backend:
@@ -200,7 +202,51 @@ services:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     restart: unless-stopped
 
+  # 监控（M5 ⑤，docs/监控.md）：自建 Prometheus + Grafana，只在内网，不联网。按需启动：
+  #   docker compose --profile monitoring up -d
+  # Prometheus 不映射端口；Grafana 只绑定本机 127.0.0.1，经堡垒机 SSH 隧道访问。
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v3.16.0-distroless
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+    volumes:
+      - ./deploy/monitoring/prometheus:/etc/prometheus:ro
+      - promdata:/prometheus
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:13.3.1
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    # 不设管理员口令拒绝启动（Grafana 默认口令是 admin）
+    entrypoint: ["/bin/sh", "-c", "[ $${#GF_SECURITY_ADMIN_PASSWORD} -ge 12 ] || { echo 'GRAFANA_ADMIN_PASSWORD 未设置或少于 12 位' >&2; exit 1; }; exec /run.sh"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      # 不联网：关闭使用统计上报、版本和插件更新检查、新闻
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PLUGIN_ADMIN_ENABLED: "false"
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+
 volumes:
   pgdata:
   redisdata:
   miniodata:
+  promdata:
+  grafanadata:

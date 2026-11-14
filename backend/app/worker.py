@@ -16,6 +16,7 @@ import socket
 import time
 from pathlib import Path
 
+from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .kb import deid_flow, intake, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed 等任务处理器
@@ -92,6 +93,20 @@ def _scan_due() -> None:
         log.warning("到期删除扫描出错：%s", type(e).__name__)
 
 
+def _verify_audit() -> None:
+    """每小时校验一次审计哈希链，结果只进指标（cp_audit_chain_ok），失败时告警（docs/监控.md）；不写审计，免得每小时一条。"""
+    try:
+        with SessionLocal() as db:
+            ok = audit.verify_chain(db).ok
+    except Exception as e:  # noqa: BLE001
+        log.warning("审计链校验出错：%s", type(e).__name__)
+        return
+    metrics.AUDIT_CHAIN_OK.set(1 if ok else 0)
+    metrics.AUDIT_CHAIN_VERIFIED.set_to_current_time()
+    if not ok:
+        log.error("审计哈希链校验未通过，请运行 python -m app.cli verify-audit 查看")
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -99,12 +114,14 @@ def main() -> None:
     wid = worker_id()
     r = _redis()
     log.info("worker %s 启动，任务种类：%s", wid, ", ".join(jobs.registered()))
+    metrics.start_server(get_settings().metrics_port)
     last_scan = 0.0
     while not _stop:
         heartbeat(r, wid)
         if time.monotonic() - last_scan >= SCAN_SECONDS:
             last_scan = time.monotonic()
             _scan_due()
+            _verify_audit()
         try:
             with SessionLocal() as db:
                 status = jobs.run_once(db, wid)
