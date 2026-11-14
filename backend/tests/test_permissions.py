@@ -103,6 +103,7 @@ MATRIX = [
      (404, 404, 403, 403, 403)),
     # 交付链运行（M3 ④）：成员可看；发起在 test_runs 里测（这里发起会在 BANK-A 留下排队的运行）
     (("GET", "/api/projects/BANK-A/runs", None),        (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/chain", None),       (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/runs/999999", None), (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/runs", None),       (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/runs/999999/cancel", None), (404, 404, 403, 403, 403)),

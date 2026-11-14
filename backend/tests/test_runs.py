@@ -1,4 +1,4 @@
-"""交付链编排（M3 ④）：3→4→7 跑通（D3、差距分析、D4 初稿），没有证据时发卡停下、补证处理卡后继续，
+"""交付链编排（M3 ④，二期 A5 补全）：SOC 3→4→5→6→7 跑通（D3、差距分析、目标运营模型、D6、D4、D5、D7、D8），没有证据时发卡停下、补证处理卡后继续，
 模型提出的确认卡让运行停在下一步之前、顾问意见交给后续步骤，重复发起被拒（严格档见 test_strict_draft），取消后任务不再执行，
 模型输出命中机密级时不保存、运行失败，模型暂不可用时重试、到上限失败，成员隔离，审计不记原文。"""
 import json
@@ -21,6 +21,9 @@ from .conftest import create_user, logged_in_client
 FACTS = "## 组织与人员\nSOC 现有 6 人，全部白班 [O-01]。\n\n## 待补证据与矛盾点\n夜间值守安排未见书面材料 [推断]。"
 GAP = "## 差距分析表\n夜间无人值守，与 7×24 监测要求存在差距 [O-01]。\n\n## 业务影响 TOP 5\n夜间事件发现滞后 [推断]。"
 DRAFT = "## 现状概述\n值守仅覆盖白班 [O-01]。\n\n## 主要差距与业务影响\n夜间监测缺失 [推断]。"
+DESIGN = "## 组织与人员\n设夜间初筛岗 [O-01]。\n\n## 路线图草案\n近期补齐夜间值守 [推断]。"
+POLICY = "## SOC 运营管理办法\n值守交接留书面记录 [O-01]。\n\n## 落地风险提示\n夜间人力不足 [推断]。"
+DOC = "## 设计目标与原则\n7×24 监测覆盖 [推断]。\n\n## 目标运营模型\n夜间初筛加白班分析 [O-01]。"
 CARD_BLOCK = ('\n\n```确认卡\n[{"kind": "方案取舍", "title": "夜间值守采用哪种模式？", '
               '"options": ["A 托管夜间初筛", "B 自建 7×24"], "recommendation": "A", '
               '"reason": "本期不扩编", "impact": "影响 D5 人力测算"}]\n```')
@@ -31,7 +34,8 @@ class _Model:
 
     def __init__(self):
         self.requests: list[dict] = []
-        self.replies = {"交付链第 3 步": FACTS, "交付链第 4 步": GAP, "交付链第 7 步": DRAFT}
+        self.replies = {"起草 D5": DOC, "起草 D7": DOC, "起草 D8": DOC, "交付链第 3 步": FACTS, "交付链第 4 步": GAP,
+                        "交付链第 5 步": DESIGN, "交付链第 6 步": POLICY, "交付链第 7 步": DRAFT}   # 具体的在前
         self.status = 200
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -102,7 +106,7 @@ def _bodies(code: str, dcode: str) -> list[str]:
         return [deliverables.get_version(s).body for s in d.sections if s.current_version]
 
 
-def test_chain_runs_3_4_7_end_to_end(proj, model):
+def test_chain_runs_end_to_end(proj, model):
     code, c = proj
     _note(c, code)
     r = c.post(f"/api/projects/{code}/runs")
@@ -112,22 +116,31 @@ def test_chain_runs_3_4_7_end_to_end(proj, model):
     run = _run(c, code, rid)
     assert run["status"] == "done" and run["next_step"] == "end" and run["finished_at"]
     assert run["chain"] == "standard"
-    assert [s["step"] for s in run["steps"]] == ["facts", "gap", "draft"]
+    assert [s["step"] for s in run["steps"]] == ["facts", "gap", "design", "policy", "draft", "design_doc", "roadmap",
+                                                 "briefing"]
     assert all(s["status"] == "done" and s["prompt_version"] and s["model"] == "mock-model" for s in run["steps"])
-    assert run["steps"][0]["refs"]["deliverable"] == "D3" and run["steps"][2]["refs"]["deliverable"] == "D4"
-    assert "差距分析表" in run["steps"][1]["output"]               # 第 4 步产出存在运行记录里
+    assert [s["refs"].get("deliverable", "") for s in run["steps"]] == ["D3", "", "", "D6", "D4", "D5", "D7", "D8"]
+    assert "差距分析表" in run["steps"][1]["output"]               # 第 4、5 步产出存在运行记录里
+    assert "路线图草案" in run["steps"][2]["output"]
     assert _bodies(code, "D3") == ["SOC 现有 6 人，全部白班 [O-01]。", "夜间值守安排未见书面材料 [推断]。"]
     assert len(_bodies(code, "D4")) == 2
+    assert _bodies(code, "D6")[0] == "值守交接留书面记录 [O-01]。" and len(_bodies(code, "D8")) == 2
     # 每一步拿到上一步的产出：证据 → D3 → 差距分析
     assert "夜间无人值守" in model.prompt("交付链第 3 步")
     assert "SOC 现有 6 人" in model.prompt("交付链第 4 步")
     assert "夜间无人值守，与 7×24" in model.prompt("交付链第 7 步")
+    # 第 5 步读差距分析和 D3；第 6 步读目标运营模型；D5、D7 读目标运营模型和差距分析；D8 读 D4、D5、D7
+    assert "差距分析（第 4 步产出）" in model.prompt("交付链第 5 步") and "SOC 现有 6 人" in model.prompt("交付链第 5 步")
+    assert "目标运营模型设计（第 5 步产出）" in model.prompt("交付链第 6 步")
+    assert "设夜间初筛岗" in model.prompt("起草 D5") and "夜间无人值守" in model.prompt("起草 D7")
+    assert all(f"# {d}" in model.prompt("起草 D8") for d in ("D4 现状评估报告", "D5 设计方案", "D7 实施路线图"))
     with SessionLocal() as db:
         used = db.scalars(select(LlmUsage).where(LlmUsage.project_code == code)).all()
-        assert {u.agent_code for u in used} == {"research-interview", "compliance-basis", "report-writer"}
+        assert {u.agent_code for u in used} == {"research-interview", "compliance-basis", "solution-designer",
+                                                "policy-drafter", "report-writer"}
         logs = db.scalars(select(AuditLog).where(AuditLog.project_code == code,
                                                  AuditLog.action.like("run.%"))).all()
-        assert [a.action for a in logs].count("run.step") == 3
+        assert [a.action for a in logs].count("run.step") == 8
         assert all("SOC 现有" not in (a.detail or "") and "差距分析表" not in (a.detail or "") for a in logs)
 
 
@@ -155,7 +168,7 @@ def test_model_card_pauses_before_next_step_and_resolution_is_passed_on(proj, mo
     rid = c.post(f"/api/projects/{code}/runs").json()["id"]
     _work()
     run = _run(c, code, rid)
-    assert run["status"] == "waiting" and run["next_step"] == "draft" and len(run["waiting_cards"]) == 1
+    assert run["status"] == "waiting" and run["next_step"] == "design" and len(run["waiting_cards"]) == 1
     assert run["steps"][1]["refs"]["cards"] == run["waiting_cards"]
     assert "确认卡" not in run["steps"][1]["output"]                     # 卡片块不进产出正文
     card = run["waiting_cards"][0]
@@ -249,7 +262,7 @@ def test_card_on_last_step_finishes_run(proj, model):
     """测试 #41 缺陷 1：最后一步发的卡处理完后运行应结束（done），不再排任务。"""
     code, c = proj
     _note(c, code)
-    model.replies["交付链第 7 步"] = DRAFT + CARD_BLOCK
+    model.replies["起草 D8"] = DOC + CARD_BLOCK
     rid = c.post(f"/api/projects/{code}/runs").json()["id"]
     _work()
     run = _run(c, code, rid)
@@ -318,3 +331,32 @@ def test_signed_deliverable_refuses_start(proj, model):
     r = c.post(f"/api/projects/{code}/runs")
     assert r.status_code == 422 and "D4 已签署" in r.json()["detail"]
     assert not c.get(f"/api/projects/{code}/runs").json()
+
+
+def test_chain_endpoint_lists_steps_from_snapshot(proj):
+    """二期 A5：驾驶舱进度条按本项目快照显示步骤，不再写死 3→4→7。"""
+    code, c = proj
+    steps = c.get(f"/api/projects/{code}/chain").json()
+    assert [(s["key"], s["number"], s["output"]) for s in steps] == [
+        ("facts", 3, "D3"), ("gap", 4, ""), ("design", 5, ""), ("policy", 6, "D6"), ("draft", 7, "D4"),
+        ("design_doc", 7, "D5"), ("roadmap", 7, "D7"), ("briefing", 7, "D8")]
+    assert steps[2]["agent"] == "solution-designer" and steps[2]["agent_name"].endswith("Agent")
+
+
+def test_design_tradeoff_card_pauses_before_policy(proj, model):
+    """第 5 步方案取舍发卡暂停；顾问的选择交给第 6、7 步。"""
+    code, c = proj
+    _note(c, code)
+    model.replies["交付链第 5 步"] = DESIGN + CARD_BLOCK
+    rid = c.post(f"/api/projects/{code}/runs").json()["id"]
+    _work()
+    run = _run(c, code, rid)
+    assert run["status"] == "waiting" and run["next_step"] == "policy"
+    assert [s["step"] for s in run["steps"]] == ["facts", "gap", "design"]
+    with SessionLocal() as db:
+        assert db.get(Confirmation, run["waiting_cards"][0]).kind == "方案取舍"
+    c.post(f"/api/confirmations/{run['waiting_cards'][0]}/resolve", json={"choice": "A"})
+    _work()
+    assert _run(c, code, rid)["status"] == "done"
+    assert all("顾问已确认事项" in model.prompt(k) and "夜间值守采用哪种模式" in model.prompt(k)
+               for k in ("交付链第 6 步", "起草 D5"))

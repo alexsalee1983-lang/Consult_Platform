@@ -143,6 +143,7 @@ export const api = {
     request(`/api/projects/${encodeURIComponent(code)}/notes`, { method: "POST", body: JSON.stringify(note) }),
   // 交付链运行（标准档 3→4→7）
   runs: (code) => request(`/api/projects/${encodeURIComponent(code)}/runs`),
+  chain: (code) => request(`/api/projects/${encodeURIComponent(code)}/chain`),   // 二期 A5：步骤按项目配置快照
   run: (code, id) => request(`/api/projects/${encodeURIComponent(code)}/runs/${id}`),
   startRun: (code) => request(`/api/projects/${encodeURIComponent(code)}/runs`, { method: "POST" }),
   cancelRun: (code, id) => request(`/api/projects/${encodeURIComponent(code)}/runs/${id}/cancel`, { method: "POST" }),
