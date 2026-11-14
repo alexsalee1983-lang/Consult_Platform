@@ -114,3 +114,28 @@ def test_prod_refuses_external_model():
     with pytest.raises(BootstrapError, match="外部模型"):
         check_settings(Settings(_env_file=None, **base))
     check_settings(Settings(_env_file=None, **{**base, "app_env": "test"}))
+
+
+def test_prod_refuses_external_rerank():
+    base = {"database_url": "postgresql+psycopg://consult:x@db:5432/consult",
+            "kb_database_url": "postgresql+psycopg://consult_kb:x@db:5432/consult_kb",
+            "app_env": "prod", "session_backend": "redis", "cookie_secure": True, "test_account_username": "",
+            "test_account_password": "", "rerank_external": True,
+            "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24}
+    with pytest.raises(BootstrapError, match="外部重排"):
+        check_settings(Settings(_env_file=None, **base))
+    check_settings(Settings(_env_file=None, **{**base, "app_env": "test"}))
+
+
+def test_external_rerank_availability_without_model_list(monkeypatch):
+    """外部平台（如硅基流动）的模型列表默认可能不列重排模型：外部模式下能连通即算可用。"""
+    s = get_settings()
+    monkeypatch.setattr(s, "rerank_base_url", "https://rerank.example/v1")
+    monkeypatch.setattr(s, "rerank_model", "Qwen/Qwen3-Reranker-8B")
+    gateway.set_transport(httpx.MockTransport(lambda req: httpx.Response(200, json={"data": [{"id": "chat-model"}]})))
+    try:
+        assert gateway.rerank_availability().startswith("down")
+        monkeypatch.setattr(s, "rerank_external", True)
+        assert gateway.rerank_availability() == "ok"
+    finally:
+        gateway.set_transport(None)

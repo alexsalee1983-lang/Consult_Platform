@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     rerank_base_url: str = ""
     rerank_api_key: str = ""
     rerank_model: str = "BAAI/bge-reranker-v2-m3-int8"   # int8 量化版（决策记录 11-11 补充）
+    # 外部重排服务（如硅基流动 Qwen3-Reranker，决策记录 2026-11-14）：与 LLM_EXTERNAL 同样只允许开发和测试环境、只处理
+    # 虚拟客户数据；查询和知识片段原样发出（片段已去标识，查询先过机密级检测），不做假名化。生产环境开启即拒绝启动。
+    rerank_external: bool = False
     # 送去重排的候选片段数（RRF 融合后的前 N 个）和每个片段的字数上限。CPU 上重排耗时大致与“个数 × 字数”成正比。
     kb_rerank_candidates: int = 20
     kb_rerank_max_chars: int = 400
