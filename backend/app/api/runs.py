@@ -63,7 +63,8 @@ def _out(run: AgentRun) -> dict:
 
 
 def _detail(run: AgentRun) -> RunDetail:
-    steps = [StepOut(step=s.step, name=svc.STEP_NAMES.get(s.step, s.step), agent_code=s.agent_code, status=s.status,
+    names = svc.step_names()
+    steps = [StepOut(step=s.step, name=names.get(s.step, s.step), agent_code=s.agent_code, status=s.status,
                      output=s.output, refs=s.refs or {}, prompt_version=s.prompt_version, model=s.model,
                      prompt_tokens=s.prompt_tokens, completion_tokens=s.completion_tokens, started_at=s.started_at,
                      finished_at=s.finished_at) for s in run.steps]
