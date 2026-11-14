@@ -205,6 +205,16 @@ jobs:
           out=$(docker compose exec -T postgres psql -U consult -d consult -c "DELETE FROM audit_logs WHERE id = 1" 2>&1 || true)
           echo "$out"
           echo "$out" | grep -q "append-only"
+      - name: 压测脚本可用（Locust 5 人 60 秒，模拟模型；正式压测在测试机按 docs/压测方案.md 执行）
+        run: |
+          docker compose exec -T backend python -m app.cli loadtest-accounts --count 5 --out /tmp/lt.json
+          docker compose cp backend:/tmp/lt.json loadtest/accounts.json
+          docker compose exec -T backend rm -f /tmp/lt.json
+          python3 -m venv /tmp/lt-venv && /tmp/lt-venv/bin/pip install -q -r loadtest/requirements.txt
+          cd loadtest && /tmp/lt-venv/bin/locust -f locustfile.py --headless -u 5 -r 5 -t 60s \
+            -H http://localhost:8080 --only-summary
+          cd .. && docker compose exec -T backend python -m app.cli loadtest-accounts --disable
+          rm -f loadtest/accounts.json
       - name: 监控（Prometheus 抓到 backend、worker，告警规则加载，Grafana 看板导入，指标端口不外露）
         run: |
           docker compose --profile monitoring run --rm --entrypoint /bin/promtool prometheus check config /etc/prometheus/prometheus.yml

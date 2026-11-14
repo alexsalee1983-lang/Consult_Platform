@@ -17,6 +17,7 @@
 create-project 立项（一期没有网页立项）：项目代号只用客户代号（不写客户真实名称），立项时必须定档，同时指定首位项目经理；
 自动建 D1～D8 交付件（未开始）。
 retention-report 列出已验收项目的保留期和到期状态（只有代号和日期，不含客户内容），供负责人跟踪到期删除。
+loadtest-accounts 只在开发、测试环境建压测账号（凭据写文件，见 loadtest/README.md）。
 deletion-scan 立即为已到期项目发起删除申请（worker 每小时自动做）；deletion-report 列出删除申请和删除记录。
 删除本身只能由项目负责人在网页上确认（规则见 app/project/deletion.py），命令行不提供直接删除。
 安全审计员由单独任命，只能用 grant-role / revoke-role 在服务器上授予或撤销，任何网页接口都做不到。
@@ -36,8 +37,8 @@ from .core import audit, secretbox, sessions
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .core.migrate import KbSplitPending, upgrade_to_head
-from .core.permissions import (BUSINESS_ROLES, EXCLUSIVE_ROLES, PROJECT_ROLES, ROLE_NAMES, RoleRuleError,
-                               membership, roles_of, set_roles)
+from .core.permissions import (BUSINESS_ROLES, CONSULTANT, EXCLUSIVE_ROLES, PROJECT_ROLES, ROLE_NAMES,
+                               RoleRuleError, membership, roles_of, set_roles)
 from .core.security import PasswordPolicyError, check_password_policy, hash_password, new_totp_secret, totp_uri
 from .models import Deliverable, Project, ProjectMember, User
 
@@ -245,6 +246,96 @@ def create_project(args: argparse.Namespace) -> int:
                      tier=args.tier, manager=args.manager)
     print(f"已立项 {code}（{TIERS[args.tier]}，{args.service}），项目经理 {args.manager}；"
           f"其他成员由项目经理在网页上添加")
+    return 0
+
+
+LOADTEST_PREFIX = "lt-"
+
+
+def loadtest_accounts(args: argparse.Namespace) -> int:
+    """压测账号（只在 APP_ENV=dev / test）：建或重置 lt-01… 顾问账号并加入压测项目，凭据写进 --out 文件（权限 600）。
+
+    凭据只在这个文件里，不打印到终端；压测完用 --disable 停用账号、删掉文件。账号和项目都是虚拟的。
+    """
+    import json
+    import os
+    import secrets
+
+    if get_settings().app_env not in ("dev", "test"):
+        print("压测账号只能在开发和测试环境（APP_ENV=dev / test）创建", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        users = list(db.scalars(select(User).where(User.username.startswith(LOADTEST_PREFIX))))
+        if args.disable:
+            for u in users:
+                u.is_active = False
+            db.commit()
+            for u in users:
+                sessions.destroy_all_for_user(u.id)
+            audit.record(db, actor="cli", action="loadtest.accounts", result="allowed", op="disable",
+                         count=len(users))
+            print(f"已停用 {len(users)} 个压测账号")
+            return 0
+        if not 1 <= args.count <= 50:
+            print("--count 取 1～50", file=sys.stderr)
+            return 1
+        if not args.out:
+            print("要用 --out 指定凭据文件", file=sys.stderr)
+            return 1
+        code = args.project.strip().upper()
+        if not PROJECT_CODE.match(code):
+            print("项目代号格式为“字母-字母或数字”，如 LOAD-A", file=sys.stderr)
+            return 1
+        creds = []
+        for i in range(1, args.count + 1):
+            name = f"{LOADTEST_PREFIX}{i:02d}"
+            password = secrets.token_urlsafe(18) + "aA1!"
+            secret = new_totp_secret()
+            u = db.scalar(select(User).where(User.username == name))
+            if u is None:
+                u = User(username=name, display_name=f"压测{i:02d}", password_hash="", totp_secret=secret)
+                db.add(u)
+            u.set_password_hash(hash_password(password))
+            u.totp_secret = secret
+            u.totp_last_step = 0
+            u.is_active = True
+            u.must_change_password = False
+            u.failed_logins = 0
+            u.locked_until = None
+            db.flush()
+            set_roles(db, u, {CONSULTANT}, granted_by="cli")
+            creds.append({"username": name, "password": password, "totp_secret": secret})
+        db.commit()
+        manager = db.scalar(select(User).where(User.username == creds[0]["username"]))
+        project = db.scalar(select(Project).where(Project.code == code))
+        if project is None:
+            from .seed import DELIVERABLES
+            project = Project(code=code, service="压测", industry="制造", tier="standard", total_weeks=8)
+            project.deliverables = [Deliverable(code=f"D{i + 1}", title=t, status="not_started")
+                                    for i, t in enumerate(DELIVERABLES)]
+            db.add(project)
+            db.flush()
+            db.add(ProjectMember(project_id=project.id, user_id=manager.id, project_role="manager",
+                                 added_by="cli"))
+        elif project.deleted_at is not None or project.tier != "standard":
+            print(f"项目 {code} 已删除或不是标准档，换一个压测项目代号", file=sys.stderr)
+            return 1
+        for c in creds[1:]:
+            u = db.scalar(select(User).where(User.username == c["username"]))
+            if membership(db, project.id, u.id) is None:
+                db.add(ProjectMember(project_id=project.id, user_id=u.id, project_role="member", added_by="cli"))
+        db.commit()
+        # 压测写章节、导出用 D5（交付链只写 D3、D4，互不干扰）：没有大纲时建 n 章的大纲，每个虚拟用户写一章
+        from .project import deliverables as dsvc
+        d5 = next(d for d in project.deliverables if d.code == "D5")
+        if not d5.sections:
+            dsvc.set_outline(db, manager, project, d5, [f"压测章节 {i:02d}" for i in range(1, len(creds) + 1)])
+        audit.record(db, actor="cli", action="loadtest.accounts", result="allowed", op="create",
+                     count=len(creds), project_code=code)
+    fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump({"project": code, "users": creds}, f, ensure_ascii=False)
+    print(f"已准备 {len(creds)} 个压测账号（项目 {code}），凭据写入 {args.out}；压测完执行 --disable 并删除该文件")
     return 0
 
 
@@ -580,6 +671,12 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
     ke.add_argument("--out", default="", help="把明细写成 JSON 文件")
     ke.set_defaults(func=kb_eval)
+    lt = sub.add_parser("loadtest-accounts", help="压测账号（只在开发、测试环境）：建或重置 lt-xx 并加入压测项目；--disable 停用")
+    lt.add_argument("--count", type=int, default=20)
+    lt.add_argument("--project", default="LOAD-A")
+    lt.add_argument("--out", default="", help="凭据文件（JSON，权限 600）；不打印到终端")
+    lt.add_argument("--disable", action="store_true", help="停用全部压测账号并注销其会话")
+    lt.set_defaults(func=loadtest_accounts)
     ks = sub.add_parser("kb-split", help="分库：把知识区数据从主库搬到知识区数据库并核对行数")
     ks.add_argument("--drop-source", action="store_true", help="核对一致后删掉主库里的知识区表（删数据，先经负责人同意）")
     ks.set_defaults(func=kb_split)

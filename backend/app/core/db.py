@@ -22,8 +22,11 @@ class KbBase(Base):
 
 
 def _engine(url: str) -> Engine:
-    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    return create_engine(url, pool_pre_ping=True, connect_args=connect_args)
+    if url.startswith("sqlite"):
+        return create_engine(url, pool_pre_ping=True, connect_args={"check_same_thread": False})
+    # 同步接口在 40 个线程的线程池里执行；默认连接池 5 + 10 时线程排队等连接，压测 10 人时响应超时（#78）。
+    # 上限 40 与线程池一致；实际连接数随并发增减，空闲时只保留 10 个
+    return create_engine(url, pool_pre_ping=True, pool_size=10, max_overflow=30, pool_timeout=30)
 
 
 _settings = get_settings()
