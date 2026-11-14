@@ -8,6 +8,10 @@
   章节没有正文 → 阻断；正文命中机密级检测 → 阻断（此时不发往模型，只出硬规则结果）；
   出现测评 / 认证结论用语（资质边界）→ 阻断；来源标注核对不上（证据编号不存在、知识库条目不存在或已下线）→ 阻断；
   整章只有 [推断]、没有证据和知识库来源 → 重要。
+  以上是通用层（所有产品都查，资质边界用语规则只在这里）。二期 A6 起再查本项目配置快照里的产品层、模块层规则
+  （products/*.yaml、modules/*.yaml 的 gates，类型只有 coverage / required_sections / forbidden_terms / min_sources，
+  见 docs/接口约定.md 第二节），level blocking → 阻断、major → 重要，同样 by = rule、不能驳回；
+  快照读不出来时记一条阻断“产品门禁规则无法核对”，不放行。
 - 再由质量评审与异议应答 Agent 经网关评审（平台按发起人的成员身份把正文交给它，它没有 doc.generate 授权）。
   解析输出的问题表（严重度 阻断 / 重要 / 建议）和“统计：阻断 X 项，重要 X 项，建议 X 项”；
   两者不一致取较大值。评审结论由平台按规则重算，不采信模型自报：
@@ -45,8 +49,9 @@ from ..core import audit
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
 from ..models import Deliverable, Project, QualityReview, ReviewWaiver, SignOff, User
+from ..products import config
 from ..services import gateway, guard, jobs, usage
-from . import cards, deliverables
+from . import cards, configs, deliverables
 from . import evidence as evidence_svc
 
 AGENT = "qa-reviewer"
@@ -289,6 +294,61 @@ def rule_issues(d: Deliverable, versions: dict, local_only: set[str] | frozenset
     return issues, confidential
 
 
+GATE_SEVERITY = {"blocking": "阻断", "major": "重要"}
+
+
+def gate_issues(d: Deliverable, versions: dict, gates: list[dict]) -> list[dict]:
+    """产品层、模块层门禁规则（二期 A6）。只列规则编号、配置里的清单项和计数，不摘正文。没有正文的章不查（通用层已阻断）。"""
+    issues: list[dict] = []
+    chapters: list[tuple[str, str, dict]] = []          # (位置, 正文, 来源计数)
+    for s in d.sections:
+        ver = int(versions.get(str(s.seq), 0) or 0)
+        v = deliverables.get_version(s, ver) if ver else None
+        if v is not None:
+            chapters.append((f"第 {s.seq} 章 {s.title}", v.body, (v.sources or {}).get("counts", {})))
+    titles = [s.title for s in d.sections]
+    full = "\n".join(titles + [b for _, b, _ in chapters])
+    for g in gates:
+        if g.get("deliverable") and g["deliverable"] != d.code:
+            continue
+        sev = GATE_SEVERITY.get(g.get("level", ""), "阻断")
+        dim = f"产品规则 {g.get('source', '')}/{g.get('id', '')}"
+        msg = g.get("message", "")
+        kind = g.get("kind")
+        if kind == "coverage":
+            missing = [i for i in g.get("items", []) if i not in full]
+            if missing:
+                more = f" 等 {len(missing)} 项" if len(missing) > 20 else ""
+                issues.append(_issue(sev, "全文", dim, f"{msg}：缺 {'、'.join(missing[:20])}{more}",
+                                     "补齐缺的各项；确实不适用的写明不适用理由", "rule"))
+        elif kind == "required_sections":
+            missing = [x for x in g.get("sections", []) if not any(x in t for t in titles)]
+            if missing:
+                issues.append(_issue(sev, "大纲", dim, f"{msg}：缺章节 {'、'.join(missing)}",
+                                     "在大纲里加上这些章节并写正文", "rule"))
+        elif kind == "forbidden_terms":
+            for loc, body, _ in chapters:
+                hits = [t for t in g.get("terms", []) if t in body]
+                if hits:
+                    issues.append(_issue(sev, loc, dim, f"{msg}：出现 {'、'.join(hits)}", "改用合规的说法", "rule"))
+        elif kind == "min_sources":
+            need = int(g.get("min", 1))
+            for loc, _, counts in chapters:
+                n = int(counts.get("evidence", 0)) + int(counts.get("knowledge", 0))
+                if n < need:
+                    issues.append(_issue(sev, loc, dim, f"{msg}：来源标注 {n} 个，少于 {need} 个",
+                                         "补充证据编号或知识库依据", "rule"))
+    return issues
+
+
+def project_gates(db: Session, project: Project) -> list[dict] | None:
+    """本项目快照里的产品层、模块层门禁规则；快照读不出来返回 None。"""
+    try:
+        return list(configs.snapshot(db, project)["gates"])
+    except config.CatalogError:
+        return None
+
+
 # ---- 质量评审：解析 Agent 输出 ----
 
 def _cells(line: str) -> list[str]:
@@ -393,6 +453,12 @@ def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverab
 def _execute(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview) -> None:
     issues, confidential = rule_issues(d, r.versions, evidence_svc.local_only_codes(db, project),
                                        strict=project.tier == "strict")
+    gates = project_gates(db, project)
+    if gates is None:
+        issues.append(_issue("阻断", "全文", "产品规则", "服务产品配置有问题，产品门禁规则无法核对",
+                             "请系统管理员运行 catalog-check 修好配置后重新评审", "rule"))
+    else:
+        issues += gate_issues(d, r.versions, gates)
     report, counts = "", {s: 0 for s in SEVERITIES}
     if confidential:
         report = "（交付件正文命中机密级检测，未发往模型评审。请先处理阻断项，再重新评审。）"
