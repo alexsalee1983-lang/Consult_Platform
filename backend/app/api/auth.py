@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..core import audit, sessions
+from ..core import audit, metrics, sessions
 from ..core.auth import current_user, password_change_required, password_expired
 from ..core.config import get_settings
 from ..core.db import get_db, utcnow
@@ -74,6 +74,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     password_ok = verify_password(user.password_hash if user else None, body.password)
     if user is None or not user.is_active:
         # 不记输入的用户名原文：用户有时会把口令误填进用户名框
+        metrics.LOGINS.labels("blocked").inc()
         audit.record(db, actor="(unknown)", action="auth.login", result="blocked", reason="unknown_or_inactive",
                      username_sha=audit.digest(body.username))
         raise HTTPException(401, LOGIN_FAILED)
@@ -81,6 +82,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     now = utcnow()
     locked_until = _as_aware(user.locked_until)
     if locked_until and locked_until > now:
+        metrics.LOGINS.labels("blocked").inc()
         audit.record(db, actor=user.username, action="auth.login", result="blocked", reason="locked")
         raise HTTPException(401, LOCKED)
 
@@ -94,6 +96,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
             user.failed_logins = 0
             reason += "+locked"
         db.commit()
+        metrics.LOGINS.labels("locked" if reason.endswith("+locked") else "blocked").inc()
         audit.record(db, actor=user.username, action="auth.login", result="blocked", reason=reason)
         raise HTTPException(401, LOGIN_FAILED)
 
@@ -107,6 +110,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     sessions.destroy(request.cookies.get(sessions.COOKIE_NAME))
     token, data = sessions.create(user.id, user.username)
     _set_cookie(response, token)
+    metrics.LOGINS.labels("allowed").inc()
     audit.record(db, actor=user.username, action="auth.login", result="allowed")
     return _me(db, user, data.csrf)
 

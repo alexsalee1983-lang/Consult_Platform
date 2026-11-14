@@ -13,6 +13,8 @@ import string
 import unicodedata
 from dataclasses import dataclass, field
 
+from ..core import metrics
+
 
 @dataclass
 class Finding:
@@ -269,4 +271,6 @@ def _check(text: str) -> GuardResult:
         _add(findings, "email", "电子邮箱", m)
 
     findings.sort(key=lambda f: f.start)
+    for kind in {f.kind for f in findings}:
+        metrics.GUARD_BLOCKS.labels(kind).inc()
     return GuardResult(bool(findings), findings)
