@@ -5,7 +5,7 @@ MinIO 社区版，从源码编译（社区版官方镜像已于 2026 年下架�
 | 组件 | 版本 |
 |---|---|
 | MinIO | RELEASE.2025-10-15T17-29-55Z（commit 9e49d5e） |
-| 编译环境 | golang:1.26.9-bookworm |
+| 编译环境 | golang:1.26.11-bookworm |
 | 运行环境 | debian:bookworm-20261027-slim，非 root 用户运行 |
 
 - 源码包固定版本并校验 sha256，Go 依赖由 `go.sum` 校验。升级时同时改 `Dockerfile` 里的版本号、commit 和 sha256，并在 PR 里说明。
