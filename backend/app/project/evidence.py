@@ -4,7 +4,7 @@
 1. 严格档项目一律拒绝（资料不出客户现场，只收去标识摘要卡，见 app/project/cards.py）。
 2. 按文件内容判断类型并解析出文字；扫描件、加密文件、超限文件直接拒绝（与知识投料共用 app/kb/parse.py）。
 3. 文件名和全文过机密级检测（guard）；命中则**不存档**，只写审计（命中类别），返回打码的命中摘录。
-4. 同一项目里同一文件（sha256 相同）不重复上传。
+4. 同一项目里同一文件（sha256 相同）或正文相同（去空白后的正文哈希，另存、换格式的同一份资料）不重复上传。
 5. 原件存对象存储项目区，键为 <项目代号>/documents/<随机编号>/original.<扩展名>（不用原文件名）。
 6. 分配证据编号 D-xx，排后台任务 project.parse 解析成章节，结果 JSON 存在原件旁边。
 
@@ -12,7 +12,7 @@
 
 仅现场使用（M4 ③）：客户书面要求某份资料只在客户现场查阅时，项目经理把它标为仅现场使用（写客户通知的文号，
 不写客户名称）。平台立即删除对象存储里的原件和解析结果、清空文件名，证据编号保留不复用；之后同一文件（sha256）
-不能再上传，Agent 经 project.evidence 读不到，交付件写入时引用它会被拒绝，质量评审把已有引用判为阻断。
+或正文相同的文件（另存、换格式）不能再上传，Agent 经 project.evidence 读不到，交付件写入时引用它会被拒绝，质量评审把已有引用判为阻断。
 标注不可撤销（文件已删除）。告知书附件一第 4 条、合同条款：收到通知后 5 个工作日内落实。
 
 审计只记项目、证据编号、类别、大小和命中类别，不记文件名、正文和文号。
@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import date
@@ -95,6 +97,11 @@ def _assign(db: Session, project: Project, kind: str, make) -> Evidence:
     raise EvidenceError(409, "证据编号分配冲突，请重试")
 
 
+def text_digest(text: str) -> str:
+    """正文哈希：NFKC 规整、去掉全部空白后的 sha256。只用于判断是否同一份资料，不记原文。"""
+    return hashlib.sha256(re.sub(r"\s+", "", unicodedata.normalize("NFKC", text)).encode("utf-8")).hexdigest()
+
+
 def upload_document(db: Session, user: User, project: Project, filename: str, data: bytes,
                     content_type: str = "", title: str = "") -> UploadResult:
     action = "project.document"
@@ -112,20 +119,21 @@ def upload_document(db: Session, user: User, project: Project, filename: str, da
 
     if not storage.enabled():
         raise EvidenceError(503, "对象存储未启用，暂时不能上传资料")
-    sha = hashlib.sha256(data).hexdigest()
-    dup = db.scalar(select(Evidence).join(ProjectDocument, Evidence.document_id == ProjectDocument.id)
-                    .where(ProjectDocument.project_id == project.id, ProjectDocument.sha256 == sha))
+    sha, text_sha = hashlib.sha256(data).hexdigest(), text_digest(doc.full_text())
+    same = select(Evidence).join(ProjectDocument, Evidence.document_id == ProjectDocument.id)         .where(ProjectDocument.project_id == project.id)
+    dup = db.scalar(same.where(ProjectDocument.sha256 == sha))         or db.scalar(same.where(ProjectDocument.text_sha256 == text_sha)
+                     .order_by(ProjectDocument.local_only.desc(), Evidence.seq))
     if dup is not None and dup.document.local_only:
         audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
                      reason="local_only", evidence=dup.code)
         raise EvidenceError(422, f"这份资料已标为仅现场使用（证据编号 {dup.code}），不能上传")
     if dup is not None:
-        raise EvidenceError(409, f"这个文件已经上传过（证据编号 {dup.code}）")
+        raise EvidenceError(409, f"这份资料已经上传过（证据编号 {dup.code}）")
 
     key = f"{project.code}/documents/{uuid.uuid4().hex}/original.{_ext(filename)}"
     storage.put(AREA, key, data, content_type or "application/octet-stream")
     d = ProjectDocument(project_id=project.id, object_key=key, filename=filename, content_type=content_type[:128],
-                        size=len(data), sha256=sha, kind=doc.kind, status="received", uploaded_by=user.username)
+                        size=len(data), sha256=sha, text_sha256=text_sha, kind=doc.kind, status="received", uploaded_by=user.username)
     db.add(d)
     db.commit()
     ev = _assign(db, project, "document", lambda seq, code: Evidence(
