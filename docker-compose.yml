@@ -190,8 +190,9 @@ services:
     volumes:
       - ${TLS_DIR:-./deploy/tls}:/etc/nginx/tls:ro
     ports:
-      - "${WEB_PORT:-8080}:80"
-      - "${WEB_TLS_PORT:-8443}:443"
+      # WEB_BIND 默认所有网卡（同事经内网访问）；只在本机用时设 127.0.0.1
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:80"
+      - "${WEB_BIND:-0.0.0.0}:${WEB_TLS_PORT:-8443}:443"
 
   # 模拟大模型（OpenAI 兼容），只在 CI 和测试机上按需启动，不对外开放端口：
   #   docker compose --profile mock-llm up -d --build
