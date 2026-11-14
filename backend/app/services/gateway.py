@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from ..core import metrics
 from ..core.config import get_settings
 from .guard import GuardResult, check
 from .pseudonym import Pseudonymizer
@@ -169,9 +170,23 @@ def _send(client: httpx.Client, payload: dict, stream: bool, url: str | None = N
           headers: dict | None = None) -> tuple[httpx.Response, int]:
     """发请求，可重试的错误按指数退避重试。返回 (响应, 尝试次数)；stream=True 时响应未读取，调用方负责关闭。
     url / headers 不传时发到大模型的 /chat/completions；向量化传向量服务的地址。"""
+    target = url or _url("/chat/completions")
+    service = metrics.upstream_service(target)
+    start = time.perf_counter()
+    outcome = "error"
+    try:
+        resp, attempts = _send_with_retry(client, payload, stream, target, headers)
+        outcome = "ok"
+        return resp, attempts
+    finally:
+        metrics.UPSTREAM_REQUESTS.labels(service, outcome).inc()
+        metrics.UPSTREAM_LATENCY.labels(service).observe(time.perf_counter() - start)
+
+
+def _send_with_retry(client: httpx.Client, payload: dict, stream: bool, target: str,
+                     headers: dict | None) -> tuple[httpx.Response, int]:
     max_attempts = get_settings().llm_max_retries + 1
     last_error = "unknown"
-    target = url or _url("/chat/completions")
     for attempt in range(1, max_attempts + 1):
         try:
             req = client.build_request("POST", target, json=payload, headers=_headers() if headers is None else headers)

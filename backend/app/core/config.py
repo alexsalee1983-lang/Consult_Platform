@@ -91,6 +91,8 @@ class Settings(BaseSettings):
     # 配置了但文件不存在时拒绝导出，不退回默认模板。
     export_template: str = ""
 
+    # 运行指标端口（core/metrics.py，docs/监控.md）：容器里设 9100，只在 docker 内部网络；0 = 不开
+    metrics_port: int = 0
     # ---- 备份（scripts/backup.sh 读同一个 .env 值）----
     # 备份保留天数：超过的备份自动删除；删除记录据此写明“备份中的副本最迟清除日”（完成日 + 天数）。
     backup_keep_days: int = 30

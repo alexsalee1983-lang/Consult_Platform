@@ -108,3 +108,35 @@ vulnerabilities:
     paths: ["usr/local/bin/gosu"]
     statement: gosu 只在启动时切换用户，不触及该标准库漏洞的代码路径
     expired_at: 2027-03-01
+  # 监控组件官方镜像（Prometheus v3.16.0、Grafana 13.3.1 已是最新版）：Go 依赖 golang.org/x/net/html 的拒绝服务漏洞，
+  # 上游尚未发版。两者只在 docker 内部网络（Prometheus 不映射端口，Grafana 只绑定 127.0.0.1、经 SSH 隧道访问），
+  # 不解析外部 HTML；最坏影响是监控暂时不可用，不涉及业务数据。上游发版后升级镜像并删除此条。
+  - id: CVE-2026-78661
+    paths: ["usr/bin/prometheus", "usr/bin/promtool", "usr/share/grafana/data/plugins-bundled/**"]
+    statement: 监控组件只在内部网络、不解析外部 HTML，最坏影响为监控不可用；等上游发版升级
+    expired_at: 2027-01-15
+  # Grafana 自带的 mysql、tempo 数据源插件里的 Go 依赖漏洞：平台不配置这两个数据源，插件不加载。
+  - id: CVE-2026-78669
+    paths: ["usr/share/grafana/data/plugins-bundled/mysql/**"]
+    statement: Grafana 自带的 mysql 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-111943
+    paths: ["usr/share/grafana/data/plugins-bundled/mysql/**"]
+    statement: Grafana 自带的 mysql 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-78667
+    paths: ["usr/share/grafana/data/plugins-bundled/mysql/**"]
+    statement: Grafana 自带的 mysql 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-97031
+    paths: ["usr/share/grafana/data/plugins-bundled/mysql/**"]
+    statement: Grafana 自带的 mysql 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-21728
+    paths: ["usr/share/grafana/data/plugins-bundled/tempo/**"]
+    statement: Grafana 自带的 tempo 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15
+  - id: CVE-2026-28377
+    paths: ["usr/share/grafana/data/plugins-bundled/tempo/**"]
+    statement: Grafana 自带的 tempo 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
+    expired_at: 2027-01-15

@@ -1,0 +1,21 @@
+# Prometheus 配置（M5 ⑤，docs/监控.md）。只抓 docker 内部网络上的指标端口，不联网。
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: backend
+    static_configs:
+      - targets: ["backend:9100"]
+  - job_name: worker
+    # 多个 worker（--scale worker=N）时按 DNS 逐个抓取
+    dns_sd_configs:
+      - names: ["worker"]
+        type: A
+        port: 9100
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

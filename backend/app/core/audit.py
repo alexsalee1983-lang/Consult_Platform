@@ -24,6 +24,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from ..models import AuditLog
+from . import metrics
 from .db import utcnow
 
 GENESIS_ACTION = "audit.genesis"
@@ -114,6 +115,7 @@ def record(db: Session, *, actor: str, action: str, result: str, project_code: s
             db.commit()
         except Exception:
             db.rollback()
+            metrics.AUDIT_WRITE_FAILURES.inc()
             raise
 
 
