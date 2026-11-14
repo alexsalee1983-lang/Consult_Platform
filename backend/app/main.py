@@ -13,6 +13,7 @@ from .core.bootstrap import check_settings, encrypt_plaintext_rows, ensure_initi
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .core.errors import out_of_range_handler, reject_control_chars, validation_error_handler
+from .core.metrics import MetricsMiddleware, register_state_collector, start_server
 from .core.migrate import upgrade_to_head
 from .services import storage
 from .seed import seed, seed_signed_sample
@@ -36,6 +37,8 @@ async def lifespan(app: FastAPI):
             storage.ensure_buckets()
         except Exception as e:  # noqa: BLE001  对象存储暂时不可用不阻止启动，健康检查会显示 down，首次使用时再建桶
             logging.getLogger(__name__).warning("对象存储建桶失败：%s", type(e).__name__)
+    register_state_collector()
+    start_server(_settings.metrics_port)
     yield
 
 
@@ -55,6 +58,7 @@ app.add_exception_handler(OverflowError, out_of_range_handler)
 app.add_exception_handler(DataError, out_of_range_handler)
 # 审计记录来源地址（core/audit.py）
 app.add_middleware(core_audit.ClientIPMiddleware)
+app.add_middleware(MetricsMiddleware)  # 只记路由模板、方法、状态码和耗时（core/metrics.py）
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -18,7 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from ..core import audit
+from ..core import audit, metrics
 from ..core.db import utcnow
 from ..models import Job
 
@@ -143,6 +144,14 @@ def _finish(db: Session, job: Job, status: str, error: str = "") -> None:
 
 def run(db: Session, job: Job) -> str:
     """执行一条已领取的任务，返回最终状态（done / queued 等待重试 / failed）。"""
+    kind, start = job.kind, time.perf_counter()
+    status = _run(db, job)
+    metrics.JOBS.labels(kind, status).inc()
+    metrics.JOB_LATENCY.labels(kind).observe(time.perf_counter() - start)
+    return status
+
+
+def _run(db: Session, job: Job) -> str:
     fn = _handlers.get(job.kind)
     ctx = JobContext(job_id=job.id, kind=job.kind, attempt=job.attempts, project_code=job.project_code,
                      created_by=job.created_by)

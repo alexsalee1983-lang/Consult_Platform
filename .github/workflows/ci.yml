@@ -84,6 +84,7 @@ jobs:
           print("MINIO_SECRET_KEY=" + secrets.token_urlsafe(30))
           print("MINIO_KMS_SECRET_KEY=ci-key:" + base64.b64encode(secrets.token_bytes(32)).decode())
           print("TOTP_KEYS=ci1:" + base64.b64encode(secrets.token_bytes(32)).decode())
+          print("GRAFANA_ADMIN_PASSWORD=" + secrets.token_urlsafe(18))
           print("KB_POSTGRES_PASSWORD=" + secrets.token_hex(16))
           PY
           # 接模拟模型（OpenAI 兼容），走网关的真实 HTTP 路径：重试、流式、可用性检查、用量计量
@@ -204,6 +205,45 @@ jobs:
             -H http://localhost:8080 --only-summary
           cd .. && docker compose exec -T backend python -m app.cli loadtest-accounts --disable
           rm -f loadtest/accounts.json
+      - name: 监控（Prometheus 抓到 backend、worker，告警规则加载，Grafana 看板导入，指标端口不外露）
+        run: |
+          docker compose --profile monitoring run --rm --entrypoint /bin/promtool prometheus check config /etc/prometheus/prometheus.yml
+          docker compose --profile monitoring up -d prometheus grafana
+          if curl -sf --max-time 3 http://127.0.0.1:9100/metrics >/dev/null; then echo "指标端口映射到了宿主机"; exit 1; fi
+          if curl -s --max-time 5 http://localhost:8080/metrics | grep -q cp_http_requests_total; then echo "业务端口暴露了指标"; exit 1; fi
+          docker compose exec -T backend python - <<'PY'
+          import base64, json, os, time, urllib.error, urllib.request
+          def get(url, auth=False):
+              req = urllib.request.Request(url)
+              if auth:
+                  token = base64.b64encode(("admin:" + os.environ["GRAFANA_ADMIN_PASSWORD"]).encode()).decode()
+                  req.add_header("Authorization", "Basic " + token)
+              return json.load(urllib.request.urlopen(req, timeout=5))
+          deadline = time.time() + 150
+          while True:
+              try:
+                  targets = get("http://prometheus:9090/api/v1/targets")["data"]["activeTargets"]
+                  up = {t["labels"]["job"] for t in targets if t["health"] == "up"}
+                  q = get("http://prometheus:9090/api/v1/query?query=cp_http_requests_total")["data"]["result"]
+                  if {"backend", "worker"} <= up and q:
+                      break
+              except Exception as e:  # noqa: BLE001
+                  up = repr(e)
+              if time.time() > deadline:
+                  raise SystemExit(f"Prometheus 没有抓到 backend 和 worker：{up}")
+              time.sleep(5)
+          rules = [r["name"] for g in get("http://prometheus:9090/api/v1/rules")["data"]["groups"] for r in g["rules"]]
+          assert len(rules) >= 13 and "审计链校验未通过" in rules, rules
+          assert get("http://grafana:3000/api/health")["database"] == "ok"
+          found = get("http://grafana:3000/api/search?query=%E5%B9%B3%E5%8F%B0%E8%BF%90%E8%A1%8C", auth=True)
+          assert any(d.get("uid") == "consult-platform" for d in found), found
+          try:
+              get("http://grafana:3000/api/search")
+              raise SystemExit("Grafana 未登录也能访问")
+          except urllib.error.HTTPError as e:
+              assert e.code == 401, e.code
+          print("监控就绪：", sorted(up), len(rules), "条告警规则")
+          PY
       - name: 备份与恢复演练（备份 → 新增数据 → 恢复 → 新增数据消失、备份时链头仍在链上、冒烟通过）
         run: |
           bash -n scripts/backup.sh && bash -n scripts/restore.sh
@@ -245,15 +285,15 @@ jobs:
           tar -xzf "$tarball" trivy
           # 模拟模型只用于 CI 和测试机，不扫；误报或暂无法修复的写进 .trivyignore.yaml 并注明理由（docs/安全扫描.md）
           fail=0
-          for img in $(docker compose config --images | sort -u); do
+          for img in $(docker compose --profile monitoring config --images | sort -u); do
             echo "== $img"
             ./trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --ignorefile .trivyignore.yaml --exit-code 1 "$img" || fail=1
           done
           exit $fail
       - if: failure()
-        run: docker compose --profile mock-llm logs --no-color | tail -200
+        run: docker compose --profile mock-llm --profile monitoring logs --no-color | tail -200
       - if: always()
-        run: docker compose --profile mock-llm down -v
+        run: docker compose --profile mock-llm --profile monitoring down -v
 
   # 安全扫描：发现任何已知漏洞或疑似密钥即失败。误报的处理办法见 docs/安全扫描.md。
   security:
