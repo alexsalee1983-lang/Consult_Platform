@@ -9,12 +9,12 @@ groups:
         labels: {severity: critical}
         annotations: {summary: "后端指标端口 2 分钟抓不到，检查 backend 容器"}
       - alert: 没有在线worker
-        expr: cp_workers_online < 1
+        expr: cp_workers_online{job="backend"} < 1
         for: 5m
         labels: {severity: critical}
         annotations: {summary: "后台任务（解析、向量化、到期删除）没有 worker 在处理"}
       - alert: 状态查询失败
-        expr: cp_state_up == 0
+        expr: cp_state_up{job="backend"} == 0
         for: 5m
         labels: {severity: critical}
         annotations: {summary: "后端查数据库或 Redis 失败（source 标签指明哪个）"}
@@ -52,11 +52,12 @@ groups:
         labels: {severity: critical}
         annotations: {summary: "有业务改动已生效但审计没写上，查后端日志和数据库（等保自查 8.1.4.3 d）"}
       - alert: 审计链校验未通过
-        expr: min(cp_audit_chain_ok) == 0
+        # 只看 worker：backend 也导出这个量但从不校验，恒为 0（测试 #81）；没校验过的（时间为 0）不算
+        expr: (cp_audit_chain_ok{job="worker"} == 0) and on(instance) (cp_audit_chain_verified_timestamp_seconds{job="worker"} > 0)
         labels: {severity: critical}
         annotations: {summary: "worker 每小时校验审计哈希链未通过，运行 python -m app.cli verify-audit 查看，按安全事件处理"}
       - alert: 审计链校验停了
-        expr: time() - max(cp_audit_chain_verified_timestamp_seconds) > 7200
+        expr: time() - max(cp_audit_chain_verified_timestamp_seconds{job="worker"}) > 7200
         for: 10m
         labels: {severity: warning}
         annotations: {summary: "超过 2 小时没有完成审计链校验（worker 未运行或校验出错）"}

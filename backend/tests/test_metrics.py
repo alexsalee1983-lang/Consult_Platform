@@ -1,4 +1,7 @@
 """运行指标（M5 ⑤）：按路由模板计数，不含业务内容；业务端口没有 /metrics。"""
+import re
+from pathlib import Path
+
 import httpx
 from prometheus_client import generate_latest
 
@@ -118,3 +121,17 @@ def test_worker_verifies_audit_chain():
     worker._verify_audit()
     assert _value("cp_audit_chain_ok") == 1
     assert _value("cp_audit_chain_verified_timestamp_seconds") > 0
+
+
+def test_single_process_metrics_filtered_by_job():
+    """backend、worker 都导出全部指标，只在一个进程里有意义的量查询时必须带 job（测试 #81：审计链告警恒误报）。"""
+    root = Path(__file__).resolve().parents[2] / "deploy" / "monitoring"
+    text_all = (root / "prometheus" / "alerts.yml").read_text(encoding="utf-8") + \
+        (root / "grafana" / "dashboards" / "platform.json").read_text(encoding="utf-8").replace('\\"', '"')
+    owner = {"cp_audit_chain_ok": "worker", "cp_audit_chain_verified_timestamp_seconds": "worker",
+             "cp_workers_online": "backend", "cp_state_up": "backend"}
+    for name, job in owner.items():
+        uses = [m.group(0) for m in re.finditer(rf"{name}(\{{[^}}]*\}})?", text_all)]
+        assert uses, name
+        for sel in uses:
+            assert f'job="{job}"' in sel, (name, sel)

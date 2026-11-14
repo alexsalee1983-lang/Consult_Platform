@@ -57,7 +57,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "cp_workers_online",
+          "expr": "cp_workers_online{job=\"backend\"}",
           "legendFormat": ""
         }
       ],
@@ -137,7 +137,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "cp_state_up",
+          "expr": "cp_state_up{job=\"backend\"}",
           "legendFormat": "{{source}}"
         }
       ],
@@ -407,7 +407,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "min(cp_audit_chain_ok)",
+          "expr": "min(cp_audit_chain_ok{job=\"worker\"})",
           "legendFormat": "链完整（1）"
         },
         {
