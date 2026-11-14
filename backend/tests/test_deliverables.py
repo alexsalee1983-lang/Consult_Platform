@@ -121,7 +121,7 @@ def test_sources_are_parsed_and_checked(proj):
     assert next(k for k in s["knowledge"] if k["ref"] == doc_id)["layer_name"] == "依据"
     assert sorted(s["unresolved"]) == ["D-07", "L4-OPS-GEN-REF-99999"]
     d = c.get(_base(code)).json()
-    assert d["totals"] == {"evidence": 2, "knowledge": 2, "inferred": 1, "unresolved": 2}
+    assert d["totals"] == {"evidence": 2, "knowledge": 2, "inferred": 1, "unresolved": 2, "knowledge_updates": 0}
     assert d["sections"][0]["unresolved"] == s["unresolved"]
 
 
