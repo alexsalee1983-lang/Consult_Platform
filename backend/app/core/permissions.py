@@ -92,7 +92,8 @@ def require_any(*allowed: str):
 
     def dep(roles: set[str] = Depends(user_roles)) -> set[str]:
         if not roles & allowed_set:
-            raise HTTPException(403, "没有权限执行此操作")
+            need = "、".join(sorted(ROLE_NAMES.get(r, r) for r in allowed_set))
+            raise HTTPException(403, f"没有权限执行此操作（需要以下角色之一：{need}）")
         return roles
 
     return dep

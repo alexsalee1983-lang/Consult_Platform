@@ -350,3 +350,16 @@ def test_last_manager_cannot_leave_and_admins_cannot_join():
         assert c.put(f"/api/projects/TEST-LM/members/{sysadmin}", json={"project_role": "member"}).status_code == 422
     finally:
         c.__exit__(None, None, None)
+
+
+def test_forbidden_message_names_required_roles() -> None:
+    import pytest as _pytest
+    from fastapi import HTTPException
+
+    from app.core.permissions import CONSULTANT, KNOWLEDGE_EXPERT, require_any
+
+    dep = require_any(CONSULTANT, KNOWLEDGE_EXPERT)
+    with _pytest.raises(HTTPException) as e:
+        dep(roles=set())
+    assert e.value.status_code == 403
+    assert "顾问" in e.value.detail and "知识专家" in e.value.detail
