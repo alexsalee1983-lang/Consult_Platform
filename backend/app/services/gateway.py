@@ -407,7 +407,9 @@ def rerank_availability() -> str:
         if resp.status_code != 200:
             return f"down: HTTP {resp.status_code}"
         ids = {m.get("id") for m in (resp.json().get("data") or [])}
-        return "ok" if s.rerank_model in ids else f"down: 重排服务上没有 {s.rerank_model}"
+        if s.rerank_model in ids or s.rerank_external:   # 外部平台的模型列表默认可能不列重排模型，能连通即算可用
+            return "ok"
+        return f"down: 重排服务上没有 {s.rerank_model}"
     except (httpx.HTTPError, ValueError) as e:
         return f"down: {type(e).__name__}"
 

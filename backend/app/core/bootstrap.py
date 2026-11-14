@@ -56,6 +56,8 @@ def check_settings(s: Settings) -> None:
             raise BootstrapError("知识区要用单独的数据库和单独的账号（KB_DATABASE_URL 的库名、用户名都要与主库不同）")
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
+    if s.is_prod and s.rerank_external:
+        raise BootstrapError("生产环境不得使用外部重排服务（RERANK_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-14）")
 
 
 def _validate(s: Settings, label: str, username: str, password: str, totp_secret: str) -> None:
