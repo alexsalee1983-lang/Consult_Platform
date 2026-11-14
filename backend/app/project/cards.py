@@ -11,6 +11,9 @@
 - 同一项目里内容（评估项 + 现状）相同的卡不重复上传。
 - 上传者或项目经理可以撤下单张卡（内容清空，编号保留）。
 - Agent 经工具 project.evidence 读摘要卡（严格档项目返回摘要卡，标准档返回证据），不新增工具授权。
+- 评估项随产品（二期 A8）：项目配置快照里的 card_items（产品 strict.card_items + 模块 adds.card_items）非空时，
+  评估项只能取清单里的值（空白折叠后逐字比对），不在清单的记“评估项不在清单”；清单为空不限。模板带下清单，
+  现场工具据此给候选值并自检。快照读不出来时拒收上传（503），模板照旧下载、清单为空并注明。
 
 审计只记项目、编号、张数、字数和命中类别，不记卡片内容和文号。
 """
@@ -31,10 +34,13 @@ from ..core.permissions import PROJECT_MANAGER, membership
 from ..kb import deid
 from ..models import Project, User
 from ..models.consent import ProjectConsent, SummaryCard
+from ..products import config
 from ..services import guard
+from . import configs
 
 MAX_CARDS = 200                 # 一次最多上传多少张
 ITEM_MAX, FINDING_MAX, MAGNITUDE_MAX, REFS_MAX = 200, 2000, 100, 20
+ITEM_NOT_LISTED = "评估项不在清单"
 ONSITE_REF_RE = re.compile(r"[A-Z]{1,3}-\d{1,4}(?:-\d{1,3})?")   # D-03、I-02、纪要某条 I-04-07
 STANDARD_REFUSAL = "标准档项目不使用摘要卡：资料和纪要直接录入项目区"
 
@@ -251,8 +257,18 @@ def _digest(item: str, finding: str) -> str:
     return hashlib.sha256(f"{_norm(item)}\n{_norm(finding)}".encode()).hexdigest()
 
 
-def _check_batch(cards: list[CardIn], consent: ProjectConsent) -> tuple[list[dict], list[CardIn]]:
+def card_items(db: Session, project: Project) -> list[str] | None:
+    """本项目摘要卡评估项的可选值（项目配置快照）；空列表 = 不限，快照读不出来返回 None。"""
+    try:
+        return [_norm(x) for x in configs.snapshot(db, project).get("card_items") or [] if _norm(x)]
+    except config.CatalogError:
+        return None
+
+
+def _check_batch(cards: list[CardIn], consent: ProjectConsent,
+                 items: list[str] | None = None) -> tuple[list[dict], list[CardIn]]:
     problems: list[dict] = []
+    allowed = set(items or [])
     clean: list[CardIn] = []
     today = date.today()
     for i, c in enumerate(cards, start=1):
@@ -260,6 +276,8 @@ def _check_batch(cards: list[CardIn], consent: ProjectConsent) -> tuple[list[dic
         refs = list(dict.fromkeys(r.strip().upper() for r in (c.onsite_refs or []) if r and r.strip()))
         if not item:
             problems.append({"card": i, "field": "item", "kinds": ["缺内容"]})
+        elif allowed and item not in allowed:
+            problems.append({"card": i, "field": "item", "kinds": [ITEM_NOT_LISTED]})
         if not finding:
             problems.append({"card": i, "field": "finding", "kinds": ["缺内容"]})
         for field, text, limit in (("item", item, ITEM_MAX), ("finding", finding, FINDING_MAX),
@@ -292,7 +310,12 @@ def upload_cards(db: Session, user: User, project: Project, cards: list[CardIn])
                      reason="no_consent")
         raise CardError(422, "本项目没有有效的客户书面同意记录，不能上传摘要卡；请项目经理先登记同意")
 
-    problems, clean = _check_batch(cards, consent)
+    items = card_items(db, project)
+    if items is None:
+        audit.record(db, actor=user.username, action=action, result="error", project_code=project.code,
+                     reason="config")
+        raise CardError(503, "本项目的服务产品配置有问题，摘要卡评估项无法核对，请联系系统管理员")
+    problems, clean = _check_batch(cards, consent, items)
     if problems:
         audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
                      reason="card_rules", cards=len(cards),
@@ -366,6 +389,9 @@ def withdraw_card(db: Session, user: User, project: Project, card: SummaryCard) 
 def template(db: Session, project: Project) -> dict:
     """空白摘要卡模板（现场工具离场前下载）：字段说明和规则，不含任何客户内容。"""
     c = active_consent(db, project)
+    items = card_items(db, project)
+    items_note = ("服务产品配置有问题，评估项清单读不出来，平台上传时会拒收" if items is None
+                  else "评估项只能从清单里选" if items else "评估项不限")
     return {"project_code": project.code, "consent_active": c is not None, "consent_id": c.id if c else None,
             "fields": [{"key": "item", "name": "评估项", "max": ITEM_MAX, "required": True},
                        {"key": "finding", "name": "现状", "max": FINDING_MAX, "required": True,
@@ -377,7 +403,7 @@ def template(db: Session, project: Project) -> dict:
                        {"key": "client_reviewed_on", "name": "客户对接人审阅签字日期", "required": True}],
             "rules": [{"kind": k, "text": t} for k, t in CARD_RULES],
             "placeholders": ["【客户】", "【甲方】", "【人员1】", "【信息科技部负责人】", "【系统A】", "【供应商A】"],
-            "items": [], "checks": field_checks()}
+            "items": items or [], "items_note": items_note, "checks": field_checks()}
 
 
 def field_checks() -> dict:

@@ -51,6 +51,14 @@ test("整张卡检查：必填、证据编号（含三段）、审阅日期", ()
   assert.deepEqual(F.uploadBody([ok]).cards[0].onsite_refs, ["D-03", "I-04-07", "O-02"]);
 });
 
+test("评估项清单（随服务产品）：清单非空只能取清单值，空清单不限", () => {
+  const ok = { item: "监测  能力", finding: "夜间无人值守", magnitude: "", onsite_refs: "", client_reviewed_on: "2026-11-01" };
+  assert.deepEqual(F.checkCard(ok, C, [], ["安全组织", "监测 能力"]), []);
+  assert.deepEqual(F.checkCard(ok, C, [], ["安全组织"]), [{ field: "item", kinds: ["评估项不在清单"] }]);
+  assert.deepEqual(F.checkCard(ok, C, [], []), []);
+  assert.deepEqual(F.checkCard(ok, C, []), []);
+});
+
 test("对照表里没有的占位符会被提醒", () => {
   const cards = [{ item: "【客户】值班", finding: "【系统A】和【系统C】未复核 [S-01]", magnitude: "" }];
   assert.deepEqual(F.unmappedPlaceholders(cards, [{ placeholder: "【系统A】", real: "x" }, { placeholder: "【客户】", real: "y" }]), ["【系统C】"]);
