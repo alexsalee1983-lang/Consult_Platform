@@ -6,7 +6,7 @@
       question: 网络运营者对网络日志要留存多久？
       mode: basis                 # basis 依据查询（只查 L4）/ search 知识检索
       expect: [csl-art21-mlps]    # 期望命中的条目 key，命中其一即算对；空列表 = 期望查不到（应提示【依据待核实】）
-      product: SOC                # 可选，search 时按服务产品过滤
+      product: SOC                # 可选：按服务产品检索（本产品优先、再通用；二期 B2 起依据查询也用），报告按产品分组
 
 指标：
 - 准确率（验收口径）：期望命中的题，期望条目出现在前 3 条；期望查不到的题，结果为空。
@@ -53,6 +53,7 @@ class QuestionResult:
     expected_rerank: float | None = None
     top_wrong_rerank: float | None = None
     expected_rank_before: int | None = None   # 期望条目重排前在 RRF 候选里的名次
+    product: str = ""
 
 
 @dataclass
@@ -60,6 +61,7 @@ class EvalReport:
     total: int = 0
     accuracy: float = 0.0
     by_mode: dict = field(default_factory=dict)
+    by_product: dict = field(default_factory=dict)   # 产品代号（未写为“不限”）→ 题数、准确率
     similarity: dict = field(default_factory=dict)
     rerank_scores: dict = field(default_factory=dict)
     vector: str = ""
@@ -90,6 +92,8 @@ def load_questions(path: Path) -> list[dict]:
         seen.add(q["id"])
         if q.get("mode", "basis") not in ("basis", "search"):
             raise EvalError(f"{q['id']}：mode 只能是 basis 或 search")
+        if not isinstance(q.get("product", ""), str):
+            raise EvalError(f"{q['id']}：product 应是产品代号")
         if not isinstance(q.get("expect", []), list):
             raise EvalError(f"{q['id']}：expect 应是列表")
     return data
@@ -117,10 +121,11 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
     rerank_states: list[str] = []
     for q in questions:
         mode, expect = q.get("mode", "basis"), [str(x) for x in q.get("expect", [])]
+        product = str(q.get("product", "")).strip()
         if mode == "basis":
-            out = search.basis(db, user, q["question"], limit=TOP_K)
+            out = search.basis(db, user, q["question"], limit=TOP_K, product=product)
         else:
-            out = search.search(db, user, q["question"], product=q.get("product", ""), limit=TOP_K)
+            out = search.search(db, user, q["question"], product=product, limit=TOP_K)
         report.vector = out.get("vector", "")
         rerank_states.append(out.get("rerank", ""))
         hits = out["items"]
@@ -129,11 +134,12 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         correct = (rank is not None and rank <= ACCURACY_K) if expect else not hits
         exp_sim = hits[rank - 1]["similarity"] if rank else None
         wrong = [h["similarity"] for h, k in zip(hits, got, strict=True) if k not in expect and h["similarity"] is not None]
-        r = QuestionResult(q["id"], mode, expect, got, rank, correct, exp_sim, max(wrong) if wrong else None)
+        r = QuestionResult(q["id"], mode, expect, got, rank, correct, exp_sim, max(wrong) if wrong else None,
+                           product=product)
         # 重排分数：被门槛挡掉的依据查询以门槛 0 再查一次，只取分数
         scored, scored_keys = hits, got
         if mode == "basis" and rerank_states[-1] == "ok" and (not expect or rank is None):
-            scored = search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0)["items"]
+            scored = search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0, product=product)["items"]
             scored_keys = [keys.get(h["doc_id"]) or h["doc_id"] for h in scored]
         exp_hit = next((h for h, k in zip(scored, scored_keys, strict=True) if k in expect), None)
         if exp_hit:
@@ -156,6 +162,10 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
             "hit@5": round(sum(1 for r in pos if r.rank) / len(pos), 4) if pos else None,
             "mrr": round(sum(1 / r.rank for r in pos if r.rank) / len(pos), 4) if pos else None,
         }
+    for prod in sorted({r.product for r in report.results}):
+        rs = [r for r in report.results if r.product == prod]
+        report.by_product[prod or "不限"] = {"questions": len(rs),
+                                            "accuracy": round(sum(r.correct for r in rs) / len(rs), 4)}
     basis = [r for r in report.results if r.mode == "basis"]
     report.accuracy = round(sum(r.correct for r in basis) / len(basis), 4) if basis else 0.0
     report.similarity = {
@@ -190,6 +200,9 @@ def format_report(r: EvalReport) -> str:
         hits = "" if m["hit@1"] is None else \
             f"，前1 {m['hit@1']:.0%} / 前3 {m['hit@3']:.0%} / 前5 {m['hit@5']:.0%}，MRR {m['mrr']:.3f}"
         lines.append(f"{name}：{m['questions']} 题（其中期望查不到 {m['negatives']} 题），准确率 {m['accuracy']:.0%}{hits}")
+    if len(r.by_product) > 1 or (r.by_product and "不限" not in r.by_product):
+        lines.append("按产品：" + "；".join(f"{k} {m['questions']} 题、准确率 {m['accuracy']:.0%}"
+                                          for k, m in r.by_product.items()))
     lines += ["", "相似度分布（用于校准门槛）："]
     for k, label in (("expected_hits", "期望条目"), ("top_wrong", "不对但排在前面的"), ("negatives_max", "期望查不到的题里最高的")):
         s = r.similarity.get(k)

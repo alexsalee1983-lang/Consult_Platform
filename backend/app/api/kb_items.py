@@ -52,6 +52,7 @@ class ItemMetaIn(BaseModel):
     classification: str = "internal"
     visible_roles: list[str] = Field(default_factory=lambda: ["consultant", "admin"])
     owner: str = ""
+    tags: list[str] = Field(default_factory=list)
 
 
 class ContentIn(BaseModel):
@@ -156,6 +157,7 @@ class ItemOut(BaseModel):
     classification: str
     visible_roles: list[str]
     owner: str
+    tags: list[str] = []
     retired: bool
     title: str = ""
     current: VersionBrief | None = None
