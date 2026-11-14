@@ -43,6 +43,7 @@ from sqlalchemy.orm import Session
 from ..core import audit
 from ..core.config import get_settings
 from ..core.db import utcnow
+from ..core.errors import BAD_CHARS
 from ..kb.meta import LAYERS
 from ..models import Deliverable, Evidence, KbItem, KbVersion, Project, SummaryCard, User
 from . import deliverables as dsvc
@@ -314,7 +315,12 @@ def _source_labels(db: Session, project: Project, d: Deliverable) -> dict[str, s
                 KbVersion, KbVersion.id == KbItem.current_version_id).where(
                 KbItem.doc_id.in_(docs), KbItem.retired.is_(False), KbItem.current_version_id.is_not(None))).all():
             labels[doc_id] = f"知识库 {layer} {LAYERS.get(layer, '')}《{title}》"
-    return labels
+    return {k: _xml_safe(v) for k, v in labels.items()}
+
+
+def _xml_safe(text: str) -> str:
+    """去掉 Word（XML 1.0）写不进的字符。入口已拒收（core/errors.reject_control_chars），这里兜底旧数据。"""
+    return BAD_CHARS.sub("", text)
 
 
 # ---- 页眉页脚 ----
@@ -352,6 +358,7 @@ def export_deliverable(db: Session, user: User, project: Project, d: Deliverable
     values = {"{{项目代号}}": project.code, "{{服务}}": project.service, "{{行业}}": project.industry,
               "{{交付件编号}}": d.code, "{{交付件名称}}": d.title, "{{修订}}": f"v{d.revision}",
               "{{导出日期}}": now.strftime("%Y-%m-%d"), "{{状态}}": STATUS_NAMES.get(d.status, d.status)}
+    values = {k: _xml_safe(v) if isinstance(v, str) else v for k, v in values.items()}
     anchor = None
     for p in list(_paragraphs_everywhere(doc)):
         if p.text.strip() == BODY_MARK and anchor is None and p._parent is doc._body:
@@ -363,19 +370,19 @@ def export_deliverable(db: Session, user: User, project: Project, d: Deliverable
     labels = _source_labels(db, project, d)
     w = _Writer(doc, anchor, notes, labels)
     if anchor is None and template_kind == "builtin":
-        doc.add_heading(f"{d.code} {d.title}", level=0)
+        doc.add_heading(f"{d.code} {_xml_safe(d.title)}", level=0)
         doc.add_paragraph(f"项目：{project.code}　服务：{project.service}　修订：v{d.revision}　"
                           f"状态：{STATUS_NAMES.get(d.status, d.status)}　导出日期：{now:%Y-%m-%d}")
     versions = {}
     for s in d.sections:
         w.noted = set()
-        w.heading(f"{s.seq}　{s.title}", 1)
+        w.heading(f"{s.seq}　{_xml_safe(s.title)}", 1)
         v = dsvc.get_version(s)
         versions[str(s.seq)] = v.version if v else 0
         if v is None:
             w._inline(w._para(), "（本章还没有正文）")
             continue
-        w.body(v.body)
+        w.body(_xml_safe(v.body))
     if anchor is not None:
         anchor._p.getparent().remove(anchor._p)
     notes.save()
