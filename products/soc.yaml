@@ -1,0 +1,84 @@
+# SOC 运营体系设计（二期 A2：从代码搬出，只搬不改，决策记录 2026-11-14）
+# 格式见 docs/接口约定.md 第二节。交付链 instruction、query 与一期代码逐字一致（tests/test_soc_config.py 核对）；
+# 以后改提示词改这里，走 PR、负责人审批。stage、client_facing 是 A2 补的元数据，暂未被代码使用，待产品专家核对。
+code: SOC
+name: SOC 运营体系设计
+domain: OPS
+status: ready
+modules: []
+deliverables:
+- code: D1
+  title: 启动包
+  stage: 启动
+  client_facing: true
+- code: D2
+  title: 调研包
+  stage: 调研
+  client_facing: true
+- code: D3
+  title: 事实清单
+  stage: 调研
+  client_facing: false
+- code: D4
+  title: 现状评估报告
+  stage: 分析
+  client_facing: true
+- code: D5
+  title: 设计方案
+  stage: 设计
+  client_facing: true
+- code: D6
+  title: 制度文件包
+  stage: 设计
+  client_facing: true
+- code: D7
+  title: 实施路线图
+  stage: 设计
+  client_facing: true
+- code: D8
+  title: 高层汇报
+  stage: 验收
+  client_facing: true
+baseline:
+  domains:
+  - 组织与人员
+  - 流程
+  - 技术平台与数据源
+  - 度量与改进
+  frameworks:
+  - SOC 能力框架
+  - 等保 2.0
+  - 行业要求
+  basis: []
+chain:
+- key: facts
+  number: 3
+  name: 整理事实清单
+  agent: research-interview
+  inputs:
+  - evidence
+  output: D3
+  query: SOC 运营现状 事实 调研
+  instruction: 任务：交付链第 3 步。根据下面的本项目证据，整理 D3 事实清单：按 SOC 能力域（组织与人员、流程、技术平台与数据源、度量与改进等）分章列出已确认的事实，每条带证据编号；另起一章列“待补证据与矛盾点”。只写证据里有的事实，不推测现状。
+- key: gap
+  number: 4
+  name: 差距分析
+  agent: compliance-basis
+  inputs:
+  - D3
+  output: ''
+  query: SOC 能力 差距分析 等保 基线
+  instruction: 任务：交付链第 4 步。以下面的 D3 事实清单为输入，对照评估基线（SOC 能力框架、等保 2.0、行业要求，依据只能来自知识库检索结果，没有的标【依据待核实】）做差距分析：输出差距分析表（能力项、现状、要求与依据、差距、证据充分性）、业务影响 TOP 5、依据库缺口。证据不足的项列出来并发“证据不足”确认卡。用“差距分析、符合性初判”的说法，不出具测评或认证结论。
+- key: draft
+  number: 7
+  name: 现状评估报告初稿
+  agent: report-writer
+  inputs:
+  - run:gap
+  - D3
+  output: D4
+  query: SOC 现状评估报告 差距 建议
+  instruction: 任务：交付链第 7 步。根据下面的差距分析和 D3 事实清单，起草 D4 现状评估报告初稿：评估范围与方法、现状概述、主要差距与业务影响、依据说明、后续建议方向。结论必须来自差距分析，并标注证据编号和依据；这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、差距分析表原样照搬、确认卡、“测试”“内部”等字样），差距分析的结论改写成报告语言。
+gates: []
+strict:
+  card_items: []

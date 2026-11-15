@@ -16,6 +16,7 @@ import hashlib
 import json
 import re
 import string
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -522,3 +523,56 @@ def _cross_check(cat: Catalog) -> None:
 
 def validate(base: Path | None = None) -> list[str]:
     return load(base).problems
+
+
+# ---- 运行时读取（带缓存，文件变了自动重新读） ----
+
+DEFAULT_PRODUCT = "SOC"   # 一期项目的产品；A3 起立项必须选产品、运行时读项目快照
+
+
+class CatalogError(RuntimeError):
+    """配置缺失或有问题。消息只写类别，给运维看；详情用 catalog-check。"""
+
+
+_lock = threading.Lock()
+_cache: tuple[tuple, Catalog] | None = None
+
+
+def _stamp(base: Path) -> tuple:
+    files = [*sorted((base / "products").glob("*.yaml")), *sorted((base / "modules").glob("*.yaml")),
+             *sorted((base / "products" / RULES_DIR).glob("*"))]
+    return (str(base), *((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in files))
+
+
+def catalog() -> Catalog:
+    global _cache
+    base = catalog_dir()
+    stamp = _stamp(base)
+    with _lock:
+        if _cache is not None and _cache[0] == stamp:
+            return _cache[1]
+    cat = load(base)
+    with _lock:
+        _cache = (stamp, cat)
+    return cat
+
+
+def product(code: str) -> Product:
+    """取一个可用（ready）的产品配置；整套配置有问题时一律拒绝，不带病运行。"""
+    cat = catalog()
+    if cat.problems:
+        raise CatalogError(f"服务产品配置有 {len(cat.problems)} 个问题，请运行 python -m app.cli catalog-check")
+    prod = cat.products.get(code)
+    if prod is None or prod.status != "ready":
+        raise CatalogError(f"服务产品 {code} 没有可用的配置")
+    return prod
+
+
+def render(template: str, prod: Product, step_number: int = 0, module_names: tuple[str, ...] = (),
+           module_instructions: str = "") -> str:
+    """填提示词模板（变量见 TEMPLATE_VARS）；没有变量的模板原样返回。"""
+    if not _template_vars(template):
+        return template
+    return template.format(product_name=prod.name, domains="、".join(prod.domains),
+                           frameworks="、".join(prod.frameworks), basis="、".join(prod.basis), number=step_number,
+                           modules="、".join(module_names), module_instructions=module_instructions)

@@ -37,6 +37,7 @@ from ..agents import knowledge, runtime, tools
 from ..core import audit
 from ..core.db import SessionLocal, utcnow
 from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMember, User
+from ..products import config
 from ..services import gateway, guard, jobs, usage
 from . import cards as cards_svc
 from . import deliverables
@@ -56,14 +57,24 @@ class Step:
     agent: str
     deliverable: str         # 写入的交付件；空 = 产出存运行记录
     name: str
+    inputs: tuple[str, ...] = ()
+    query: str = ""          # 检索查询的固定部分
+    instruction: str = ""    # 已填好变量的任务说明
 
 
-STEPS = (
-    Step("facts", 3, "research-interview", "D3", "整理事实清单"),
-    Step("gap", 4, "compliance-basis", "", "差距分析"),
-    Step("draft", 7, "report-writer", "D4", "现状评估报告初稿"),
-)
-STEP_NAMES = {s.key: f"第 {s.number} 步 {s.name}" for s in STEPS}
+def steps(code: str = config.DEFAULT_PRODUCT) -> tuple[Step, ...]:
+    """交付链步骤，读服务产品配置（二期 A2：products/soc.yaml；A3 起按项目快照）。配置有问题抛 CatalogError。"""
+    prod = config.product(code)
+    return tuple(Step(s.key, s.number, s.agent, s.output, s.name, tuple(s.inputs), s.query,
+                      config.render(s.instruction, prod, s.number)) for s in prod.chain)
+
+
+def step_names(code: str = config.DEFAULT_PRODUCT) -> dict[str, str]:
+    try:
+        return {s.key: f"第 {s.number} 步 {s.name}" for s in steps(code)}
+    except config.CatalogError:
+        return {}
+
 
 OUTPUT_RULES = (
     "输出格式（平台据此解析，必须遵守）：\n"
@@ -81,21 +92,6 @@ STRICT_RULES = (
     "摘要卡里的现场证据编号只能写成“现场 D-03”，不加方括号；机构、人员、系统一律用占位符（【客户】【人员1】【系统A】），"
     "不写真实名称、职务加姓、IP、域名、产品名和版本号，不引用原话。"
 )
-
-INSTRUCTIONS = {
-    "facts": "任务：交付链第 3 步。根据下面的本项目证据，整理 D3 事实清单：按 SOC 能力域（组织与人员、流程、"
-             "技术平台与数据源、度量与改进等）分章列出已确认的事实，每条带证据编号；另起一章列“待补证据与矛盾点”。"
-             "只写证据里有的事实，不推测现状。",
-    "gap": "任务：交付链第 4 步。以下面的 D3 事实清单为输入，对照评估基线（SOC 能力框架、等保 2.0、行业要求，"
-           "依据只能来自知识库检索结果，没有的标【依据待核实】）做差距分析：输出差距分析表（能力项、现状、要求与依据、"
-           "差距、证据充分性）、业务影响 TOP 5、依据库缺口。证据不足的项列出来并发“证据不足”确认卡。"
-           "用“差距分析、符合性初判”的说法，不出具测评或认证结论。",
-    "draft": "任务：交付链第 7 步。根据下面的差距分析和 D3 事实清单，起草 D4 现状评估报告初稿：评估范围与方法、"
-             "现状概述、主要差距与业务影响、依据说明、后续建议方向。结论必须来自差距分析，并标注证据编号和依据；"
-             "这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、"
-             "差距分析表原样照搬、确认卡、“测试”“内部”等字样），差距分析的结论改写成报告语言。",
-}
-
 
 class RunError(ValueError):
     def __init__(self, status: int, message: str):
@@ -132,12 +128,17 @@ def start(db: Session, user: User, project: Project) -> AgentRun:
     if active is not None:
         _deny(db, user, project, action, "active_run")
         raise RunError(409, f"本项目已有未结束的交付链运行（#{active.id}），请等它结束或先取消")
-    signed = [s.deliverable for s in STEPS if s.deliverable and getattr(
+    try:
+        chain = steps()
+    except config.CatalogError as e:
+        _deny(db, user, project, action, "catalog")
+        raise RunError(503, f"服务产品配置有问题，交付链暂不可用：{e}") from e
+    signed = [s.deliverable for s in chain if s.deliverable and getattr(
         deliverables.get_deliverable(db, project, s.deliverable), "status", "") == "signed"]
     if signed:
         _deny(db, user, project, action, "signed")
         raise RunError(422, f"{'、'.join(signed)} 已签署，交付链不能再改写")
-    for s in STEPS:
+    for s in chain:
         try:
             runtime.ready_doc(db, s.agent)
         except runtime.AgentNotReady as e:
@@ -179,7 +180,7 @@ def on_card_resolved(db: Session, card: Confirmation) -> AgentRun | None:
         if _lock(db, run) != "waiting":
             db.commit()
             return None
-        finished = run.step_index >= len(STEPS)          # 最后一步发的卡：处理完就结束，不再排任务
+        finished = run.step_index >= len(steps())          # 最后一步发的卡：处理完就结束，不再排任务
         run.status, run.waiting_cards, run.updated_at = ("done" if finished else "queued"), [], utcnow()
         if finished:
             run.finished_at = run.updated_at
@@ -202,7 +203,11 @@ def get_run(db: Session, project: Project, run_id: int) -> AgentRun | None:
 
 
 def _step_key(run: AgentRun) -> str:
-    return STEPS[run.step_index].key if run.step_index < len(STEPS) else "end"
+    try:
+        chain = steps()
+    except config.CatalogError:
+        return "?"
+    return chain[run.step_index].key if run.step_index < len(chain) else "end"
 
 
 def _enqueue(db: Session, run: AgentRun, project: Project) -> None:
@@ -273,6 +278,11 @@ def _evidence_input(db: Session, user: User, agent: str, project: Project) -> st
     return "\n\n".join(parts)
 
 
+def _doc_input(step: Step) -> str:
+    """这一步读的交付件（配置 inputs 里不是 run: 开头的第一项）。"""
+    return next(i for i in step.inputs if i not in ("evidence",) and not i.startswith("run:"))
+
+
 def _deliverable_text(db: Session, project: Project, code: str) -> str:
     """平台按发起人的成员身份读交付件当前版本，交给下一步 Agent 作为输入。"""
     d = deliverables.get_deliverable(db, project, code)
@@ -320,12 +330,17 @@ def _step_job(payload: dict, ctx: jobs.JobContext) -> None:
         if not member or not user.is_active:
             _fail(db, run, project, "发起人已不是项目成员或账号已停用")
             return
-        if run.step_index >= len(STEPS):                 # 已经走完的运行直接结束，不让越界异常逃出去
+        try:
+            chain = steps()
+        except config.CatalogError as e:
+            _fail(db, run, project, f"服务产品配置有问题：{e}")
+            raise jobs.JobError(str(e), retry=False) from e
+        if run.step_index >= len(chain):                 # 已经走完的运行直接结束，不让越界异常逃出去
             run.status, run.waiting_cards = "done", []
             run.updated_at = run.finished_at = utcnow()
             db.commit()
             return
-        step = STEPS[run.step_index]
+        step = chain[run.step_index]
         run.status, run.updated_at = "running", utcnow()
         db.commit()
         try:
@@ -338,18 +353,18 @@ def _step_job(payload: dict, ctx: jobs.JobContext) -> None:
         except StepRetry as e:
             db.rollback()
             if ctx.attempt >= MAX_ATTEMPTS:
-                _fail(db, run, project, f"{STEP_NAMES[step.key]}：{e}")
+                _fail(db, run, project, f"第 {step.number} 步 {step.name}：{e}")
                 raise jobs.JobError(str(e), retry=False) from e
             _requeue(db, run)
             raise jobs.JobError(str(e)) from e
         except StepFailed as e:
             db.rollback()
-            _fail(db, run, project, f"{STEP_NAMES[step.key]}：{e}")
+            _fail(db, run, project, f"第 {step.number} 步 {step.name}：{e}")
             raise jobs.JobError(str(e), retry=False) from e
         except Exception as e:  # noqa: BLE001  意外错误：按任务重试，到上限时把运行标为失败，不让它停在 running
             db.rollback()
             if ctx.attempt >= MAX_ATTEMPTS:
-                _fail(db, run, project, f"{STEP_NAMES[step.key]}：内部错误（{type(e).__name__}）")
+                _fail(db, run, project, f"第 {step.number} 步 {step.name}：内部错误（{type(e).__name__}）")
                 raise jobs.JobError(type(e).__name__, retry=False) from e
             _requeue(db, run)
             raise
@@ -389,26 +404,28 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
             if not material:
                 _ask_for_evidence(db, user, project, run, step, record)
                 return
-            inputs, query = f"# 本项目证据\n\n{material}", "SOC 运营现状 事实 调研"
+            inputs, query = f"# 本项目证据\n\n{material}", step.query
         elif step.key == "gap":
-            facts = _deliverable_text(db, project, "D3")
+            src = _doc_input(step)
+            facts = _deliverable_text(db, project, src)
             if not facts:
-                raise StepFailed("D3 事实清单还没有正文")
-            inputs, query = f"# D3 事实清单（当前版本）\n\n{facts}", "SOC 能力 差距分析 等保 基线 " + facts[:200]
+                raise StepFailed(f"{src} 事实清单还没有正文")
+            inputs, query = f"# {src} 事实清单（当前版本）\n\n{facts}", f"{step.query} {facts[:200]}"
         else:
             gap = _last_output(run, "gap")
             if not gap:
                 raise StepFailed("没有差距分析结果")
-            facts = _deliverable_text(db, project, "D3")
-            inputs = f"# 差距分析（第 4 步产出）\n\n{gap}\n\n# D3 事实清单（当前版本）\n\n{facts}"[:INPUT_CHARS * 2]
-            query = "SOC 现状评估报告 差距 建议 " + gap[:200]
+            src = _doc_input(step)
+            facts = _deliverable_text(db, project, src)
+            inputs = f"# 差距分析（第 4 步产出）\n\n{gap}\n\n# {src} 事实清单（当前版本）\n\n{facts}"[:INPUT_CHARS * 2]
+            query = f"{step.query} {gap[:200]}"
         kb_block, refs = knowledge.retrieve(db, user, step.agent, project, query)
     except tools.ToolError as e:
         raise StepFailed(f"工具调用被拒绝（{e.status}）") from e
 
     confirmed = _resolved_cards(db, run)
     strict = STRICT_RULES if project.tier == "strict" else ""
-    message = "\n\n".join(x for x in (INSTRUCTIONS[step.key], OUTPUT_RULES, strict, confirmed, inputs) if x)
+    message = "\n\n".join(x for x in (step.instruction, OUTPUT_RULES, strict, confirmed, inputs) if x)
     try:
         c = gateway.complete(message, tier=project.tier, project_code=project.code, level=doc.level,
                              system=runtime.system_prompt(doc, card, kb_block))
@@ -457,7 +474,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     open_ids = [i for i in card_ids if db.get(Confirmation, i).status == "open"]
     if open_ids:
         run.status, run.waiting_cards = "waiting", open_ids
-    elif run.step_index >= len(STEPS):
+    elif run.step_index >= len(steps()):
         run.status, run.finished_at = "done", utcnow()
     else:
         run.status = "queued"
@@ -482,11 +499,11 @@ def _ask_for_evidence(db: Session, user: User, project: Project, run: AgentRun, 
     if run.status != "running":
         raise StepCancelled()
     r = tools.invoke(db, user, step.agent, "confirm.create", {
-        "kind": "证据不足", "title": "本项目还没有可用的摘要卡，无法整理 D3 事实清单" if project.tier == "strict"
-        else "本项目还没有访谈纪要或客户资料，无法整理 D3 事实清单",
+        "kind": "证据不足", "title": f"本项目还没有可用的摘要卡，无法整理 {step.deliverable} 事实清单" if project.tier == "strict"
+        else f"本项目还没有访谈纪要或客户资料，无法整理 {step.deliverable} 事实清单",
         "options": ["A 已补充访谈纪要或资料，继续整理", "B 暂停交付链"], "recommendation": "A",
         "reason": "第 3 步只能根据本项目证据整理事实，不能推测现状",
-        "impact": "选 A 后平台重新读取证据再整理；仍没有证据会再次停下", "deliverable": "D3"}, project.code)
+        "impact": "选 A 后平台重新读取证据再整理；仍没有证据会再次停下", "deliverable": step.deliverable}, project.code)
     record.status, record.refs, record.finished_at = "waiting", {"cards": [r["id"]]}, utcnow()
     db.add(record)
     if _lock(db, run) != "running":
@@ -518,7 +535,7 @@ def _write_deliverable(db: Session, user: User, project: Project, step: Step,
             continue
         r = tools.invoke(db, user, step.agent, "doc.generate",
                          {"action": "write", "deliverable": step.deliverable, "section": seq, "body": body,
-                          "note": f"交付链{STEP_NAMES[step.key]}"}, project.code)
+                          "note": f"交付链第 {step.number} 步 {step.name}"}, project.code)
         versions[seq] = r["version"]
     return {"deliverable": step.deliverable, "versions": versions}
 
