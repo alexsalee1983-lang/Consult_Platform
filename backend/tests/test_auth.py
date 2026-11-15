@@ -22,6 +22,7 @@ PROTECTED = [
     ("POST", "/api/chat"),
     ("POST", "/api/chat/stream"),
     ("GET", "/api/admin/usage"),
+    ("GET", "/api/admin/models"),
     ("GET", "/api/admin/agent-grants"),
     ("GET", "/api/agents"),
     ("POST", "/api/agents/x/tools/y"),

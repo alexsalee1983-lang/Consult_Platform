@@ -200,6 +200,7 @@ export const api = {
   lookupUsers: (q) => request(`/api/users/lookup?q=${encodeURIComponent(q)}`),
   // 系统管理员：账号与角色
   adminUsers: () => request("/api/admin/users"),
+  adminModels: () => request("/api/admin/models"),
   createUser: (username, display_name, roles) =>
     request("/api/admin/users", { method: "POST", body: JSON.stringify({ username, display_name, roles }) }),
   setRoles: (username, roles) =>
