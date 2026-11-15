@@ -7,13 +7,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..core.db import utcnow
-from ..models import KbItem, KbVersion
-from . import meta
+from ..models import KbItem, KbMapping, KbVersion
+from . import mapping, meta
 
 
 @dataclass
@@ -81,6 +81,7 @@ def next_doc_id(db: Session, m: ItemMeta) -> str:
 
 def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) -> KbVersion:
     c.check(item.layer)
+    rows = mapping.parse_rows(c.body) if item.doc_type == "MAP" else []   # 映射矩阵：正文表格必须能解析（B3）
     n = (db.scalar(select(func.max(KbVersion.version)).where(KbVersion.item_id == item.id)) or 0) + 1
     effective = c.effective_date
     review = c.review_date or (meta.default_review_date(item.layer, effective) if effective else None)
@@ -90,6 +91,9 @@ def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) 
                   ref_version=c.ref_version, ref_status=c.ref_status, effective_date=effective,
                   review_date=review, created_by=created_by)
     db.add(v)
+    if rows:
+        db.flush()
+        db.add_all(KbMapping(version_id=v.id, seq=i, **r.as_dict()) for i, r in enumerate(rows, 1))
     item.updated_at = utcnow()
     return v
 
@@ -125,6 +129,15 @@ def create_draft(db: Session, item: KbItem, c: VersionContent, created_by: str) 
     v = _new_version(db, item, c, created_by)
     db.commit()
     return v
+
+
+def replace_mapping_rows(db: Session, v: KbVersion) -> None:
+    """草稿正文改了以后重新解析映射行（只用于草稿；已提交、已发布的版本不再改）。格式不对抛 MetaError。"""
+    if v.item.doc_type != "MAP":
+        return
+    rows = mapping.parse_rows(v.body)
+    db.execute(delete(KbMapping).where(KbMapping.version_id == v.id))
+    db.add_all(KbMapping(version_id=v.id, seq=i, **r.as_dict()) for i, r in enumerate(rows, 1))
 
 
 def current_version(db: Session, item: KbItem) -> KbVersion | None:
