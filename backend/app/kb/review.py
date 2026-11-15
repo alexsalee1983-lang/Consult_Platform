@@ -133,7 +133,7 @@ def new_version(db: Session, user: User, item: KbItem, c: VersionContent, upload
 
 
 EDITABLE = ("title", "summary", "body", "applicability", "change_note", "source_detail", "ref_document",
-            "ref_version", "ref_status", "effective_date", "review_date")
+            "ref_version", "ref_status", "ref_code", "ref_replaced_by", "effective_date", "review_date")
 
 
 def edit_draft(db: Session, user: User, v: KbVersion, changes: dict) -> KbVersion:
