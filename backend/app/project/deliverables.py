@@ -224,11 +224,14 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
     if current is not None and current.body_sha == sha:
         raise DeliverableError(409, f"第 {seq} 章内容与当前版本 v{s.current_version} 相同，没有新建版本")
     sources = parse_sources(db, project, body)
-    local = sorted({x["code"] for x in sources["evidence"]} & evidence_svc.local_only_codes(db, project))
-    if local:                                      # 仅现场使用的资料不能引用（M4 ③）
+    gone = evidence_svc.withdrawn_codes(db, project)
+    local = sorted({x["code"] for x in sources["evidence"]} & set(gone))
+    if local:                                      # 仅现场使用（M4 ③）、已删除的证据不能引用
+        reason = "local_only" if any(gone[c] == "已标为仅现场使用" for c in local) else "deleted"
         audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
-                     deliverable=d.code, section=seq, reason="local_only", evidence=local)
-        raise DeliverableError(422, f"{'、'.join(local)} 已标为仅现场使用，不能在交付件里引用，请删去这些标注和据此写的内容")
+                     deliverable=d.code, section=seq, reason=reason, evidence=local)
+        listed = "、".join(f"{c}（{gone[c]}）" for c in local)
+        raise DeliverableError(422, f"{listed} 不能在交付件里引用，请删去这些标注和据此写的内容")
     v = SectionVersion(version=s.current_version + 1, body=body, char_count=len(body), body_sha=sha,
                        sources=sources, note=note, author=user.username, agent_code=agent_code)
     s.versions.append(v)
