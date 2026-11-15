@@ -345,7 +345,7 @@ def test_gateway_rerank_guard_order_and_errors(reranker, monkeypatch):
 def test_rerank_reorders_search_results(people, reranker):
     a = _publish(people, "壬午演练甲", "## 演练\n\n壬午演练的准备工作清单。")
     b = _publish(people, "壬午演练乙", "## 演练\n\n壬午演练的复盘报告写法，复盘要点。")
-    r = reranker(good=("复盘",))
+    r = reranker(good=("壬午演练乙",))       # 只认本用例的条目：共用库里别的用例的条目也可能含“复盘”，同分时会排到前面
     out = _search(people, "consultant", "壬午演练")
     assert out["rerank"] == "ok" and r.calls == 1
     ids = _ids(out)
