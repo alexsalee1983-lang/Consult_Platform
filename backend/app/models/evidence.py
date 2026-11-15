@@ -45,6 +45,9 @@ class ProjectDocument(Base):
     local_only_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     local_only_by: Mapped[str] = mapped_column(String(64), server_default="")
     local_only_ref: Mapped[str] = mapped_column(String(64), server_default="")    # 客户书面通知的文号，不写客户名称
+    # 正文哈希（迁移 0031）：解析出的文字去空白后的 sha256。另存、换格式但正文相同的文件按此识别为同一份资料，
+    # 仅现场使用的资料另存后也不能再上传。迁移前上传的资料为空串。
+    text_sha256: Mapped[str] = mapped_column(String(64), server_default="", index=True)
 
 
 class Evidence(Base):
