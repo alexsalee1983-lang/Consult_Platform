@@ -68,7 +68,7 @@ def test_basis_boosts_snapshot_standards(people):  # noqa: F811
         assert boosted.index(weak.doc_id) < boosted.index(strong.doc_id)
 
 
-def _project_with_snapshot(kb_tags: list[str]) -> tuple[str, str]:
+def _project_with_snapshot(kb_tags: list[str], **extra) -> tuple[str, str]:
     code = f"KP-{secrets.token_hex(3).upper()}"
     with SessionLocal() as db:
         db.add(Project(code=code, service="SOC 运营体系设计", industry="银行", tier="standard"))
@@ -78,6 +78,7 @@ def _project_with_snapshot(kb_tags: list[str]) -> tuple[str, str]:
         p = db.scalar(select(Project).where(Project.code == code))
         snap = config.compose_codes("SOC")
         snap["kb_tags"] = kb_tags
+        snap.update(extra)
         configs._store(db, p, snap, "test")
         db.commit()
     return code, name
@@ -140,3 +141,39 @@ def test_item_meta_default_tags_empty():
     m = ItemMeta(layer="L2", domain="OPS", product="SOC", doc_type="MTD", stage="设计", capabilities=["运营"])
     m.check()
     assert m.tags == []
+
+
+def test_industry_basis_config_and_boost(people, tmp_path):  # noqa: F811
+    """按行业加权行业依据（二期 B2 补充）：产品配置 baseline.industry_basis，项目行业对上时依据查询加权。"""
+    import yaml
+
+    raw = yaml.safe_load((config.catalog_dir() / "products" / "soc.yaml").read_text(encoding="utf-8"))
+    raw["baseline"]["industry_basis"] = {"银行": ["JR/T 88803-2021"], "电力": ["DL/T 88804"]}
+    good = tmp_path / "soc.yaml"
+    good.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    errs: list[str] = []
+    prod = config.parse_product(good, errs)
+    assert not errs and prod.industry_basis == {"银行": ("JR/T 88803-2021",), "电力": ("DL/T 88804",)}
+    assert config.compose(prod, ())["industry_basis"]["银行"] == ["JR/T 88803-2021"]
+    for bad in ([1], {"银行": "JR/T 1"}, {"银行": []}, {"": ["JR/T 1"]}):
+        raw["baseline"]["industry_basis"] = bad
+        good.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+        errs = []
+        config.parse_product(good, errs)
+        assert any("industry_basis" in e for e in errs), bad
+
+    strong = _publish(people, "管理要求丙", "## 5.3 值守\n\n应安排七乘二十四小时值守并记录交接班情况。", layer="L4",
+                      product="GEN", doc_type="REF", stage="通用", ref=("GB/T 99903", "2020", "current"))
+    weak = _publish(people, "行业要求丁", "## 6.3 值守\n\n应安排值守。", layer="L4", product="GEN",
+                    doc_type="REF", stage="通用", ref=("JR/T 88803", "2021", "current"))
+    q = {"query": "七乘二十四小时值守 交接班 记录", "limit": 20}
+    code, name = _project_with_snapshot([], industry_basis={"银行": ["JR/T 88803-2021"]})   # 项目行业为“银行”
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        user = db.scalar(select(User).where(User.username == name))
+        ids = _ids(tools.invoke(db, user, "compliance-basis", "basis.lookup", q, code))
+        assert ids.index(weak.doc_id) < ids.index(strong.doc_id)          # 银行项目：行业依据在前
+        p.industry = "电力"
+        db.commit()
+        ids = _ids(tools.invoke(db, user, "compliance-basis", "basis.lookup", q, code))
+        assert ids.index(strong.doc_id) < ids.index(weak.doc_id)          # 行业对不上：不加权

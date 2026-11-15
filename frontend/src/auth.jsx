@@ -76,7 +76,7 @@ export function isSysAdmin(user) {
 export function homePath(user) {
   if (isAuditor(user)) return "/audit";
   if (isSysAdmin(user)) return "/admin/users";
-  return "/projects";
+  return "/workbench";
 }
 
 export function HomeRedirect() {

@@ -118,7 +118,8 @@ def _quality_check(ctx: ToolContext, args: dict) -> dict:
 
 
 def _project_kb_prefs(ctx: ToolContext) -> dict:
-    """项目上下文里检索的默认值（二期 B2）：快照的产品、所选模块的 kb_tags、basis 列出的标准。
+    """项目上下文里检索的默认值（二期 B2）：快照的产品、所选模块的 kb_tags、basis 列出的标准
+    （B2 补充：项目行业在快照 industry_basis 里有对应的，行业依据排在前面一并加权）。
     没有项目或快照读不出来时都为空（检索照常进行，不按产品排序）。"""
     if ctx.project is None:
         return {}
@@ -129,8 +130,10 @@ def _project_kb_prefs(ctx: ToolContext) -> dict:
         snap = configs.snapshot(ctx.db, ctx.project)
     except config.CatalogError:
         return {}
-    return {"product": str(snap.get("product") or ""), "tags": list(snap.get("kb_tags") or []),
-            "basis": list(snap.get("basis") or [])}
+    industry = (ctx.project.industry or "").strip()
+    by_industry = list((snap.get("industry_basis") or {}).get(industry) or []) if industry else []
+    basis = list(dict.fromkeys(by_industry + list(snap.get("basis") or [])))   # 行业依据在前（二期 B2 补充）
+    return {"product": str(snap.get("product") or ""), "tags": list(snap.get("kb_tags") or []), "basis": basis}
 
 
 def _kb_search(ctx: ToolContext, args: dict) -> dict:
