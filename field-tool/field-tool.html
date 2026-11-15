@@ -262,17 +262,19 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); paddi
 
   const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 
+  const normSpace = (s) => String(s || "").replace(/\s+/g, " ").trim();
   function normRefs(v) {
     const list = Array.isArray(v) ? v : String(v || "").split(/[\s,，、;；]+/);
     return [...new Set(list.map((x) => String(x).trim().toUpperCase()).filter(Boolean))];
   }
 
-  /** 一张卡的全部问题：[{field, kinds}]。 */
-  function checkCard(card, C, mapping) {
+  /** 一张卡的全部问题：[{field, kinds}]。items 为模板带下的评估项清单（随服务产品，空 = 不限）。 */
+  function checkCard(card, C, mapping, items) {
     const out = [];
     const item = (card.item || "").trim(), finding = (card.finding || "").trim();
     if (!item) out.push({ field: "item", kinds: ["缺内容"] });
     else if (item.length > 200) out.push({ field: "item", kinds: ["超长"] });
+    else if (items && items.length && !items.map(normSpace).includes(normSpace(item))) out.push({ field: "item", kinds: ["评估项不在清单"] });
     if (!finding) out.push({ field: "finding", kinds: ["缺内容"] });
     else if (finding.length > 2000) out.push({ field: "finding", kinds: ["超长"] });
     if ((card.magnitude || "").length > 100) out.push({ field: "magnitude", kinds: ["超长"] });
@@ -461,7 +463,8 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); paddi
     state.template = tpl; state.checks = tpl.checks || null; C = F.compile(state.checks);
     if (tpl.project_code) $("projectCode").value = tpl.project_code;
     $("hdrProject").textContent = "项目 " + (tpl.project_code || "") + (tpl.consent_active === false ? " · 模板下载时尚未登记客户同意" : "");
-    $("cardHint").textContent = "可用占位符：" + (tpl.placeholders || []).join(" ") + "。规则：" + (tpl.rules || []).map((r) => r.kind).join("、");
+    $("cardHint").textContent = "可用占位符：" + (tpl.placeholders || []).join(" ") + "。规则：" + (tpl.rules || []).map((r) => r.kind).join("、")
+      + "。" + (tpl.items && tpl.items.length ? "评估项只能从清单里选：" + tpl.items.join("、") : (tpl.items_note || "评估项不限"));
   }
   $("tplFile").addEventListener("change", async (e) => {
     const f = e.target.files[0]; if (!f) return;
@@ -494,7 +497,8 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); paddi
   // 摘要卡
   const FIELDS = [["item", "评估项", "input"], ["finding", "现状（只写控制项层面的事实，用占位符）", "textarea"], ["magnitude", "数量级（如“约 30 个”）", "input"],
     ["onsite_refs", "现场证据编号（如 D-03 I-02，原文留在现场）", "input"], ["client_reviewed_on", "客户对接人审阅签字日期", "date"]];
-  function cardStatus(c) { return F.checkCard(c, C, state.mapping); }
+  const tplItems = () => (state.template && Array.isArray(state.template.items) ? state.template.items : []);
+  function cardStatus(c) { return F.checkCard(c, C, state.mapping, tplItems()); }
   function renderCards() {
     $("cardList").innerHTML = state.cards.map((c, i) => {
       const probs = cardStatus(c);
@@ -502,8 +506,8 @@ pre { white-space: pre-wrap; word-break: break-all; background: var(--s2); paddi
       return `<div class="pnl"><div class="row"><b>第 ${i + 1} 张</b>${chips}<span style="flex:1"></span><button class="btn dan" data-del="${i}">删除</button></div>
         <div class="grid2">${FIELDS.map(([k, n, t]) => `<div${k === "finding" ? ' style="grid-column:1/3"' : ""}><label>${n}</label>${t === "textarea"
           ? `<textarea data-i="${i}" data-f="${k}">${esc(c[k])}</textarea>`
-          : `<input data-i="${i}" data-f="${k}" type="${t === "date" ? "date" : "text"}" value="${esc(Array.isArray(c[k]) ? c[k].join(" ") : c[k])}">`}</div>`).join("")}</div></div>`;
-    }).join("");
+          : `<input data-i="${i}" data-f="${k}"${k === "item" && tplItems().length ? ' list="itemList"' : ""} type="${t === "date" ? "date" : "text"}" value="${esc(Array.isArray(c[k]) ? c[k].join(" ") : c[k])}">`}</div>`).join("")}</div></div>`;
+    }).join("") + `<datalist id="itemList">${tplItems().map((x) => `<option value="${esc(x)}">`).join("")}</datalist>`;
     const bad = state.cards.filter((c) => cardStatus(c).length).length;
     $("cardStat").textContent = `共 ${state.cards.length} 张，${bad} 张未通过自检`;
   }
