@@ -102,7 +102,7 @@ def test_cli_split_then_import(tmp_path):
         u = db.scalar(select(User).where(User.username == name))
         rs = importer.import_dir(db, u, out)
         assert [r.action for r in rs] == ["created"] * 9, [(r.file, r.message) for r in rs]
-        art3 = db.scalar(select(KbItem).where(KbItem.import_key.like("src-%-3")))
+        art3 = db.scalar(select(KbItem).where(KbItem.import_key == sources.src_key("中华人民共和国示范安全法", "3")))
         v = art3.versions[-1]
         assert (v.ref_code, v.ref_status, v.effective_date) == ("主席令第1号", "current", date(2030, 1, 1))
         assert importer.import_dir(db, u, out)[0].action == "skipped"     # 草稿未处理

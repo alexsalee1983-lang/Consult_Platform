@@ -127,6 +127,8 @@ MATRIX = [
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
+    (("GET", "/api/kb/samples", None),                  (403, 403, 403, 403, 403)),   # 抽检队列（二期 B10），同上
+    (("POST", "/api/kb/versions/999999/sample", {"decision": "pass"}), (404, 404, 403, 403, 403)),
     (("GET", "/api/admin/jobs", None),                  (403, 403, 200, 403, 403)),
     (("POST", "/api/admin/jobs/selfcheck", None),       (403, 403, 202, 403, 403)),
     (("GET", "/api/users/lookup?q=u_", None),           (200, 200, 403, 403, 403)),

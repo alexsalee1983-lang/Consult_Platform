@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     # 起草引用校验（二期 B8）：解读、映射、案例、异议应答引用的“文件 + 条款号”在库里找不到依据原文时不能提交审核。
     # 关掉只显示“待核”、不拦提交（例如依据原文还没切条入库的过渡期）。
     kb_citation_gate: bool = True
+    # 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：kb-source-publish 核验通过的 SRC 由平台自动发布，
+    # 每批按比例随机抽检；最近 20 次抽检不通过率超过上限时暂停自动发布、全部转人工审核，直到抽检恢复。
+    kb_src_auto_publish: bool = True
+    kb_sample_rate_src: float = 0.05
+    kb_sample_fail_max: float = 0.1
+    # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
+    kb_source_hosts: str = ""
 
     # 重排服务（/rerank，交叉编码模型，决策记录 2026-11-11），同样只经网关调用。留空表示不启用：检索只用 RRF 排序，
     # 依据查询退回上面的余弦相似度门槛。docker compose 默认指向 rerank 服务（tools/rerank）。

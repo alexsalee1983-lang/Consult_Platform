@@ -236,6 +236,8 @@ export const api = {
   kbReview: (id, role, decision, comment) =>
     request(`/api/kb/versions/${id}/review`, { method: "POST", body: JSON.stringify({ role, decision, comment }) }),
   kbQueue: () => request("/api/kb/review-queue"),
+  kbSamples: () => request("/api/kb/samples"),
+  kbSample: (versionId, decision, comment = "") => request(`/api/kb/versions/${versionId}/sample`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
   kbBasis: (q) => request(`/api/kb/basis?q=${encodeURIComponent(q)}`),

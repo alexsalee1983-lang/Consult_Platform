@@ -6,8 +6,41 @@ import { TopBar } from "../components/common.jsx";
 import { Chip, EMPTY_META, fmtDate, MetaForm, useKbMeta, VERSION_STATUS } from "../components/kb.jsx";
 
 const TABS = [
-  ["queue", "待审"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"],
+  ["queue", "待审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"],
 ];
+const ROLE_LABEL = { content: "内容", compliance: "合规", platform: "平台核验", sample: "抽检" };
+const SAMPLE_STATE = { pending: ["c-a", "待抽检"], passed: ["c-g", "抽检通过"], failed: ["c-r", "抽检不通过"] };
+
+function SampleActions({ v, onDone }) {
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function act(decision) {
+    setBusy(true);
+    setError("");
+    try {
+      await api.kbSample(v.id, decision, comment);
+      setComment("");
+      await onDone();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="sub">对照原件核对条号、条文是否逐字一致，以及文号、现行状态是否与原件相符。</div>
+      <textarea rows={2} placeholder="不通过时写明问题：哪一条、哪里与原件不一致" value={comment}
+        onChange={(e) => setComment(e.target.value)} />
+      <div className="row">
+        <button type="button" className="btnp" disabled={busy} onClick={() => act("pass")}>抽检通过</button>
+        <button type="button" className="btn" disabled={busy} onClick={() => act("fail")}>不通过</button>
+      </div>
+      {error && <div className="err" role="alert">{error}</div>}
+    </div>
+  );
+}
 
 function Diff({ lines }) {
   const body = lines.filter((l) => !l.startsWith("---") && !l.startsWith("+++"));
@@ -210,11 +243,13 @@ export default function KbReview() {
   const [v, setV] = useState(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [stats, setStats] = useState(null);
 
   const loadList = useCallback(async () => {
     setError("");
     try {
       if (tab === "queue") setList(await api.kbQueue());
+      else if (tab === "sample") { const s = await api.kbSamples(); setStats(s); setList(s.items); }
       else if (tab === "published") setList(await api.kbVersions({ status: "published" }));
       else setList(await api.kbVersions({ status: tab, mine: true }));
     } catch (e) {
@@ -250,6 +285,13 @@ export default function KbReview() {
             ))}
           </div>
           {error && <div className="err">{error}</div>}
+          {tab === "sample" && stats && (
+            <div className={stats.suspended || !stats.enabled ? "err" : "sub"}>
+              平台核验自动发布的依据原文按比例抽检 · 最近 {stats.checked} 次不通过 {stats.failed} 次
+              {stats.suspended ? `，超过 ${Math.round(stats.fail_max * 100)}%：自动发布已暂停，新入库的转人工审核` : ""}
+              {!stats.enabled ? " · 自动发布已关闭" : ""}
+            </div>
+          )}
           <ul className="pick">
             {list.map((x) => (
               <li key={x.id}>
@@ -279,6 +321,8 @@ export default function KbReview() {
                   {v.ref_document && <span className="chip c-v">依据：{v.ref_document} {v.ref_version}</span>}
                   {v.review_date && <span className="chip c-n">复审 {v.review_date}</span>}
                   {v.single_review && <span className="chip c-a">单人发布 · 待补复审</span>}
+                  {v.auto_review === "platform" && <span className="chip c-c">平台核验发布</span>}
+                  {SAMPLE_STATE[v.sample_state] && <span className={`chip ${SAMPLE_STATE[v.sample_state][0]}`}>{SAMPLE_STATE[v.sample_state][1]}</span>}
                 </div>
               </div>
               <div className="pad" style={{ gap: 14 }}>
@@ -303,14 +347,15 @@ export default function KbReview() {
                 <ul className="lst">
                   {v.reviews.map((r, i) => (
                     <li key={i} className="sb">
-                      <span>{r.reviewer}<span className="sub">（{r.review_role === "content" ? "内容" : "合规"}）</span>
+                      <span>{r.reviewer}<span className="sub">（{ROLE_LABEL[r.review_role] || r.review_role}）</span>
                         {r.comment && <div className="sub">{r.comment}</div>}</span>
                       <span className={`chip ${r.decision === "approve" ? "c-g" : "c-r"}`}>{r.decision === "approve" ? "采纳" : "退回"}</span>
                     </li>
                   ))}
                   {v.reviews.length === 0 && <li className="sub">还没有审核记录</li>}
                 </ul>
-                <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>
+                {v.auto_review === "platform" ? <div className="sub">依据原文：平台核验官方来源、原件哈希、文号和切分后自动发布，按比例抽检</div> : <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>}
+                {v.auto_review === "platform" && v.status === "published" && !["passed", "failed"].includes(v.sample_state) && hasRole(user, "knowledge_expert") && <SampleActions v={v} onDone={refresh} />}
                 {v.status === "in_review" && <ReviewActions v={v} onDone={refresh} />}
                 {v.status === "published" && <PublishedActions v={v} onDone={refresh} />}
               </section>

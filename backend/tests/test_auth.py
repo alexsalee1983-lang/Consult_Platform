@@ -112,6 +112,8 @@ PROTECTED = [
     ("POST", "/api/kb/versions/1/review"),
     ("GET", "/api/kb/review-queue"),
     ("GET", "/api/kb/review-due"),
+    ("GET", "/api/kb/samples"),
+    ("POST", "/api/kb/versions/1/sample"),
     ("GET", "/api/kb/search"),
     ("GET", "/api/kb/basis"),
     ("GET", "/api/kb/meta"),

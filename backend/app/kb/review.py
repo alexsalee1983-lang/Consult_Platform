@@ -45,7 +45,7 @@ def is_knowledge_user(db: Session, user: User) -> bool:
     return bool(roles_of(db, user.id) & KNOWLEDGE_ROLES)
 
 
-def _require_knowledge(db: Session, user: User) -> None:
+def require_knowledge(db: Session, user: User) -> None:
     if not is_knowledge_user(db, user):
         raise ReviewError(403, "只有知识专家、知识管理员能编辑和审核知识条目")
 
@@ -91,7 +91,7 @@ def _apply(v: KbVersion, fields: dict) -> None:
 # ---- 草稿 ----
 
 def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id: int | None = None) -> KbVersion:
-    _require_knowledge(db, user)
+    require_knowledge(db, user)
     fields = _source_fields(db, c, upload_id)
     _check_text(c.title, c.body)
     try:
@@ -106,7 +106,7 @@ def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id:
 
 
 def new_version(db: Session, user: User, item: KbItem, c: VersionContent, upload_id: int | None = None) -> KbVersion:
-    _require_knowledge(db, user)
+    require_knowledge(db, user)
     open_draft = db.scalar(select(KbVersion.id).where(KbVersion.item_id == item.id,
                                                       KbVersion.status.in_(("draft", "in_review"))))
     if open_draft:
@@ -137,7 +137,7 @@ EDITABLE = ("title", "summary", "body", "applicability", "change_note", "source_
 
 
 def edit_draft(db: Session, user: User, v: KbVersion, changes: dict) -> KbVersion:
-    _require_knowledge(db, user)
+    require_knowledge(db, user)
     if v.status != "draft":
         raise ReviewError(409, "只有草稿能修改；已提交的版本请等审核结果，退回的版本请建新版本")
     for k, val in changes.items():
@@ -160,7 +160,7 @@ def edit_draft(db: Session, user: User, v: KbVersion, changes: dict) -> KbVersio
 # ---- 提交与审核 ----
 
 def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
-    _require_knowledge(db, user)
+    require_knowledge(db, user)
     if v.status != "draft":
         raise ReviewError(409, "只有草稿能提交")
     if v.deid_status not in ("passed", "not_needed"):

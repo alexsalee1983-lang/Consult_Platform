@@ -12,6 +12,8 @@ POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
+GET  /api/kb/samples                     抽检队列：平台自动发布的依据原文中待抽检、抽检不通过的，附问题率（同上）
+POST /api/kb/versions/{id}/sample        抽检：decision=pass|fail（知识专家，不能是导入人；二期 B10）
 GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
 GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
 GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵、待复审、本月运营（知识专家、知识管理员）
@@ -30,7 +32,7 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
-from ..kb import citations
+from ..kb import autopublish, citations
 from ..kb import meta as kb_meta
 from ..kb import review as rv
 from ..kb import search as kb_search
@@ -106,6 +108,11 @@ class ReviewIn(BaseModel):
     comment: str = Field(default="", max_length=1000)
 
 
+class SampleIn(BaseModel):
+    decision: str = Field(pattern="^(pass|fail)$")
+    comment: str = Field(default="", max_length=1000)
+
+
 class ReasonIn(BaseModel):
     reason: str = Field(default="", max_length=200)
 
@@ -121,6 +128,8 @@ class VersionBrief(BaseModel):
     published_at: datetime | None
     review_date: date | None
     single_review: bool = False         # 单人发布，待补复审
+    auto_review: str = ""               # platform：平台核验自动发布（二期 B10）
+    sample_state: str = ""              # 抽检：pending / passed / failed
 
 
 class ReviewOut(BaseModel):
@@ -334,6 +343,21 @@ def review_queue(db: Session = Depends(get_db), user: User = Depends(current_use
 def review_due(days: int = Query(30, ge=0, le=366), db: Session = Depends(get_db), user: User = Depends(current_user)):
     _knowledge_only(db, user)
     return [_version_out(db, v, user) for v in rv.review_due(db, days)]
+
+
+@router.get("/samples")
+def samples(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _knowledge_only(db, user)
+    return {**autopublish.sample_stats(db), "items": [_version_out(db, v, user) for v in autopublish.sample_queue(db)]}
+
+
+@router.post("/versions/{version_id}/sample", response_model=VersionOut)
+def sample(version_id: int, body: SampleIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    try:
+        v = autopublish.sample_check(db, user, _version(db, version_id, user), body.decision, body.comment)
+    except rv.ReviewError as e:
+        raise _err(e) from e
+    return _version_out(db, v, user)
 
 
 def _search_error(e: kb_search.SearchError):
