@@ -17,7 +17,10 @@
     applicability: ……                # 可选
     ref_document: 中华人民共和国网络安全法   # L4 依据必填：文件名、版本号、生效状态
     ref_version: 2016
-    ref_status: current
+    ref_status: current              # current / upcoming / repealed / superseded
+    ref_code: GB/T 22239-2019        # 可选（二期 B7）：文号或标准号
+    ref_replaced_by: ……              # 可选：已被替代时写替代文件名和版本
+    effective_date: 2017-06-01       # 可选：施行日期
     ---
     ## 章节标题（依据类用条款号，如“第二十一条 网络安全等级保护”）
 
@@ -29,6 +32,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 
 import yaml
 
@@ -39,7 +43,7 @@ KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 META_KEYS = ("layer", "domain", "product", "doc_type", "stage", "capabilities", "industries", "classification",
              "visible_roles", "owner", "tags")
 CONTENT_KEYS = ("title", "source_type", "source_detail", "summary", "applicability", "change_note", "ref_document",
-                "ref_version", "ref_status")
+                "ref_version", "ref_status", "ref_code", "ref_replaced_by")
 
 
 class EntryError(ValueError):
@@ -88,6 +92,11 @@ def parse_entry(text: str) -> Entry:
     if "title" not in content_kw or "source_type" not in content_kw:
         raise EntryError("元数据缺少 title 或 source_type")
     content = VersionContent(body=body, **content_kw)
+    if head.get("effective_date") not in (None, ""):
+        try:
+            content.effective_date = date.fromisoformat(str(head["effective_date"]))
+        except ValueError as e:
+            raise EntryError(f"effective_date 不是 YYYY-MM-DD 日期：{head['effective_date']!r}") from e
     try:
         item_meta.check()
         content.check(item_meta.layer)
@@ -107,5 +116,7 @@ def format_entry(e: Entry) -> str:
         v = getattr(e.content, k)
         if k != "title" and v:
             head[k] = v
+    if e.content.effective_date:
+        head["effective_date"] = e.content.effective_date.isoformat()
     return "---\n" + yaml.safe_dump(head, allow_unicode=True, sort_keys=False).strip() + "\n---\n\n" + \
         e.content.body.strip() + "\n"

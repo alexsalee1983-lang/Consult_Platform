@@ -66,6 +66,8 @@ class ContentIn(BaseModel):
     ref_document: str = Field(default="", max_length=200)
     ref_version: str = Field(default="", max_length=64)
     ref_status: str = Field(default="", max_length=16)
+    ref_code: str = Field(default="", max_length=100)
+    ref_replaced_by: str = Field(default="", max_length=200)
     effective_date: date | None = None
     review_date: date | None = None
 
@@ -91,6 +93,8 @@ class EditIn(BaseModel):
     ref_document: str | None = Field(default=None, max_length=200)
     ref_version: str | None = Field(default=None, max_length=64)
     ref_status: str | None = Field(default=None, max_length=16)
+    ref_code: str | None = Field(default=None, max_length=100)
+    ref_replaced_by: str | None = Field(default=None, max_length=200)
     effective_date: date | None = None
     review_date: date | None = None
 
@@ -137,6 +141,8 @@ class VersionOut(VersionBrief):
     ref_document: str
     ref_version: str
     ref_status: str
+    ref_code: str = ""
+    ref_replaced_by: str = ""
     deid_status: str
     effective_date: date | None
     self_review_allowed: bool = False   # 公开资料单人发布开关允许作者本人审核这个版本
@@ -203,6 +209,7 @@ def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
     out = VersionOut(**_brief(v).model_dump(), doc_id=v.item.doc_id,
                      **{k: getattr(v, k) for k in ("summary", "body", "applicability", "change_note", "source_type",
                                                    "source_detail", "ref_document", "ref_version", "ref_status",
+                                                   "ref_code", "ref_replaced_by",
                                                    "deid_status", "effective_date")})
     if rv.is_knowledge_user(db, user):          # 审核信息只给知识侧角色
         out.self_review_allowed = rv.self_review_allowed(v)

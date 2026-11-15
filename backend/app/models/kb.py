@@ -72,6 +72,8 @@ class KbVersion(KbBase):
     ref_document: Mapped[str] = mapped_column(String(200), default="")
     ref_version: Mapped[str] = mapped_column(String(64), default="")
     ref_status: Mapped[str] = mapped_column(String(16), default="")
+    ref_code: Mapped[str] = mapped_column(String(100), default="")          # 文号或标准号（二期 B7）
+    ref_replaced_by: Mapped[str] = mapped_column(String(200), default="")   # 已被替代时：替代文件名和版本
     deid_status: Mapped[str] = mapped_column(String(16), default="pending")    # pending / passed / not_needed
     deid_report_id: Mapped[int | None] = mapped_column(ForeignKey("kb_deid_reports.id"), nullable=True)
     upload_id: Mapped[int | None] = mapped_column(ForeignKey("kb_uploads.id"), nullable=True)

@@ -60,6 +60,8 @@ class VersionContent:
     ref_document: str = ""
     ref_version: str = ""
     ref_status: str = ""
+    ref_code: str = ""
+    ref_replaced_by: str = ""
     effective_date: date | None = None
     review_date: date | None = None
 
@@ -87,7 +89,8 @@ def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) 
     v = KbVersion(item_id=item.id, version=n, status="draft", title=c.title.strip(), summary=c.summary,
                   body=c.body, applicability=c.applicability, change_note=c.change_note,
                   source_type=c.source_type, source_detail=c.source_detail, ref_document=c.ref_document,
-                  ref_version=c.ref_version, ref_status=c.ref_status, effective_date=effective,
+                  ref_version=c.ref_version, ref_status=c.ref_status, ref_code=c.ref_code,
+                  ref_replaced_by=c.ref_replaced_by, effective_date=effective,
                   review_date=review, created_by=created_by)
     db.add(v)
     item.updated_at = utcnow()

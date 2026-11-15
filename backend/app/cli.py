@@ -424,6 +424,24 @@ def usage_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_source_split(args: argparse.Namespace) -> int:
+    """依据原文切条（二期 B7）：按下载清单把公开资料机械切成 SRC 条目文件，不入库、不调模型。"""
+    from pathlib import Path
+
+    from .kb import sources
+
+    r = sources.split_all(Path(args.manifest), Path(args.dir), Path(args.out))
+    total = 0
+    for d in r.docs:
+        total += d.entries
+        extra = f"，退回 {d.rejected} 条（见 _rejected/）" if d.rejected else ""
+        print(f"{d.title}（{d.mode}）：{d.entries} 条{extra}" + (f"；{d.message}" if d.message else ""))
+    for s in r.skipped:
+        print(f"跳过：{s}", file=sys.stderr)
+    print(f"共 {len(r.docs)} 份、{total} 条，写到 {args.out}；核对后用 kb-import {args.out} --as <知识专家> --submit 导入")
+    return 0 if total else 1
+
+
 def catalog_check(args: argparse.Namespace) -> int:
     """校验 products/、modules/ 下的服务产品与模块配置（二期 A1，docs/接口约定.md）。"""
     from .products import config
@@ -671,6 +689,11 @@ def main(argv: list[str] | None = None) -> int:
     kd.add_argument("--product", default="", help="默认服务产品缩写，如 SOC、GEN")
     kd.add_argument("--domain", default="", help="默认一级目录缩写，如 OPS、CMP")
     kd.set_defaults(func=kb_draft)
+    kss = sub.add_parser("kb-source-split", help="依据原文切条：按下载清单把法规按条、标准按条款目录切成条目文件（不入库）")
+    kss.add_argument("manifest", help="下载清单 CSV（文件名、名称、文号/标准号、现行状态、切分方式……）")
+    kss.add_argument("--dir", required=True, help="下载文件所在目录（清单里的文件名相对它）")
+    kss.add_argument("--out", required=True, help="条目文件写到哪个目录")
+    kss.set_defaults(func=kb_source_split)
     ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
@@ -692,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
     br.add_argument("--bytes", type=int, default=0)
     br.set_defaults(func=backup_record)
     args = p.parse_args(argv)
-    if args.func is catalog_check:      # 只读配置文件，不连数据库（开发线 2 本地校验用）
+    if args.func in (catalog_check, kb_source_split):      # 只读配置文件，不连数据库（开发线 2 本地校验用）
         return args.func(args)
     try:
         upgrade_to_head()
