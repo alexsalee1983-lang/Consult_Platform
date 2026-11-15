@@ -146,3 +146,15 @@ def test_item_mode_manifest_and_verify():
     ok = GUIDE.replace("四、这一行项号跳过三，不是新的一项。\n", "").encode()
     e2, r2, _ = sources.split_doc(d, ok)
     assert "continuous" not in sources.verify(d, ok, e2, r2)
+
+
+def test_law_stops_at_appendix_and_strips_pdf_page_numbers():
+    d = sources.Doc(file="x.txt", title="示范等级保护管理办法")
+    text = ("第一条 运营者应当开展定级、等— 5 —级测评。\n第二条 本办法自发布之日起施行。\n"
+            "附件：示范定级审核表\n附件\n示范定级审核表\n第三条 表格里的说明，不是条款。\n")
+    entries, rejected, _ = sources.split_doc(d, text.encode())
+    assert [e.content.title for e in entries] == ["示范等级保护管理办法 第一条", "示范等级保护管理办法 第二条"]
+    assert "审核表" not in entries[1].content.body
+    assert sources.verify(d, text.encode(), entries, rejected) == ["official_source", "sha256", "code"]
+    pdf = sources.parse.ParsedDoc(kind="pdf", sections=[sources.parse.Section(heading="", text=text)])
+    assert sources._lines(pdf)[0] == "第一条 运营者应当开展定级、等级测评。"
