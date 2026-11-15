@@ -6,6 +6,7 @@
 - 收到 SIGTERM / SIGINT 时做完当前任务再退出。
 - 每 SCAN_SECONDS 秒扫描一次到期项目，自动发起删除申请（app/project/deletion.py）。
 - 每 DAILY_SECONDS 秒（启动时先做一次）排每日自检、停用长期未登录的账号（app/services/ops.py，二期 C5）。
+- 每 RECHECK_SECONDS 秒扫描一次交付件里的知识引用，标记使用反馈待复查（app/kb/recheck.py，二期 B13）。
 - 不做数据库迁移（由 backend 启动时完成），compose 里 worker 在 backend 健康后才启动。
 """
 from __future__ import annotations
@@ -27,6 +28,7 @@ from .services import jobs, ops
 POLL_SECONDS = 5
 SCAN_SECONDS = 3600        # 到期删除扫描间隔（平台规则自动发起到期删除，M4 ②）
 DAILY_SECONDS = 86400      # 每日自检、长期未登录停用（二期 C5 O5、O7）
+RECHECK_SECONDS = 86400    # 使用反馈待复查扫描间隔（二期 B13，app/kb/recheck.py）
 HEARTBEAT_TTL = 30
 HEARTBEAT_PREFIX = "worker:heartbeat:"
 ALIVE_FILE = Path(os.environ.get("WORKER_ALIVE_FILE", "/tmp/worker.alive"))  # nosec B108  容器内存活标记，不含数据
@@ -95,6 +97,19 @@ def _scan_due() -> None:
         log.warning("到期删除扫描出错：%s", type(e).__name__)
 
 
+def _scan_recheck() -> None:
+    """平台规则：顾问常删掉 Agent 引用的知识条目标为待复查，进抽检队列（可重复执行）。"""
+    from .kb import recheck
+
+    try:
+        with SessionLocal() as db:
+            made = recheck.scan(db)
+        if made:
+            log.info("标记待复查的知识条目 %d 条", len(made))
+    except Exception as e:  # noqa: BLE001
+        log.warning("待复查扫描出错：%s", type(e).__name__)
+
+
 def _verify_audit() -> None:
     """每小时校验一次审计哈希链，结果只进指标（cp_audit_chain_ok），失败时告警（docs/监控.md）；不写审计，免得每小时一条。"""
     try:
@@ -136,7 +151,7 @@ def main() -> None:
     r = _redis()
     log.info("worker %s 启动，任务种类：%s", wid, ", ".join(jobs.registered()))
     metrics.start_server(get_settings().metrics_port)
-    last_scan = last_daily = None
+    last_scan = last_daily = last_recheck = None
     while not _stop:
         heartbeat(r, wid)
         if last_scan is None or time.monotonic() - last_scan >= SCAN_SECONDS:
@@ -146,6 +161,9 @@ def main() -> None:
         if last_daily is None or time.monotonic() - last_daily >= DAILY_SECONDS:
             last_daily = time.monotonic()
             _daily()
+        if last_recheck is None or time.monotonic() - last_recheck >= RECHECK_SECONDS:
+            last_recheck = time.monotonic()
+            _scan_recheck()
         try:
             with SessionLocal() as db:
                 status = jobs.run_once(db, wid)
