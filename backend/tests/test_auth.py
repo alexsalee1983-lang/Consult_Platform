@@ -17,6 +17,7 @@ from .conftest import TEST_PASSWORD, TEST_USER, login, totp_code
 PROTECTED = [
     ("GET", "/api/projects"),
     ("GET", "/api/portfolio"),
+    ("GET", "/api/workbench"),
     ("GET", "/api/projects/BANK-A"),
     ("POST", "/api/projects"),
     ("GET", "/api/catalog/products"),
