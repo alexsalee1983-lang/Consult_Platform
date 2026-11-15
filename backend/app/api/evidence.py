@@ -36,7 +36,7 @@ class EvidenceOut(BaseModel):
     interviewee_role: str
     occurred_on: date | None
     chars: int
-    status: str                 # 资料：received 待解析 / parsed 已解析 / failed 解析失败 / local_only 仅现场使用；纪要和观察：ready
+    status: str                 # 资料：received 待解析 / parsed 已解析 / failed 解析失败 / local_only 仅现场使用；纪要和观察：ready；已删除：deleted
     filename: str               # 资料的原文件名（只在项目区接口里出现）
     error: str
     created_by: str
@@ -45,11 +45,17 @@ class EvidenceOut(BaseModel):
     local_only_at: datetime | None = None
     local_only_by: str = ""
     local_only_ref: str = ""
+    deleted_at: datetime | None = None
+    deleted_by: str = ""
 
 
 class EvidenceDetail(EvidenceOut):
     content: str                # 纪要 / 观察正文
     preview: list[dict]         # 资料解析后的前 20 节 [{heading, text}]
+
+
+class RenameIn(BaseModel):
+    title: str   # 长度在服务层校验：非成员先得到 404，不因请求体先报 422
 
 
 class LocalOnlyIn(BaseModel):
@@ -68,11 +74,13 @@ def _out(e: Evidence, cls=EvidenceOut, **extra):
     d = e.document
     return cls(code=e.code, kind=e.kind, kind_name=EVIDENCE_KIND_NAMES.get(e.kind, e.kind), title=e.title,
                interviewee_role=e.interviewee_role, occurred_on=e.occurred_on,
-               chars=d.char_count if d else e.char_count, status=d.status if d else "ready",
+               chars=d.char_count if d else e.char_count,
+               status="deleted" if e.deleted_at else d.status if d else "ready",
                filename=d.filename if d else "", error=d.error if d else "", created_by=e.created_by,
                created_at=e.created_at, local_only=bool(d and d.local_only),
                local_only_at=d.local_only_at if d else None, local_only_by=d.local_only_by if d else "",
-               local_only_ref=d.local_only_ref if d else "", **extra)
+               local_only_ref=d.local_only_ref if d else "", deleted_at=e.deleted_at, deleted_by=e.deleted_by,
+               **extra)
 
 
 def _raise(e: ev_svc.EvidenceError):
@@ -133,6 +141,38 @@ def mark_local_only(code: str, evidence: str, body: LocalOnlyIn, db: Session = D
         raise HTTPException(404, "证据不存在")
     try:
         ev_svc.mark_local_only(db, user, p, e, body.request_ref)
+    except ev_svc.EvidenceError as err:
+        _raise(err)
+    db.refresh(e, attribute_names=["document"])
+    return _out(e)
+
+
+def _member_evidence(db: Session, code: str, evidence: str, user: User) -> tuple:
+    p = project_for_member(db, code, user)
+    e = ev_svc.get_evidence(db, p, evidence)
+    if e is None:
+        raise HTTPException(404, "证据不存在")
+    return p, e
+
+
+@router.patch("/{code}/evidences/{evidence}", response_model=EvidenceOut)
+def rename_evidence(code: str, evidence: str, body: RenameIn, db: Session = Depends(get_db),
+                    user: User = Depends(current_user)):
+    """改标题（录入人或项目经理）：编号不变；标题过机密级检测，审计不记标题。"""
+    p, e = _member_evidence(db, code, evidence, user)
+    try:
+        ev_svc.rename_evidence(db, user, p, e, body.title)
+    except ev_svc.EvidenceError as err:
+        _raise(err)
+    return _out(e)
+
+
+@router.delete("/{code}/evidences/{evidence}", response_model=EvidenceOut)
+def delete_evidence(code: str, evidence: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """删除证据（录入人或项目经理，不可撤销）：编号保留不复用，内容和文件清空；已签署交付件引用的 409。"""
+    p, e = _member_evidence(db, code, evidence, user)
+    try:
+        ev_svc.delete_evidence(db, user, p, e)
     except ev_svc.EvidenceError as err:
         _raise(err)
     db.refresh(e, attribute_names=["document"])
