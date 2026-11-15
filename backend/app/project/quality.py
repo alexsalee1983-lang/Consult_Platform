@@ -226,12 +226,13 @@ def gate(db: Session, d: Deliverable) -> Gate:
     empty = [str(s.seq) for s in d.sections if not s.current_version]
     if empty:
         reasons.append(f"第 {'、'.join(empty)} 章还没有正文")
-    local = evidence_svc.local_only_codes(db, d.project)
-    if local:                                  # 评审之后才标为仅现场使用的资料：签署前实时检查
+    local = evidence_svc.withdrawn_codes(db, d.project)
+    if local:                                  # 评审之后才标为仅现场使用或删除的证据：签署前实时检查
         cited = sorted({x.get("code") for s in d.sections if (v := deliverables.get_version(s)) is not None
-                        for x in (v.sources or {}).get("evidence", [])} & local)
+                        for x in (v.sources or {}).get("evidence", [])} & set(local))
         if cited:
-            reasons.append(f"正文引用了已标为仅现场使用的资料 {'、'.join(cited)}，删去后重新评审")
+            listed = "、".join(f"{c}（{local[c]}）" for c in cited)
+            reasons.append(f"正文引用了不能使用的证据 {listed}，删去后重新评审")
     stale = kb_ref_states(db, cited_kb_refs(d))      # 评审之后条目下线、依据废止：签署前实时检查
     bad = sorted(ref for ref, st in stale.items() if st in (KB_GONE, KB_REPEALED))
     if bad:
@@ -284,6 +285,12 @@ def request_review(db: Session, user: User, project: Project, d: Deliverable) ->
 
 # ---- 质量评审：硬规则 ----
 
+def covers(text: str, item: str) -> bool:
+    """coverage 规则：清单项在正文里单独出现才算。条款号按边界判断，“5.1”不会被“5.10”“15.1”“A.5.1.2”冒充。"""
+    pat = rf"(?<![0-9A-Za-z.]){re.escape(item)}(?![0-9A-Za-z]|\.[0-9A-Za-z])"
+    return re.search(pat, text) is not None
+
+
 def _issue(severity: str, location: str, dimension: str, problem: str, suggestion: str, by: str) -> dict:
     return {"severity": severity, "location": location[:100], "dimension": dimension[:40],
             "problem": problem[:500], "suggestion": suggestion[:500], "by": by}
@@ -297,9 +304,11 @@ def qualification_hits(text: str) -> int:
     return n
 
 
-def rule_issues(d: Deliverable, versions: dict, local_only: set[str] | frozenset[str] = frozenset(),
+def rule_issues(d: Deliverable, versions: dict,
+                local_only: set[str] | frozenset[str] | dict[str, str] = frozenset(),
                 strict: bool = False, kb_states: dict[str, str] | None = None) -> tuple[list[dict], bool]:
-    """返回 (问题清单, 是否命中机密级)。只用标注和类别描述，不摘正文。local_only：已标为仅现场使用的证据编号；
+    """返回 (问题清单, 是否命中机密级)。只用标注和类别描述，不摘正文。
+    local_only：不能引用的证据编号；传 withdrawn_codes() 的 {编号: 原因} 时区分仅现场使用和已删除，传集合时都按仅现场使用。
     kb_states：kb_ref_states 的结果（引用条目的当前状态）。"""
     kb_states = kb_states or {}
     issues: list[dict] = []
@@ -338,10 +347,16 @@ def rule_issues(d: Deliverable, versions: dict, local_only: set[str] | frozenset
             hit = sorted(r for r in refs if kb_states.get(r) == state)
             if hit:
                 issues.append(_issue(severity, loc, "证据链 / 依据", f"{problem}：{'、'.join(hit[:10])}", suggestion, "rule"))
-        cited = sorted({x.get("code") for x in src.get("evidence", [])} & set(local_only))
-        if cited:
-            issues.append(_issue("阻断", loc, "保密", f"引用了已标为仅现场使用的资料：{'、'.join(cited)}",
+        cited = {x.get("code") for x in src.get("evidence", [])} & set(local_only)
+        reasons = local_only if isinstance(local_only, dict) else {}
+        local = sorted(c for c in cited if reasons.get(c, "已标为仅现场使用") == "已标为仅现场使用")
+        if local:
+            issues.append(_issue("阻断", loc, "保密", f"引用了已标为仅现场使用的资料：{'、'.join(local)}",
                                  "删去这些标注和据此写的内容", "rule"))
+        deleted = sorted(cited - set(local))
+        if deleted:
+            issues.append(_issue("阻断", loc, "证据链", f"引用了已删除的证据：{'、'.join(deleted)}",
+                                 "删去这些标注和据此写的内容，或改用其他证据", "rule"))
         counts = src.get("counts", {})
         if counts.get("inferred", 0) and not counts.get("evidence", 0) and not counts.get("knowledge", 0):
             issues.append(_issue("重要", loc, "证据链", "本章结论只有推断，没有客户证据或知识库来源",
@@ -371,7 +386,7 @@ def gate_issues(d: Deliverable, versions: dict, gates: list[dict]) -> list[dict]
         msg = g.get("message", "")
         kind = g.get("kind")
         if kind == "coverage":
-            missing = [i for i in g.get("items", []) if i not in full]
+            missing = [i for i in g.get("items", []) if not covers(full, i)]
             if missing:
                 more = f" 等 {len(missing)} 项" if len(missing) > 20 else ""
                 issues.append(_issue(sev, "全文", dim, f"{msg}：缺 {'、'.join(missing[:20])}{more}",
@@ -506,7 +521,7 @@ def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverab
 
 
 def _execute(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview) -> None:
-    issues, confidential = rule_issues(d, r.versions, evidence_svc.local_only_codes(db, project),
+    issues, confidential = rule_issues(d, r.versions, evidence_svc.withdrawn_codes(db, project),
                                        strict=project.tier == "strict",
                                        kb_states=kb_ref_states(db, cited_kb_refs(d, r.versions)))
     gates = project_gates(db, project)

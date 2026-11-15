@@ -85,3 +85,11 @@ def test_broken_snapshot_blocks(team, model):  # noqa: F811  （夹具来自 tes
     rv = _review(member, code)
     broken = [i for i in rv["issues"] if i["dimension"] == "产品规则"]
     assert len(broken) == 1 and broken[0]["severity"] == "阻断" and not broken[0]["waivable"]
+
+
+def test_coverage_matches_whole_item_only():
+    from app.project.quality import covers
+    text = "SoA：5.10 已覆盖；A.5.12 不适用；15.1 无；8.34。值守安排见第 2 章。"
+    assert not covers(text, "5.1") and not covers(text, "A.5.1") and not covers(text, "8.3")
+    assert covers(text, "5.10") and covers(text, "A.5.12") and covers(text, "8.34") and covers(text, "值守")
+    assert covers("控制 5.1、5.2 已实施", "5.1") and covers("（5.1）", "5.1") and covers("5.1\n", "5.1")
