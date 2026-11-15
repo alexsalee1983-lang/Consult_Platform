@@ -239,6 +239,12 @@ def request_review(db: Session, user: User, project: Project, d: Deliverable) ->
 
 # ---- 质量评审：硬规则 ----
 
+def covers(text: str, item: str) -> bool:
+    """coverage 规则：清单项在正文里单独出现才算。条款号按边界判断，“5.1”不会被“5.10”“15.1”“A.5.1.2”冒充。"""
+    pat = rf"(?<![0-9A-Za-z.]){re.escape(item)}(?![0-9A-Za-z]|\.[0-9A-Za-z])"
+    return re.search(pat, text) is not None
+
+
 def _issue(severity: str, location: str, dimension: str, problem: str, suggestion: str, by: str) -> dict:
     return {"severity": severity, "location": location[:100], "dimension": dimension[:40],
             "problem": problem[:500], "suggestion": suggestion[:500], "by": by}
@@ -316,7 +322,7 @@ def gate_issues(d: Deliverable, versions: dict, gates: list[dict]) -> list[dict]
         msg = g.get("message", "")
         kind = g.get("kind")
         if kind == "coverage":
-            missing = [i for i in g.get("items", []) if i not in full]
+            missing = [i for i in g.get("items", []) if not covers(full, i)]
             if missing:
                 more = f" 等 {len(missing)} 项" if len(missing) > 20 else ""
                 issues.append(_issue(sev, "全文", dim, f"{msg}：缺 {'、'.join(missing[:20])}{more}",
