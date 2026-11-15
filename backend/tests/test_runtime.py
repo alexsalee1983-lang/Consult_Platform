@@ -77,7 +77,8 @@ def test_readiness_rules():
 def test_md_tools_mismatch_is_reported_not_enforced():
     with SessionLocal() as db:
         infos = {i.code: i for i in runtime.list_agents(db)}
-    assert infos["solution-designer"].notes == []               # md 与授权表一致
+    # md 与授权表一致；映射查询（二期 B3，迁移 0035）待负责人同意后补进 md 的 tools，补之前只提示这一项
+    assert infos["solution-designer"].notes in ([], ["已授权但 md 未写：kb.mapping"])
     assert any("RAG 检索" in n for n in infos["consultant-lead"].notes)  # 旧 md 写法，只提示
 
 

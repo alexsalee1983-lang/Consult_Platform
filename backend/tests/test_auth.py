@@ -16,6 +16,8 @@ from .conftest import TEST_PASSWORD, TEST_USER, login, totp_code
 # 所有业务接口：未登录一律 401。新增接口时加到这里。
 PROTECTED = [
     ("GET", "/api/projects"),
+    ("GET", "/api/portfolio"),
+    ("GET", "/api/workbench"),
     ("GET", "/api/projects/BANK-A"),
     ("POST", "/api/projects"),
     ("GET", "/api/catalog/products"),
@@ -32,6 +34,7 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/conversations"),
     ("GET", "/api/conversations/1"),
     ("POST", "/api/conversations/1/messages"),
+    ("POST", "/api/conversations/1/handoff"),
     ("POST", "/api/gateway/check"),
     ("GET", "/api/audit"),
     ("GET", "/api/audit/verify"),
@@ -42,6 +45,7 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/evidences/I-01"),
     ("POST", "/api/projects/BANK-A/documents"),
     ("POST", "/api/projects/BANK-A/notes"),
+    ("POST", "/api/projects/BANK-A/notes/extract"),
     ("POST", "/api/projects/BANK-A/evidences/I-01/local-only"),
     ("PATCH", "/api/projects/BANK-A/evidences/I-01"),
     ("DELETE", "/api/projects/BANK-A/evidences/I-01"),
@@ -114,6 +118,8 @@ PROTECTED = [
     ("POST", "/api/kb/versions/1/review"),
     ("GET", "/api/kb/review-queue"),
     ("GET", "/api/kb/review-due"),
+    ("GET", "/api/kb/samples"),
+    ("POST", "/api/kb/versions/1/sample"),
     ("GET", "/api/kb/search"),
     ("GET", "/api/kb/basis"),
     ("GET", "/api/kb/meta"),

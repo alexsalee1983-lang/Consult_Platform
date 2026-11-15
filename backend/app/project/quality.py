@@ -8,6 +8,8 @@
   章节没有正文 → 阻断；正文命中机密级检测 → 阻断（此时不发往模型，只出硬规则结果）；
   出现测评 / 认证结论用语（资质边界）→ 阻断；来源标注核对不上（证据编号不存在、知识库条目不存在或已下线）→ 阻断；
   整章只有 [推断]、没有证据和知识库来源 → 重要。
+  依据时效（二期 B9）：评审时按知识库当前状态重新核对引用的条目——已下线、依据已废止或已被替代（ref_status repealed / superseded）→ 阻断；
+  依据即将实施（upcoming，或施行日期晚于今天）→ 重要。签署门禁再实时查一次已下线 / 已废止。
   以上是通用层（所有产品都查，资质边界用语规则只在这里）。二期 A6 起再查本项目配置快照里的产品层、模块层规则
   （products/*.yaml、modules/*.yaml 的 gates，类型只有 coverage / required_sections / forbidden_terms / min_sources，
   见 docs/接口约定.md 第二节），level blocking → 阻断、major → 重要，同样 by = rule、不能驳回；
@@ -29,7 +31,7 @@
 
 驳回阻断（负责人 2026-11-12 定，迁移 0022）：AI 给意见、人来定夺。
 - 项目经理可以逐条驳回质量评审 Agent（by = agent）提出的阻断问题，必须写理由（去掉空白至少 10 个字）；只追加，不能撤销（要恢复就重新评审）。
-- 平台硬规则（by = rule）判出的阻断不能驳回：缺正文、机密级、测评 / 认证结论用语、来源核对不上。
+- 平台硬规则（by = rule）判出的阻断不能驳回：缺正文、机密级、测评 / 认证结论用语、来源核对不上、引用已下线条目或已废止依据。
 - 只能驳回最近一次已完成、且针对当前修订的评审；交付件一改，新评审的阻断要重新处理。
 - Agent 统计的阻断数比问题清单里列出的多（没法逐条驳回）时，多出的部分照样算阻断，要重新评审。
 - 门禁用“未驳回的阻断”判断；驳回记录在签署流程里显示，提交、签署的审计记下驳回条数。
@@ -40,6 +42,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -48,7 +51,7 @@ from ..agents import knowledge, runtime, tools
 from ..core import audit
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
-from ..models import Deliverable, Project, QualityReview, ReviewWaiver, SignOff, User
+from ..models import Deliverable, KbItem, KbVersion, Project, QualityReview, ReviewWaiver, SignOff, User
 from ..products import config
 from ..services import gateway, guard, jobs, usage
 from . import cards, configs, deliverables
@@ -123,6 +126,44 @@ class Blocking:
 
 # ---- 公共 ----
 
+KB_GONE, KB_REPEALED, KB_UPCOMING = "gone", "repealed", "upcoming"
+
+
+def cited_kb_refs(d: Deliverable, versions: dict | None = None) -> set[str]:
+    """各章（versions 指定的版本，不传取当前版本）引用的、写入时核对得上的知识库条目编号。"""
+    refs: set[str] = set()
+    for s in d.sections:
+        if versions is None:
+            v = deliverables.get_version(s)
+        else:
+            ver = int(versions.get(str(s.seq), 0) or 0)
+            v = deliverables.get_version(s, ver) if ver else None
+        if v is not None:
+            refs |= {x["ref"] for x in (v.sources or {}).get("knowledge", []) if x.get("found")}
+    return refs
+
+
+def kb_ref_states(db: Session, refs: set[str], today: date | None = None) -> dict[str, str]:
+    """按知识库当前状态核对条目：已下线 / 没有现行版本 → gone；依据已废止 → repealed；
+    即将实施（或施行日期晚于今天）→ upcoming；正常的不返回。"""
+    if not refs:
+        return {}
+    today = today or date.today()
+    rows = {doc_id: (retired, status, eff) for doc_id, retired, status, eff in db.execute(
+        select(KbItem.doc_id, KbItem.retired, KbVersion.ref_status, KbVersion.effective_date)
+        .outerjoin(KbVersion, KbVersion.id == KbItem.current_version_id)
+        .where(KbItem.doc_id.in_(refs))).all()}
+    out: dict[str, str] = {}
+    for ref in refs:
+        row = rows.get(ref)
+        if row is None or row[0] or row[1] is None:
+            out[ref] = KB_GONE
+        elif row[1] in ("repealed", "superseded"):
+            out[ref] = KB_REPEALED
+        elif row[1] == "upcoming" or (row[2] is not None and row[2] > today):
+            out[ref] = KB_UPCOMING
+    return out
+
 def _snapshot(d: Deliverable) -> dict:
     return {str(s.seq): s.current_version for s in d.sections}
 
@@ -192,6 +233,10 @@ def gate(db: Session, d: Deliverable) -> Gate:
         if cited:
             listed = "、".join(f"{c}（{local[c]}）" for c in cited)
             reasons.append(f"正文引用了不能使用的证据 {listed}，删去后重新评审")
+    stale = kb_ref_states(db, cited_kb_refs(d))      # 评审之后条目下线、依据废止：签署前实时检查
+    bad = sorted(ref for ref, st in stale.items() if st in (KB_GONE, KB_REPEALED))
+    if bad:
+        reasons.append(f"正文引用的知识库条目已下线或依据已废止：{'、'.join(bad[:10])}，改正后重新评审")
     r = latest_done_review(db, d)
     if r is None:
         reasons.append("还没有完成的质量评审")
@@ -261,9 +306,11 @@ def qualification_hits(text: str) -> int:
 
 def rule_issues(d: Deliverable, versions: dict,
                 local_only: set[str] | frozenset[str] | dict[str, str] = frozenset(),
-                strict: bool = False) -> tuple[list[dict], bool]:
+                strict: bool = False, kb_states: dict[str, str] | None = None) -> tuple[list[dict], bool]:
     """返回 (问题清单, 是否命中机密级)。只用标注和类别描述，不摘正文。
-    local_only：不能引用的证据编号；传 withdrawn_codes() 的 {编号: 原因} 时区分仅现场使用和已删除，传集合时都按仅现场使用。"""
+    local_only：不能引用的证据编号；传 withdrawn_codes() 的 {编号: 原因} 时区分仅现场使用和已删除，传集合时都按仅现场使用。
+    kb_states：kb_ref_states 的结果（引用条目的当前状态）。"""
+    kb_states = kb_states or {}
     issues: list[dict] = []
     confidential = False
     for s in d.sections:
@@ -292,6 +339,14 @@ def rule_issues(d: Deliverable, versions: dict,
         if unresolved:
             issues.append(_issue("阻断", loc, "证据链 / 依据", f"来源标注核对不上：{'、'.join(unresolved[:10])}",
                                  "核对证据编号和知识库条目编号，改正或删除", "rule"))
+        refs = {x["ref"] for x in src.get("knowledge", []) if x.get("found")}
+        for state, severity, problem, suggestion in (
+                (KB_GONE, "阻断", "引用的知识库条目已下线", "改引现行条目，或删除据此写的内容"),
+                (KB_REPEALED, "阻断", "引用的依据已废止或已被替代", "改引现行依据（新版或替代文件），并核对据此写的结论"),
+                (KB_UPCOMING, "重要", "引用的依据尚未施行", "注明施行日期，或同时引用现行依据")):
+            hit = sorted(r for r in refs if kb_states.get(r) == state)
+            if hit:
+                issues.append(_issue(severity, loc, "证据链 / 依据", f"{problem}：{'、'.join(hit[:10])}", suggestion, "rule"))
         cited = {x.get("code") for x in src.get("evidence", [])} & set(local_only)
         reasons = local_only if isinstance(local_only, dict) else {}
         local = sorted(c for c in cited if reasons.get(c, "已标为仅现场使用") == "已标为仅现场使用")
@@ -467,7 +522,8 @@ def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverab
 
 def _execute(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview) -> None:
     issues, confidential = rule_issues(d, r.versions, evidence_svc.withdrawn_codes(db, project),
-                                       strict=project.tier == "strict")
+                                       strict=project.tier == "strict",
+                                       kb_states=kb_ref_states(db, cited_kb_refs(d, r.versions)))
     gates = project_gates(db, project)
     if gates is None:
         issues.append(_issue("阻断", "全文", "产品规则", "服务产品配置有问题，产品门禁规则无法核对",

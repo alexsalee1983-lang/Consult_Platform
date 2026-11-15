@@ -25,6 +25,7 @@ from ..agents import registry
 from ..core import audit
 from ..models import Agent, User
 from ..services import gateway, guard, usage
+from . import citations
 from . import parse
 from .files import Entry, EntryError, format_entry, parse_entry
 
@@ -75,6 +76,7 @@ ref_status: （依据类必填）current / upcoming / repealed
 class DraftReport:
     accepted: list[Entry] = field(default_factory=list)
     rejected: list[tuple[str, str]] = field(default_factory=list)    # (原始输出片段, 原因)
+    pending: dict[str, list[str]] = field(default_factory=dict)      # 二期 B8：key → 待核引用（库里没有依据原文）
     calls: int = 0
     model: str = ""
     note: str = ""
@@ -162,10 +164,16 @@ def draft(db: Session, user: User, filename: str, data: bytes, *, source_detail:
                     report.rejected.append((chunk, reason))
                 else:
                     report.accepted.append(e)
+                    if e.meta.doc_type in citations.CITING_TYPES:
+                        todo = citations.pending(citations.check(db, e.content.body, e.content.ref_document,
+                                                                 e.content.ref_code))
+                        if todo:
+                            report.pending[e.key] = todo
             except EntryError as ex:
                 report.rejected.append((chunk, str(ex)))
     audit.record(db, actor=user.username, action="kb.draft_agent", result="allowed", calls=report.calls,
-                 accepted=len(report.accepted), rejected=len(report.rejected), model=report.model,
+                 accepted=len(report.accepted), rejected=len(report.rejected), pending=len(report.pending),
+                 model=report.model,
                  source_length=len(full))
     return report
 

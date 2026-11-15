@@ -89,6 +89,8 @@ class Product:
     card_items: tuple[str, ...]
     version: str
     raw: dict[str, Any]
+    # 行业依据（二期 B2 补充）：项目行业 → 依据查询要加权的标准号或法规名，例如 银行: [JR/T 0071-2020]
+    industry_basis: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def deliverable(self, code: str) -> Deliverable | None:
         return next((d for d in self.deliverables if d.code == code), None)
@@ -346,6 +348,21 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
     domains = bp.texts(base_raw, "domains", required=status == "ready")
     frameworks = bp.texts(base_raw, "frameworks")
     basis = bp.texts(base_raw, "basis")
+    industry_basis: dict[str, tuple[str, ...]] = {}
+    ib_raw = base_raw.get("industry_basis") or {}
+    if not isinstance(ib_raw, dict):
+        bp.add("industry_basis 应为对象（行业 → 依据列表）")
+        ib_raw = {}
+    for ind, refs in ib_raw.items():
+        if not isinstance(ind, str) or not ind.strip() or len(ind.strip()) > 32:
+            bp.add(f"industry_basis 的行业 {ind!r} 应为不超过 32 字的文字（同立项时填的行业）")
+            continue
+        if not isinstance(refs, list) or not refs:
+            bp.add(f"industry_basis 的行业 {ind} 应对应非空的依据列表")
+            continue
+        got = _P(f"{path.name} baseline industry_basis {ind}", out).texts({"basis": refs}, "basis", required=True)
+        if got:
+            industry_basis[ind.strip()] = got
 
     chain: list[Step] = []
     raw_c = data.get("chain")
@@ -406,7 +423,7 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
         strict = {}
     card_items = _P(f"{path.name} strict", out).texts(strict, "card_items")
     return Product(code, name, domain, status, modules, tuple(deliverables), domains, frameworks, basis,
-                   tuple(chain), gates, card_items, content_version(data), data)
+                   tuple(chain), gates, card_items, content_version(data), data, industry_basis)
 
 
 def parse_module(path: Path, out: list[str]) -> Module | None:
@@ -636,6 +653,7 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
         "modules": [{"code": m.code, "name": m.name, "version": m.version} for m in mods],
         "deliverables": deliverables,
         "domains": list(prod.domains), "frameworks": list(merged.frameworks), "basis": list(merged.basis),
+        "industry_basis": {k: list(v) for k, v in prod.industry_basis.items()},
         "chain": chain,
         "gates": [_gate_dict(g, prod.code) for g in prod.gates]
                  + [_gate_dict(g, m.code) for m in mods for g in m.gates],

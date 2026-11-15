@@ -434,6 +434,26 @@ def usage_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_source_split(args: argparse.Namespace) -> int:
+    """依据原文切条（二期 B7）：按下载清单把公开资料机械切成 SRC 条目文件，不入库、不调模型。"""
+    from pathlib import Path
+
+    from .kb import sources
+
+    r = sources.split_all(Path(args.manifest), Path(args.dir), Path(args.out))
+    total = 0
+    for d in r.docs:
+        total += d.entries
+        extra = f"，退回 {d.rejected} 条（见 _rejected/）" if d.rejected else ""
+        print(f"{d.title}（{d.mode}）：{d.entries} 条{extra}" + (f"；{d.message}" if d.message else ""))
+        if d.failed:
+            print("  核验未通过（kb-source-publish 会转人工审核）：" + "；".join(sources.VERIFY_RULES[k] for k in d.failed))
+    for s in r.skipped:
+        print(f"跳过：{s}", file=sys.stderr)
+    print(f"共 {len(r.docs)} 份、{total} 条，写到 {args.out}；核对后用 kb-import {args.out} --as <知识专家> --submit 导入")
+    return 0 if total else 1
+
+
 def catalog_check(args: argparse.Namespace) -> int:
     """校验 products/、modules/ 下的服务产品与模块配置（二期 A1，docs/接口约定.md）。"""
     from .products import config
@@ -556,6 +576,40 @@ def kb_import(args: argparse.Namespace) -> int:
     return 2 if counts["error"] else 0
 
 
+def kb_source_publish(args: argparse.Namespace) -> int:
+    """依据原文自动核验发布（二期 B10）：从原件切条、核验，通过的由平台自动发布并抽检，没通过的转人工审核。"""
+    import json
+    from pathlib import Path
+
+    from .kb import autopublish, sources
+
+    manifest, src = Path(args.manifest), Path(args.dir)
+    if not manifest.is_file() or not src.is_dir():
+        print("清单文件或资料目录不存在", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        user = _knowledge_user(db, args.as_user)
+        if user is None:
+            return 1
+        r = autopublish.run(db, user, manifest, src)
+    if r.suspended:
+        print(f"自动发布已暂停（{r.suspended}），本批全部转人工审核")
+    for d in r.docs:
+        print(f"{d.title}：自动发布 {d.published}，转人工 {d.manual}，无变化 {d.unchanged}"
+              + (f"；{d.message}" if d.message else ""))
+        if d.failed:
+            print("  核验未通过：" + "；".join(sources.VERIFY_RULES[k] for k in d.failed))
+        for s in d.skipped:
+            print(f"  跳过：{s}")
+    for s in r.skipped:
+        print(f"清单跳过：{s}", file=sys.stderr)
+    print(f"合计：自动发布 {sum(d.published for d in r.docs)}，转人工 {sum(d.manual for d in r.docs)}；"
+          f"抽检 {len(r.sampled)} 条（知识审批页“抽检”）")
+    if args.report:
+        Path(args.report).write_text(json.dumps(r.to_json(), ensure_ascii=False, indent=1), encoding="utf-8")
+    return 0
+
+
 def kb_draft(args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -580,7 +634,10 @@ def kb_draft(args: argparse.Namespace) -> int:
     print(f"调用模型 {report.calls} 次（{report.model}）。{report.note}")
     print(f"起草 {len(report.accepted)} 条，写到 {args.out}；退回 {len(report.rejected)} 条（见 {args.out}/_rejected/）")
     for p in written:
-        print(f"  {p.name}")
+        todo = report.pending.get(p.name.removesuffix(".new.md").removesuffix(".md"))
+        print(f"  {p.name}" + (f"  待核引用 {len(todo)} 处：{'、'.join(todo[:5])}" if todo else ""))
+    if report.pending:
+        print(f"{len(report.pending)} 条有待核引用（库里没有对应的依据原文）：先 kb-source-split 切条入库原文，或改正引用，否则不能提交审核。")
     print("这些只是草稿文件：专家逐条修改核对后，用 kb-import 导入，再经双人审核发布。")
     return 0
 
@@ -682,6 +739,17 @@ def main(argv: list[str] | None = None) -> int:
     kd.add_argument("--product", default="", help="默认服务产品缩写，如 SOC、GEN")
     kd.add_argument("--domain", default="", help="默认一级目录缩写，如 OPS、CMP")
     kd.set_defaults(func=kb_draft)
+    kss = sub.add_parser("kb-source-split", help="依据原文切条：按下载清单把法规按条、标准按条款目录切成条目文件（不入库）")
+    kss.add_argument("manifest", help="下载清单 CSV（文件名、名称、文号/标准号、现行状态、切分方式……）")
+    kss.add_argument("--dir", required=True, help="下载文件所在目录（清单里的文件名相对它）")
+    kss.add_argument("--out", required=True, help="条目文件写到哪个目录")
+    kss.set_defaults(func=kb_source_split)
+    ksp = sub.add_parser("kb-source-publish", help="依据原文自动核验发布：从原件切条、核验，通过的平台自动发布并抽检，没通过的转人工")
+    ksp.add_argument("manifest", help="下载清单 CSV（要有原网址和原件 sha256 列）")
+    ksp.add_argument("--dir", required=True, help="下载文件所在目录")
+    ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
+    ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
+    ksp.set_defaults(func=kb_source_publish)
     ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
@@ -703,7 +771,7 @@ def main(argv: list[str] | None = None) -> int:
     br.add_argument("--bytes", type=int, default=0)
     br.set_defaults(func=backup_record)
     args = p.parse_args(argv)
-    if args.func is catalog_check:      # 只读配置文件，不连数据库（开发线 2 本地校验用）
+    if args.func in (catalog_check, kb_source_split):      # 只读配置文件，不连数据库（开发线 2 本地校验用）
         return args.func(args)
     try:
         upgrade_to_head()
