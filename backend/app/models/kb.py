@@ -89,6 +89,11 @@ class KbVersion(KbBase):
     # 自动发布（二期 B10）：platform = 平台核验发布的依据原文；空 = 人工审核。sample_state：抽检 pending / passed / failed
     auto_review: Mapped[str] = mapped_column(String(16), default="")
     sample_state: Mapped[str] = mapped_column(String(16), default="", index=True)
+    # 使用反馈待复查（二期 B13，知识区迁移 k0007）：顾问在交付件里常删掉 Agent 引用的条目时由平台标记，进抽检队列；
+    # recheck_state pending / passed / failed，recheck_reason 只写计数（不写交付件内容），recheck_at 为最近一次标记或处理时间
+    recheck_state: Mapped[str] = mapped_column(String(16), default="", index=True)
+    recheck_reason: Mapped[str] = mapped_column(String(200), default="")
+    recheck_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     item: Mapped[KbItem] = relationship(back_populates="versions", foreign_keys=[item_id])
     reviews: Mapped[list["KbReview"]] = relationship(back_populates="version", order_by="KbReview.id")
