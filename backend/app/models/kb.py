@@ -87,6 +87,9 @@ class KbVersion(KbBase):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 单人发布（公开资料、KB_SINGLE_REVIEWER_PUBLIC 开启时作者本人审核发布），其他知识专家补复审后清除
     single_review: Mapped[bool] = mapped_column(Boolean, server_default=sql_false())
+    # 自动发布（二期 B10）：platform = 平台核验发布的依据原文；空 = 人工审核。sample_state：抽检 pending / passed / failed
+    auto_review: Mapped[str] = mapped_column(String(16), default="")
+    sample_state: Mapped[str] = mapped_column(String(16), default="", index=True)
 
     item: Mapped[KbItem] = relationship(back_populates="versions", foreign_keys=[item_id])
     reviews: Mapped[list["KbReview"]] = relationship(back_populates="version", order_by="KbReview.id")

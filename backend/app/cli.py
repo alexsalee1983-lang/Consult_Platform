@@ -436,6 +436,8 @@ def kb_source_split(args: argparse.Namespace) -> int:
         total += d.entries
         extra = f"，退回 {d.rejected} 条（见 _rejected/）" if d.rejected else ""
         print(f"{d.title}（{d.mode}）：{d.entries} 条{extra}" + (f"；{d.message}" if d.message else ""))
+        if d.failed:
+            print("  核验未通过（kb-source-publish 会转人工审核）：" + "；".join(sources.VERIFY_RULES[k] for k in d.failed))
     for s in r.skipped:
         print(f"跳过：{s}", file=sys.stderr)
     print(f"共 {len(r.docs)} 份、{total} 条，写到 {args.out}；核对后用 kb-import {args.out} --as <知识专家> --submit 导入")
@@ -562,6 +564,40 @@ def kb_import(args: argparse.Namespace) -> int:
     print("合计：" + "，".join(f"{label[k]} {n}" for k, n in counts.items() if n) +
           ("；已提交审核，仍需双人审核后发布" if args.submit else "；均为草稿，在审批队列提交审核"))
     return 2 if counts["error"] else 0
+
+
+def kb_source_publish(args: argparse.Namespace) -> int:
+    """依据原文自动核验发布（二期 B10）：从原件切条、核验，通过的由平台自动发布并抽检，没通过的转人工审核。"""
+    import json
+    from pathlib import Path
+
+    from .kb import autopublish, sources
+
+    manifest, src = Path(args.manifest), Path(args.dir)
+    if not manifest.is_file() or not src.is_dir():
+        print("清单文件或资料目录不存在", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        user = _knowledge_user(db, args.as_user)
+        if user is None:
+            return 1
+        r = autopublish.run(db, user, manifest, src)
+    if r.suspended:
+        print(f"自动发布已暂停（{r.suspended}），本批全部转人工审核")
+    for d in r.docs:
+        print(f"{d.title}：自动发布 {d.published}，转人工 {d.manual}，无变化 {d.unchanged}"
+              + (f"；{d.message}" if d.message else ""))
+        if d.failed:
+            print("  核验未通过：" + "；".join(sources.VERIFY_RULES[k] for k in d.failed))
+        for s in d.skipped:
+            print(f"  跳过：{s}")
+    for s in r.skipped:
+        print(f"清单跳过：{s}", file=sys.stderr)
+    print(f"合计：自动发布 {sum(d.published for d in r.docs)}，转人工 {sum(d.manual for d in r.docs)}；"
+          f"抽检 {len(r.sampled)} 条（知识审批页“抽检”）")
+    if args.report:
+        Path(args.report).write_text(json.dumps(r.to_json(), ensure_ascii=False, indent=1), encoding="utf-8")
+    return 0
 
 
 def kb_draft(args: argparse.Namespace) -> int:
@@ -697,6 +733,12 @@ def main(argv: list[str] | None = None) -> int:
     kss.add_argument("--dir", required=True, help="下载文件所在目录（清单里的文件名相对它）")
     kss.add_argument("--out", required=True, help="条目文件写到哪个目录")
     kss.set_defaults(func=kb_source_split)
+    ksp = sub.add_parser("kb-source-publish", help="依据原文自动核验发布：从原件切条、核验，通过的平台自动发布并抽检，没通过的转人工")
+    ksp.add_argument("manifest", help="下载清单 CSV（要有原网址和原件 sha256 列）")
+    ksp.add_argument("--dir", required=True, help="下载文件所在目录")
+    ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
+    ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
+    ksp.set_defaults(func=kb_source_publish)
     ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
