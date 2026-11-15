@@ -5,13 +5,12 @@
 
 | 批次 | 内容 | 份数 / 条数 | 来源 |
 |---|---|---|---|
-| batch1 | 网络安全、数据、个人信息、密码、关基、保密、反间谍、反诈法律法规（现行版） | 10 份 / 622 条 | 国家法律法规数据库 flk.npc.gov.cn |
+| batch1 | 网络安全、数据、个人信息、密码、关基、国家安全、保密、反间谍、反诈、电子签名法律法规（现行版） | 12 份 / 742 条 | 国家法律法规数据库 flk.npc.gov.cn |
 
 文号已对照官方公布逐份核对；`sha256` 为下载原件哈希。导入（测试机后端容器内）：
 
 ```bash
-python -m app.cli kb-source-split /srv/knowledge/sources/batch1/manifest.csv --out /tmp/batch1
+python -m app.cli kb-source-split /srv/knowledge/sources/batch1/manifest.csv --dir /srv/knowledge/sources/batch1 --out /tmp/batch1
 python -m app.cli kb-source-publish /tmp/batch1 --as <知识专家>   # 平台核验 + 5% 抽检（B10，决策记录 2026-11-15）
 ```
 
-国家安全法、电子签名法文号待核实，下一批补入。
