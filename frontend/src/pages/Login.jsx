@@ -54,8 +54,8 @@ export default function Login() {
             </svg>
           </div>
           <div style={{ lineHeight: 1.2 }}>
-            <div id="login-title" style={{ fontWeight: 700, fontSize: 15 }}>安全咨询专家平台</div>
-            <div style={{ fontSize: 10, letterSpacing: ".16em", color: "var(--tx3)" }}>ADVISORY · 内部</div>
+            <div id="login-title" style={{ fontWeight: 700, fontSize: 16 }}>安全咨询专家平台</div>
+            <div style={{ fontSize: 12, letterSpacing: ".16em", color: "var(--tx3)" }}>ADVISORY · 内部</div>
           </div>
         </div>
 
