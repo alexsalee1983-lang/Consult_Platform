@@ -10,6 +10,7 @@
     stage: 设计
     capabilities: [运营]
     industries: [通用]
+    tags: [等保]                     # 可选：检索加权标签，对应模块配置的 kb_tags（二期 B2）
     source_type: public              # 批量导入只收公开资料；其他来源走投料箱 + 去标识
     source_detail: 公开资料：……       # 文件名、标准编号、发布机关
     summary: ……                      # 可选
@@ -36,7 +37,7 @@ from .items import ItemMeta, VersionContent
 
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 META_KEYS = ("layer", "domain", "product", "doc_type", "stage", "capabilities", "industries", "classification",
-             "visible_roles", "owner")
+             "visible_roles", "owner", "tags")
 CONTENT_KEYS = ("title", "source_type", "source_detail", "summary", "applicability", "change_note", "ref_document",
                 "ref_version", "ref_status")
 
@@ -76,7 +77,7 @@ def parse_entry(text: str) -> Entry:
         return v if isinstance(v, list) else [x.strip() for x in str(v).split(",") if x.strip()]
 
     meta_kw = {k: head[k] for k in META_KEYS if k in head}
-    for k in ("capabilities", "industries", "visible_roles"):
+    for k in ("capabilities", "industries", "visible_roles", "tags"):
         if k in meta_kw:
             meta_kw[k] = [str(x) for x in as_list(meta_kw[k])]
     try:

@@ -165,7 +165,7 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
             {editable && isCurrent && !edit && <button className="btn sm" onClick={() => setEdit({ body: s.body, note: "" })}>{s.version ? "修改本章" : "写正文"}</button>}
           </div>
         </div>
-        <h2 className="h1" style={{ fontSize: 22 }}>{s.title}</h2>
+        <h2 className="h1" style={{ fontSize: 24 }}>{s.title}</h2>
         {s.version > 0 && <div className="sub">{s.author}{s.agent_code ? `（${s.agent_code}）` : ""} · {fmt(s.created_at)}{s.note ? ` · ${s.note}` : ""}</div>}
       </div>
       <div className="doc-wrap">

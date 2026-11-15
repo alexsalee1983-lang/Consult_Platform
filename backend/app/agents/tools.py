@@ -12,6 +12,7 @@ Agent 读写数据只能经 invoke()。每次调用依次检查（任一不满�
 已实现：project.read（真实数据）、project.evidence（查证据：清单或某条证据的正文，分段返回；M3）、
 doc.generate（交付件分章节：读大纲 / 读章节、写大纲、写章节新版本，规则见 app/project/deliverables.py；M3）、
 confirm.create（发确认卡：选项、推荐和理由、影响，规则见 app/project/confirmations.py；M3）、
+agent.handoff（对话转交：为专业 Agent 新建对话，规则见 app/agents/handoff.py；二期 C2）、
 quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，只查 L4）；
 kb.stage_write 在 M2 后续接入，目前是占位实现。
 kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用人的可见范围过滤（app/kb/search.py）。
@@ -115,13 +116,34 @@ def _quality_check(ctx: ToolContext, args: dict) -> dict:
             "findings": [{"kind": f.kind, "label": f.label, "excerpt": f.excerpt} for f in r.findings]}
 
 
+def _project_kb_prefs(ctx: ToolContext) -> dict:
+    """项目上下文里检索的默认值（二期 B2）：快照的产品、所选模块的 kb_tags、basis 列出的标准
+    （B2 补充：项目行业在快照 industry_basis 里有对应的，行业依据排在前面一并加权）。
+    没有项目或快照读不出来时都为空（检索照常进行，不按产品排序）。"""
+    if ctx.project is None:
+        return {}
+    from ..products import config
+    from ..project import configs
+
+    try:
+        snap = configs.snapshot(ctx.db, ctx.project)
+    except config.CatalogError:
+        return {}
+    industry = (ctx.project.industry or "").strip()
+    by_industry = list((snap.get("industry_basis") or {}).get(industry) or []) if industry else []
+    basis = list(dict.fromkeys(by_industry + list(snap.get("basis") or [])))   # 行业依据在前（二期 B2 补充）
+    return {"product": str(snap.get("product") or ""), "tags": list(snap.get("kb_tags") or []), "basis": basis}
+
+
 def _kb_search(ctx: ToolContext, args: dict) -> dict:
     from ..kb import search as kb
 
+    prefs = _project_kb_prefs(ctx)
     try:
         return kb.search(ctx.db, ctx.user, str(args.get("query", "")), layer=str(args.get("layer", "")),
-                         product=str(args.get("product", "")), stage=str(args.get("stage", "")),
-                         doc_type=str(args.get("doc_type", "")), limit=_int_arg(args, "limit", 8))
+                         product=str(args.get("product", "") or prefs.get("product", "")),
+                         stage=str(args.get("stage", "")), doc_type=str(args.get("doc_type", "")),
+                         limit=_int_arg(args, "limit", 8), boost_tags=prefs.get("tags", ()))
     except kb.SearchError as e:
         raise ToolError(e.detail, status=e.status) from e
 
@@ -129,9 +151,11 @@ def _kb_search(ctx: ToolContext, args: dict) -> dict:
 def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
     from ..kb import search as kb
 
+    prefs = _project_kb_prefs(ctx)
     try:
         return kb.basis(ctx.db, ctx.user, str(args.get("query", "")), ref_document=str(args.get("ref_document", "")),
-                        limit=_int_arg(args, "limit", 5))
+                        limit=_int_arg(args, "limit", 5), product=prefs.get("product", ""),
+                        boost_refs=prefs.get("basis", ()))
     except kb.SearchError as e:
         raise ToolError(e.detail, status=e.status) from e
 
@@ -155,6 +179,15 @@ def _confirm_create(ctx: ToolContext, args: dict) -> dict:
     return confirmations.card_for_agent(c, created)
 
 
+def _agent_handoff(ctx: ToolContext, args: dict) -> dict:
+    from . import handoff
+
+    try:
+        return handoff.create(ctx.db, ctx.user, ctx.project, ctx.agent, args)
+    except handoff.HandoffError as e:
+        raise ToolError(e.detail, status=e.status) from e
+
+
 def _placeholder(milestone: str, empty: dict) -> Callable[[ToolContext, dict], dict]:
     def run(ctx: ToolContext, args: dict) -> dict:
         return {**empty, "placeholder": True, "note": f"该工具在 {milestone} 接入，目前返回空结果"}
@@ -169,9 +202,11 @@ IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "basis.lookup": _basis_lookup,
     "doc.generate": _doc_generate,
     "confirm.create": _confirm_create,
+    "agent.handoff": _agent_handoff,
     "kb.stage_write": _placeholder("M2 投料", {"staged": False}),
 }
-NEEDS_PROJECT = frozenset({"project.read", "project.evidence", "doc.generate", "confirm.create"})
+NEEDS_PROJECT = frozenset({"project.read", "project.evidence", "doc.generate", "confirm.create", "agent.handoff"})
+PROJECT_PREFS = frozenset({"kb.search", "basis.lookup"})   # 在项目里调用时按项目配置快照取默认产品等（B2）
 
 
 def granted_tools(db: Session, agent_code: str) -> list[str]:
@@ -208,6 +243,10 @@ def invoke(db: Session, user: User, agent_code: str, tool_code: str, args: dict[
                             .where(Project.code == project_code, ProjectMember.user_id == user.id))
         if project is None:
             deny(ToolNotFound, "not_member", "项目不存在")
+    elif project_code and tool_code in PROJECT_PREFS and agent.side != KNOWLEDGE:
+        # 知识检索不需要项目，但交付侧在项目里调用时按项目配置快照排序（B2）；不是成员就当没有项目，不报错、不泄露
+        project = db.scalar(select(Project).join(ProjectMember, ProjectMember.project_id == Project.id)
+                            .where(Project.code == project_code, ProjectMember.user_id == user.id))
 
     result = IMPLEMENTATIONS[tool_code](ToolContext(db, user, agent, tool, project), args)
     audit.record(db, actor=user.username, action="tool.call", result="allowed", project_code=project_code or "",

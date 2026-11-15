@@ -2,7 +2,7 @@
 name: research-interview
 display_name: 调研访谈 Agent
 version: 0.1
-phase: 一期以咨询师 Agent 的"调研模式"运行；二期独立
+phase: 二期起独立运行，由咨询师 Agent 转交（一期曾以咨询师 Agent 的"调研模式"运行）
 primary_users: 交付顾问
 knowledge_access:
   read: [L2 访谈提纲与问卷模板, L3, L4]
