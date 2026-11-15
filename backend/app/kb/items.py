@@ -28,11 +28,24 @@ class ItemMeta:
     classification: str = "internal"
     visible_roles: list[str] = field(default_factory=lambda: ["consultant", "admin"])
     owner: str = ""
+    tags: list[str] = field(default_factory=list)   # 检索加权标签（二期 B2），对应模块配置的 kb_tags
 
     def check(self) -> None:
         meta.check_classification(self.layer, self.domain, self.product, self.doc_type)
         meta.check_tags(self.stage, self.capabilities, self.industries)
         meta.check_visibility(self.classification, self.visible_roles)
+        self.tags = check_search_tags(self.tags)
+
+
+SEARCH_TAGS_MAX, SEARCH_TAG_LEN = 10, 20
+
+
+def check_search_tags(tags: list[str]) -> list[str]:
+    """检索加权标签：去空白、去重，至多 10 个、每个至多 20 字。返回规整后的列表。"""
+    out = list(dict.fromkeys(str(t).strip() for t in tags or [] if str(t).strip()))
+    if len(out) > SEARCH_TAGS_MAX or any(len(t) > SEARCH_TAG_LEN for t in out):
+        raise meta.MetaError(f"检索标签至多 {SEARCH_TAGS_MAX} 个、每个至多 {SEARCH_TAG_LEN} 字")
+    return out
 
 
 @dataclass
@@ -89,7 +102,8 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
         item = KbItem(doc_id=next_doc_id(db, m), layer=m.layer, domain=m.domain, product=m.product,
                       doc_type=m.doc_type, stage=m.stage, capabilities=list(m.capabilities),
                       industries=list(m.industries), classification=m.classification,
-                      visible_roles=list(m.visible_roles), owner=m.owner, created_by=created_by)
+                      visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags),
+                      created_by=created_by)
         db.add(item)
         try:
             db.flush()

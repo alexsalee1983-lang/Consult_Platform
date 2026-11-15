@@ -115,13 +115,31 @@ def _quality_check(ctx: ToolContext, args: dict) -> dict:
             "findings": [{"kind": f.kind, "label": f.label, "excerpt": f.excerpt} for f in r.findings]}
 
 
+def _project_kb_prefs(ctx: ToolContext) -> dict:
+    """项目上下文里检索的默认值（二期 B2）：快照的产品、所选模块的 kb_tags、basis 列出的标准。
+    没有项目或快照读不出来时都为空（检索照常进行，不按产品排序）。"""
+    if ctx.project is None:
+        return {}
+    from ..products import config
+    from ..project import configs
+
+    try:
+        snap = configs.snapshot(ctx.db, ctx.project)
+    except config.CatalogError:
+        return {}
+    return {"product": str(snap.get("product") or ""), "tags": list(snap.get("kb_tags") or []),
+            "basis": list(snap.get("basis") or [])}
+
+
 def _kb_search(ctx: ToolContext, args: dict) -> dict:
     from ..kb import search as kb
 
+    prefs = _project_kb_prefs(ctx)
     try:
         return kb.search(ctx.db, ctx.user, str(args.get("query", "")), layer=str(args.get("layer", "")),
-                         product=str(args.get("product", "")), stage=str(args.get("stage", "")),
-                         doc_type=str(args.get("doc_type", "")), limit=_int_arg(args, "limit", 8))
+                         product=str(args.get("product", "") or prefs.get("product", "")),
+                         stage=str(args.get("stage", "")), doc_type=str(args.get("doc_type", "")),
+                         limit=_int_arg(args, "limit", 8), boost_tags=prefs.get("tags", ()))
     except kb.SearchError as e:
         raise ToolError(e.detail, status=e.status) from e
 
@@ -129,9 +147,11 @@ def _kb_search(ctx: ToolContext, args: dict) -> dict:
 def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
     from ..kb import search as kb
 
+    prefs = _project_kb_prefs(ctx)
     try:
         return kb.basis(ctx.db, ctx.user, str(args.get("query", "")), ref_document=str(args.get("ref_document", "")),
-                        limit=_int_arg(args, "limit", 5))
+                        limit=_int_arg(args, "limit", 5), product=prefs.get("product", ""),
+                        boost_refs=prefs.get("basis", ()))
     except kb.SearchError as e:
         raise ToolError(e.detail, status=e.status) from e
 
@@ -172,6 +192,7 @@ IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "kb.stage_write": _placeholder("M2 投料", {"staged": False}),
 }
 NEEDS_PROJECT = frozenset({"project.read", "project.evidence", "doc.generate", "confirm.create"})
+PROJECT_PREFS = frozenset({"kb.search", "basis.lookup"})   # 在项目里调用时按项目配置快照取默认产品等（B2）
 
 
 def granted_tools(db: Session, agent_code: str) -> list[str]:
@@ -208,6 +229,10 @@ def invoke(db: Session, user: User, agent_code: str, tool_code: str, args: dict[
                             .where(Project.code == project_code, ProjectMember.user_id == user.id))
         if project is None:
             deny(ToolNotFound, "not_member", "项目不存在")
+    elif project_code and tool_code in PROJECT_PREFS and agent.side != KNOWLEDGE:
+        # 知识检索不需要项目，但交付侧在项目里调用时按项目配置快照排序（B2）；不是成员就当没有项目，不报错、不泄露
+        project = db.scalar(select(Project).join(ProjectMember, ProjectMember.project_id == Project.id)
+                            .where(Project.code == project_code, ProjectMember.user_id == user.id))
 
     result = IMPLEMENTATIONS[tool_code](ToolContext(db, user, agent, tool, project), args)
     audit.record(db, actor=user.username, action="tool.call", result="allowed", project_code=project_code or "",
