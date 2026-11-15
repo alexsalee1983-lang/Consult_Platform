@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
+from ..kb import citations
 from ..kb import meta as kb_meta
 from ..kb import review as rv
 from ..kb import search as kb_search
@@ -149,6 +150,7 @@ class VersionOut(VersionBrief):
     reviews: list[ReviewOut] = []
     diff: list[str] = []
     similar: list[dict] = []
+    citations: list[dict] = []      # 二期 B8：引用核对（知识侧角色可见）
 
 
 class ItemOut(BaseModel):
@@ -216,6 +218,7 @@ def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
         out.reviews = [ReviewOut.model_validate(r, from_attributes=True) for r in v.reviews]
         out.diff = rv.diff_with_current(db, v)
         out.similar = rv.similar_items(db, v) if v.status in ("draft", "in_review") else []
+        out.citations = citations.as_dicts(citations.for_version(db, v))   # 二期 B8：引用核对，审核页并排看原文
     return out
 
 

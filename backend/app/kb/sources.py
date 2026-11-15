@@ -262,9 +262,14 @@ def split_sections(lines: list[str], with_text: bool) -> list[Piece]:
     return pieces
 
 
-def _key(d: Doc, part: str) -> str:
-    h = hashlib.sha256(d.title.encode("utf-8")).hexdigest()[:8]
+def src_key(ref_document: str, part: str) -> str:
+    """依据原文条目的 key：src-<文件名哈希>-<条号>。B8 引用校验按同一规则由文件名和条号找条款。"""
+    h = hashlib.sha256(ref_document[:200].encode("utf-8")).hexdigest()[:8]
     return f"src-{h}-{part}"[:64].rstrip("-")
+
+
+def _key(d: Doc, part: str) -> str:
+    return src_key(d.title, part)
 
 
 def to_entry(d: Doc, p: Piece) -> Entry:

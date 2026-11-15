@@ -169,6 +169,15 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
         raise ReviewError(409, "去标识还没有通过，不能提交")
     if not v.body.strip():
         raise ReviewError(422, "正文不能为空")
+    if get_settings().kb_citation_gate:
+        from . import citations
+
+        todo = citations.pending(citations.for_version(db, v))
+        if todo:
+            audit.record(db, actor=user.username, action="kb.submit", result="blocked", doc_id=v.item.doc_id,
+                         version=v.version, reason="citation_pending", pending=len(todo))
+            raise ReviewError(422, f"引用待核 {len(todo)} 处：{'、'.join(todo[:5])}{' 等' if len(todo) > 5 else ''}。"
+                                   "库里没有对应的依据原文或条款目录：先把原文切条入库（kb-source-split），或改正引用")
     v.status, v.submitted_by, v.submitted_at = "in_review", user.username, utcnow()
     db.commit()
     audit.record(db, actor=user.username, action="kb.submit", result="allowed", doc_id=v.item.doc_id,

@@ -314,6 +314,27 @@ export default function KbReview() {
                 {v.status === "in_review" && <ReviewActions v={v} onDone={refresh} />}
                 {v.status === "published" && <PublishedActions v={v} onDone={refresh} />}
               </section>
+              {(v.citations || []).length > 0 && (
+                <section className="pnl pad" aria-label="引用核对">
+                  <div className="sb"><span className="cap">引用核对（对照依据原文）</span>
+                    <span className="sub">待核 {v.citations.filter((c) => !c.found).length} / {v.citations.length}</span></div>
+                  <ul className="lst">
+                    {v.citations.map((c, i) => (
+                      <li key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div className="sb">
+                          <span>{c.document} <span className="mono">{c.clause}</span></span>
+                          {!c.found ? <span className="chip c-r">待核</span>
+                            : c.ref_status === "current" ? <span className="chip c-g">原文已核对</span>
+                              : <span className="chip c-a">{{ upcoming: "即将实施", repealed: "已废止", superseded: "已被替代" }[c.ref_status] || c.ref_status}</span>}
+                        </div>
+                        {c.found && !c.catalog && <div className="preview" style={{ maxHeight: 140 }}>{c.excerpt}</div>}
+                        {c.found && c.catalog && <div className="sub">条款目录（标准原文不入库，请查阅原件）· {c.src_doc_id}</div>}
+                        {!c.found && <div className="sub">库里没有对应的依据原文或条款目录：先切条入库原文，或改正引用</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               <section className="pnl pad" aria-label="相似条目">
                 <div className="cap">相似的已发布条目（可能重复或冲突）</div>
                 <ul className="lst">
