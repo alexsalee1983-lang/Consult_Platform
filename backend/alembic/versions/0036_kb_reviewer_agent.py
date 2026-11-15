@@ -4,7 +4,7 @@
 直接交给它审查（app/kb/agent_review.py），它只返回审查意见，不经工具读写任何区域；发布与否由平台按规则决定。
 
 Revision ID: 0036_kb_reviewer_agent
-Revises: 0033_conversation_handoff
+Revises: 0035_kb_mapping_tool
 Create Date: 2026-11-15
 """
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0036_kb_reviewer_agent"
-down_revision: str | None = "0033_conversation_handoff"
+down_revision: str | None = "0035_kb_mapping_tool"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
