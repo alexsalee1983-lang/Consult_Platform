@@ -124,3 +124,10 @@ def test_ire_draft_config_loads_with_boundary_gate():
     ire = cat.products["IRE"]
     assert ire.status == "draft" and [d.code for d in ire.deliverables] == [f"D{i}" for i in range(1, 9)]
     assert {g.id for g in ire.gates} == {"ire-sections", "no-liability-claim"}
+def test_nsg_draft_config_loads():
+    """D4：网络安全治理规划产品草稿可加载；D5 必须有愿景与目标、重点任务、保障措施章节。"""
+    cat = config.load()
+    assert not cat.problems
+    nsg = cat.products["NSG"]
+    assert nsg.status == "draft" and [d.code for d in nsg.deliverables] == [f"D{i}" for i in range(1, 9)]
+    assert [g.id for g in nsg.gates] == ["nsg-sections"]
