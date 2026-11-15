@@ -2,7 +2,7 @@
 name: delivery-pm
 display_name: 项目交付管理 Agent
 version: 0.1
-phase: 一期以咨询师 Agent 的"项目管理模式"运行；二期独立
+phase: 二期起独立运行，由咨询师 Agent 转交（一期曾以咨询师 Agent 的"项目管理模式"运行）
 primary_users: 项目经理、交付顾问
 knowledge_access:
   read: [L1 客户管理工具与质量门禁, L2 工作分解与排期模板]
