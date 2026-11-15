@@ -131,6 +131,7 @@ class VersionBrief(BaseModel):
     single_review: bool = False         # 单人发布，待补复审
     auto_review: str = ""               # platform：平台核验自动发布（二期 B10）；agent：知识审核 Agent（B11）
     sample_state: str = ""              # 抽检：pending / passed / failed
+    required_roles: list[str] = []      # 发布需要的审核（B12：第三级只要 content）
 
 
 class ReviewOut(BaseModel):
@@ -191,7 +192,9 @@ def _err(e: rv.ReviewError):
 
 
 def _brief(v: KbVersion) -> VersionBrief:
-    return VersionBrief.model_validate(v, from_attributes=True)
+    b = VersionBrief.model_validate(v, from_attributes=True)
+    b.required_roles = list(rv.required_roles(v))
+    return b
 
 
 def _item_out(db: Session, item: KbItem, cls=ItemOut, versions: list[KbVersion] | None = None):

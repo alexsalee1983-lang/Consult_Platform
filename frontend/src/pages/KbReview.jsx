@@ -122,8 +122,9 @@ function ReviewActions({ v, onDone }) {
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const roles = [["content", "knowledge_expert", "内容审核"], ["compliance", "knowledge_admin", "合规审核"]]
-    .filter(([, r]) => hasRole(user, r));
+  const need = v.required_roles?.length ? v.required_roles : ["content", "compliance"];
+  const roles = [["content", "knowledge_expert", need.length === 1 ? "拍板（内容审核）" : "内容审核"], ["compliance", "knowledge_admin", "合规审核"]]
+    .filter(([role, r]) => need.includes(role) && hasRole(user, r));
   const mine = [v.created_by, v.submitted_by].includes(user?.username) && !v.self_review_allowed;
   const done = new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role));
 
@@ -379,7 +380,7 @@ export default function KbReview() {
                   ))}
                   {v.reviews.length === 0 && <li className="sub">还没有审核记录</li>}
                 </ul>
-                {v.auto_review === "platform" ? <div className="sub">依据原文：平台核验官方来源、原件哈希、文号和切分后自动发布，按比例抽检</div> : v.auto_review === "agent" ? <div className="sub">程序规则和知识审核 Agent 逐项检查通过后自动发布，按比例抽检</div> : <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>}
+                {v.auto_review === "platform" ? <div className="sub">依据原文：平台核验官方来源、原件哈希、文号和切分后自动发布，按比例抽检</div> : v.auto_review === "agent" ? <div className="sub">程序规则和知识审核 Agent 逐项检查通过后自动发布，按比例抽检</div> : v.required_roles?.length === 1 ? <div className="sub">项目沉淀、专家经验、内部制度改造：合规已在去标识确认时完成；知识审核 Agent 先审、只出意见，一位知识专家（不能是作者）拍板发布</div> : <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve" && ["content", "compliance"].includes(r.review_role)).map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>}
                 {AUTO_LABEL[v.auto_review] && v.status === "published" && !["passed", "failed"].includes(v.sample_state) && hasRole(user, "knowledge_expert") && <SampleActions v={v} onDone={refresh} />}
                 {v.status === "in_review" && <ReviewActions v={v} onDone={refresh} />}
                 {v.status === "published" && <PublishedActions v={v} onDone={refresh} />}
