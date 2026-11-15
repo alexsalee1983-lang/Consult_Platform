@@ -11,6 +11,10 @@
 !backend/app/**
 !agents
 !agents/**
+!products
+!products/**
+!modules
+!modules/**
 !knowledge
 !knowledge/**
 **/__pycache__

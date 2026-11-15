@@ -212,40 +212,26 @@ def add_member(args: argparse.Namespace) -> int:
     return 0
 
 
-PROJECT_CODE = re.compile(r"^[A-Z]{2,8}-[A-Z0-9]{1,6}$")
+PROJECT_CODE = re.compile(r"^[A-Z]{2,8}-[A-Z0-9]{1,6}$")   # 同 app/project/configs.py
 TIERS = {"standard": "标准档", "strict": "严格档"}
 
 
 def create_project(args: argparse.Namespace) -> int:
-    """立项：建项目和 D1～D8 交付件，指定首位项目经理。"""
-    from .seed import DELIVERABLES
+    """立项：选产品和模块、定档，按产品配置建交付件、记下配置快照，指定首位项目经理（规则在 app/project/configs.py）。"""
+    from .project import configs
 
-    code = args.code.strip().upper()
-    if not PROJECT_CODE.match(code):
-        print("项目代号格式为“字母-字母或数字”，如 BANK-D、GRID-B2；只用客户代号，不写客户真实名称", file=sys.stderr)
-        return 1
     with SessionLocal() as db:
-        if db.scalar(select(Project.id).where(Project.code == code)) is not None:
-            print(f"项目 {code} 已存在", file=sys.stderr)
+        user = db.scalar(select(User).where(User.username == args.manager))
+        try:
+            p = configs.create(db, actor="cli", code=args.code, tier=args.tier, manager=user, product=args.product,
+                               modules=args.module or [], industry=args.industry, weeks=args.weeks,
+                               service=args.service)
+        except configs.CreateError as e:
+            print(str(e) if user is not None else f"没有用户 {args.manager}", file=sys.stderr)
             return 1
-        user = _get(db, args.manager)
-        if user is None:
-            return 1
-        if not user.is_active or not roles_of(db, user.id) & BUSINESS_ROLES:
-            print("项目经理必须是启用状态、持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户", file=sys.stderr)
-            return 1
-        p = Project(code=code, service=args.service.strip(), industry=args.industry.strip(), tier=args.tier,
-                    total_weeks=args.weeks)
-        p.deliverables = [Deliverable(code=f"D{i + 1}", title=t, status="not_started")
-                          for i, t in enumerate(DELIVERABLES)]
-        db.add(p)
-        db.flush()
-        db.add(ProjectMember(project_id=p.id, user_id=user.id, project_role="manager", added_by="cli"))
-        db.commit()
-        audit.record(db, actor="cli", action="project.create", result="allowed", project_code=code,
-                     tier=args.tier, manager=args.manager)
-    print(f"已立项 {code}（{TIERS[args.tier]}，{args.service}），项目经理 {args.manager}；"
-          f"其他成员由项目经理在网页上添加")
+        codes = "、".join(d.code for d in p.deliverables)
+        print(f"已立项 {p.code}（{TIERS[p.tier]}，{p.service}），交付件 {codes}，项目经理 {args.manager}；"
+              f"其他成员由项目经理在网页上添加")
     return 0
 
 
@@ -325,11 +311,11 @@ def loadtest_accounts(args: argparse.Namespace) -> int:
             if membership(db, project.id, u.id) is None:
                 db.add(ProjectMember(project_id=project.id, user_id=u.id, project_role="member", added_by="cli"))
         db.commit()
-        # 压测写章节、导出用 D5（交付链只写 D3、D4，互不干扰）：没有大纲时建 n 章的大纲，每个虚拟用户写一章
+        # 压测写章节、导出用 D2（交付链不写 D1、D2，互不干扰；二期 A5 起交付链写 D3～D8）：没有大纲时建 n 章的大纲，每个虚拟用户写一章
         from .project import deliverables as dsvc
-        d5 = next(d for d in project.deliverables if d.code == "D5")
-        if not d5.sections:
-            dsvc.set_outline(db, manager, project, d5, [f"压测章节 {i:02d}" for i in range(1, len(creds) + 1)])
+        d2 = next(d for d in project.deliverables if d.code == "D2")
+        if not d2.sections:
+            dsvc.set_outline(db, manager, project, d2, [f"压测章节 {i:02d}" for i in range(1, len(creds) + 1)])
         audit.record(db, actor="cli", action="loadtest.accounts", result="allowed", op="create",
                      count=len(creds), project_code=code)
     fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -436,6 +422,22 @@ def usage_report(args: argparse.Namespace) -> int:
         print(f"{keys}  调用 {r['calls']:>5}  输入 {r['prompt_tokens']:>9}  输出 {r['completion_tokens']:>9}  "
               f"失败 {r['errors']:>3}  拦截 {r['blocked']:>3}")
     return 0
+
+
+def catalog_check(args: argparse.Namespace) -> int:
+    """校验 products/、modules/ 下的服务产品与模块配置（二期 A1，docs/接口约定.md）。"""
+    from .products import config
+
+    cat = config.load()
+    for prod in cat.products.values():
+        print(f"产品 {prod.code} {prod.name}（{prod.status}，版本 {prod.version}）：交付件 {len(prod.deliverables)} 个、"
+              f"交付链 {len(prod.chain)} 步、门禁 {len(prod.gates)} 条")
+    for mod in cat.modules.values():
+        print(f"模块 {mod.code} {mod.name}（{mod.status}，版本 {mod.version}）：可挂 {'、'.join(mod.products)}")
+    for problem in cat.problems:
+        print(f"问题：{problem}", file=sys.stderr)
+    print(f"共 {len(cat.products)} 个产品、{len(cat.modules)} 个模块、{len(cat.problems)} 个问题")
+    return 1 if cat.problems else 0
 
 
 def jobs_status(args: argparse.Namespace) -> int:
@@ -629,7 +631,9 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("--code", required=True, help="客户代号，如 BANK-D（不写客户真实名称）")
     cp.add_argument("--tier", required=True, choices=sorted(TIERS), help="standard=标准档，strict=严格档（立项时必须定档）")
     cp.add_argument("--manager", required=True, help="首位项目经理的用户名")
-    cp.add_argument("--service", default="SOC 运营体系设计", help="服务产品（默认 SOC 运营体系设计）")
+    cp.add_argument("--product", default="SOC", help="服务产品代号（products/ 下 ready 的产品，默认 SOC）")
+    cp.add_argument("--module", action="append", help="勾选的模块代号，可重复；只能选产品允许的 ready 模块")
+    cp.add_argument("--service", default="", help="显示名（默认用产品名称）")
     cp.add_argument("--industry", default="", help="行业，如 银行")
     cp.add_argument("--weeks", type=int, default=12, help="计划周数（默认 12）")
     cp.set_defaults(func=create_project)
@@ -649,6 +653,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="汇总维度，逗号分隔：username / project_code / model")
     us.set_defaults(func=usage_report)
     sub.add_parser("jobs", help="后台任务状态").set_defaults(func=jobs_status)
+    sub.add_parser("catalog-check", help="校验服务产品与模块配置（products/、modules/）").set_defaults(func=catalog_check)
     sc = sub.add_parser("selfcheck", help="排一个 worker 自检任务并等待结果（成功退出码 0）")
     sc.add_argument("--wait", type=int, default=60)
     sc.set_defaults(func=selfcheck)
@@ -687,6 +692,8 @@ def main(argv: list[str] | None = None) -> int:
     br.add_argument("--bytes", type=int, default=0)
     br.set_defaults(func=backup_record)
     args = p.parse_args(argv)
+    if args.func is catalog_check:      # 只读配置文件，不连数据库（开发线 2 本地校验用）
+        return args.func(args)
     try:
         upgrade_to_head()
     except KbSplitPending:

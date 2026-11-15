@@ -16,6 +16,7 @@ from .core.errors import out_of_range_handler, reject_control_chars, validation_
 from .core.metrics import MetricsMiddleware, register_state_collector, start_server
 from .core.migrate import upgrade_to_head
 from .services import storage
+from .project import configs as project_configs
 from .seed import seed, seed_signed_sample
 
 _settings = get_settings()
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
             seed(db)
             seed_signed_sample(db)
         ensure_test_memberships(db, _settings)
+        project_configs.backfill(db)
     if storage.enabled():
         try:
             storage.ensure_buckets()
