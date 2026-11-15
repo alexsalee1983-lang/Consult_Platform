@@ -30,11 +30,11 @@ OLD_INSTRUCTIONS = {
 
 
 def test_soc_chain_unchanged() -> None:
-    chain = runs.steps()
+    chain = runs.chain_of(config.compose_codes("SOC"))
     assert [(s.key, s.number, s.agent, s.deliverable, s.name) for s in chain] == OLD_STEPS
     assert {s.key: s.instruction for s in chain} == OLD_INSTRUCTIONS
     assert {s.key: s.query for s in chain} == OLD_QUERIES
-    assert runs.step_names() == {"facts": "第 3 步 整理事实清单", "gap": "第 4 步 差距分析", "draft": "第 7 步 现状评估报告初稿"}
+    assert {s.key: f"第 {s.number} 步 {s.name}" for s in chain} == {"facts": "第 3 步 整理事实清单", "gap": "第 4 步 差距分析", "draft": "第 7 步 现状评估报告初稿"}
     assert [runs._doc_input(s) for s in chain[1:]] == ["D3", "D3"]
 
 
@@ -52,5 +52,4 @@ def test_broken_catalog_blocks_runs(tmp_path, monkeypatch: pytest.MonkeyPatch) -
     (tmp_path / "products" / "soc.yaml").write_text("code: [", encoding="utf-8")
     monkeypatch.setattr(get_settings(), "catalog_dir", str(tmp_path))
     with pytest.raises(config.CatalogError):
-        runs.steps()
-    assert runs.step_names() == {}
+        config.compose_codes("SOC")

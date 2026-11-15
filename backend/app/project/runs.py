@@ -40,6 +40,7 @@ from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMembe
 from ..products import config
 from ..services import gateway, guard, jobs, usage
 from . import cards as cards_svc
+from . import configs
 from . import deliverables
 
 JOB_KIND = "agent_run.step"
@@ -62,16 +63,20 @@ class Step:
     instruction: str = ""    # 已填好变量的任务说明
 
 
-def steps(code: str = config.DEFAULT_PRODUCT) -> tuple[Step, ...]:
-    """交付链步骤，读服务产品配置（二期 A2：products/soc.yaml；A3 起按项目快照）。配置有问题抛 CatalogError。"""
-    prod = config.product(code)
-    return tuple(Step(s.key, s.number, s.agent, s.output, s.name, tuple(s.inputs), s.query,
-                      config.render(s.instruction, prod, s.number)) for s in prod.chain)
+def chain_of(snap: dict) -> tuple[Step, ...]:
+    """快照里的交付链（任务说明、检索词已在 config.compose 里填好变量、拼好模块说明）。"""
+    return tuple(Step(s["key"], s["number"], s["agent"], s["output"], s["name"], tuple(s["inputs"]), s["query"],
+                      s["instruction"]) for s in config.check_snapshot(snap)["chain"])
 
 
-def step_names(code: str = config.DEFAULT_PRODUCT) -> dict[str, str]:
+def steps(db: Session, project: Project) -> tuple[Step, ...]:
+    """本项目的交付链步骤，只读项目配置快照（二期 A4）。配置有问题抛 config.CatalogError。"""
+    return chain_of(configs.snapshot(db, project))
+
+
+def step_names(db: Session, project: Project) -> dict[str, str]:
     try:
-        return {s.key: f"第 {s.number} 步 {s.name}" for s in steps(code)}
+        return {s.key: f"第 {s.number} 步 {s.name}" for s in steps(db, project)}
     except config.CatalogError:
         return {}
 
@@ -129,7 +134,7 @@ def start(db: Session, user: User, project: Project) -> AgentRun:
         _deny(db, user, project, action, "active_run")
         raise RunError(409, f"本项目已有未结束的交付链运行（#{active.id}），请等它结束或先取消")
     try:
-        chain = steps()
+        chain = steps(db, project)
     except config.CatalogError as e:
         _deny(db, user, project, action, "catalog")
         raise RunError(503, f"服务产品配置有问题，交付链暂不可用：{e}") from e
@@ -161,7 +166,7 @@ def cancel(db: Session, user: User, project: Project, run: AgentRun) -> AgentRun
     run.status, run.waiting_cards = "cancelled", []
     run.updated_at = run.finished_at = utcnow()
     audit.record(db, actor=user.username, action="run.cancel", result="allowed", project_code=project.code,
-                 run_id=run.id, step=_step_key(run))
+                 run_id=run.id, step=_step_key(db, project, run))
     db.commit()
     db.refresh(run)
     return run
@@ -180,12 +185,12 @@ def on_card_resolved(db: Session, card: Confirmation) -> AgentRun | None:
         if _lock(db, run) != "waiting":
             db.commit()
             return None
-        finished = run.step_index >= len(steps())          # 最后一步发的卡：处理完就结束，不再排任务
+        finished = run.step_index >= len(steps(db, card.project))  # 最后一步发的卡：处理完就结束，不再排任务
         run.status, run.waiting_cards, run.updated_at = ("done" if finished else "queued"), [], utcnow()
         if finished:
             run.finished_at = run.updated_at
         audit.record(db, actor=card.resolved_by or "system", action="run.resume", result="allowed",
-                     project_code=card.project.code, run_id=run.id, step=_step_key(run), next=run.status)
+                     project_code=card.project.code, run_id=run.id, step=_step_key(db, card.project, run), next=run.status)
         db.commit()
         if not finished:
             _enqueue(db, run, card.project)
@@ -202,9 +207,9 @@ def get_run(db: Session, project: Project, run_id: int) -> AgentRun | None:
     return run if run is not None and run.project_id == project.id else None
 
 
-def _step_key(run: AgentRun) -> str:
+def _step_key(db: Session, project: Project, run: AgentRun) -> str:
     try:
-        chain = steps()
+        chain = steps(db, project)
     except config.CatalogError:
         return "?"
     return chain[run.step_index].key if run.step_index < len(chain) else "end"
@@ -331,7 +336,7 @@ def _step_job(payload: dict, ctx: jobs.JobContext) -> None:
             _fail(db, run, project, "发起人已不是项目成员或账号已停用")
             return
         try:
-            chain = steps()
+            chain = steps(db, project)
         except config.CatalogError as e:
             _fail(db, run, project, f"服务产品配置有问题：{e}")
             raise jobs.JobError(str(e), retry=False) from e
@@ -383,7 +388,7 @@ def _fail(db: Session, run: AgentRun, project: Project, reason: str) -> None:
     run.status, run.error, run.waiting_cards = "failed", reason[:200], []
     run.updated_at = run.finished_at = utcnow()
     audit.record(db, actor="worker", action="run.failed", result="error", project_code=project.code,
-                 run_id=run.id, step=_step_key(run), error=reason[:200])
+                 run_id=run.id, step=_step_key(db, project, run), error=reason[:200])
     db.commit()
 
 
@@ -474,7 +479,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     open_ids = [i for i in card_ids if db.get(Confirmation, i).status == "open"]
     if open_ids:
         run.status, run.waiting_cards = "waiting", open_ids
-    elif run.step_index >= len(steps()):
+    elif run.step_index >= len(steps(db, project)):
         run.status, run.finished_at = "done", utcnow()
     else:
         run.status = "queued"

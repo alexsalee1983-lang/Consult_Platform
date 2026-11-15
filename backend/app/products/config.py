@@ -12,12 +12,13 @@
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
 import string
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -576,3 +577,85 @@ def render(template: str, prod: Product, step_number: int = 0, module_names: tup
     return template.format(product_name=prod.name, domains="、".join(prod.domains),
                            frameworks="、".join(prod.frameworks), basis="、".join(prod.basis), number=step_number,
                            modules="、".join(module_names), module_instructions=module_instructions)
+
+
+# ---- 立项快照（二期 A4；表 project_configs 在 A3，docs/接口约定.md 第四节） ----
+
+SNAPSHOT_FORMAT = 1
+
+
+def _merged(*lists: tuple[str, ...]) -> list[str]:
+    out: list[str] = []
+    for xs in lists:
+        out += [x for x in xs if x not in out]
+    return out
+
+
+def _gate_dict(g: Gate, source: str) -> dict[str, Any]:
+    return {"id": g.id, "kind": g.kind, "deliverable": g.deliverable, "level": g.level, "message": g.message,
+            "source": source, **copy.deepcopy(g.params)}
+
+
+def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> dict[str, Any]:
+    """产品 + 所选模块合并成完整配置（立项快照的 snapshot 字段）。
+
+    快照自足：任务说明和检索词已填好变量，coverage 清单已展开，之后改配置文件不影响它。
+    模块的追加说明填进 {module_instructions}；模板里没有这个变量时拼在末尾。模块不能挂本产品、不是 ready 抛 CatalogError。
+    """
+    if prod.status != "ready":
+        raise CatalogError(f"产品 {prod.code} 还不是 ready")
+    mods = tuple(modules)
+    for m in mods:
+        if m.status != "ready":
+            raise CatalogError(f"模块 {m.code} 还不是 ready")
+        if m.code not in prod.modules or prod.code not in m.products:
+            raise CatalogError(f"模块 {m.code} 不能挂在产品 {prod.code} 上")
+    if len({m.code for m in mods}) != len(mods):
+        raise CatalogError("模块重复")
+    merged = replace(prod, frameworks=tuple(_merged(prod.frameworks, *(m.frameworks for m in mods))),
+                     basis=tuple(_merged(prod.basis, *(m.basis for m in mods))))
+    names = tuple(m.name for m in mods)
+    chain = []
+    for s in prod.chain:
+        extra = "\n".join(m.instructions[s.key] for m in mods if m.instructions.get(s.key))
+        extra = render(extra, merged, s.number, names) if extra else ""
+        text = render(s.instruction, merged, s.number, names, extra)
+        if extra and "module_instructions" not in (_template_vars(s.instruction) or set()):
+            text = f"{text}\n{extra}"
+        chain.append({"key": s.key, "number": s.number, "name": s.name, "agent": s.agent, "inputs": list(s.inputs),
+                      "output": s.output, "query": render(s.query, merged, s.number, names, ""),
+                      "instruction": text})
+    deliverables = []
+    for d in prod.deliverables:
+        outline = _merged(d.outline, *(m.sections.get(prod.code, {}).get(d.code, ()) for m in mods))
+        deliverables.append({"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
+                             "outline": outline})
+    return {
+        "format": SNAPSHOT_FORMAT,
+        "product": prod.code, "product_name": prod.name, "product_version": prod.version,
+        "modules": [{"code": m.code, "name": m.name, "version": m.version} for m in mods],
+        "deliverables": deliverables,
+        "domains": list(prod.domains), "frameworks": list(merged.frameworks), "basis": list(merged.basis),
+        "chain": chain,
+        "gates": [_gate_dict(g, prod.code) for g in prod.gates]
+                 + [_gate_dict(g, m.code) for m in mods for g in m.gates],
+        "card_items": _merged(prod.card_items, *(m.card_items for m in mods)),
+        "kb_tags": _merged(*(m.kb_tags for m in mods)),
+    }
+
+
+def compose_codes(product_code: str, module_codes: tuple[str, ...] | list[str] = ()) -> dict[str, Any]:
+    """按代号从当前配置合并（立项时用）。"""
+    cat = catalog()
+    prod = product(product_code)
+    missing = [c for c in module_codes if c not in cat.modules]
+    if missing:
+        raise CatalogError(f"没有模块 {'、'.join(missing)}")
+    return compose(prod, [cat.modules[c] for c in module_codes])
+
+
+def check_snapshot(snap: Any) -> dict[str, Any]:
+    """读快照前核对格式；运行时只认 compose 产出的结构。"""
+    if not isinstance(snap, dict) or snap.get("format") != SNAPSHOT_FORMAT or not isinstance(snap.get("chain"), list):
+        raise CatalogError("项目配置快照格式不对")
+    return snap
