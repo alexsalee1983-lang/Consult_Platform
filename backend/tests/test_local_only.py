@@ -142,3 +142,33 @@ def test_citations_refused_and_gate_blocks(team, model):  # noqa: F811
                                                     AuditLog.action == "deliverable.write",
                                                     AuditLog.result == "blocked")).all()
     assert any(json.loads(a.detail).get("reason") == "local_only" for a in blocked)
+
+
+RESAVED = docx_bytes([("Heading 1", "值班制度（仅现场测试）"), ("Normal", "实行 7×8  小时值班。 ")])   # 另存：字节不同、正文相同
+
+
+def test_resaved_copy_of_local_only_document_is_rejected(team):
+    code, c, pm, member, store = team
+    assert RESAVED != DOC
+    assert c.post(f"/api/projects/{code}/documents",
+                  files={"file": ("值班制度.docx", DOC, "application/octet-stream")}).status_code == 201
+    r = c.post(f"/api/projects/{code}/documents", files={"file": ("副本.docx", RESAVED, "application/octet-stream")})
+    assert r.status_code == 409 and "D-01" in r.json()["detail"]          # 正文相同 = 同一份资料
+    assert pm.post(f"/api/projects/{code}/evidences/D-01/local-only", json={"request_ref": REF}).status_code == 200
+    r = c.post(f"/api/projects/{code}/documents", files={"file": ("另存.docx", RESAVED, "application/octet-stream")})
+    assert r.status_code == 422 and "仅现场使用" in r.json()["detail"]
+    assert store.objects == {}
+    with SessionLocal() as db:
+        logs = db.scalars(select(AuditLog).where(AuditLog.project_code == code,
+                                                 AuditLog.action == "project.document")
+                             .order_by(AuditLog.id)).all()
+        assert logs[-1].result == "blocked" and json.loads(logs[-1].detail).get("reason") == "local_only"
+        assert all("值班" not in (x.detail or "") for x in logs)
+
+
+def test_different_text_is_not_duplicate(team):
+    code, c, pm, member, store = team
+    other = docx_bytes([("Heading 1", "值班制度（仅现场测试）"), ("Normal", "实行 5×8 小时值班。")])
+    for name, data, ev in (("a.docx", DOC, "D-01"), ("b.docx", other, "D-02")):
+        r = c.post(f"/api/projects/{code}/documents", files={"file": (name, data, "application/octet-stream")})
+        assert r.status_code == 201 and r.json()["code"] == ev

@@ -4,7 +4,7 @@
 迁移不依赖配置文件能否读出。
 
 Revision ID: 0032_project_configs
-Revises: 0030_kb_split（#98 的 0031 合并后改为 0031_document_text_sha）
+Revises: 0034_evidence_deleted（main 上 0031 → 0034 之后）
 Create Date: 2026-11-14
 """
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0032_project_configs"
-down_revision: str | None = "0030_kb_split"
+down_revision: str | None = "0034_evidence_deleted"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -318,3 +318,28 @@ def test_admin_usage_report_has_no_project_dimension(fake, member):
 def test_health_reports_model_availability(fake, member):
     gateway._health_cache.clear()
     assert member.get("/api/health").json()["checks"]["llm"] == "ok"
+
+
+def test_admin_model_status_hides_keys(monkeypatch):
+    """模型配置状态页：显示地址、模型名、连通状态，不返回密钥和地址里带的账号口令。"""
+    s = get_settings()
+    monkeypatch.setattr(s, "llm_base_url", "http://user:Secret-pw@llm.internal:8000/v1?token=abc")
+    monkeypatch.setattr(s, "llm_api_key", "sk-model-key-0001")
+    monkeypatch.setattr(s, "rerank_base_url", "http://rerank.internal/v1")
+    monkeypatch.setattr(s, "rerank_api_key", "sk-rerank-key-0002")
+    ids = [s.llm_model_reasoning, s.llm_model_standard, s.llm_model_light]
+    gateway.set_transport(httpx.MockTransport(lambda req: httpx.Response(200, json={"data": [{"id": i} for i in ids]})))
+    admin = logged_in_client(app, create_user(("sys_admin",)))
+    try:
+        r = admin.get("/api/admin/models")
+    finally:
+        admin.__exit__(None, None, None)
+        gateway.set_transport(None)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["llm"]["endpoint"] == "http://llm.internal:8000/v1"
+    assert body["llm"]["key_configured"] is True and body["llm"]["status"] == "ok"
+    assert body["embedding"]["status"] == "not enabled" and body["embedding"]["key_configured"] is False
+    assert body["rerank"]["status"].startswith("down")        # 重排服务上没有配置的模型
+    for secret in ("Secret-pw", "sk-model-key-0001", "sk-rerank-key-0002", "token=abc", "user:"):
+        assert secret not in r.text

@@ -2,7 +2,7 @@
 
 用法见 loadtest/README.md。每个虚拟用户用一个独立的压测账号（动态码防重放，不能共用），
 按顾问的日常操作比例访问（决策记录 2026-11-13）：项目列表与详情、证据、交付件、知识检索、确认卡、
-顾问对话（经网关走模型）、录入观察、上传资料、写章节（D5，每人一章）、导出 Word（D5）、发起交付链（同一项目同时
+顾问对话（经网关走模型）、录入观察、上传资料、写章节（D2，每人一章）、导出 Word（D2）、发起交付链（同一项目同时
 只能有一个运行，409 视为正常）。
 结束时按阈值判定（docs/压测方案.md）：失败数为 0；普通接口 p95 < 1 秒；知识检索 p95 < 2 秒；
 顾问对话 p95 < CHAT_P95_MS（模拟模型默认 5 秒，真实模型轮次按需放宽）。不满足时退出码 1。
@@ -62,7 +62,7 @@ class Consultant(HttpUser):
         self.csrf = ""
         self.conv = 0
         self.n = 0
-        self.seq = int(acc["username"].rsplit("-", 1)[1])   # lt-03 写 D5 第 3 章
+        self.seq = int(acc["username"].rsplit("-", 1)[1])   # lt-03 写 D2 第 3 章
         r = self.client.post("/api/auth/login", name="auth.login",
                              json={"username": acc["username"], "password": acc["password"],
                                    "totp": totp(acc["totp_secret"])})
@@ -123,7 +123,7 @@ class Consultant(HttpUser):
     @task(2)
     def section(self) -> None:
         self.n += 1
-        with self.client.put(f"/api/projects/{PROJECT}/deliverables/D5/sections/{self.seq}", name="sections.write",
+        with self.client.put(f"/api/projects/{PROJECT}/deliverables/D2/sections/{self.seq}", name="sections.write",
                              headers=self._h(), catch_response=True,
                              json={"body": f"压测正文第 {self.n} 稿：夜间值守安排需补充交接记录。[推断]"}) as r:
             # 409 是业务上的版本冲突（同章同时修改），接口正确拒绝，不算失败
@@ -134,7 +134,7 @@ class Consultant(HttpUser):
 
     @task(1)
     def export(self) -> None:
-        with self.client.get(f"/api/projects/{PROJECT}/deliverables/D5/export", name="deliverables.export",
+        with self.client.get(f"/api/projects/{PROJECT}/deliverables/D2/export", name="deliverables.export",
                              catch_response=True) as r:
             if r.status_code == 200 and r.content[:2] == b"PK":
                 r.success()

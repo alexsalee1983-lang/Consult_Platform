@@ -129,6 +129,12 @@ export const api = {
   // 项目证据（D 资料 / I 访谈 / O 现场观察）
   evidences: (code) => request(`/api/projects/${encodeURIComponent(code)}/evidences`),
   evidence: (code, ev) => request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}`),
+  // 证据改名、删除：录入人或项目经理；删除后编号保留、内容清空，不可撤销
+  renameEvidence: (code, ev, title) =>
+    request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}`,
+      { method: "PATCH", body: JSON.stringify({ title }) }),
+  deleteEvidence: (code, ev) =>
+    request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}`, { method: "DELETE" }),
   // 仅现场使用（M4 ③）：项目经理凭客户书面通知标注，平台删除原件和解析结果，不可撤销
   markLocalOnly: (code, ev, request_ref) =>
     request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}/local-only`,
@@ -200,6 +206,7 @@ export const api = {
   lookupUsers: (q) => request(`/api/users/lookup?q=${encodeURIComponent(q)}`),
   // 系统管理员：账号与角色
   adminUsers: () => request("/api/admin/users"),
+  adminModels: () => request("/api/admin/models"),
   createUser: (username, display_name, roles) =>
     request("/api/admin/users", { method: "POST", body: JSON.stringify({ username, display_name, roles }) }),
   setRoles: (username, roles) =>
@@ -280,7 +287,7 @@ export const SEVERITY_CLS = { 阻断: "c-r", 重要: "c-a", 建议: "c-n" };
 export const EVIDENCE_STATUS = {
   received: { label: "待解析", cls: "c-a" }, parsed: { label: "已解析", cls: "c-g" },
   failed: { label: "解析失败", cls: "c-r" }, ready: { label: "已录入", cls: "c-g" },
-  local_only: { label: "仅现场使用", cls: "c-v" },
+  local_only: { label: "仅现场使用", cls: "c-v" }, deleted: { label: "已删除", cls: "c-n" },
 };
 export const RUN_STATUS = {
   queued: { label: "排队中", cls: "c-c" }, running: { label: "运行中", cls: "c-c" },

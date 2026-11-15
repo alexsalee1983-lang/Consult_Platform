@@ -14,21 +14,30 @@ function Detail({ code, ev, onChange }) {
   const [ref, setRef] = useState("");
   const [busy, setBusy] = useState(false);
   const [markErr, setMarkErr] = useState("");
+  const [editing, setEditing] = useState(null);   // null / "rename" / "delete"
+  const [title, setTitle] = useState("");
   useEffect(() => { api.evidence(code, ev.code).then(setD).catch(setError); }, [code, ev.code, ev.status]);
   useEffect(() => {
-    if (ev.kind !== "document") return;
     api.members(code).then((ms) => setIsManager(ms.some((m) => m.username === user?.username && m.project_role === "manager")))
       .catch(() => setIsManager(false));
-  }, [code, ev.kind, user]);
+  }, [code, user]);
   const mark = () => {
     setBusy(true);
     setMarkErr("");
     api.markLocalOnly(code, ev.code, ref.trim()).then((x) => { setD(null); setMarking(false); onChange(x); })
       .catch((e) => setMarkErr(e.message)).finally(() => setBusy(false));
   };
+  const change = (call) => {
+    setBusy(true);
+    setMarkErr("");
+    call().then((x) => { setD(null); setEditing(null); onChange(x); })
+      .catch((e) => setMarkErr(e.message)).finally(() => setBusy(false));
+  };
   if (error) return <div className="err sub">{error.message}</div>;
   if (!d) return <div className="sub">加载中…</div>;
-  const meta = [d.kind_name, d.interviewee_role && `受访者：${d.interviewee_role}`, d.occurred_on, d.filename,
+  const deleted = d.status === "deleted";
+  const canChange = !deleted && !d.local_only && (isManager || d.created_by === user?.username);
+  const meta = deleted ? `已删除（${d.deleted_by} · ${d.deleted_at?.slice(0, 10)}）：编号保留不复用，平台已清空内容和文件；Agent 读不到，交付件不能引用。` : [d.kind_name, d.interviewee_role && `受访者：${d.interviewee_role}`, d.occurred_on, d.filename,
     `${d.chars} 字`, `录入：${d.created_by}`].filter(Boolean).join(" · ");
   return (
     <div className="ev-detail">
@@ -45,9 +54,32 @@ function Detail({ code, ev, onChange }) {
           只能在客户现场查阅；Agent 读不到，交付件不能引用。
         </div>
       )}
-      {d.kind === "document" && !d.local_only && isManager && !marking && (
-        <div className="row"><button className="btn sm" onClick={() => setMarking(true)}>标为仅现场使用</button></div>
+      {!marking && !editing && (canChange || (d.kind === "document" && !d.local_only && !deleted && isManager)) && (
+        <div className="row">
+          {canChange && <button className="btn sm" onClick={() => { setTitle(d.title); setEditing("rename"); }}>改名</button>}
+          {canChange && <button className="btn sm" onClick={() => setEditing("delete")}>删除</button>}
+          {d.kind === "document" && !d.local_only && !deleted && isManager &&
+            <button className="btn sm" onClick={() => setMarking(true)}>标为仅现场使用</button>}
+        </div>
       )}
+      {editing === "rename" && (
+        <div className="row">
+          <input className="inp" aria-label="新标题" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <button className="btnp" disabled={busy || !title.trim()} onClick={() => change(() => api.renameEvidence(code, ev.code, title.trim()))}>保存</button>
+          <button className="btn" disabled={busy} onClick={() => setEditing(null)}>取消</button>
+        </div>
+      )}
+      {editing === "delete" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="sub">删除用于传错、录错。删除后编号 {ev.code} 保留不再使用，标题、正文和文件立即清空，不可撤销；
+            同一文件可以重新上传（分配新编号）。交付件里已有的引用要删去后重新评审；已签署的交付件引用的不能删除。</div>
+          <div className="row">
+            <button className="btnp" disabled={busy} onClick={() => change(() => api.deleteEvidence(code, ev.code))}>确认删除</button>
+            <button className="btn" disabled={busy} onClick={() => setEditing(null)}>取消</button>
+          </div>
+        </div>
+      )}
+      {editing && markErr && <div className="err sub" role="alert">{markErr}</div>}
       {marking && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <div className="sub">客户书面要求这份资料只在现场查阅时使用。标注后平台立即删除原件和解析结果，不可撤销；
@@ -155,7 +187,7 @@ export default function Evidence({ code, strict, items, onChange }) {
             <li key={e.code}>
               <button className="ev-row" onClick={() => setOpen(open === e.code ? null : e.code)} aria-expanded={open === e.code}>
                 <span className="mono sub ev-code">{e.code}</span>
-                <span className="ev-title">{e.title || e.filename}{e.interviewee_role && <span className="sub"> · {e.interviewee_role}</span>}</span>
+                <span className="ev-title">{e.title || e.filename || (e.status === "deleted" ? "（已删除）" : "")}{e.interviewee_role && <span className="sub"> · {e.interviewee_role}</span>}</span>
                 <span className="sub mono">{e.occurred_on || e.created_at.slice(0, 10)}</span>
                 <span className={`chip ${st.cls}`}>{st.label}</span>
               </button>
