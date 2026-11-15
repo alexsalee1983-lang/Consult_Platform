@@ -644,10 +644,22 @@ def kb_eval(args: argparse.Namespace) -> int:
             print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
             return 1
         try:
-            report = evaluate.run(db, user, evaluate.load_questions(Path(args.questions)))
-        except evaluate.EvalError as e:
+            questions = evaluate.load_questions(Path(args.questions))
+            if args.compare:
+                from .kb import compare
+
+                cmp = compare.run(db, user, questions)
+            else:
+                report = evaluate.run(db, user, questions)
+        except (evaluate.EvalError, ValueError) as e:
             print(f"题目文件有问题：{e}", file=sys.stderr)
             return 1
+    if args.compare:
+        print(compare.format_report(cmp))
+        if args.out:
+            Path(args.out).write_text(json.dumps(cmp.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"明细已写到 {args.out}（含题号和识别出的引用，不含答案原文）")
+        return 0 if cmp.passed else 3
     print(evaluate.format_report(report))
     if args.out:
         Path(args.out).write_text(json.dumps(report.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -743,6 +755,8 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("questions", help="评测题目文件（YAML）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
     ke.add_argument("--out", default="", help="把明细写成 JSON 文件")
+    ke.add_argument("--compare", action="store_true",
+                    help="有无知识库对比评测（二期 B1 补充）：同一批题分别不用、用知识库让模型作答，核对文件名和条款号，达标时退出码 0")
     ke.set_defaults(func=kb_eval)
     lt = sub.add_parser("loadtest-accounts", help="压测账号（只在开发、测试环境）：建或重置 lt-xx 并加入压测项目；--disable 停用")
     lt.add_argument("--count", type=int, default=20)
