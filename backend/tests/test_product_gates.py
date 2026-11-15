@@ -109,3 +109,37 @@ def test_iso_soa_gate_lists_all_93_annex_a_controls():
     full = "\n".join(f"{c} 适用" for c in want)
     assert all(covers(full, c) for c in items)
     assert [c for c in items if not covers(full.replace("5.1 适用\n", ""), c)] == ["5.1"]
+def test_dsm_draft_config_loads_with_boundary_gate():
+    """D2：数据安全产品草稿可加载；资质边界门禁覆盖全部交付件。"""
+    cat = config.load()
+    assert not cat.problems
+    dsm = cat.products["DSM"]
+    assert dsm.status == "draft" and [d.code for d in dsm.deliverables] == [f"D{i}" for i in range(1, 9)]
+    g = next(g for g in dsm.gates if g.id == "no-assessment-claim")
+    assert g.deliverable == "" and g.level == "blocking"
+def test_ire_draft_config_loads_with_boundary_gate():
+    """D3：事件后 E2E 产品草稿可加载；D4 必须有时间线和根因章节，全部交付件禁止责任认定说法。"""
+    cat = config.load()
+    assert not cat.problems
+    ire = cat.products["IRE"]
+    assert ire.status == "draft" and [d.code for d in ire.deliverables] == [f"D{i}" for i in range(1, 9)]
+    assert {g.id for g in ire.gates} == {"ire-sections", "no-liability-claim"}
+def test_nsg_draft_config_loads():
+    """D4：网络安全治理规划产品草稿可加载；D5 必须有愿景与目标、重点任务、保障措施章节。"""
+    cat = config.load()
+    assert not cat.problems
+    nsg = cat.products["NSG"]
+    assert nsg.status == "draft" and [d.code for d in nsg.deliverables] == [f"D{i}" for i in range(1, 9)]
+    assert [g.id for g in nsg.gates] == ["nsg-sections"]
+
+
+def test_d5_modules_draft_attach_both_sides_and_not_composable():
+    """D5：三个模块草稿两边都登记；草稿模块不能立项勾选。"""
+    import pytest
+    cat = config.load()
+    assert not cat.problems
+    assert {c: m.status for c, m in cat.modules.items()} == {"DJBH": "draft", "HYJG": "draft", "GFYL": "draft"}
+    for m in cat.modules.values():
+        assert all(m.code in cat.products[p].modules for p in m.products)
+    with pytest.raises(config.CatalogError):
+        config.compose(cat.products["SOC"], [cat.modules["DJBH"]])
