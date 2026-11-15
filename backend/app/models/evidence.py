@@ -67,5 +67,8 @@ class Evidence(Base):
     document_id: Mapped[int | None] = mapped_column(ForeignKey("project_documents.id"), nullable=True)
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # 删除（二期一期待办，迁移 0034）：编号保留、不复用；标题、正文、文件和解析结果清空
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by: Mapped[str] = mapped_column(String(64), server_default="")
 
     document: Mapped[ProjectDocument | None] = relationship()
