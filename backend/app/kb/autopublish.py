@@ -20,7 +20,7 @@ import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..core import audit
@@ -32,6 +32,7 @@ from . import importer, parse, sources
 from . import review as rv
 
 PLATFORM = "platform"
+AGENT = "agent"                    # 知识审核 Agent 自动发布（二期 B11，app/kb/agent_review.py）
 RECENT_SAMPLES = 20
 SAMPLE_DECISIONS = {"pass": "approve", "fail": "reject"}
 
@@ -60,23 +61,32 @@ class PublishReport:
                 "suspended": self.suspended}
 
 
-def sample_stats(db: Session) -> dict:
-    """最近 RECENT_SAMPLES 次抽检的结果和是否暂停自动发布。"""
+def _enabled(kind: str) -> tuple[bool, str]:
+    if kind == AGENT:
+        return get_settings().kb_agent_auto_publish, "KB_AGENT_AUTO_PUBLISH"
+    return get_settings().kb_src_auto_publish, "KB_SRC_AUTO_PUBLISH"
+
+
+def sample_stats(db: Session, kind: str = PLATFORM) -> dict:
+    """某类自动发布（platform 平台核验 / agent 知识审核 Agent）最近 RECENT_SAMPLES 次抽检的结果和是否暂停。"""
     rows = db.scalars(select(KbVersion.sample_state)
-                      .where(KbVersion.auto_review == PLATFORM, KbVersion.sample_state.in_(("passed", "failed")))
+                      .where(KbVersion.auto_review == kind, KbVersion.sample_state.in_(("passed", "failed")))
                       .order_by(KbVersion.id.desc()).limit(RECENT_SAMPLES)).all()
     failed = sum(1 for s in rows if s == "failed")
-    pending = db.scalar(select(KbVersion.id).where(KbVersion.sample_state == "pending").limit(1)) is not None
+    pending = db.scalar(select(KbVersion.id).where(KbVersion.auto_review == kind,
+                                                   KbVersion.sample_state == "pending").limit(1)) is not None
     limit = get_settings().kb_sample_fail_max
-    suspended = bool(rows) and failed / len(rows) > limit
-    return {"checked": len(rows), "failed": failed, "fail_max": limit, "suspended": suspended,
-            "has_pending": pending, "enabled": get_settings().kb_src_auto_publish}
+    over = bool(rows) and failed / len(rows) > limit
+    return {"checked": len(rows), "failed": failed, "fail_max": limit, "suspended": over,
+            "has_pending": pending, "enabled": _enabled(kind)[0]}
 
 
-def _suspended(db: Session) -> str:
-    if not get_settings().kb_src_auto_publish:
-        return "KB_SRC_AUTO_PUBLISH=false"
-    s = sample_stats(db)
+def suspended(db: Session, kind: str = PLATFORM) -> str:
+    """暂停自动发布的原因；空串表示没暂停。"""
+    on, var = _enabled(kind)
+    if not on:
+        return f"{var}=false"
+    s = sample_stats(db, kind)
     if s["suspended"]:
         return f"最近 {s['checked']} 次抽检不通过 {s['failed']} 次，超过 {s['fail_max']:.0%}"
     return ""
@@ -112,7 +122,7 @@ def _auto_publish(db: Session, user: User, v: KbVersion) -> None:
 def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport:
     rv.require_knowledge(db, user)
     docs, skipped = sources.read_manifest(manifest.read_bytes())
-    report = PublishReport(skipped=skipped, suspended=_suspended(db))
+    report = PublishReport(skipped=skipped, suspended=suspended(db))
     published: list[KbVersion] = []
     for d in docs:
         out = DocOutcome(file=d.file, title=d.title)
@@ -159,14 +169,16 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
 
 
 def sample_queue(db: Session) -> list[KbVersion]:
-    """待抽检和抽检不通过、还没处理（仍是现行版本）的自动发布版本。"""
+    """待抽检和抽检不通过、还没处理（仍是现行版本）的自动发布版本，以及使用反馈待复查的现行版本（B13，app/kb/recheck.py）。"""
     return list(db.scalars(select(KbVersion).join(KbItem, KbItem.current_version_id == KbVersion.id)
-                           .where(KbVersion.sample_state.in_(("pending", "failed")), KbItem.retired.is_(False))
-                           .order_by(KbVersion.sample_state.desc(), KbVersion.id)))
+                           .where(or_(KbVersion.sample_state.in_(("pending", "failed")),
+                                      KbVersion.recheck_state.in_(("pending", "failed"))),
+                                  KbItem.retired.is_(False))
+                           .order_by(KbVersion.sample_state.desc(), KbVersion.recheck_state.desc(), KbVersion.id)))
 
 
 def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: str = "") -> KbVersion:
-    """抽检：知识专家对照原件判通过（pass）或不通过（fail，写明问题）。自动发布的版本都可以补抽检。"""
+    """抽检：知识专家对照原件判通过（pass）或不通过（fail，写明问题）。自动发布（平台核验、知识审核 Agent）的版本都可以补抽检。"""
     def deny(status: int, reason: str, message: str):
         audit.record(db, actor=user.username, action="kb.sample", result="blocked", doc_id=v.item.doc_id,
                      version=v.version, reason=reason)
@@ -176,18 +188,25 @@ def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: 
         raise rv.ReviewError(422, "decision 只能是 pass / fail")
     if KNOWLEDGE_EXPERT not in roles_of(db, user.id):
         deny(403, "role_mismatch", "抽检须由知识专家进行")
-    if v.auto_review != PLATFORM or v.status != "published":
-        raise rv.ReviewError(409, "只有平台自动发布的现行版本需要抽检")
-    if v.sample_state in ("passed", "failed"):
-        raise rv.ReviewError(409, "这个版本已经抽检过")
+    sample = v.auto_review in (PLATFORM, AGENT) and v.sample_state not in ("passed", "failed")
+    recheck = v.recheck_state == "pending"           # 使用反馈待复查（B13）：人审版本也可以，不计入抽检不通过率
+    current = v.item.current_version_id == v.id and not v.item.retired
+    if v.status != "published" or not current or not (sample or recheck):
+        if v.sample_state in ("passed", "failed") and v.recheck_state != "pending":
+            raise rv.ReviewError(409, "这个版本已经抽检过")
+        raise rv.ReviewError(409, "只有自动发布或待复查的现行版本需要抽检")
     if user.username in {v.created_by, v.submitted_by}:
         deny(403, "self_review", "不能抽检自己导入的版本")
     if decision == "fail" and len(comment.strip()) < 5:
         raise rv.ReviewError(422, "不通过要写明问题（至少 5 个字）")
-    db.add(KbReview(version_id=v.id, reviewer=user.username, review_role="sample",
+    state = "passed" if decision == "pass" else "failed"
+    db.add(KbReview(version_id=v.id, reviewer=user.username, review_role="sample" if sample else "recheck",
                     decision=SAMPLE_DECISIONS[decision], comment=comment[:1000]))
-    v.sample_state = "passed" if decision == "pass" else "failed"
+    if sample:                                       # 一次看完同时了结抽检和待复查
+        v.sample_state = state
+    if recheck:
+        v.recheck_state, v.recheck_at = state, utcnow()
     db.commit()
     audit.record(db, actor=user.username, action="kb.sample", result="allowed", doc_id=v.item.doc_id,
-                 version=v.version, decision=decision)
+                 version=v.version, decision=decision, sample=sample, recheck=recheck)
     return v

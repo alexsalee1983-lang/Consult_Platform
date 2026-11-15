@@ -111,7 +111,7 @@ def test_suspended_when_fail_rate_high(tmp_path, monkeypatch):
         assert {x.status for x in _versions(db, t2["ok.txt"])} == {"in_review"}
         monkeypatch.setattr(get_settings(), "kb_sample_fail_max", 1.0)
         monkeypatch.setattr(get_settings(), "kb_src_auto_publish", False)
-        assert autopublish._suspended(db) == "KB_SRC_AUTO_PUBLISH=false"
+        assert autopublish.suspended(db) == "KB_SRC_AUTO_PUBLISH=false"
 
 
 def test_samples_api(tmp_path):

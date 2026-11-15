@@ -12,7 +12,8 @@ POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
-GET  /api/kb/samples                     抽检队列：平台自动发布的依据原文中待抽检、抽检不通过的，附问题率（同上）
+GET  /api/kb/samples                     抽检队列：自动发布（平台核验的依据原文、知识审核 Agent 审过的）中待抽检、
+                                         抽检不通过的，附两类各自的问题率（同上；B11）；另含使用反馈待复查的条目（B13）
 POST /api/kb/versions/{id}/sample        抽检：decision=pass|fail（知识专家，不能是导入人；二期 B10）
 GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
 GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
@@ -128,8 +129,10 @@ class VersionBrief(BaseModel):
     published_at: datetime | None
     review_date: date | None
     single_review: bool = False         # 单人发布，待补复审
-    auto_review: str = ""               # platform：平台核验自动发布（二期 B10）
+    auto_review: str = ""               # platform：平台核验自动发布（二期 B10）；agent：知识审核 Agent（B11）
     sample_state: str = ""              # 抽检：pending / passed / failed
+    recheck_state: str = ""             # 使用反馈待复查（B13）：pending / passed / failed
+    recheck_reason: str = ""
 
 
 class ReviewOut(BaseModel):
@@ -137,6 +140,7 @@ class ReviewOut(BaseModel):
     review_role: str
     decision: str
     comment: str
+    findings: dict = {}                 # 知识审核 Agent 的逐项检查和问题清单（review_role=agent，二期 B11）
     created_at: datetime
 
 
@@ -348,7 +352,7 @@ def review_due(days: int = Query(30, ge=0, le=366), db: Session = Depends(get_db
 @router.get("/samples")
 def samples(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     _knowledge_only(db, user)
-    return {**autopublish.sample_stats(db), "items": [_version_out(db, v, user) for v in autopublish.sample_queue(db)]}
+    return {**autopublish.sample_stats(db), "agent": autopublish.sample_stats(db, autopublish.AGENT), "items": [_version_out(db, v, user) for v in autopublish.sample_queue(db)]}
 
 
 @router.post("/versions/{version_id}/sample", response_model=VersionOut)

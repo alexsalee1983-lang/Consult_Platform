@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     kb_src_auto_publish: bool = True
     kb_sample_rate_src: float = 0.05
     kb_sample_fail_max: float = 0.1
+    # 知识审核 Agent（二期 B11，二期开发计划第十二节第二级）：公开资料的解读、映射、方法和只含公开资料的案例、异议应答，
+    # 提交后由程序规则 + 知识审核 Agent（经网关）逐项检查，全部通过的自动发布并按比例抽检，存疑的进人工队列。
+    # 最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX 时暂停；超过一半时抽检比例加倍。
+    kb_agent_auto_publish: bool = True
+    kb_sample_rate_agent: float = 0.2
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
 
