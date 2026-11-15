@@ -4,7 +4,7 @@
 1. 严格档项目一律拒绝（资料不出客户现场，只收去标识摘要卡，见 app/project/cards.py）。
 2. 按文件内容判断类型并解析出文字；扫描件、加密文件、超限文件直接拒绝（与知识投料共用 app/kb/parse.py）。
 3. 文件名和全文过机密级检测（guard）；命中则**不存档**，只写审计（命中类别），返回打码的命中摘录。
-4. 同一项目里同一文件（sha256 相同）不重复上传。
+4. 同一项目里同一文件（sha256 相同）或正文相同（去空白后的正文哈希，另存、换格式的同一份资料）不重复上传。
 5. 原件存对象存储项目区，键为 <项目代号>/documents/<随机编号>/original.<扩展名>（不用原文件名）。
 6. 分配证据编号 D-xx，排后台任务 project.parse 解析成章节，结果 JSON 存在原件旁边。
 
@@ -12,7 +12,7 @@
 
 仅现场使用（M4 ③）：客户书面要求某份资料只在客户现场查阅时，项目经理把它标为仅现场使用（写客户通知的文号，
 不写客户名称）。平台立即删除对象存储里的原件和解析结果、清空文件名，证据编号保留不复用；之后同一文件（sha256）
-不能再上传，Agent 经 project.evidence 读不到，交付件写入时引用它会被拒绝，质量评审把已有引用判为阻断。
+或正文相同的文件（另存、换格式）不能再上传，Agent 经 project.evidence 读不到，交付件写入时引用它会被拒绝，质量评审把已有引用判为阻断。
 标注不可撤销（文件已删除）。告知书附件一第 4 条、合同条款：收到通知后 5 个工作日内落实。
 
 审计只记项目、证据编号、类别、大小和命中类别，不记文件名、正文和文号。
@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import unicodedata
 import uuid
 from dataclasses import dataclass
 from datetime import date
@@ -42,6 +44,7 @@ AREA = "project"
 MAX_NOTE_CHARS = 100_000
 READ_CHARS = 20_000            # 工具一次最多返回的正文字数，超出的用 offset 分段取
 LOCAL_ONLY_NOTE = "已标为仅现场使用：平台没有原文，只能在客户现场查阅，不能引用"
+DELETED_NOTE = "已删除：平台不再保存内容，不能引用"
 STRICT_REFUSAL = "严格档项目的资料不出客户现场，平台不保存资料和纪要原文；客户书面同意后只上传去标识摘要卡"
 
 
@@ -95,6 +98,11 @@ def _assign(db: Session, project: Project, kind: str, make) -> Evidence:
     raise EvidenceError(409, "证据编号分配冲突，请重试")
 
 
+def text_digest(text: str) -> str:
+    """正文哈希：NFKC 规整、去掉全部空白后的 sha256。只用于判断是否同一份资料，不记原文。"""
+    return hashlib.sha256(re.sub(r"\s+", "", unicodedata.normalize("NFKC", text)).encode("utf-8")).hexdigest()
+
+
 def upload_document(db: Session, user: User, project: Project, filename: str, data: bytes,
                     content_type: str = "", title: str = "") -> UploadResult:
     action = "project.document"
@@ -112,20 +120,21 @@ def upload_document(db: Session, user: User, project: Project, filename: str, da
 
     if not storage.enabled():
         raise EvidenceError(503, "对象存储未启用，暂时不能上传资料")
-    sha = hashlib.sha256(data).hexdigest()
-    dup = db.scalar(select(Evidence).join(ProjectDocument, Evidence.document_id == ProjectDocument.id)
-                    .where(ProjectDocument.project_id == project.id, ProjectDocument.sha256 == sha))
+    sha, text_sha = hashlib.sha256(data).hexdigest(), text_digest(doc.full_text())
+    same = select(Evidence).join(ProjectDocument, Evidence.document_id == ProjectDocument.id)         .where(ProjectDocument.project_id == project.id)
+    dup = db.scalar(same.where(ProjectDocument.sha256 == sha))         or db.scalar(same.where(ProjectDocument.text_sha256 == text_sha)
+                     .order_by(ProjectDocument.local_only.desc(), Evidence.seq))
     if dup is not None and dup.document.local_only:
         audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
                      reason="local_only", evidence=dup.code)
         raise EvidenceError(422, f"这份资料已标为仅现场使用（证据编号 {dup.code}），不能上传")
     if dup is not None:
-        raise EvidenceError(409, f"这个文件已经上传过（证据编号 {dup.code}）")
+        raise EvidenceError(409, f"这份资料已经上传过（证据编号 {dup.code}）")
 
     key = f"{project.code}/documents/{uuid.uuid4().hex}/original.{_ext(filename)}"
     storage.put(AREA, key, data, content_type or "application/octet-stream")
     d = ProjectDocument(project_id=project.id, object_key=key, filename=filename, content_type=content_type[:128],
-                        size=len(data), sha256=sha, kind=doc.kind, status="received", uploaded_by=user.username)
+                        size=len(data), sha256=sha, text_sha256=text_sha, kind=doc.kind, status="received", uploaded_by=user.username)
     db.add(d)
     db.commit()
     ev = _assign(db, project, "document", lambda seq, code: Evidence(
@@ -206,6 +215,95 @@ def local_only_codes(db: Session, project: Project) -> set[str]:
                           .where(Evidence.project_id == project.id, ProjectDocument.local_only.is_(True))))
 
 
+def withdrawn_codes(db: Session, project: Project) -> dict[str, str]:
+    """不能再引用的证据编号 → 原因（已标为仅现场使用 / 已删除）。交付件写入、签署门禁、质量评审平台规则据此判断。"""
+    out = {c: "已删除" for c in db.scalars(select(Evidence.code).where(Evidence.project_id == project.id,
+                                                                     Evidence.deleted_at.is_not(None)))}
+    out.update({c: "已标为仅现场使用" for c in local_only_codes(db, project)})
+    return out
+
+
+def _may_change(db: Session, user: User, project: Project, ev: Evidence, action: str) -> None:
+    """改名、删除：录入人本人或本项目的项目经理。"""
+    m = membership(db, project.id, user.id)
+    if ev.created_by == user.username or (m is not None and m.project_role == PROJECT_MANAGER):
+        return
+    audit.record(db, actor=user.username, action=action, result="denied", project_code=project.code,
+                 evidence=ev.code, reason="not_owner")
+    raise EvidenceError(403, "只有录入人或本项目的项目经理能修改这条证据")
+
+
+def rename_evidence(db: Session, user: User, project: Project, ev: Evidence, title: str) -> Evidence:
+    """改证据标题（编号不变）。标题过机密级检测；审计不记标题。"""
+    action = "project.evidence.rename"
+    _may_change(db, user, project, ev, action)
+    if ev.deleted_at is not None:
+        raise EvidenceError(409, f"{ev.code} 已删除，不能改名")
+    title = title.strip()
+    if not title or len(title) > 200:
+        raise EvidenceError(422, "标题为 1～200 字")
+    _guard(db, user, project, action, title, "标题没有修改", evidence=ev.code)
+    if title != ev.title:
+        ev.title = title
+        db.commit()
+        audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
+                     evidence=ev.code, chars=len(title))
+    return ev
+
+
+def citing_deliverables(db: Session, project: Project, code: str) -> list[tuple[str, str]]:
+    """当前版本正文引用了该证据的交付件 [(D1, 状态)]。"""
+    from .deliverables import get_version
+
+    out = []
+    for d in project.deliverables:
+        for s in d.sections:
+            v = get_version(s)
+            if v is not None and any(x.get("code") == code for x in (v.sources or {}).get("evidence", [])):
+                out.append((d.code, d.status))
+                break
+    return out
+
+
+def delete_evidence(db: Session, user: User, project: Project, ev: Evidence) -> Evidence:
+    """删除一条证据（录入人或项目经理，用于传错、录错）：编号保留不复用；标题、正文清空，资料原件和解析结果
+    从对象存储删除，同一文件以后可以重新上传（分配新编号）。已签署交付件引用的不能删；未签署交付件里的引用
+    在写入、签署门禁和质量评审平台规则里判阻断。仅现场使用的资料已没有内容，不需要删除。不可撤销。"""
+    action = "project.evidence.delete"
+    _may_change(db, user, project, ev, action)
+    if ev.deleted_at is not None:
+        raise EvidenceError(409, f"{ev.code} 已经删除")
+    d = ev.document
+    if d is not None and d.local_only:
+        raise EvidenceError(422, f"{ev.code} 已标为仅现场使用，平台已没有原文，不需要删除")
+    cited = citing_deliverables(db, project, ev.code)
+    signed = [c for c, st in cited if st == "signed"]
+    if signed:
+        audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
+                     evidence=ev.code, reason="cited_by_signed", deliverables=signed)
+        raise EvidenceError(409, f"已签署的交付件 {'、'.join(signed)} 引用了 {ev.code}，不能删除")
+    db.refresh(ev, with_for_update=True)       # 与并发的删除、解析串行
+    if ev.deleted_at is not None:
+        raise EvidenceError(409, f"{ev.code} 已经删除")
+    keys: list[str] = []
+    if d is not None:
+        db.refresh(d, with_for_update=True)
+        keys = [k for k in (d.object_key, d.parsed_key) if k]
+        if keys and not storage.enabled():
+            raise EvidenceError(503, "对象存储未启用，暂时不能删除资料文件，请稍后再试")
+        for k in keys:
+            storage.delete(AREA, k)
+        # sha256 有唯一约束：改成占位值，同一文件以后可以重新上传
+        d.sha256, d.text_sha256, d.filename, d.parsed_key = f"deleted-{d.id}", "", "", ""
+        d.status, d.error, d.char_count, d.section_count, d.page_count = "deleted", "", 0, 0, 0
+    ev.title, ev.content, ev.interviewee_role, ev.occurred_on, ev.char_count = "", "", "", None, 0
+    ev.deleted_at, ev.deleted_by = utcnow(), user.username
+    db.commit()
+    audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
+                 evidence=ev.code, kind=ev.kind, files=len(keys), cited_unsigned=len(cited))
+    return ev
+
+
 def list_evidences(db: Session, project: Project) -> list[Evidence]:
     return list(db.scalars(select(Evidence).where(Evidence.project_id == project.id)
                            .order_by(Evidence.kind, Evidence.seq)))
@@ -239,7 +337,9 @@ def summary(ev: Evidence) -> dict:
     return {"code": ev.code, "kind": ev.kind, "title": ev.title, "interviewee_role": ev.interviewee_role,
             "occurred_on": ev.occurred_on.isoformat() if ev.occurred_on else None,
             "chars": d.char_count if d else ev.char_count,
-            "status": d.status if d else "ready", **({"note": LOCAL_ONLY_NOTE} if d and d.local_only else {})}
+            "status": "deleted" if ev.deleted_at else d.status if d else "ready",
+            **({"note": LOCAL_ONLY_NOTE} if d and d.local_only else {}),
+            **({"note": DELETED_NOTE} if ev.deleted_at else {})}
 
 
 def read_for_agent(db: Session, project: Project, code: str = "", offset: int = 0,
@@ -255,6 +355,8 @@ def read_for_agent(db: Session, project: Project, code: str = "", offset: int = 
         return {"error": f"本项目没有证据 {code}"}
     if ev.document is not None and ev.document.local_only:
         return {**summary(ev), "text": "", "error": f"{ev.code} {LOCAL_ONLY_NOTE}"}
+    if ev.deleted_at is not None:
+        return {**summary(ev), "text": "", "error": f"{ev.code} {DELETED_NOTE}"}
     text = full_text(ev)
     if text is None:
         return {**summary(ev), "text": "", "note": "文档还在解析，稍后再取"}
@@ -273,7 +375,7 @@ def _parse_job(payload: dict, ctx: jobs.JobContext) -> None:
         d = db.get(ProjectDocument, int(payload["document_id"]))
         if d is None:
             raise jobs.JobError("资料记录不存在", retry=False)
-        if d.local_only:                       # 解析前已标为仅现场使用：文件已删，不再解析
+        if d.local_only or d.status == "deleted":   # 解析前已标为仅现场使用或已删除：文件已删，不再解析
             return
         data = storage.get(AREA, d.object_key)
         try:
@@ -282,8 +384,8 @@ def _parse_job(payload: dict, ctx: jobs.JobContext) -> None:
             d.status, d.error = "failed", str(e)[:200]
             db.commit()
             raise jobs.JobError(str(e), retry=False) from e
-        db.refresh(d, with_for_update=True)     # 与“仅现场使用”标注串行：解析期间被标注的不写结果
-        if d.local_only:
+        db.refresh(d, with_for_update=True)     # 与“仅现场使用”标注、删除串行：解析期间被标注或删除的不写结果
+        if d.local_only or d.status == "deleted":
             db.commit()
             return
         key = d.object_key.rsplit("/", 1)[0] + "/parsed.json"
