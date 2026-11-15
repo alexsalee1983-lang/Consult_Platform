@@ -98,7 +98,8 @@ def _done(r) -> dict:
 
 def test_product_code_mapping():
     assert knowledge.product_code("SOC 运营体系设计") == "SOC"
-    assert knowledge.product_code("网络安全治理规划") == ""      # 一期没有这个产品的知识，不按产品过滤
+    assert knowledge.product_code("网络安全治理规划") == "NSG"   # 二期起元数据有 NSG（#118）
+    assert knowledge.product_code("压测") == ""                  # 对不上的不按产品过滤
 
 
 def test_knowledge_injected_and_references_recorded(kb, model, client):
