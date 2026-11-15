@@ -118,3 +118,21 @@ class ProjectDeletion(Base):
     job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), nullable=True)
 
     project: Mapped[Project] = relationship()
+
+
+class ProjectConfig(Base):
+    """立项快照（二期 A3，迁移 0032，docs/接口约定.md 第四节）：产品 + 所选模块合并后的完整配置，立项后不变。
+
+    只有配置（产品、模块、任务说明、门禁），没有客户资料；项目删除时保留（项目行也保留）。
+    """
+    __tablename__ = "project_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), unique=True)
+    product: Mapped[str] = mapped_column(String(8))
+    modules: Mapped[list] = mapped_column(JSON, default=list)            # 模块代号
+    product_version: Mapped[str] = mapped_column(String(16))
+    module_versions: Mapped[dict] = mapped_column(JSON, default=dict)    # 代号 → 版本
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    created_by: Mapped[str] = mapped_column(String(64), default="")

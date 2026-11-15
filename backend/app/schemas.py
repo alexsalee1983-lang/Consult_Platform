@@ -55,6 +55,11 @@ class ProjectOut(BaseModel):
     retention_state: str = "active"
     days_to_deletion: int | None = None
     flowback_allowed: bool = True           # False：客户不同意回流（M4 ②）
+    # 立项快照（二期 A3）：产品、所选模块、产品配置版本
+    product: str = ""
+    product_name: str = ""
+    modules: list[dict] = []
+    product_version: str = ""
 
 
 class ProjectDetail(ProjectOut):

@@ -212,40 +212,26 @@ def add_member(args: argparse.Namespace) -> int:
     return 0
 
 
-PROJECT_CODE = re.compile(r"^[A-Z]{2,8}-[A-Z0-9]{1,6}$")
+PROJECT_CODE = re.compile(r"^[A-Z]{2,8}-[A-Z0-9]{1,6}$")   # 同 app/project/configs.py
 TIERS = {"standard": "标准档", "strict": "严格档"}
 
 
 def create_project(args: argparse.Namespace) -> int:
-    """立项：建项目和 D1～D8 交付件，指定首位项目经理。"""
-    from .seed import DELIVERABLES
+    """立项：选产品和模块、定档，按产品配置建交付件、记下配置快照，指定首位项目经理（规则在 app/project/configs.py）。"""
+    from .project import configs
 
-    code = args.code.strip().upper()
-    if not PROJECT_CODE.match(code):
-        print("项目代号格式为“字母-字母或数字”，如 BANK-D、GRID-B2；只用客户代号，不写客户真实名称", file=sys.stderr)
-        return 1
     with SessionLocal() as db:
-        if db.scalar(select(Project.id).where(Project.code == code)) is not None:
-            print(f"项目 {code} 已存在", file=sys.stderr)
+        user = db.scalar(select(User).where(User.username == args.manager))
+        try:
+            p = configs.create(db, actor="cli", code=args.code, tier=args.tier, manager=user, product=args.product,
+                               modules=args.module or [], industry=args.industry, weeks=args.weeks,
+                               service=args.service)
+        except configs.CreateError as e:
+            print(str(e) if user is not None else f"没有用户 {args.manager}", file=sys.stderr)
             return 1
-        user = _get(db, args.manager)
-        if user is None:
-            return 1
-        if not user.is_active or not roles_of(db, user.id) & BUSINESS_ROLES:
-            print("项目经理必须是启用状态、持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户", file=sys.stderr)
-            return 1
-        p = Project(code=code, service=args.service.strip(), industry=args.industry.strip(), tier=args.tier,
-                    total_weeks=args.weeks)
-        p.deliverables = [Deliverable(code=f"D{i + 1}", title=t, status="not_started")
-                          for i, t in enumerate(DELIVERABLES)]
-        db.add(p)
-        db.flush()
-        db.add(ProjectMember(project_id=p.id, user_id=user.id, project_role="manager", added_by="cli"))
-        db.commit()
-        audit.record(db, actor="cli", action="project.create", result="allowed", project_code=code,
-                     tier=args.tier, manager=args.manager)
-    print(f"已立项 {code}（{TIERS[args.tier]}，{args.service}），项目经理 {args.manager}；"
-          f"其他成员由项目经理在网页上添加")
+        codes = "、".join(d.code for d in p.deliverables)
+        print(f"已立项 {p.code}（{TIERS[p.tier]}，{p.service}），交付件 {codes}，项目经理 {args.manager}；"
+              f"其他成员由项目经理在网页上添加")
     return 0
 
 
@@ -645,7 +631,9 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("--code", required=True, help="客户代号，如 BANK-D（不写客户真实名称）")
     cp.add_argument("--tier", required=True, choices=sorted(TIERS), help="standard=标准档，strict=严格档（立项时必须定档）")
     cp.add_argument("--manager", required=True, help="首位项目经理的用户名")
-    cp.add_argument("--service", default="SOC 运营体系设计", help="服务产品（默认 SOC 运营体系设计）")
+    cp.add_argument("--product", default="SOC", help="服务产品代号（products/ 下 ready 的产品，默认 SOC）")
+    cp.add_argument("--module", action="append", help="勾选的模块代号，可重复；只能选产品允许的 ready 模块")
+    cp.add_argument("--service", default="", help="显示名（默认用产品名称）")
     cp.add_argument("--industry", default="", help="行业，如 银行")
     cp.add_argument("--weeks", type=int, default=12, help="计划周数（默认 12）")
     cp.set_defaults(func=create_project)
