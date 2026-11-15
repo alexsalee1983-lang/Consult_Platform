@@ -76,7 +76,10 @@ export default function Sidebar() {
       ] : []),
     ] : []),
     ...(isAuditor(user) ? [{ to: "/audit", icon: "audit", label: "审计日志" }] : []),
-    ...(isSysAdmin(user) ? [{ to: "/admin/users", icon: "users", label: "用户与角色" }] : []),
+    ...(isSysAdmin(user) ? [
+      { to: "/admin/users", icon: "users", label: "用户与角色" },
+      { to: "/admin/models", icon: "dash", label: "模型配置状态" },
+    ] : []),
     { to: PASSWORD_PATH, icon: "key", label: "修改口令" },
   ];
   const name = user?.displayName || user?.username || "";

@@ -44,6 +44,10 @@
 6. **权限隔离**：非项目成员看不到项目（返回 404）；知识侧 Agent 不能读项目区；交付侧 Agent 不能写知识库。改动权限相关代码必须同步更新权限矩阵测试。
 7. **密钥只放 `.env` 或部署机的密钥文件**，不提交；`.env.example` 只放占位值。
 
+## 设计原则：自动化优先（决策记录 2026-11-15）
+
+平台尽量少用人工：能做成工作流自动完成的都做成自动化（程序规则 + Agent 按清单判断 + 评测 + 抽检），人只处理例外和必须由人担责的事（签署、删除确认、客户数据、只有人知道的信息、公司经验认可、规则变更），前提是不降低咨询质量。设计新功能时先按这条判断，保留人工要说明理由；数据保护红线和资质边界不因此放松。详见 `docs/二期开发计划.md` 第十二节。
+
 ## 资质边界
 
 平台和 Agent 不得出具或暗示等保测评结论、密评结论、认证结论。界面和提示词统一用“差距分析、符合性初判、整改建议”。
@@ -113,7 +117,7 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 运行时约定：Agent 的系统提示 = `agents/01_公共规范.md` + 角色 md 正文 + 平台生成的项目卡（`app/agents/runtime.py`）；项目卡经工具层 `project.read` 读取。md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier`、`tools`（仅作说明）、`service_modules`。每条对话和回复记下提示词版本（md 内容哈希）。后端镜像以仓库根目录为构建范围，`agents/` 打进镜像（`backend/Dockerfile`、根目录 `.dockerignore`）；测试机可只读挂载 `./agents:/srv/agents:ro`，md 改了自动重新加载。
 
-网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。测试里用 `gateway.set_transport(httpx.MockTransport(...))` 模拟模型，不要连真实地址。
+网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。测试里用 `gateway.set_transport(httpx.MockTransport(...))` 模拟模型，不要连真实地址。系统管理员在“模型配置状态”页（`GET /api/admin/models`，只读）看大模型、向量、重排的地址、模型名、是否外部和连通状态；不返回密钥，地址去掉账号口令和查询参数。
 
 对象存储约定：文件只经 `app/services/storage.py` 读写（S3 协议，一期为自建 MinIO，见 `deploy/minio/README.md`）；只有 project（项目区）和 knowledge（知识区）两个区，分桶存放、默认服务端加密；哪个 Agent 能碰哪个区由工具层硬规则判断。测试里设 `TEST_S3_ENDPOINT` 才连真实存储，否则相关测试跳过。
 
@@ -129,7 +133,7 @@ SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
 
 检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。重排只经网关 `gateway.rerank()`（tools/rerank 服务，默认 bge-reranker-v2-m3 int8；查询过机密级检测，命中的候选不发出、记 0 分），RRF 后前 `KB_RERANK_CANDIDATES` 个切片按重排分数排序，依据查询门槛用 `KB_BASIS_MIN_RERANK`；重排不可用时退回 RRF 排序和余弦相似度门槛，返回体 `rerank` 字段注明。外部重排服务（`RERANK_EXTERNAL=true`，决策记录 2026-11-14）同外部模型，只限开发测试、虚拟数据，生产拒绝启动。查询写了标准号或法规条号时先按 L4 元数据精确匹配（`search._exact_match`）。二期 B2 起按产品：传了 `product`（交付侧 Agent 在项目里调用 `kb.search` / `basis.lookup` 时默认取项目配置快照的产品，显式传入的优先）本产品条目排在通用 GEN 前面；所选模块的 `kb_tags` 与条目 `tags`（知识区迁移 k0002，条目文件可选字段）相同的、依据查询里属于快照 `basis` 标准的，同组内排序分数乘 `search.BOOST`；返回体每条带 `scope`（product / general）。向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
 
-项目区约定（M3）：客户资料、访谈纪要、现场观察只经 `app/project/evidence.py` 进入平台（先过机密级检测；严格档一律拒收），按项目分配证据编号 D-xx / I-xx / O-xx，编号不变、不复用；访谈纪要只写受访者角色。资料原件和解析结果存对象存储项目区，键里不用原文件名；文件名和正文不进审计。Agent 经工具 `project.evidence` 读证据。仅现场使用（M4 ③）：项目经理凭客户书面通知把资料 D-xx 标为仅现场使用（`POST /api/projects/{code}/evidences/{ev}/local-only`，写文号不写客户名，不可撤销），平台立即删除对象存储里的原件和解析结果、清空文件名，编号和 sha256 保留；同一文件再上传 422，`project.evidence` 读不到，交付件写入引用 422，已有引用在签署门禁和质量评审平台规则里判阻断；审计不记文号。
+项目区约定（M3）：客户资料、访谈纪要、现场观察只经 `app/project/evidence.py` 进入平台（先过机密级检测；严格档一律拒收），按项目分配证据编号 D-xx / I-xx / O-xx，编号不变、不复用；访谈纪要只写受访者角色。资料原件和解析结果存对象存储项目区，键里不用原文件名；文件名和正文不进审计。Agent 经工具 `project.evidence` 读证据。改名、删除（`PATCH` / `DELETE /api/projects/{code}/evidences/{ev}`，录入人或项目经理）：改名过机密级检测；删除用于传错、录错，编号保留不复用，标题、正文、文件和解析结果清空，同一文件可重新上传，已签署交付件引用的 409，未签署的引用同仅现场使用一样在写入、签署门禁和平台规则里阻断（`evidence.withdrawn_codes`），不可撤销；审计不记标题和正文。仅现场使用（M4 ③）：项目经理凭客户书面通知把资料 D-xx 标为仅现场使用（`POST /api/projects/{code}/evidences/{ev}/local-only`，写文号不写客户名，不可撤销），平台立即删除对象存储里的原件和解析结果、清空文件名，编号和 sha256 保留；同一文件或正文相同的另存件（`text_sha256`，迁移 0031）再上传 422，`project.evidence` 读不到，交付件写入引用 422，已有引用在签署门禁和质量评审平台规则里判阻断；审计不记文号。
 
 交付件约定（M3）：交付件按章节存储，只经 `app/project/deliverables.py` 写入（Agent 经工具 `doc.generate`，顾问经 `/api/projects/{code}/deliverables/...`）：先写大纲再写各章，每次写入新建一个版本、旧版本保留（`section_versions` 只追加）；正文和标题先过机密级检测；严格档只收占位符版本（M4 ④b：`cards.placeholder_problems` 查机构名、人名、联系方式、网络标识、系统名、原话，命中 422 不保存）、已签署拒绝；正文里的来源标注 `[I-01]` `[D-12]` `[O-05]` `[S-02]`（严格档摘要卡）`[L4-…]` `[推断]` 写入时核对并记在版本的 `sources` 里，核对不上的不拒绝、列入 `unresolved`。审计只记编号、版本、字数和摘要哈希，不记正文和标题。
 
