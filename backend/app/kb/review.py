@@ -45,7 +45,7 @@ def is_knowledge_user(db: Session, user: User) -> bool:
     return bool(roles_of(db, user.id) & KNOWLEDGE_ROLES)
 
 
-def _require_knowledge(db: Session, user: User) -> None:
+def require_knowledge(db: Session, user: User) -> None:
     if not is_knowledge_user(db, user):
         raise ReviewError(403, "只有知识专家、知识管理员能编辑和审核知识条目")
 
@@ -91,7 +91,7 @@ def _apply(v: KbVersion, fields: dict) -> None:
 # ---- 草稿 ----
 
 def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id: int | None = None) -> KbVersion:
-    _require_knowledge(db, user)
+    require_knowledge(db, user)
     fields = _source_fields(db, c, upload_id)
     _check_text(c.title, c.body)
     try:
@@ -106,7 +106,7 @@ def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id:
 
 
 def new_version(db: Session, user: User, item: KbItem, c: VersionContent, upload_id: int | None = None) -> KbVersion:
-    _require_knowledge(db, user)
+    require_knowledge(db, user)
     open_draft = db.scalar(select(KbVersion.id).where(KbVersion.item_id == item.id,
                                                       KbVersion.status.in_(("draft", "in_review"))))
     if open_draft:
@@ -133,11 +133,11 @@ def new_version(db: Session, user: User, item: KbItem, c: VersionContent, upload
 
 
 EDITABLE = ("title", "summary", "body", "applicability", "change_note", "source_detail", "ref_document",
-            "ref_version", "ref_status", "effective_date", "review_date")
+            "ref_version", "ref_status", "ref_code", "ref_replaced_by", "effective_date", "review_date")
 
 
 def edit_draft(db: Session, user: User, v: KbVersion, changes: dict) -> KbVersion:
-    _require_knowledge(db, user)
+    require_knowledge(db, user)
     if v.status != "draft":
         raise ReviewError(409, "只有草稿能修改；已提交的版本请等审核结果，退回的版本请建新版本")
     for k, val in changes.items():
@@ -162,17 +162,30 @@ def edit_draft(db: Session, user: User, v: KbVersion, changes: dict) -> KbVersio
 # ---- 提交与审核 ----
 
 def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
-    _require_knowledge(db, user)
+    require_knowledge(db, user)
     if v.status != "draft":
         raise ReviewError(409, "只有草稿能提交")
     if v.deid_status not in ("passed", "not_needed"):
         raise ReviewError(409, "去标识还没有通过，不能提交")
     if not v.body.strip():
         raise ReviewError(422, "正文不能为空")
+    if get_settings().kb_citation_gate:
+        from . import citations
+
+        todo = citations.pending(citations.for_version(db, v))
+        if todo:
+            audit.record(db, actor=user.username, action="kb.submit", result="blocked", doc_id=v.item.doc_id,
+                         version=v.version, reason="citation_pending", pending=len(todo))
+            raise ReviewError(422, f"引用待核 {len(todo)} 处：{'、'.join(todo[:5])}{' 等' if len(todo) > 5 else ''}。"
+                                   "库里没有对应的依据原文或条款目录：先把原文切条入库（kb-source-split），或改正引用")
     v.status, v.submitted_by, v.submitted_at = "in_review", user.username, utcnow()
     db.commit()
     audit.record(db, actor=user.username, action="kb.submit", result="allowed", doc_id=v.item.doc_id,
                  version=v.version)
+    if get_settings().kb_agent_auto_publish:
+        from . import agent_review          # 公开资料的解读、映射等交知识审核 Agent（二期 B11），后台执行
+
+        agent_review.enqueue(db, v, created_by=user.username)
     return v
 
 
@@ -211,7 +224,7 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
     db.refresh(v)
     audit.record(db, actor=user.username, action="kb.review", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, role=role, decision=decision)
-    approved = {r.review_role for r in v.reviews if r.decision == "approve"}
+    approved = {r.review_role for r in v.reviews if r.decision == "approve" and r.review_role in ROLE_OF}
     if v.status == "in_review" and approved == set(ROLE_OF):
         reviewers = {r.reviewer for r in v.reviews if r.decision == "approve"}
         v.single_review = not (reviewers - _authors(v))     # 没有作者以外的人通过（只在开关允许时可能）

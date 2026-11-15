@@ -12,6 +12,9 @@ POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
+GET  /api/kb/samples                     抽检队列：自动发布（平台核验的依据原文、知识审核 Agent 审过的）中待抽检、
+                                         抽检不通过的，附两类各自的问题率（同上；B11）；另含使用反馈待复查的条目（B13）
+POST /api/kb/versions/{id}/sample        抽检：decision=pass|fail（知识专家，不能是导入人；二期 B10）
 GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
 GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
 GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵（按产品、模块，B6）、缺口 TOP、贡献统计、待复审、本月运营（知识专家、知识管理员）
@@ -30,6 +33,7 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
+from ..kb import autopublish, citations
 from ..kb import meta as kb_meta
 from ..kb import review as rv
 from ..kb import search as kb_search
@@ -66,6 +70,8 @@ class ContentIn(BaseModel):
     ref_document: str = Field(default="", max_length=200)
     ref_version: str = Field(default="", max_length=64)
     ref_status: str = Field(default="", max_length=16)
+    ref_code: str = Field(default="", max_length=100)
+    ref_replaced_by: str = Field(default="", max_length=200)
     effective_date: date | None = None
     review_date: date | None = None
 
@@ -91,6 +97,8 @@ class EditIn(BaseModel):
     ref_document: str | None = Field(default=None, max_length=200)
     ref_version: str | None = Field(default=None, max_length=64)
     ref_status: str | None = Field(default=None, max_length=16)
+    ref_code: str | None = Field(default=None, max_length=100)
+    ref_replaced_by: str | None = Field(default=None, max_length=200)
     effective_date: date | None = None
     review_date: date | None = None
 
@@ -98,6 +106,11 @@ class EditIn(BaseModel):
 class ReviewIn(BaseModel):
     role: str = Field(pattern="^(content|compliance)$")
     decision: str = Field(pattern="^(approve|reject)$")
+    comment: str = Field(default="", max_length=1000)
+
+
+class SampleIn(BaseModel):
+    decision: str = Field(pattern="^(pass|fail)$")
     comment: str = Field(default="", max_length=1000)
 
 
@@ -116,6 +129,10 @@ class VersionBrief(BaseModel):
     published_at: datetime | None
     review_date: date | None
     single_review: bool = False         # 单人发布，待补复审
+    auto_review: str = ""               # platform：平台核验自动发布（二期 B10）；agent：知识审核 Agent（B11）
+    sample_state: str = ""              # 抽检：pending / passed / failed
+    recheck_state: str = ""             # 使用反馈待复查（B13）：pending / passed / failed
+    recheck_reason: str = ""
 
 
 class ReviewOut(BaseModel):
@@ -123,6 +140,7 @@ class ReviewOut(BaseModel):
     review_role: str
     decision: str
     comment: str
+    findings: dict = {}                 # 知识审核 Agent 的逐项检查和问题清单（review_role=agent，二期 B11）
     created_at: datetime
 
 
@@ -137,12 +155,15 @@ class VersionOut(VersionBrief):
     ref_document: str
     ref_version: str
     ref_status: str
+    ref_code: str = ""
+    ref_replaced_by: str = ""
     deid_status: str
     effective_date: date | None
     self_review_allowed: bool = False   # 公开资料单人发布开关允许作者本人审核这个版本
     reviews: list[ReviewOut] = []
     diff: list[str] = []
     similar: list[dict] = []
+    citations: list[dict] = []      # 二期 B8：引用核对（知识侧角色可见）
 
 
 class ItemOut(BaseModel):
@@ -203,12 +224,14 @@ def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
     out = VersionOut(**_brief(v).model_dump(), doc_id=v.item.doc_id,
                      **{k: getattr(v, k) for k in ("summary", "body", "applicability", "change_note", "source_type",
                                                    "source_detail", "ref_document", "ref_version", "ref_status",
+                                                   "ref_code", "ref_replaced_by",
                                                    "deid_status", "effective_date")})
     if rv.is_knowledge_user(db, user):          # 审核信息只给知识侧角色
         out.self_review_allowed = rv.self_review_allowed(v)
         out.reviews = [ReviewOut.model_validate(r, from_attributes=True) for r in v.reviews]
         out.diff = rv.diff_with_current(db, v)
         out.similar = rv.similar_items(db, v) if v.status in ("draft", "in_review") else []
+        out.citations = citations.as_dicts(citations.for_version(db, v))   # 二期 B8：引用核对，审核页并排看原文
     return out
 
 
@@ -324,6 +347,21 @@ def review_queue(db: Session = Depends(get_db), user: User = Depends(current_use
 def review_due(days: int = Query(30, ge=0, le=366), db: Session = Depends(get_db), user: User = Depends(current_user)):
     _knowledge_only(db, user)
     return [_version_out(db, v, user) for v in rv.review_due(db, days)]
+
+
+@router.get("/samples")
+def samples(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _knowledge_only(db, user)
+    return {**autopublish.sample_stats(db), "agent": autopublish.sample_stats(db, autopublish.AGENT), "items": [_version_out(db, v, user) for v in autopublish.sample_queue(db)]}
+
+
+@router.post("/versions/{version_id}/sample", response_model=VersionOut)
+def sample(version_id: int, body: SampleIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    try:
+        v = autopublish.sample_check(db, user, _version(db, version_id, user), body.decision, body.comment)
+    except rv.ReviewError as e:
+        raise _err(e) from e
+    return _version_out(db, v, user)
 
 
 def _search_error(e: kb_search.SearchError):

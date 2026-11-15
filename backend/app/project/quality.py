@@ -8,7 +8,7 @@
   章节没有正文 → 阻断；正文命中机密级检测 → 阻断（此时不发往模型，只出硬规则结果）；
   出现测评 / 认证结论用语（资质边界）→ 阻断；来源标注核对不上（证据编号不存在、知识库条目不存在或已下线）→ 阻断；
   整章只有 [推断]、没有证据和知识库来源 → 重要。
-  依据时效（二期 B9）：评审时按知识库当前状态重新核对引用的条目——已下线、依据已废止（ref_status repealed）→ 阻断；
+  依据时效（二期 B9）：评审时按知识库当前状态重新核对引用的条目——已下线、依据已废止或已被替代（ref_status repealed / superseded）→ 阻断；
   依据即将实施（upcoming，或施行日期晚于今天）→ 重要。签署门禁再实时查一次已下线 / 已废止。
   以上是通用层（所有产品都查，资质边界用语规则只在这里）。二期 A6 起再查本项目配置快照里的产品层、模块层规则
   （products/*.yaml、modules/*.yaml 的 gates，类型只有 coverage / required_sections / forbidden_terms / min_sources，
@@ -158,7 +158,7 @@ def kb_ref_states(db: Session, refs: set[str], today: date | None = None) -> dic
         row = rows.get(ref)
         if row is None or row[0] or row[1] is None:
             out[ref] = KB_GONE
-        elif row[1] == "repealed":
+        elif row[1] in ("repealed", "superseded"):
             out[ref] = KB_REPEALED
         elif row[1] == "upcoming" or (row[2] is not None and row[2] > today):
             out[ref] = KB_UPCOMING
@@ -342,7 +342,7 @@ def rule_issues(d: Deliverable, versions: dict,
         refs = {x["ref"] for x in src.get("knowledge", []) if x.get("found")}
         for state, severity, problem, suggestion in (
                 (KB_GONE, "阻断", "引用的知识库条目已下线", "改引现行条目，或删除据此写的内容"),
-                (KB_REPEALED, "阻断", "引用的依据已废止", "改引现行依据（新版或替代文件），并核对据此写的结论"),
+                (KB_REPEALED, "阻断", "引用的依据已废止或已被替代", "改引现行依据（新版或替代文件），并核对据此写的结论"),
                 (KB_UPCOMING, "重要", "引用的依据尚未施行", "注明施行日期，或同时引用现行依据")):
             hit = sorted(r for r in refs if kb_states.get(r) == state)
             if hit:

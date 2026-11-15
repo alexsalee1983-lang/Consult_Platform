@@ -29,11 +29,13 @@ class ImportResult:
     message: str = ""
 
 
-def _same(v: KbVersion, e: Entry) -> bool:
+def same(v: KbVersion, e: Entry) -> bool:
     c = e.content
+    # 文件没写施行日期时不比（发布时平台按发布日补填）
     return (v.title, v.body.strip(), v.summary, v.applicability, v.source_detail, v.ref_document, v.ref_version,
-            v.ref_status) == (c.title, c.body.strip(), c.summary, c.applicability, c.source_detail, c.ref_document,
-                              c.ref_version, c.ref_status)
+            v.ref_status, v.ref_code, v.ref_replaced_by) == (
+        c.title, c.body.strip(), c.summary, c.applicability, c.source_detail, c.ref_document, c.ref_version,
+        c.ref_status, c.ref_code, c.ref_replaced_by) and (c.effective_date is None or c.effective_date == v.effective_date)
 
 
 def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> ImportResult:
@@ -57,7 +59,7 @@ def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> Imp
         if latest is not None and latest.status in ("draft", "in_review"):
             r.action, r.message = "skipped", f"已有未完成的 v{latest.version}（{latest.status}），先处理它"
             return r
-        if latest is not None and latest.status == "published" and _same(latest, e):
+        if latest is not None and latest.status == "published" and same(latest, e):
             r.action, r.message = "unchanged", "与现行版本相同" + ("，检索标签已更新" if tags_changed else "")
             return r
         v = rv.new_version(db, user, item, e.content)

@@ -13,7 +13,7 @@ ItemMeta / VersionContent）：
 | 一级目录 | domain | DOMAINS 的键：GOV / CMP / DAT / OPS / RES / ARC |
 | 服务产品 | product | PRODUCTS 的键：SOC / GEN |
 | 交付阶段 | stage | STAGES：启动……通用（中文） |
-| 交付物类型 | doc_type | DOC_TYPES 的键：TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT |
+| 交付物类型 | doc_type | DOC_TYPES 的键：TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT / SRC（依据原文，二期 B7） |
 | 能力域标签 | capabilities | CAPABILITIES：管理 / 运营 / 技术支撑（列表） |
 | 适用行业 | industries | 中文列表，通用的填 ["通用"] |
 | 密级 | classification | internal 内部 / restricted 受限 |
@@ -24,7 +24,8 @@ ItemMeta / VersionContent）：
 | 版本 | KbVersion.version | 1, 2, 3……自动递增 |
 | 生效日期 / 复审日期 | effective_date / review_date | 复审日期不填时按层级自动算 |
 | 可见角色 | visible_roles | consultant / presales / admin（列表） |
-| 依据：文件名 / 版本号 / 生效状态 | ref_document / ref_version / ref_status | L4 必填；ref_status 为 current / upcoming / repealed |
+| 依据：文件名 / 版本号 / 生效状态 | ref_document / ref_version / ref_status | L4 必填；ref_status 为 current / upcoming / repealed / superseded（已被替代，二期 B7） |
+| 依据：文号或标准号 / 替代文件 | ref_code / ref_replaced_by | L4 可选（二期 B7）；已被替代的写替代文件名和版本 |
 """
 from __future__ import annotations
 
@@ -56,7 +57,7 @@ STAGES = ("启动", "调研", "分析", "设计", "落地辅导", "验收", "通
 # 交付物类型（缩写 → 名称）
 DOC_TYPES = {
     "TPL": "模板", "GLD": "黄金样例", "POL": "制度母版", "MTD": "方法说明", "REF": "依据解读",
-    "MAP": "映射矩阵", "CAS": "案例", "OBJ": "异议应答", "PIT": "踩坑记录",
+    "MAP": "映射矩阵", "CAS": "案例", "OBJ": "异议应答", "PIT": "踩坑记录", "SRC": "依据原文",
 }
 # 能力域标签（可多选）
 CAPABILITIES = ("管理", "运营", "技术支撑")
@@ -71,7 +72,7 @@ DEID_STATUSES = {"pending": "未脱敏", "passed": "已脱敏", "not_needed": "�
 # 可见角色（第一期售前只定义，不开放）
 VISIBLE_ROLES = {"consultant": "交付顾问", "presales": "售前", "admin": "管理员"}
 # 依据（L4）的生效状态
-REF_STATUSES = {"current": "现行", "upcoming": "即将实施", "repealed": "已废止"}
+REF_STATUSES = {"current": "现行", "upcoming": "即将实施", "repealed": "已废止", "superseded": "已被替代"}
 
 # 版本状态：草稿 → 待审 →（双人审核）→ 已发布；新版本发布后旧版本为“已替代”；下线后为“已下线”
 VERSION_STATUSES = {
