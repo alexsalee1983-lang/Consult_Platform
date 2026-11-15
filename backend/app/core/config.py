@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     # Agent md 目录（01_公共规范.md、roles/*.md）。留空时依次找 /srv/agents（镜像内）和仓库根目录的 agents/。
     # 测试机可把仓库的 agents/ 只读挂载到容器里，md 改了不用重建镜像，运行时会自动重新加载。
     agents_dir: str = ""
+    # 服务产品与模块配置的上级目录（下有 products/、modules/，二期 A1）。留空时依次找 /srv（镜像内）和仓库根目录。
+    catalog_dir: str = ""
     agent_history_chars: int = 24_000   # 多轮对话时随请求带上的历史消息总字数上限（从最近往前取）
 
     # 交付件 Word 导出模板（.docx 文件路径，决策记录 2026-11-10）。留空用内置默认模板；部署后管理员把公司模板放到
