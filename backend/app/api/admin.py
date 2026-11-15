@@ -10,6 +10,7 @@
 命令行 create-user 仍可用（口令由本人当场输入，不要求修改）。
 """
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -17,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit, sessions
-from ..services import jobs, usage
+from ..services import gateway, jobs, usage
 from ..core.auth import current_user, password_expired
 from ..core.config import get_settings
 from ..core.db import get_db, utcnow
@@ -131,6 +132,38 @@ def agent_grants(db: Session = Depends(get_db)) -> list[dict]:
 def usage_report(days: int = Query(30, ge=1, le=366), db: Session = Depends(get_db)) -> list[dict]:
     """大模型用量，按人、模型汇总。三权分立：系统管理员看不到项目维度（项目维度用命令行 usage-report）。"""
     return usage.summary(db, days, ("username", "model"))
+
+
+def _endpoint(url: str) -> str:
+    """只显示协议、主机、端口和路径：去掉地址里可能带的账号口令和查询参数。"""
+    if not url:
+        return ""
+    u = urlsplit(url)
+    host = u.hostname or ""
+    return f"{u.scheme}://{host}{f':{u.port}' if u.port else ''}{u.path}"
+
+
+@router.get("/models")
+def model_status() -> dict:
+    """模型配置状态（二期一期待办）：大模型、向量、重排三个服务的地址、模型名、是否外部、密钥是否已配和连通状态。
+    只读，不返回密钥；改配置仍在部署机 .env 里改、重启生效。连通状态与 /api/health 同源（带缓存）。"""
+    s = get_settings()
+    return {
+        "app_env": s.app_env,
+        "llm": {"endpoint": _endpoint(s.llm_base_url), "key_configured": bool(s.llm_api_key),
+                "models": {"reasoning": s.llm_model_reasoning, "standard": s.llm_model_standard,
+                           "light": s.llm_model_light},
+                "external": gateway.uses_external_model(), "pseudonymize": s.llm_pseudonymize,
+                "timeout_seconds": s.llm_timeout_seconds, "max_retries": s.llm_max_retries,
+                "status": gateway.availability()},
+        "embedding": {"endpoint": _endpoint(s.embed_base_url), "key_configured": bool(s.embed_api_key),
+                      "model": s.embed_model, "dim": gateway.EMBED_DIM, "status": gateway.embed_availability()},
+        "rerank": {"endpoint": _endpoint(s.rerank_base_url), "key_configured": bool(s.rerank_api_key),
+                   "model": s.rerank_model, "external": s.rerank_external,
+                   "candidates": s.kb_rerank_candidates, "max_chars": s.kb_rerank_max_chars,
+                   "basis_min": s.kb_basis_min_rerank, "search_min": s.kb_search_min_rerank,
+                   "status": gateway.rerank_availability()},
+    }
 
 
 class JobOut(BaseModel):
