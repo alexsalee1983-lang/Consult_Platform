@@ -5,6 +5,8 @@ GET  /api/projects/{code}/evidences/{evidence}   证据详情：纪要 / 观察�
 POST /api/projects/{code}/documents              上传客户资料（multipart：file，可选 title），分配 D-xx；
                                                  机密级命中 422（不保存）、重复 409、严格档 422
 POST /api/projects/{code}/notes                  录入访谈纪要 / 现场观察（JSON），分配 I-xx / O-xx
+POST /api/projects/{code}/notes/extract          纪要文件（multipart：file，.docx/.md/.txt ≤2MB）→ 正文，填进录入框；
+                                                 不保存文件、不分配编号；机密级命中 422、严格档 422
 POST /api/projects/{code}/evidences/{evidence}/local-only
                                                  把资料标为仅现场使用（项目经理，写客户通知文号）：删除原件和
                                                  解析结果，不可撤销；同一文件再上传 422
@@ -130,6 +132,25 @@ def add_note(code: str, body: NoteIn, db: Session = Depends(get_db), user: User 
         _raise(err)
     return _out(e)
 
+
+
+class ExtractOut(BaseModel):
+    content: str
+    chars: int
+
+
+@router.post("/{code}/notes/extract", response_model=ExtractOut)
+def extract_note(code: str, file: UploadFile | None = File(default=None), db: Session = Depends(get_db),
+                 user: User = Depends(current_user)):
+    p = project_for_member(db, code, user)          # 先判成员（非成员 404），再看文件
+    if file is None:
+        raise HTTPException(422, "请选择纪要文件")
+    data = file.file.read(ev_svc.NOTE_FILE_MAX + 1)
+    try:
+        text = ev_svc.extract_note(db, user, p, file.filename or "", data)
+    except ev_svc.EvidenceError as err:
+        _raise(err)
+    return ExtractOut(content=text, chars=len(text))
 
 
 @router.post("/{code}/evidences/{evidence}/local-only", response_model=EvidenceOut)
