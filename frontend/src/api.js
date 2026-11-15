@@ -201,6 +201,7 @@ export const api = {
   setFlowback: (code, allowed) =>
     request(`/api/projects/${encodeURIComponent(code)}/flowback`, { method: "PUT", body: JSON.stringify({ allowed }) }),
   deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
+  portfolio: () => request("/api/portfolio"),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
     request(`/api/deletions/${id}/confirm`, { method: "POST", body: JSON.stringify({ flowback, flowback_refs }) }),
