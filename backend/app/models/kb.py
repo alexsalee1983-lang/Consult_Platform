@@ -7,6 +7,7 @@
 - kb_reviews：双人审核记录（知识专家审内容、知识管理员审合规）。
 - kb_uploads：投料上传记录，原件存对象存储知识区；只记机密级检测命中的类别，不记命中内容。
 - kb_deid_reports：去标识审查报告，只记替换的类别、占位符和次数，不记被替换的原文。
+- kb_mappings：映射矩阵（类型 MAP）版本里解析出的控制映射行（二期 B3，知识区迁移 k0003），供 kb.mapping 查询。
 
 知识区只收去标识后的做法，不收客户数据；项目区内容不会自动进入这里（架构设计第三节）。
 """
@@ -106,6 +107,25 @@ class KbChunk(KbBase):
     # 向量（迁移 0014）：PostgreSQL 上另有 embedding vector(512) 列和 HNSW 索引，不映射到 ORM，读写走 SQL
     # （app/kb/search.py）；这里记生成向量所用的模型，换模型后据此重新向量化
     embedding_model: Mapped[str] = mapped_column(String(64), default="")
+
+
+class KbMapping(KbBase):
+    """映射矩阵条目（doc_type MAP）某个版本里的一行：源标准条款 ↔ 目标标准条款（二期 B3）。
+
+    建版本时由 app/kb/mapping.py 从正文表格解析写入，随版本只追加；查询只取已发布、未下线的现行版本。
+    只存条款号、关系和简短说明，不存标准原文。"""
+    __tablename__ = "kb_mappings"
+    __table_args__ = (UniqueConstraint("version_id", "seq", name="uq_kb_mappings_version_seq"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version_id: Mapped[int] = mapped_column(ForeignKey("kb_versions.id", ondelete="CASCADE"), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
+    source_std: Mapped[str] = mapped_column(String(100), index=True)      # ISO/IEC 27001:2022
+    source_ref: Mapped[str] = mapped_column(String(40), index=True)       # A.5.15
+    target_std: Mapped[str] = mapped_column(String(100), index=True)      # GB/T 22239-2019
+    target_ref: Mapped[str] = mapped_column(String(40), index=True)       # 8.1.4.2
+    relation: Mapped[str] = mapped_column(String(16))                     # equivalent / partial / related
+    note: Mapped[str] = mapped_column(String(500), default="")
 
 
 class KbReview(KbBase):

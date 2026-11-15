@@ -7,7 +7,7 @@ primary_users: 交付顾问
 knowledge_access:
   read: [L4 依据库, L2, L3]
   write: []
-tools: [RAG 检索]
+tools: [RAG 检索, 映射查询]
 depends_on: [01_公共规范.md]
 handoff_to: [solution-designer, policy-drafter, report-writer, qa-reviewer]
 ---
