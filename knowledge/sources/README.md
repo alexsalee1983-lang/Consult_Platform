@@ -7,6 +7,7 @@
 |---|---|---|---|
 | batch1 | 网络安全、数据、个人信息、密码、关基、国家安全、保密、反间谍、反诈、电子签名法律法规（现行版） | 12 份 / 742 条 | 国家法律法规数据库 flk.npc.gov.cn |
 | batch2 | 部门规章：网络安全审查、数据出境评估、标准合同、数据跨境流动、个人信息保护合规审计、网络安全事件报告、商用密码应用安全性评估、电力监控系统安全防护、银行保险机构数据安全、人民银行业务领域数据安全 | 10 份 / 299 条 | 网信办、密码局、中国政府网、金融监管总局、人民银行官网 |
+| batch3 | 附件：网络安全事件分级指南（事件报告办法附件）、个人信息保护合规审计指引（合规审计办法附件） | 2 份 / 31 项 | 网信办官网（与 batch2 同一网页，网页原件 sha256 同 batch2） |
 
 文号已对照官方公布逐份核对；`sha256` 为切条所用文件的哈希。
 
@@ -18,3 +19,10 @@ python -m app.cli kb-source-split /srv/knowledge/sources/batch1/manifest.csv --d
 python -m app.cli kb-source-publish /tmp/batch1 --as <知识专家>   # 平台核验 + 5% 抽检（B10，决策记录 2026-11-15）
 ```
 
+
+batch3 是 batch2 两个网页里“附件”之后的正文，开发侧同样机械转成 .txt（只取附件名称行到网页页脚之前），切分方式“按项”（`item`，#129）：
+按“一、二、三”切、项号连续，“（一）”“1.”留在本项正文。事件分级指南同母办法没有文号，核验 code 不过、转人工审核。
+
+```bash
+python -m app.cli kb-source-split knowledge/sources/batch3/manifest.csv --dir knowledge/sources/batch3 --out /tmp/batch3-out
+```
