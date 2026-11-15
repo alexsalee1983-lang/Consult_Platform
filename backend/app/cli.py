@@ -311,11 +311,11 @@ def loadtest_accounts(args: argparse.Namespace) -> int:
             if membership(db, project.id, u.id) is None:
                 db.add(ProjectMember(project_id=project.id, user_id=u.id, project_role="member", added_by="cli"))
         db.commit()
-        # 压测写章节、导出用 D5（交付链只写 D3、D4，互不干扰）：没有大纲时建 n 章的大纲，每个虚拟用户写一章
+        # 压测写章节、导出用 D2（交付链不写 D1、D2，互不干扰；二期 A5 起交付链写 D3～D8）：没有大纲时建 n 章的大纲，每个虚拟用户写一章
         from .project import deliverables as dsvc
-        d5 = next(d for d in project.deliverables if d.code == "D5")
-        if not d5.sections:
-            dsvc.set_outline(db, manager, project, d5, [f"压测章节 {i:02d}" for i in range(1, len(creds) + 1)])
+        d2 = next(d for d in project.deliverables if d.code == "D2")
+        if not d2.sections:
+            dsvc.set_outline(db, manager, project, d2, [f"压测章节 {i:02d}" for i in range(1, len(creds) + 1)])
         audit.record(db, actor="cli", action="loadtest.accounts", result="allowed", op="create",
                      count=len(creds), project_code=code)
     fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
