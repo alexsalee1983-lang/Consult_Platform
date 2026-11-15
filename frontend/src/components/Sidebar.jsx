@@ -42,17 +42,23 @@ function statusColor(v) {
   return "var(--tx3)";
 }
 
-// 驾驶舱和对话页沿用当前项目；在“我的项目”页时默认第一个虚拟客户
+// 驾驶舱和对话页沿用当前项目；不在项目页时用“我的项目”里的第一个（没有项目时不显示这三项）
 function currentCode(pathname) {
   const m = pathname.match(/^\/(?:project|chat)\/([^/]+)/);
-  return m ? decodeURIComponent(m[1]) : "BANK-A";
+  return m ? decodeURIComponent(m[1]) : "";
 }
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
-  const code = encodeURIComponent(currentCode(pathname));
+  const [firstCode, setFirstCode] = useState("");
+  const code = encodeURIComponent(currentCode(pathname) || firstCode);
   const [health, setHealth] = useState(null);
+  const business = hasBusinessRole(user);
+  useEffect(() => {
+    if (!business) return;
+    api.projects().then((ps) => setFirstCode(ps[0]?.code || "")).catch(() => setFirstCode(""));
+  }, [business]);
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth({ status: "down", checks: {} }));
   }, []);
@@ -61,9 +67,11 @@ export default function Sidebar() {
   const items = [
     ...(hasBusinessRole(user) ? [
       { to: "/projects", icon: "proj", label: "我的项目" },
-      { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
-      { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
-      { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
+      ...(code ? [
+        { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
+        { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
+        { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
+      ] : []),
       ...(hasRole(user, "project_lead") ? [{ to: "/portfolio", icon: "map", label: "项目总览" }, { to: "/deletions", icon: "trash", label: "资料删除" }] : []),
     ] : []),
     ...(hasBusinessRole(user) ? [
@@ -95,8 +103,8 @@ export default function Sidebar() {
           </svg>
         </div>
         <div style={{ lineHeight: 1.2 }}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>安全咨询专家平台</div>
-          <div style={{ fontSize: 10, letterSpacing: ".16em", color: "var(--tx3)" }}>ADVISORY · 内部</div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>安全咨询专家平台</div>
+          <div style={{ fontSize: 12, letterSpacing: ".16em", color: "var(--tx3)" }}>ADVISORY · 内部</div>
         </div>
       </div>
 
