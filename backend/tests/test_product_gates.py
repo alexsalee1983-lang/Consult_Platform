@@ -93,3 +93,12 @@ def test_coverage_matches_whole_item_only():
     assert not covers(text, "5.1") and not covers(text, "A.5.1") and not covers(text, "8.3")
     assert covers(text, "5.10") and covers(text, "A.5.12") and covers(text, "8.34") and covers(text, "值守")
     assert covers("控制 5.1、5.2 已实施", "5.1") and covers("（5.1）", "5.1") and covers("5.1\n", "5.1")
+
+
+def test_ire_draft_config_loads_with_boundary_gate():
+    """D3：事件后 E2E 产品草稿可加载；D4 必须有时间线和根因章节，全部交付件禁止责任认定说法。"""
+    cat = config.load()
+    assert not cat.problems
+    ire = cat.products["IRE"]
+    assert ire.status == "draft" and [d.code for d in ire.deliverables] == [f"D{i}" for i in range(1, 9)]
+    assert {g.id for g in ire.gates} == {"ire-sections", "no-liability-claim"}
