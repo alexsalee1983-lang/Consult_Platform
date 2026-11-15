@@ -93,3 +93,19 @@ def test_coverage_matches_whole_item_only():
     assert not covers(text, "5.1") and not covers(text, "A.5.1") and not covers(text, "8.3")
     assert covers(text, "5.10") and covers(text, "A.5.12") and covers(text, "8.34") and covers(text, "值守")
     assert covers("控制 5.1、5.2 已实施", "5.1") and covers("（5.1）", "5.1") and covers("5.1\n", "5.1")
+
+
+def test_iso_soa_gate_lists_all_93_annex_a_controls():
+    """D1：ISO 产品的 SoA 门禁清单是附录 A 2022 版 93 项控制号（5.1～5.37、6.1～6.8、7.1～7.14、8.1～8.34）。"""
+    from app.project.quality import covers
+    cat = config.load()
+    assert not cat.problems
+    iso = cat.products["ISO"]
+    assert iso.status == "draft"
+    soa = next(g for g in iso.gates if g.id == "soa-annex-a")
+    items = list(soa.params["items"])
+    want = [f"{a}.{i}" for a, n in ((5, 37), (6, 8), (7, 14), (8, 34)) for i in range(1, n + 1)]
+    assert items == want and len(items) == 93
+    full = "\n".join(f"{c} 适用" for c in want)
+    assert all(covers(full, c) for c in items)
+    assert [c for c in items if not covers(full.replace("5.1 适用\n", ""), c)] == ["5.1"]
