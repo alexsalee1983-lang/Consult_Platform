@@ -13,7 +13,7 @@ gateway.complete（外部模型只用于虚拟数据，网关照常假名化、�
     - id: C001
       category: clause            # clause 按条号查询 / mapping 跨依据映射 / industry 行业要求
       question: 网络运营者对网络日志要留存多久？
-      expect_refs: ["《网络安全法》第二十一条"]
+      expect_refs: ["《网络安全法》第二十三条"]      # 网安法按 2025 修正后的条号
       product: SOC                # 可选
 
 达标：用知识库的准确率 ≥ KB_EVAL_MIN_ACCURACY、编造条号 0 次，且不低于不用知识库的准确率。
@@ -97,7 +97,7 @@ def select_questions(questions: list[dict]) -> list[dict]:
         if refs is None:
             continue
         if not isinstance(refs, list) or not refs or not all(isinstance(x, str) and x.strip() for x in refs):
-            raise CompareError(f"{q['id']}：expect_refs 应是非空的依据列表，例如 [\"《网络安全法》第二十一条\"]")
+            raise CompareError(f"{q['id']}：expect_refs 应是非空的依据列表，例如 [\"《网络安全法》第二十三条\"]")
         if not all(citations.find(x) for x in refs):
             raise CompareError(f"{q['id']}：expect_refs 里有认不出“文件 + 条款号”的写法")
         cat = q.get("category", "clause")
