@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from ..core import audit
@@ -269,6 +269,7 @@ def purge(db: Session, p: Project) -> dict:
 
     conv = select(Conversation.id).where(Conversation.project_id == pid)
     counts["messages"] = drop(Message, Message.conversation_id.in_(conv))
+    db.execute(update(Conversation).where(Conversation.project_id == pid).values(handoff_from=None))  # 自引用先断开
     counts["conversations"] = drop(Conversation, Conversation.project_id == pid)
     runs = select(AgentRun.id).where(AgentRun.project_id == pid)
     drop(AgentRunStep, AgentRunStep.run_id.in_(runs))
