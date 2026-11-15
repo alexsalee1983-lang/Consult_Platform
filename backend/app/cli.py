@@ -566,6 +566,15 @@ def kb_import(args: argparse.Namespace) -> int:
     return 2 if counts["error"] else 0
 
 
+def kb_reconfirm_scan(args: argparse.Namespace) -> int:
+    """立即扫描复审到期的公开知识条目，排知识审核 Agent 复查（worker 每小时自动执行；复查本身在 worker 里做）。"""
+    from .kb import reconfirm_agent
+    with SessionLocal() as db:
+        made = reconfirm_agent.scan_due(db)
+    print(f"排知识审核 Agent 复查 {len(made)} 条（结果见知识审批页“复审到期”）")
+    return 0
+
+
 def kb_source_publish(args: argparse.Namespace) -> int:
     """依据原文自动核验发布（二期 B10）：从原件切条、核验，通过的由平台自动发布并抽检，没通过的转人工审核。"""
     import json
@@ -739,6 +748,7 @@ def main(argv: list[str] | None = None) -> int:
     ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
     ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     ksp.set_defaults(func=kb_source_publish)
+    sub.add_parser("kb-reconfirm-scan", help="立即扫描复审到期的公开知识条目，排知识审核 Agent 复查（worker 每小时自动执行）")         .set_defaults(func=kb_reconfirm_scan)
     ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")

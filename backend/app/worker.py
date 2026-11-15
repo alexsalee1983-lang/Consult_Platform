@@ -19,7 +19,7 @@ from pathlib import Path
 from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
-from .kb import agent_review, deid_flow, intake, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review 等任务处理器
+from .kb import agent_review, deid_flow, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review 等任务处理器
 from .project import deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs
 
@@ -93,6 +93,17 @@ def _scan_due() -> None:
         log.warning("到期删除扫描出错：%s", type(e).__name__)
 
 
+def _scan_reconfirm() -> None:
+    """平台规则（人工环节复查 K7）：复审到期的公开知识条目排知识审核 Agent 复查（可重复执行，本周期查过的不再排）。"""
+    try:
+        with SessionLocal() as db:
+            made = reconfirm_agent.scan_due(db)
+        if made:
+            log.info("复审到期，排知识审核 Agent 复查 %d 条", len(made))
+    except Exception as e:  # noqa: BLE001
+        log.warning("复审到期扫描出错：%s", type(e).__name__)
+
+
 def _verify_audit() -> None:
     """每小时校验一次审计哈希链，结果只进指标（cp_audit_chain_ok），失败时告警（docs/监控.md）；不写审计，免得每小时一条。"""
     try:
@@ -121,6 +132,7 @@ def main() -> None:
         if time.monotonic() - last_scan >= SCAN_SECONDS:
             last_scan = time.monotonic()
             _scan_due()
+            _scan_reconfirm()
             _verify_audit()
         try:
             with SessionLocal() as db:

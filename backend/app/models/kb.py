@@ -116,7 +116,7 @@ class KbReview(KbBase):
     id: Mapped[int] = mapped_column(primary_key=True)
     version_id: Mapped[int] = mapped_column(ForeignKey("kb_versions.id"), index=True)
     reviewer: Mapped[str] = mapped_column(String(64))
-    review_role: Mapped[str] = mapped_column(String(16))                      # content / compliance / platform / agent / sample
+    review_role: Mapped[str] = mapped_column(String(16))                      # content / compliance / platform / agent / sample / reconfirm（复审到期 Agent 复查）
     decision: Mapped[str] = mapped_column(String(16))                         # approve / reject；Agent 存疑为 flag
     comment: Mapped[str] = mapped_column(String(1000), default="")
     # 知识审核 Agent（二期 B11，review_role=agent）的逐项检查 checks 和问题清单 issues；人工审核为空
