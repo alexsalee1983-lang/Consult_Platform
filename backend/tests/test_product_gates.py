@@ -131,3 +131,15 @@ def test_nsg_draft_config_loads():
     nsg = cat.products["NSG"]
     assert nsg.status == "draft" and [d.code for d in nsg.deliverables] == [f"D{i}" for i in range(1, 9)]
     assert [g.id for g in nsg.gates] == ["nsg-sections"]
+
+
+def test_d5_modules_draft_attach_both_sides_and_not_composable():
+    """D5：三个模块草稿两边都登记；草稿模块不能立项勾选。"""
+    import pytest
+    cat = config.load()
+    assert not cat.problems
+    assert {c: m.status for c, m in cat.modules.items()} == {"DJBH": "draft", "HYJG": "draft", "GFYL": "draft"}
+    for m in cat.modules.values():
+        assert all(m.code in cat.products[p].modules for p in m.products)
+    with pytest.raises(config.CatalogError):
+        config.compose(cat.products["SOC"], [cat.modules["DJBH"]])

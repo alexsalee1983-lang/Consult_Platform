@@ -4,7 +4,7 @@ code: IRE
 name: 事件后 E2E 评估与整改
 domain: RES
 status: draft
-modules: []
+modules: [GFYL, HYJG]
 deliverables:
 - code: D1
   title: 启动包

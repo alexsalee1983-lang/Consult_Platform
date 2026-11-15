@@ -4,7 +4,7 @@ code: NSG
 name: 网络安全治理规划
 domain: GOV
 status: draft
-modules: []
+modules: [DJBH, HYJG]
 deliverables:
 - code: D1
   title: 启动包

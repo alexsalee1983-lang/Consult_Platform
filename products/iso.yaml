@@ -4,7 +4,7 @@ code: ISO
 name: ISO 27001 信息安全管理体系建设
 domain: GOV
 status: draft
-modules: []
+modules: [DJBH, HYJG]
 deliverables:
 - code: D1
   title: 启动包

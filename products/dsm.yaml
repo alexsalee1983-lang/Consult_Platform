@@ -4,7 +4,7 @@ code: DSM
 name: 数据安全管理体系建设
 domain: DAT
 status: draft
-modules: []
+modules: [DJBH, HYJG]
 deliverables:
 - code: D1
   title: 启动包
