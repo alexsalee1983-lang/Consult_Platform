@@ -57,7 +57,7 @@ def test_review_date_defaults():
     ({"industries": []}, "适用行业"),
     ({"classification": "secret"}, "密级"),
     ({"visible_roles": ["guest"]}, "可见角色"),
-    ({"product": "ISO"}, "服务产品"),
+    ({"product": "XYZ"}, "服务产品"),
 ])
 def test_item_meta_rejects_bad_values(kw, msg):
     with pytest.raises(meta.MetaError, match=msg):
