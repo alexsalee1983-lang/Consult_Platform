@@ -14,6 +14,9 @@
   同一文件重新下载新版后再切，key 不变，kb-import 建新版本、历史版本保留。
 - 每条先过机密级检测，命中的写进 _rejected/ 并注明类别（不写原文）。
 - 只生成文件，不入库、不调模型：核对后用 kb-import --submit 导入，审核时抽检即可（机械切分）。
+- 核验（二期 B10，verify）：原网址在官方网站白名单里、清单写了原件 sha256 且一致、写了文号或标准号、切出条款且没有
+  退回、法规条号连续没有漏切。结果写进 _report.json 的 failed；kb-source-publish 据此决定自动发布还是转人工
+  （app/kb/autopublish.py）。
 """
 from __future__ import annotations
 
@@ -47,6 +50,7 @@ COLUMNS = {
     "industries": ("适用行业", "industries"),
     "replaced_by": ("替代文件", "替代关系", "replaced_by"),
     "obtained": ("获取方式", "obtained"),
+    "sha256": ("sha256", "SHA256", "原件sha256", "原件 sha256", "原件哈希"),
 }
 STATUS = {"现行": "current", "现行有效": "current", "有效": "current", "即将实施": "upcoming", "尚未施行": "upcoming",
           "已废止": "repealed", "废止": "repealed", "失效": "repealed", "已被替代": "superseded", "被替代": "superseded",
@@ -98,6 +102,7 @@ class Doc:
     domain: str = "CMP"
     industries: list[str] = field(default_factory=lambda: ["通用"])
     replaced_by: str = ""
+    sha256: str = ""
 
 
 @dataclass
@@ -117,6 +122,7 @@ class DocResult:
     entries: int = 0
     rejected: int = 0
     message: str = ""
+    failed: list[str] = field(default_factory=list)     # 核验没通过的规则（VERIFY_RULES 的键）
 
 
 @dataclass
@@ -168,7 +174,7 @@ def read_manifest(data: bytes) -> tuple[list[Doc], list[str]]:
                         published=row["published"], effective=_parse_date(row["effective"]), status=status,
                         version=version, url=row["url"], mode=mode, domain=row["domain"] or "CMP",
                         industries=[x.strip() for x in re.split(r"[,，、;；]", row["industries"]) if x.strip()]
-                        or ["通用"], replaced_by=row["replaced_by"]))
+                        or ["通用"], replaced_by=row["replaced_by"], sha256=row["sha256"].lower()))
     return docs, skipped
 
 
@@ -262,9 +268,14 @@ def split_sections(lines: list[str], with_text: bool) -> list[Piece]:
     return pieces
 
 
-def _key(d: Doc, part: str) -> str:
-    h = hashlib.sha256(d.title.encode("utf-8")).hexdigest()[:8]
+def src_key(ref_document: str, part: str) -> str:
+    """依据原文条目的 key：src-<文件名哈希>-<条号>。B8 引用校验按同一规则由文件名和条号找条款。"""
+    h = hashlib.sha256(ref_document[:200].encode("utf-8")).hexdigest()[:8]
     return f"src-{h}-{part}"[:64].rstrip("-")
+
+
+def _key(d: Doc, part: str) -> str:
+    return src_key(d.title, part)
 
 
 def to_entry(d: Doc, p: Piece) -> Entry:
@@ -314,6 +325,59 @@ def split_doc(d: Doc, data: bytes) -> tuple[list[Entry], list[tuple[str, str]], 
     return entries, rejected, note
 
 
+# ---- 核验（二期 B10） ----
+
+VERIFY_RULES = {
+    "official_source": "原网址在官方网站白名单里",
+    "sha256": "清单写了原件 sha256，与文件一致",
+    "code": "清单写了文号或标准号",
+    "complete": "切出了条款，没有退回的条款",
+    "continuous": "法规条号从第一条起连续，没有漏切",
+}
+OFFICIAL_HOSTS = ("gov.cn", "nist.gov")
+
+
+def official_hosts() -> tuple[str, ...]:
+    from ..core.config import get_settings
+
+    extra = [h.strip().lower().lstrip(".") for h in get_settings().kb_source_hosts.split(",") if h.strip()]
+    return OFFICIAL_HOSTS + tuple(extra)
+
+
+def is_official(url: str) -> bool:
+    from urllib.parse import urlsplit
+
+    try:
+        u = urlsplit(url.strip())
+    except ValueError:
+        return False
+    host = (u.hostname or "").lower()
+    return u.scheme in ("http", "https") and any(host == h or host.endswith("." + h) for h in official_hosts())
+
+
+def verify(d: Doc, data: bytes, entries: list[Entry], rejected: list[tuple[str, str]]) -> list[str]:
+    """返回核验没通过的规则。全部通过（空列表）才能由平台自动发布。"""
+    failed: list[str] = []
+    if not is_official(d.url):
+        failed.append("official_source")
+    if not d.sha256 or hashlib.sha256(data).hexdigest() != d.sha256:
+        failed.append("sha256")
+    if not d.code.strip():
+        failed.append("code")
+    if not entries or rejected:
+        failed.append("complete")
+    if d.mode == "law":
+        got = {e.key for e in entries}
+        for ln in _lines(parse.parse(d.file, data)):
+            m = _ARTICLE.match(ln)
+            if m and cn_int(m.group(1)):
+                part = f"{cn_int(m.group(1))}" + (f"-{cn_int(m.group(2))}" if m.group(2) else "")
+                if _key(d, part) not in got:        # 行首像条号却没切出来：前面有漏切、条号跳号
+                    failed.append("continuous")
+                    break
+    return failed
+
+
 def split_all(manifest: Path, src_dir: Path, out_dir: Path) -> SplitReport:
     docs, skipped = read_manifest(manifest.read_bytes())
     report = SplitReport(skipped=skipped)
@@ -326,11 +390,14 @@ def split_all(manifest: Path, src_dir: Path, out_dir: Path) -> SplitReport:
         if not f.is_file():
             r.message = "文件不存在"
             continue
+        data = f.read_bytes()
         try:
-            entries, rejected, r.message = split_doc(d, f.read_bytes())
+            entries, rejected, r.message = split_doc(d, data)
         except parse.ParseError as e:
             r.message = str(e)
+            r.failed = ["complete"]
             continue
+        r.failed = verify(d, data, entries, rejected)
         for e in entries:
             (out_dir / f"{e.key}.md").write_text(format_entry(e), encoding="utf-8")
         if rejected:

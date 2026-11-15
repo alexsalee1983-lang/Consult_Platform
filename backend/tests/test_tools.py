@@ -32,6 +32,7 @@ EXPECTED = {
     "qa-reviewer":        (1, 1, 1, 0, 1, 0, 1, 1, 0, 0),
     "kb-builder":         (1, 1, 0, 0, 0, 1, 0, 0, 0, 0),
     "sanitizer":          (0, 0, 0, 0, 0, 1, 0, 0, 0, 0),
+    "kb-reviewer":        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),   # 二期 B11（迁移 0036）：平台直接交材料，不授权工具
 }
 # 授权矩阵测试里每个工具的调用参数；发确认卡发到严格档 GRID-B（避免改变 BANK-A 演示数据的待确认数）
 MATRIX_CALLS = {"kb.mapping": ("BANK-A", {"source": "ISO 27001"}),
@@ -39,7 +40,7 @@ MATRIX_CALLS = {"kb.mapping": ("BANK-A", {"source": "ISO 27001"}),
                 "agent.handoff": ("GRID-B", lambda user: {"from_conversation": _lead_conversation(user, "GRID-B"),
                                                           "target": "research-interview",
                                                           "brief": "【交接】目标 Agent：调研访谈 ｜ 任务：授权矩阵测试"})}
-KNOWLEDGE_SIDE = {"kb-builder", "sanitizer"}
+KNOWLEDGE_SIDE = {"kb-builder", "sanitizer", "kb-reviewer"}
 
 
 @pytest.fixture(scope="module")

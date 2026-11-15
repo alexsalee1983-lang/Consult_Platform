@@ -354,6 +354,15 @@ def retention_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_recheck_scan(args: argparse.Namespace) -> int:
+    """立即执行一次使用反馈扫描（worker 每天自动执行）：顾问常删掉 Agent 引用的知识条目标为待复查（二期 B13）。"""
+    from .kb import recheck
+    with SessionLocal() as db:
+        made = recheck.scan(db, actor="cli")
+    print(f"标记待复查 {len(made)} 条" + ("：" + "、".join(made) if made else ""))
+    return 0
+
+
 def deletion_scan(args: argparse.Namespace) -> int:
     """立即执行一次到期扫描（worker 每小时自动执行），为已到期的项目发起删除申请。"""
     from .project import deletion
@@ -436,6 +445,8 @@ def kb_source_split(args: argparse.Namespace) -> int:
         total += d.entries
         extra = f"，退回 {d.rejected} 条（见 _rejected/）" if d.rejected else ""
         print(f"{d.title}（{d.mode}）：{d.entries} 条{extra}" + (f"；{d.message}" if d.message else ""))
+        if d.failed:
+            print("  核验未通过（kb-source-publish 会转人工审核）：" + "；".join(sources.VERIFY_RULES[k] for k in d.failed))
     for s in r.skipped:
         print(f"跳过：{s}", file=sys.stderr)
     print(f"共 {len(r.docs)} 份、{total} 条，写到 {args.out}；核对后用 kb-import {args.out} --as <知识专家> --submit 导入")
@@ -600,6 +611,40 @@ def kb_import(args: argparse.Namespace) -> int:
     return 2 if counts["error"] else 0
 
 
+def kb_source_publish(args: argparse.Namespace) -> int:
+    """依据原文自动核验发布（二期 B10）：从原件切条、核验，通过的由平台自动发布并抽检，没通过的转人工审核。"""
+    import json
+    from pathlib import Path
+
+    from .kb import autopublish, sources
+
+    manifest, src = Path(args.manifest), Path(args.dir)
+    if not manifest.is_file() or not src.is_dir():
+        print("清单文件或资料目录不存在", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        user = _knowledge_user(db, args.as_user)
+        if user is None:
+            return 1
+        r = autopublish.run(db, user, manifest, src)
+    if r.suspended:
+        print(f"自动发布已暂停（{r.suspended}），本批全部转人工审核")
+    for d in r.docs:
+        print(f"{d.title}：自动发布 {d.published}，转人工 {d.manual}，无变化 {d.unchanged}"
+              + (f"；{d.message}" if d.message else ""))
+        if d.failed:
+            print("  核验未通过：" + "；".join(sources.VERIFY_RULES[k] for k in d.failed))
+        for s in d.skipped:
+            print(f"  跳过：{s}")
+    for s in r.skipped:
+        print(f"清单跳过：{s}", file=sys.stderr)
+    print(f"合计：自动发布 {sum(d.published for d in r.docs)}，转人工 {sum(d.manual for d in r.docs)}；"
+          f"抽检 {len(r.sampled)} 条（知识审批页“抽检”）")
+    if args.report:
+        Path(args.report).write_text(json.dumps(r.to_json(), ensure_ascii=False, indent=1), encoding="utf-8")
+    return 0
+
+
 def kb_draft(args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -624,7 +669,10 @@ def kb_draft(args: argparse.Namespace) -> int:
     print(f"调用模型 {report.calls} 次（{report.model}）。{report.note}")
     print(f"起草 {len(report.accepted)} 条，写到 {args.out}；退回 {len(report.rejected)} 条（见 {args.out}/_rejected/）")
     for p in written:
-        print(f"  {p.name}")
+        todo = report.pending.get(p.name.removesuffix(".new.md").removesuffix(".md"))
+        print(f"  {p.name}" + (f"  待核引用 {len(todo)} 处：{'、'.join(todo[:5])}" if todo else ""))
+    if report.pending:
+        print(f"{len(report.pending)} 条有待核引用（库里没有对应的依据原文）：先 kb-source-split 切条入库原文，或改正引用，否则不能提交审核。")
     print("这些只是草稿文件：专家逐条修改核对后，用 kb-import 导入，再经双人审核发布。")
     return 0
 
@@ -694,6 +742,7 @@ def main(argv: list[str] | None = None) -> int:
     rr = sub.add_parser("retention-report", help="已验收项目的保留期与到期状态（--all 含未验收）")
     rr.add_argument("--all", action="store_true")
     rr.set_defaults(func=retention_report)
+    sub.add_parser("kb-recheck-scan", help="立即扫描交付件里的知识引用，标记使用反馈待复查（worker 每天自动执行）")         .set_defaults(func=kb_recheck_scan)
     sub.add_parser("deletion-scan", help="立即扫描到期项目并发起删除申请（worker 每小时自动执行）")         .set_defaults(func=deletion_scan)
     dr = sub.add_parser("deletion-report", help="未完成的删除申请（--all 含已删除、已撤销）")
     dr.add_argument("--all", action="store_true")
@@ -736,6 +785,12 @@ def main(argv: list[str] | None = None) -> int:
     kbc.add_argument("--apply", action="store_true", help="自动登记时效变更：建新版本、平台核对后发布")
     kbc.add_argument("--out", default="", help="把比对结果写成 JSON 文件")
     kbc.set_defaults(func=kb_basis_check)
+    ksp = sub.add_parser("kb-source-publish", help="依据原文自动核验发布：从原件切条、核验，通过的平台自动发布并抽检，没通过的转人工")
+    ksp.add_argument("manifest", help="下载清单 CSV（要有原网址和原件 sha256 列）")
+    ksp.add_argument("--dir", required=True, help="下载文件所在目录")
+    ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
+    ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
+    ksp.set_defaults(func=kb_source_publish)
     ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
