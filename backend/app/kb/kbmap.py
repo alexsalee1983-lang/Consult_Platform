@@ -7,7 +7,7 @@
   审计不记检索词原文（数据保护红线第 4 条），所以只能按检索时带的产品、阶段过滤条件归到格子里，看不到具体问题；
   检索没带阶段的零命中只计到产品上（product_zero_hits）。同一问题反复零命中的次数按检索词摘要哈希统计。
 - 贡献统计：按现行版本的作者统计已发布条数、近 30 天新发布条数和来源构成；按审核人统计近 30 天的审核次数
-  （平台自动审核的 platform:* 不计）。只有内部账号和计数，不含条目内容。
+  （平台自动审核 platform:*、审核 Agent agent:* 不计）。只有内部账号和计数，不含条目内容。
 知识区与主库是两个库：条目、审核在知识区，账号姓名和审计在主库，分开查、在内存里合并，不 JOIN。
 """
 from __future__ import annotations
@@ -116,7 +116,7 @@ def contributors(db: Session, live: list[tuple[KbItem, KbVersion]], since: datet
                                        "by_source": {}})
 
     for _, v in live:
-        if not v.created_by:
+        if not v.created_by or v.created_by.startswith(("platform", "agent:")):
             continue
         r = row(v.created_by)
         r["published"] += 1
@@ -124,7 +124,7 @@ def contributors(db: Session, live: list[tuple[KbItem, KbVersion]], since: datet
         if v.published_at and _aware(v.published_at) >= since:
             r["published_30d"] += 1
     for name in db.scalars(select(KbReview.reviewer).where(KbReview.created_at >= since)):
-        if name and not name.startswith("platform"):
+        if name and not name.startswith(("platform", "agent:")):
             row(name)["reviews_30d"] += 1
     names: dict[str, str] = {}
     if stats:

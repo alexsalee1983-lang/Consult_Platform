@@ -24,8 +24,12 @@ def _cat():
               modules={"DJBH": NS(code="DJBH", name="等保模块", status="ready", kb_tags=("等保", "DJBH"))})
 
 
+_PRODUCTS = {"SOC": "安全运营", "ISO": "体系建设", "GEN": "通用"}      # 固定取值表，免得 meta.PRODUCTS 增加产品后测试跟着变
+
+
 def test_matrix_rows_products_modules_general(monkeypatch):
     monkeypatch.setattr(kbmap, "_catalog", _cat)
+    monkeypatch.setattr(kbmap.meta, "PRODUCTS", _PRODUCTS)
     live = _live(*[("SOC", "设计", ())] * 8, ("SOC", "调研", ("等保",)), ("GEN", "通用", ("DJBH",)),
                  ("ISO", "调研", ()))
     rows = {r["code"]: r for r in kbmap.coverage_rows(live)}
@@ -42,6 +46,7 @@ def test_matrix_rows_products_modules_general(monkeypatch):
 
 def test_matrix_without_catalog(monkeypatch):
     monkeypatch.setattr(kbmap, "_catalog", lambda: None)
+    monkeypatch.setattr(kbmap.meta, "PRODUCTS", {"SOC": "安全运营", "GEN": "通用"})
     rows = kbmap.coverage_rows(_live(("SOC", "设计", ())))
     assert [(r["code"], r["status"]) for r in rows] == [("SOC", "unconfigured"), ("GEN", "ready")]
 
@@ -80,7 +85,7 @@ def test_stats_api_gaps_contributors():
         if soc["cells"]["验收"] < 8:
             cell = [g for g in s["gaps"] if (g["product"], g["stage"]) == ("SOC", "验收")]
             assert cell and cell[0]["zero_hits_30d"] >= 2 or len(s["gaps"]) == kbmap.GAP_LIMIT
-        assert all(not c["username"].startswith("platform") for c in s["contributors"])
+        assert all(not c["username"].startswith(("platform", "agent:")) for c in s["contributors"])
         assert len(s["contributors"]) <= kbmap.CONTRIB_LIMIT
     finally:
         for c in (expert, admin, consultant):
