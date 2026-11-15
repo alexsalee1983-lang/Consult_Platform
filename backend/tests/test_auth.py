@@ -44,6 +44,7 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/evidences/I-01"),
     ("POST", "/api/projects/BANK-A/documents"),
     ("POST", "/api/projects/BANK-A/notes"),
+    ("POST", "/api/projects/BANK-A/notes/extract"),
     ("POST", "/api/projects/BANK-A/evidences/I-01/local-only"),
     ("PATCH", "/api/projects/BANK-A/evidences/I-01"),
     ("DELETE", "/api/projects/BANK-A/evidences/I-01"),
