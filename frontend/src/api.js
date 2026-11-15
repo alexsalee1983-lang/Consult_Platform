@@ -139,6 +139,11 @@ export const api = {
   markLocalOnly: (code, ev, request_ref) =>
     request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}/local-only`,
       { method: "POST", body: JSON.stringify({ request_ref }) }),
+  extractNote: (code, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request(`/api/projects/${encodeURIComponent(code)}/notes/extract`, { method: "POST", body: fd });
+  },
   uploadDocument: (code, file, title = "") => {
     const fd = new FormData();
     fd.append("file", file);
@@ -198,6 +203,8 @@ export const api = {
   setFlowback: (code, allowed) =>
     request(`/api/projects/${encodeURIComponent(code)}/flowback`, { method: "PUT", body: JSON.stringify({ allowed }) }),
   deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
+  portfolio: () => request("/api/portfolio"),
+  workbench: () => request("/api/workbench"),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
     request(`/api/deletions/${id}/confirm`, { method: "POST", body: JSON.stringify({ flowback, flowback_refs }) }),
