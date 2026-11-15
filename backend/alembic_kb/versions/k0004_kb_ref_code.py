@@ -3,10 +3,10 @@
 依据原文切条（app/kb/sources.py）按下载清单填写；ref_status 新增取值 superseded（已被替代），
 质量评审按已废止处理（二期 B9）。已有版本一律为空，不影响现有数据。
 
-down_revision 暂接 k0002_kb_tags：e2 的 B3 用 k0003，B3 合并后改为接 k0003（已与 e2 约定）。
+接在 B3 的 k0003_kb_mappings 之后（与 e2 约定：#113 先合并）。
 
 Revision ID: k0004_kb_ref_code
-Revises: k0002_kb_tags
+Revises: k0003_kb_mappings
 Create Date: 2026-11-15
 """
 from collections.abc import Sequence
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0004_kb_ref_code"
-down_revision: str | None = "k0002_kb_tags"
+down_revision: str | None = "k0003_kb_mappings"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

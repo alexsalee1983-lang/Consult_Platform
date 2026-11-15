@@ -26,6 +26,7 @@ TOOL_NAMES = {  # md 里工具的中文名 → 工具代号
     "知识检索": "kb.search", "依据查询": "basis.lookup", "读项目区": "project.read", "查证据": "project.evidence",
     "文档生成": "doc.generate", "质量检查": "quality.check", "写待入库区": "kb.stage_write",
     "发确认卡": "confirm.create", "转交 Agent": "agent.handoff",
+    "映射查询": "kb.mapping",
 }
 
 # md 写了左边的工具，就视为也写了右边的（只影响不一致提示）：“查证据”是“读项目区”的细分，授权与之同列（迁移 0017）；
