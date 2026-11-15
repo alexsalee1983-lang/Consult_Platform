@@ -93,3 +93,12 @@ def test_coverage_matches_whole_item_only():
     assert not covers(text, "5.1") and not covers(text, "A.5.1") and not covers(text, "8.3")
     assert covers(text, "5.10") and covers(text, "A.5.12") and covers(text, "8.34") and covers(text, "值守")
     assert covers("控制 5.1、5.2 已实施", "5.1") and covers("（5.1）", "5.1") and covers("5.1\n", "5.1")
+
+
+def test_nsg_draft_config_loads():
+    """D4：网络安全治理规划产品草稿可加载；D5 必须有愿景与目标、重点任务、保障措施章节。"""
+    cat = config.load()
+    assert not cat.problems
+    nsg = cat.products["NSG"]
+    assert nsg.status == "draft" and [d.code for d in nsg.deliverables] == [f"D{i}" for i in range(1, 9)]
+    assert [g.id for g in nsg.gates] == ["nsg-sections"]

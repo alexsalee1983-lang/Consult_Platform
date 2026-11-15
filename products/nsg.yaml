@@ -1,0 +1,163 @@
+# 网络安全治理规划（二期 D4，草稿：公司方法待专家萃取工作坊补充，交付件结构、提示词待产品专家核对，负责人同意后改 ready）
+# 格式见 docs/接口约定.md 第二节。资质边界：只做现状评估、差距分析、规划建议，不出具测评或认证结论。
+code: NSG
+name: 网络安全治理规划
+domain: GOV
+status: draft
+modules: []
+deliverables:
+- code: D1
+  title: 启动包
+  stage: 启动
+  client_facing: true
+- code: D2
+  title: 调研包
+  stage: 调研
+  client_facing: true
+- code: D3
+  title: 事实清单
+  stage: 调研
+  client_facing: false
+- code: D4
+  title: 现状评估报告
+  stage: 分析
+  client_facing: true
+- code: D5
+  title: 网络安全规划
+  stage: 设计
+  client_facing: true
+  outline:
+  - 规划背景与原则
+  - 愿景与目标
+  - 安全治理架构
+  - 重点任务
+  - 保障措施
+- code: D6
+  title: 治理制度文件包
+  stage: 设计
+  client_facing: true
+- code: D7
+  title: 实施路线图与项目清单
+  stage: 设计
+  client_facing: true
+- code: D8
+  title: 高层汇报
+  stage: 验收
+  client_facing: true
+baseline:
+  domains:
+  - 战略与治理架构
+  - 组织与人员
+  - 合规与风险管理
+  - 安全技术体系
+  - 安全运营
+  - 数据安全
+  - 供应链与第三方
+  - 投入与考核
+  frameworks:
+  - 网络安全法
+  - 关键信息基础设施安全保护条例
+  - 等保 2.0
+  - NIST 网络安全框架
+  - 行业要求
+  basis: []
+chain:
+- key: facts
+  number: 3
+  name: 整理事实清单
+  agent: research-interview
+  inputs:
+  - evidence
+  output: D3
+  query: '{product_name} 现状 事实 调研'
+  instruction: 任务：交付链第 {number} 步。根据下面的本项目证据，整理 D3 事实清单：先列业务战略、数字化规划和监管要求中与网络安全相关的事实，再按评估域（{domains}）分章列出已确认的事实，每条带证据编号；另起一章列“待补证据与矛盾点”。只写证据里有的事实，不推测现状。
+- key: gap
+  number: 4
+  name: 差距分析
+  agent: compliance-basis
+  inputs:
+  - D3
+  output: ''
+  query: 网络安全治理 能力评估 差距分析 合规要求
+  instruction: 任务：交付链第 {number} 步。以下面的 D3 事实清单为输入，对照评估基线（{frameworks}，依据只能来自知识库检索结果，没有的标【依据待核实】）做差距分析：按评估域输出差距分析表（能力项、现状、要求与依据、差距、证据充分性）、业务影响 TOP 5、合规义务清单（适用的法规和行业要求、现状初判）、依据库缺口。证据不足的项列出来并发“证据不足”确认卡。用“差距分析、符合性初判”的说法，不出具测评或认证结论。
+- key: design
+  number: 5
+  name: 规划设计
+  agent: solution-designer
+  inputs:
+  - run:gap
+  - D3
+  output: ''
+  query: 网络安全规划 治理架构 重点任务 目标
+  instruction: 任务：交付链第 {number} 步。根据下面的差距分析和 D3 事实清单，设计网络安全规划：规划原则、愿景与分阶段目标（可度量）、安全治理架构（决策、管理、执行、监督各层职责）、重点任务（每项写目标、主要内容、对应的差距和证据编号）、保障措施（组织、制度、人才、投入、考核）；最后一章写实施路线图草案（分阶段目标、建设项目、前置条件、投入量级）。规划期、投入规模、业务战略方向由客户管理层决定，证据和顾问已确认事项里没有的不要假设，发“范围确认”确认卡；有两个以上可行路线时列出选项、推荐和理由，发“方案取舍”确认卡。
+- key: policy
+  number: 6
+  name: 治理制度起草
+  agent: policy-drafter
+  inputs:
+  - run:design
+  - D3
+  output: D6
+  query: 网络安全 管理办法 责任制 考核 制度体系
+  instruction: 任务：交付链第 {number} 步。根据下面的网络安全规划设计，起草 D6 治理制度文件包：网络安全制度体系框架（总纲、管理办法、规范、操作规程四层清单），网络安全工作责任制、网络安全管理总纲（或管理办法）、考核与问责办法、第三方安全管理办法，最后一章写落地风险提示。条款要可执行（谁、何时、做什么、留什么记录）；部门名称只用规划设计和事实清单里出现过的，客户实际部门或已有制度不清楚时发“范围确认”确认卡，不编造部门；引用依据只用知识库检索结果。
+- key: draft
+  number: 7
+  name: 现状评估报告初稿
+  agent: report-writer
+  inputs:
+  - run:gap
+  - D3
+  output: D4
+  query: 网络安全 现状评估报告 差距 建议
+  instruction: 任务：交付链第 {number} 步。根据下面的差距分析和 D3 事实清单，起草 D4 现状评估报告初稿：评估范围与方法、现状概述、主要差距与业务影响、合规义务初判、依据说明、规划建议方向。结论必须来自差距分析，并标注证据编号和依据；这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、差距分析表原样照搬、确认卡、“测试”“内部”等字样）。
+- key: design_doc
+  number: 7
+  name: 网络安全规划成稿
+  agent: report-writer
+  inputs:
+  - run:design
+  - run:gap
+  output: D5
+  query: 网络安全规划 愿景 目标 重点任务 保障措施
+  instruction: 任务：交付链第 {number} 步。根据下面的网络安全规划设计和差距分析，起草 D5 网络安全规划，按大纲分章：规划背景与原则、愿景与目标、安全治理架构、重点任务、保障措施。规划取舍以顾问已确认事项为准；目标要可度量。保留证据编号和依据标注。D5 是交给客户的文件：不写内部工作内容（差距编号 G-xx、确认卡、“测试”“内部”等字样），改写成规划语言。
+- key: roadmap
+  number: 7
+  name: 实施路线图成稿
+  agent: report-writer
+  inputs:
+  - run:design
+  - run:gap
+  output: D7
+  query: 网络安全规划 实施路线图 建设项目 分年度
+  instruction: 任务：交付链第 {number} 步。根据下面网络安全规划设计里的路线图草案和差距分析，起草 D7 实施路线图与项目清单：按规划期分年度写阶段目标和里程碑，列出建设项目（名称、目标、主要内容、责任方、前置条件、投入量级、优先级），优先安排合规义务和业务影响大的差距；资源和时间按客户约束写，不清楚的写成待确认事项。D7 是交给客户的文件：不写内部工作内容（差距编号 G-xx、确认卡、“测试”“内部”等字样）。
+- key: briefing
+  number: 7
+  name: 高层汇报起草
+  agent: report-writer
+  inputs:
+  - D4
+  - D5
+  - D7
+  output: D8
+  query: 网络安全规划 高层汇报 管理层 决策
+  instruction: 任务：交付链第 {number} 步。根据下面的 D4 现状评估报告、D5 网络安全规划和 D7 实施路线图与项目清单，起草 D8 高层汇报：面向客户管理层，每章是一页汇报的要点（现状结论、主要风险与合规压力、规划目标与治理架构、重点任务与投入、需要管理层决策的事项），结论先行、语言简洁。只用这三份文件里已有的结论并标注来源，不新增结论；用“差距分析、规划建议”的说法，不出具测评或认证结论。
+gates:
+- id: nsg-sections
+  kind: required_sections
+  deliverable: D5
+  sections:
+  - 愿景与目标
+  - 重点任务
+  - 保障措施
+  level: blocking
+  message: 网络安全规划缺少愿景与目标、重点任务或保障措施章节
+strict:
+  card_items:
+  - 战略与治理架构
+  - 组织与人员
+  - 合规与风险管理
+  - 安全技术体系
+  - 安全运营
+  - 数据安全
+  - 供应链与第三方
+  - 投入与考核
