@@ -20,7 +20,7 @@ import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..core import audit
@@ -171,10 +171,12 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
 
 
 def sample_queue(db: Session) -> list[KbVersion]:
-    """待抽检和抽检不通过、还没处理（仍是现行版本）的自动发布版本。"""
+    """待抽检和抽检不通过、还没处理（仍是现行版本）的自动发布版本，以及使用反馈待复查的现行版本（B13，app/kb/recheck.py）。"""
     return list(db.scalars(select(KbVersion).join(KbItem, KbItem.current_version_id == KbVersion.id)
-                           .where(KbVersion.sample_state.in_(("pending", "failed")), KbItem.retired.is_(False))
-                           .order_by(KbVersion.sample_state.desc(), KbVersion.id)))
+                           .where(or_(KbVersion.sample_state.in_(("pending", "failed")),
+                                      KbVersion.recheck_state.in_(("pending", "failed"))),
+                                  KbItem.retired.is_(False))
+                           .order_by(KbVersion.sample_state.desc(), KbVersion.recheck_state.desc(), KbVersion.id)))
 
 
 def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: str = "") -> KbVersion:
@@ -188,18 +190,25 @@ def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: 
         raise rv.ReviewError(422, "decision 只能是 pass / fail")
     if KNOWLEDGE_EXPERT not in roles_of(db, user.id):
         deny(403, "role_mismatch", "抽检须由知识专家进行")
-    if v.auto_review not in (PLATFORM, AGENT) or v.status != "published":
-        raise rv.ReviewError(409, "只有自动发布的现行版本需要抽检")
-    if v.sample_state in ("passed", "failed"):
-        raise rv.ReviewError(409, "这个版本已经抽检过")
+    sample = v.auto_review in (PLATFORM, AGENT) and v.sample_state not in ("passed", "failed")
+    recheck = v.recheck_state == "pending"           # 使用反馈待复查（B13）：人审版本也可以，不计入抽检不通过率
+    current = v.item.current_version_id == v.id and not v.item.retired
+    if v.status != "published" or not current or not (sample or recheck):
+        if v.sample_state in ("passed", "failed") and v.recheck_state != "pending":
+            raise rv.ReviewError(409, "这个版本已经抽检过")
+        raise rv.ReviewError(409, "只有自动发布或待复查的现行版本需要抽检")
     if user.username in {v.created_by, v.submitted_by}:
         deny(403, "self_review", "不能抽检自己导入的版本")
     if decision == "fail" and len(comment.strip()) < 5:
         raise rv.ReviewError(422, "不通过要写明问题（至少 5 个字）")
-    db.add(KbReview(version_id=v.id, reviewer=user.username, review_role="sample",
+    state = "passed" if decision == "pass" else "failed"
+    db.add(KbReview(version_id=v.id, reviewer=user.username, review_role="sample" if sample else "recheck",
                     decision=SAMPLE_DECISIONS[decision], comment=comment[:1000]))
-    v.sample_state = "passed" if decision == "pass" else "failed"
+    if sample:                                       # 一次看完同时了结抽检和待复查
+        v.sample_state = state
+    if recheck:
+        v.recheck_state, v.recheck_at = state, utcnow()
     db.commit()
     audit.record(db, actor=user.username, action="kb.sample", result="allowed", doc_id=v.item.doc_id,
-                 version=v.version, decision=decision)
+                 version=v.version, decision=decision, sample=sample, recheck=recheck)
     return v
