@@ -8,6 +8,7 @@ import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
 import Deletions from "./pages/Deletions.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
+import Workbench from "./pages/Workbench.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
 import KbMap from "./pages/KbMap.jsx";
@@ -74,6 +75,7 @@ export default function App() {
       <Route element={<Shell />}>
         <Route index element={<HomeRedirect />} />
         <Route element={<Business />}>
+          <Route path="/workbench" element={<Workbench />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/project/:code" element={<OverviewPage />} />
           <Route path="/project/:code/deliverables" element={<DeliverableHome />} />

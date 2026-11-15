@@ -36,6 +36,8 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
     # 项目总览（方案 A）：只给项目负责人；顾问 403（负责人 200 在 test_portfolio 里测）
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
+    # 工作台：业务角色可用，只汇总本人能看到的待办
+    (("GET", "/api/workbench", None),                   (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
