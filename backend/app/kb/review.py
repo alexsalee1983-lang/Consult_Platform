@@ -8,7 +8,8 @@
   这样发布的版本标记 single_review，由作者以外的知识专家复审确认（补复审）后清除。项目回流等其他来源不适用。
 - 第三级（二期 B12，决策记录 2026-11-15）：来源为项目沉淀、专家萃取、内部制度改造且去标识已通过的版本，
   合规审核并入去标识确认（知识管理员，不能是上传者），发布只要一位知识专家（不能是作者）内容审核拍板；
-  提交后知识审核 Agent 先审、把问题列在审核页，只出意见、不自动发布（app/kb/agent_review.py）。
+  提交后知识审核 Agent 先审、把问题列在审核页，只出意见、不自动发布（app/kb/agent_review.py）；Agent 意见出来之前
+  不能通过（可以驳回）。Agent 调用失败、未登记或没接模型时也记一条说明，之后即可拍板，不会卡住。
 - 任一审核人退回，版本即“已退回”（终态）；要修改就基于它建新版本再提交，审核记录始终对应被审的那一版。
 - 来源：投料来的草稿必须是去标识已通过的投料；不经投料直接写的草稿只允许“公开资料”（deid_status=not_needed），
   正文同样先过机密级检测。
@@ -228,6 +229,9 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
     if role not in required_roles(v):
         deny(409, "level3_no_compliance", "项目沉淀、专家经验、内部制度改造的合规审核已在去标识确认时完成，"
                                          "只需一位知识专家内容审核拍板")
+    if level3(v) and decision == "approve" and not any(r.review_role == "agent" for r in v.reviews):
+        deny(409, "level3_wait_agent", "知识审核 Agent 的意见还没出来，请稍后再拍板（Agent 调用失败或没接模型时"
+                                       "也会记一条说明，之后即可拍板）")
 
     db.add(KbReview(version_id=v.id, reviewer=user.username, review_role=role, decision=decision,
                     comment=comment[:1000]))

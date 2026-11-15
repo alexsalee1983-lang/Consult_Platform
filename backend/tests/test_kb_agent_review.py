@@ -165,6 +165,9 @@ def test_level3_agent_advises_one_expert_decides(lib, model, monkeypatch):
         assert rv.level3(v) and rv.required_roles(v) == ("content",)
         job = db.scalar(select(Job).where(Job.kind == "kb.agent_review").order_by(Job.id.desc()))
         assert json.loads(job.payload) == {"version_id": v.id}
+        with pytest.raises(rv.ReviewError) as e:                               # Agent 意见出来之前不能拍板
+            rv.review(db, db.merge(expert), v, "content", "approve")
+        assert e.value.status == 409 and v.status == "in_review"
         out = agent_review.run(db, v)
         assert out.status == "manual" and v.status == "in_review" and v.auto_review == "" and v.sample_state == ""
         r = next(x for x in v.reviews if x.review_role == "agent")
@@ -192,4 +195,16 @@ def test_level3_flag_still_human(lib, model):
         r = next(x for x in v.reviews if x.review_role == "agent")
         assert r.decision == "flag" and v.status == "in_review"
         rv.review(db, db.merge(expert), v, "content", "approve")               # 意见供参考，拍板仍由人
+        assert v.status == "published"
+
+
+def test_level3_demo_does_not_block(lib):
+    """没接模型（演示模式）时 Agent 也记一条说明，专家随后即可拍板，不会卡住。"""
+    (author, expert, _), law = lib
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY, level3=True)
+        assert agent_review.run(db, v).status == "manual"
+        r = next(x for x in v.reviews if x.review_role == "agent")
+        assert r.findings["agent"] == "skipped" and r.decision == "flag"
+        rv.review(db, db.merge(expert), v, "content", "approve")
         assert v.status == "published"
