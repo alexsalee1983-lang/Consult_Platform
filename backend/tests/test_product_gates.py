@@ -93,3 +93,13 @@ def test_coverage_matches_whole_item_only():
     assert not covers(text, "5.1") and not covers(text, "A.5.1") and not covers(text, "8.3")
     assert covers(text, "5.10") and covers(text, "A.5.12") and covers(text, "8.34") and covers(text, "值守")
     assert covers("控制 5.1、5.2 已实施", "5.1") and covers("（5.1）", "5.1") and covers("5.1\n", "5.1")
+
+
+def test_dsm_draft_config_loads_with_boundary_gate():
+    """D2：数据安全产品草稿可加载；资质边界门禁覆盖全部交付件。"""
+    cat = config.load()
+    assert not cat.problems
+    dsm = cat.products["DSM"]
+    assert dsm.status == "draft" and [d.code for d in dsm.deliverables] == [f"D{i}" for i in range(1, 9)]
+    g = next(g for g in dsm.gates if g.id == "no-assessment-claim")
+    assert g.deliverable == "" and g.level == "blocking"
