@@ -106,3 +106,43 @@ def test_cli_split_then_import(tmp_path):
         v = art3.versions[-1]
         assert (v.ref_code, v.ref_status, v.effective_date) == ("主席令第1号", "current", date(2030, 1, 1))
         assert importer.import_dir(db, u, out)[0].action == "skipped"     # 草稿未处理
+
+
+GUIDE = """示范事件分级指南
+一、
+特别重大示范事件
+符合下列情形之一的，为特别重大示范事件：
+1.示范系统大面积瘫痪。
+二、
+重大示范事件
+（一）示范系统长时间中断。
+四、这一行项号跳过三，不是新的一项。
+三、对示范处理活动进行审计的，应当重点审查下列事项：
+（一）是否取得示范同意。
+注：本指南中的“以上”均包括本数。
+"""
+
+
+def test_item_split_sequential_and_headings():
+    ps = sources.split_items([ln for ln in GUIDE.splitlines() if ln.strip()])
+    assert [(p.clause, p.key_part, p.heading) for p in ps] == [
+        ("一、", "1", "特别重大示范事件"), ("二、", "2", "重大示范事件"), ("三、", "3", "")]
+    assert ps[0].text == "符合下列情形之一的，为特别重大示范事件：1.示范系统大面积瘫痪。"
+    assert "不是新的一项" in ps[1].text                      # 跳号的“四、”留在正文里
+    assert ps[2].text.startswith("对示范处理活动进行审计的") and ps[2].text.endswith("均包括本数。")
+
+
+def test_item_mode_manifest_and_verify():
+    m = ("文件名,名称,文号/标准号,原网址,切分方式\n"
+         "g.txt,示范事件分级指南,示范办法附件,https://www.example.gov.cn/g,按项\n")
+    (d,), _ = sources.read_manifest(m.encode())
+    assert d.mode == "item"
+    data = GUIDE.encode()
+    entries, rejected, _ = sources.split_doc(d, data)
+    assert [e.content.title for e in entries] == ["示范事件分级指南 一、 特别重大示范事件",
+                                                  "示范事件分级指南 二、 重大示范事件", "示范事件分级指南 三、"]
+    assert entries[0].key == sources.src_key("示范事件分级指南", "1")
+    assert "continuous" in sources.verify(d, data, entries, rejected)     # 行首“四、”没切出来，转人工
+    ok = GUIDE.replace("四、这一行项号跳过三，不是新的一项。\n", "").encode()
+    e2, r2, _ = sources.split_doc(d, ok)
+    assert "continuous" not in sources.verify(d, ok, e2, r2)
