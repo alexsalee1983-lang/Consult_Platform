@@ -117,3 +117,10 @@ def test_dsm_draft_config_loads_with_boundary_gate():
     assert dsm.status == "draft" and [d.code for d in dsm.deliverables] == [f"D{i}" for i in range(1, 9)]
     g = next(g for g in dsm.gates if g.id == "no-assessment-claim")
     assert g.deliverable == "" and g.level == "blocking"
+def test_ire_draft_config_loads_with_boundary_gate():
+    """D3：事件后 E2E 产品草稿可加载；D4 必须有时间线和根因章节，全部交付件禁止责任认定说法。"""
+    cat = config.load()
+    assert not cat.problems
+    ire = cat.products["IRE"]
+    assert ire.status == "draft" and [d.code for d in ire.deliverables] == [f"D{i}" for i in range(1, 9)]
+    assert {g.id for g in ire.gates} == {"ire-sections", "no-liability-claim"}
