@@ -213,19 +213,26 @@ def _selfcheck(payload: dict, ctx: JobContext) -> None:
     """worker 自检：能连数据库；启用对象存储时在项目区写入、读回、删除一个测试对象。"""
     from sqlalchemy import text
 
+    from ..core import metrics
     from ..core.db import SessionLocal
     from . import storage
 
-    with SessionLocal() as db:
-        db.execute(text("SELECT 1"))
-    if storage.enabled():
-        key = f"SELFCHECK/job-{ctx.job_id}"
-        body = f"selfcheck {ctx.job_id}".encode()
-        storage.put("project", key, body, "text/plain")
-        try:
-            if storage.get("project", key) != body:
-                raise JobError("对象存储读回内容不一致")
-        finally:
-            storage.delete("project", key)
-    if payload.get("fail"):          # 测试用：模拟失败
-        raise JobError("按要求模拟失败", retry=bool(payload.get("retry", True)))
+    ok = False
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        if storage.enabled():
+            key = f"SELFCHECK/job-{ctx.job_id}"
+            body = f"selfcheck {ctx.job_id}".encode()
+            storage.put("project", key, body, "text/plain")
+            try:
+                if storage.get("project", key) != body:
+                    raise JobError("对象存储读回内容不一致")
+            finally:
+                storage.delete("project", key)
+        if payload.get("fail"):          # 测试用：模拟失败
+            raise JobError("按要求模拟失败", retry=bool(payload.get("retry", True)))
+        ok = True
+    finally:                             # 结果进指标（每日自检告警用，docs/监控.md）
+        metrics.SELFCHECK_OK.set(1 if ok else 0)
+        metrics.SELFCHECK_DONE.set_to_current_time()

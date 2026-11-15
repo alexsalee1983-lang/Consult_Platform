@@ -367,6 +367,16 @@ def deletion_report(args: argparse.Namespace) -> int:
     """删除申请与删除记录（只有代号、日期、计数和回流情况）。"""
     from .project import deletion
     names = {"pending": "待确认", "confirmed": "执行中", "done": "已删除", "cancelled": "已撤销"}
+    if args.monthly:
+        from .services import ops
+        with SessionLocal() as db:
+            months = ops.monthly_deletions(db)
+        if not months:
+            print("没有删除申请")
+        for m in months:
+            print(f"{m['month']}  发起 {m['requested']:>3}  已删除 {m['done']:>3}（按期 {m['on_time']}）  "
+                  f"撤销 {m['cancelled']:>3}  未完成 {m['open']:>3}（逾期 {m['overdue']}）")
+        return 0
     with SessionLocal() as db:
         rows = db.scalars(select(deletion.ProjectDeletion).order_by(deletion.ProjectDeletion.id)).all()
         if not args.all:
@@ -643,6 +653,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("deletion-scan", help="立即扫描到期项目并发起删除申请（worker 每小时自动执行）")         .set_defaults(func=deletion_scan)
     dr = sub.add_parser("deletion-report", help="未完成的删除申请（--all 含已删除、已撤销）")
     dr.add_argument("--all", action="store_true")
+    dr.add_argument("--monthly", action="store_true", help="按申请月份汇总（只有计数，二期 C5 O6）")
     dr.set_defaults(func=deletion_report)
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
