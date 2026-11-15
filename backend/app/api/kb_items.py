@@ -14,7 +14,7 @@ GET  /api/kb/review-queue                待审版本（知识专家、知识管
 GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
 GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
 GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
-GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵、待复审、本月运营（知识专家、知识管理员）
+GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵（按产品、模块，B6）、缺口 TOP、贡献统计、待复审、本月运营（知识专家、知识管理员）
 GET  /api/kb/search?q=                   知识检索（全文 + 向量，RRF 融合），只返回已发布、看得到的条目
 GET  /api/kb/basis?q=                    依据查询（只查 L4 依据库），附引用格式
 
@@ -396,7 +396,10 @@ def stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> 
     searches = db.scalars(select(AuditLog.detail).where(AuditLog.action.in_(("kb.search", "kb.basis")),
                                                        AuditLog.result == "allowed", AuditLog.at >= month_ago)).all()
     zero = sum(1 for d in searches if '"results": 0' in (d or ""))
+    from ..kb import kbmap
+
     return {
+        **kbmap.overview(db, [(item, v) for item, v in rows], month_ago),
         "published": len(rows),
         "by_source": by_source,
         "coverage": coverage,
