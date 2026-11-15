@@ -27,14 +27,15 @@ def test_workbench_aggregates_roles_and_marks_self_conflicts():
     multi = create_user(("consultant", "project_lead", "knowledge_expert", "knowledge_admin"), {code: "manager"})
     me = multi[0]
     with SessionLocal() as db:
-        db.add_all([
+        upload = KbUpload(object_key=f"wb/{secrets.token_hex(4)}", filename="x.docx", sha256=secrets.token_hex(32),
+                          status="deid_pending", uploaded_by=me)
+        db.add_all([upload,
             Confirmation(project_id=pid, kind="scope", title="确认值班模式", agent="方案设计 Agent"),
             Confirmation(project_id=other_pid, kind="scope", title="别的项目的卡", agent="方案设计 Agent"),
             ProjectDeletion(project_id=other_pid, kind="early", status="pending", requested_by=me, due_by=date.today()),
-            KbUpload(object_key=f"wb/{secrets.token_hex(4)}", filename="x.docx", sha256=secrets.token_hex(32),
-                     status="deid_pending", uploaded_by=me),
         ])
         db.commit()
+        upload_id = upload.id
     with logged_in_client(app, multi) as c:
         r = c.get("/api/workbench")
         assert r.status_code == 200
@@ -46,8 +47,8 @@ def test_workbench_aggregates_roles_and_marks_self_conflicts():
         assert ("signoff", code) in kinds and sum(t["kind"] == "signoff" for t in todos) == 1
         dele = next(t for t in todos if t["kind"] == "deletion" and t["project_code"] == other_code)
         assert "另一位项目负责人" in dele["blocked"]                                            # 发起人不能自己确认
-        assert all(t["blocked"] for t in todos if t["kind"] == "deid" and t["link"] == "/kb/intake"
-                   and t["title"].startswith("上传")) 
+        deid = next(t for t in todos if t["kind"] == "deid" and t["title"] == f"上传 #{upload_id}")
+        assert "另一位知识管理员" in deid["blocked"]                                           # 上传者不能确认去标识
         assert "x.docx" not in r.text                                                           # 不给上传文件名
     consultant = create_user(("consultant",), {code: "member"})
     with logged_in_client(app, consultant) as c:
