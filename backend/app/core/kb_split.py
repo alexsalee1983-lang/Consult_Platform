@@ -12,11 +12,11 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import Engine, Table, inspect, insert, select, text
 
-from ..models import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion
+from ..models import KbChunk, KbDeidReport, KbItem, KbMapping, KbReview, KbUpload, KbVersion
 from .migrate import KB_TABLES, drop_main_kb_tables, kb_row_count
 
 # 按外键依赖排序；kb_items.current_version_id 指向 kb_versions，先置空，版本搬完再补
-COPY_ORDER: tuple[Table, ...] = tuple(m.__table__ for m in (KbUpload, KbDeidReport, KbItem, KbVersion, KbChunk, KbReview))
+COPY_ORDER: tuple[Table, ...] = tuple(m.__table__ for m in (KbUpload, KbDeidReport, KbItem, KbVersion, KbMapping, KbChunk, KbReview))
 _BATCH = 500
 
 
