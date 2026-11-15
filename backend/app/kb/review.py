@@ -180,6 +180,10 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
     db.commit()
     audit.record(db, actor=user.username, action="kb.submit", result="allowed", doc_id=v.item.doc_id,
                  version=v.version)
+    if get_settings().kb_agent_auto_publish:
+        from . import agent_review          # 公开资料的解读、映射等交知识审核 Agent（二期 B11），后台执行
+
+        agent_review.enqueue(db, v, created_by=user.username)
     return v
 
 
@@ -218,7 +222,7 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
     db.refresh(v)
     audit.record(db, actor=user.username, action="kb.review", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, role=role, decision=decision)
-    approved = {r.review_role for r in v.reviews if r.decision == "approve"}
+    approved = {r.review_role for r in v.reviews if r.decision == "approve" and r.review_role in ROLE_OF}
     if v.status == "in_review" and approved == set(ROLE_OF):
         reviewers = {r.reviewer for r in v.reviews if r.decision == "approve"}
         v.single_review = not (reviewers - _authors(v))     # 没有作者以外的人通过（只在开关允许时可能）
