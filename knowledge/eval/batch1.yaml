@@ -1,0 +1,77 @@
+# 正式评测题初稿 · 第一批法律法规（knowledge/sources/batch1，622 条依据原文）。
+# 开发线 2 起草，待知识专家评审；expect 用 kb-source-split 生成的稳定 key（同一原文、同一条号不变）。
+# 网络安全法按 2025 年修正后的条号（主席令第六十一号，2026-01-01 施行）。
+# 末尾 N 开头的题期望查不到（第一批没收），后续批次收入后改为正向题。
+
+# ---- 网络安全法 ----
+- {id: L001, mode: basis, question: 网络日志至少要留存多久？依据是哪一条？, expect: [src-58361819-23]}
+- {id: L002, mode: basis, question: 网络运营者在等级保护制度下要履行哪些安全保护义务？, expect: [src-58361819-23]}
+- {id: L003, mode: basis, question: 用户办理网络接入、发布信息时要求提供真实身份信息的依据, expect: [src-58361819-26]}
+- {id: L004, mode: basis, question: 网络安全事件应急预案有没有法定要求？, expect: [src-58361819-27]}
+- {id: L005, mode: basis, question: 网络关键设备和网络安全专用产品上市前要经过什么认证或检测？, expect: [src-58361819-25]}
+- {id: L006, mode: basis, question: 关键信息基础设施运营者在等级保护之外还要额外履行哪些义务？, expect: [src-58361819-36]}
+- {id: L007, mode: basis, question: 关基运营者采购可能影响国家安全的网络产品要做什么审查？, expect: [src-58361819-37, src-b7f469a3-19]}
+- {id: L008, mode: basis, question: 关基运营中收集的个人信息和重要数据能不能存到境外？, expect: [src-58361819-39]}
+- {id: L009, mode: basis, question: 关基运营者多久要做一次网络安全检测评估？, expect: [src-58361819-40, src-b7f469a3-17]}
+- {id: L010, mode: basis, question: 网络运营者能否未经同意向他人提供收集的个人信息？, expect: [src-58361819-44]}
+- {id: L011, mode: basis, question: 网络产品发现安全缺陷、漏洞时提供者要怎么做？, expect: [src-58361819-24]}
+
+# ---- 数据安全法 ----
+- {id: L021, mode: basis, question: 数据分类分级保护制度是哪部法律规定的？, expect: [src-74b705f5-21]}
+- {id: L022, mode: basis, question: 开展数据处理活动要建立哪些数据安全管理制度？, expect: [src-74b705f5-27]}
+- {id: L023, mode: basis, question: 重要数据处理者要明确数据安全负责人和管理机构吗？, expect: [src-74b705f5-27, src-a93c37ec-30]}
+- {id: L024, mode: basis, question: 发生数据安全事件后要采取什么措施、向谁报告？, expect: [src-74b705f5-29]}
+- {id: L025, mode: basis, question: 重要数据处理者要定期做风险评估并报送报告吗？, expect: [src-74b705f5-30, src-a93c37ec-33]}
+- {id: L026, mode: basis, question: 关基运营者的重要数据出境适用什么规定？, expect: [src-74b705f5-31]}
+- {id: L027, mode: basis, question: 数据交易中介机构要审核数据来源吗？, expect: [src-74b705f5-33]}
+- {id: L028, mode: basis, question: 境外司法机构调取境内数据，能不能直接提供？, expect: [src-74b705f5-36]}
+- {id: L029, mode: basis, question: 不履行数据安全保护义务会受到什么处罚？, expect: [src-74b705f5-45]}
+
+# ---- 个人信息保护法 ----
+- {id: L041, mode: basis, question: 处理个人信息的合法性基础有哪些？, expect: [src-64032253-13]}
+- {id: L042, mode: basis, question: 处理个人信息前要告知个人哪些事项？, expect: [src-64032253-17]}
+- {id: L043, mode: basis, question: 利用个人信息做自动化决策有什么要求？, expect: [src-64032253-24]}
+- {id: L044, mode: basis, question: 敏感个人信息包括哪些？, expect: [src-64032253-28]}
+- {id: L045, mode: basis, question: 处理不满十四周岁未成年人个人信息要谁同意？, expect: [src-64032253-31]}
+- {id: L046, mode: basis, question: 个人信息出境要满足哪些条件之一？, expect: [src-64032253-38, src-a93c37ec-35]}
+- {id: L047, mode: basis, question: 向境外提供个人信息要单独同意吗？要告知什么？, expect: [src-64032253-39]}
+- {id: L048, mode: basis, question: 什么情况下要指定个人信息保护负责人？, expect: [src-64032253-52]}
+- {id: L049, mode: basis, question: 境外个人信息处理者要在境内设立专门机构或指定代表吗？, expect: [src-64032253-53]}
+- {id: L050, mode: basis, question: 个人信息合规审计是法定要求吗？, expect: [src-64032253-54, src-a93c37ec-27]}
+- {id: L051, mode: basis, question: 哪些情形要事前做个人信息保护影响评估？, expect: [src-64032253-55]}
+- {id: L052, mode: basis, question: 个人信息泄露后要通知谁？, expect: [src-64032253-57]}
+
+# ---- 密码法、商用密码管理条例 ----
+- {id: L061, mode: basis, question: 密码分为哪几类？, expect: [src-11c616f4-6]}
+- {id: L062, mode: basis, question: 商用密码用于保护什么信息？, expect: [src-11c616f4-8]}
+- {id: L063, mode: basis, question: 关基运营者使用商用密码要开展商用密码应用安全性评估吗？, expect: [src-11c616f4-27, src-f93e0421-38]}
+- {id: L064, mode: basis, question: 等级保护对象使用商用密码保护的依据, expect: [src-f93e0421-41]}
+- {id: L065, mode: basis, question: 关基运营者未按要求开展商用密码应用安全性评估的法律责任, expect: [src-f93e0421-60]}
+
+# ---- 关键信息基础设施安全保护条例 ----
+- {id: L071, mode: basis, question: 关键信息基础设施是怎么定义的？涉及哪些行业？, expect: [src-b7f469a3-2]}
+- {id: L072, mode: basis, question: 关基认定规则由谁制定、要不要备案？, expect: [src-b7f469a3-9]}
+- {id: L073, mode: basis, question: 关基安全保护措施要三同步吗？, expect: [src-b7f469a3-12]}
+- {id: L074, mode: basis, question: 关基运营者要设置专门安全管理机构吗？负责人要做安全背景审查吗？, expect: [src-b7f469a3-14]}
+- {id: L075, mode: basis, question: 专门安全管理机构具体负责哪些工作？, expect: [src-b7f469a3-15]}
+- {id: L076, mode: basis, question: 关基发生重大网络安全事件要向谁报告？, expect: [src-b7f469a3-18]}
+- {id: L077, mode: basis, question: 关基运营者合并、分立、解散时要报告吗？, expect: [src-b7f469a3-21]}
+
+# ---- 网络数据安全管理条例 ----
+- {id: L081, mode: basis, question: 重要数据目录由谁制定？, expect: [src-a93c37ec-29]}
+- {id: L082, mode: basis, question: 重要数据的网络数据安全管理机构要履行哪些职责？, expect: [src-a93c37ec-30]}
+- {id: L083, mode: basis, question: 提供、委托处理重要数据前要做风险评估吗？, expect: [src-a93c37ec-31]}
+- {id: L084, mode: basis, question: 重要数据确需出境要通过什么评估？, expect: [src-a93c37ec-37]}
+- {id: L085, mode: basis, question: 基于个人同意处理个人信息有哪些具体规定？, expect: [src-a93c37ec-22]}
+
+# ---- 保守国家秘密法、反电信网络诈骗法、反间谍法 ----
+- {id: L091, mode: basis, question: 涉密信息系统实行什么保护？, expect: [src-87e67d39-30]}
+- {id: L092, mode: basis, question: 机关单位对信息系统、信息设备的保密管理要求, expect: [src-87e67d39-31]}
+- {id: L093, mode: basis, question: 电信企业对涉诈异常电话卡要重新实名核验吗？, expect: [src-da1d95c7-11]}
+- {id: L094, mode: basis, question: 银行开立企业账户的异常情形风险防控依据, expect: [src-da1d95c7-17]}
+- {id: L095, mode: basis, question: 发现间谍行为应当向哪个机关举报？, expect: [src-06fd5c0a-16]}
+
+# ---- 期望查不到（第一批未收）----
+- {id: N001, mode: basis, question: 电力监控系统安全防护的总体原则是什么？, expect: []}
+- {id: N002, mode: basis, question: 银行业金融机构信息科技外包风险管理的监管要求, expect: []}
+- {id: N003, mode: basis, question: 等保 2.0 第三级安全通用要求对身份鉴别的具体条款, expect: []}
