@@ -42,17 +42,23 @@ function statusColor(v) {
   return "var(--tx3)";
 }
 
-// 驾驶舱和对话页沿用当前项目；在“我的项目”页时默认第一个虚拟客户
+// 驾驶舱和对话页沿用当前项目；不在项目页时用“我的项目”里的第一个（没有项目时不显示这三项）
 function currentCode(pathname) {
   const m = pathname.match(/^\/(?:project|chat)\/([^/]+)/);
-  return m ? decodeURIComponent(m[1]) : "BANK-A";
+  return m ? decodeURIComponent(m[1]) : "";
 }
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
-  const code = encodeURIComponent(currentCode(pathname));
+  const [firstCode, setFirstCode] = useState("");
+  const code = encodeURIComponent(currentCode(pathname) || firstCode);
   const [health, setHealth] = useState(null);
+  const business = hasBusinessRole(user);
+  useEffect(() => {
+    if (!business) return;
+    api.projects().then((ps) => setFirstCode(ps[0]?.code || "")).catch(() => setFirstCode(""));
+  }, [business]);
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth({ status: "down", checks: {} }));
   }, []);
@@ -61,10 +67,19 @@ export default function Sidebar() {
   const items = [
     ...(hasBusinessRole(user) ? [
       { to: "/projects", icon: "proj", label: "我的项目" },
+<<<<<<< HEAD
       { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
       { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
       { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
       ...(hasRole(user, "project_lead") ? [{ to: "/portfolio", icon: "map", label: "项目总览" }, { to: "/deletions", icon: "trash", label: "资料删除" }] : []),
+=======
+      ...(code ? [
+        { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
+        { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
+        { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
+      ] : []),
+      ...(hasRole(user, "project_lead") ? [{ to: "/deletions", icon: "trash", label: "资料删除" }] : []),
+>>>>>>> origin/fix/p2-sidebar-project
     ] : []),
     ...(hasBusinessRole(user) ? [
       { group: "知识" },
