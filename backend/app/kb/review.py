@@ -29,7 +29,7 @@ from ..core.permissions import KNOWLEDGE_ADMIN, KNOWLEDGE_EXPERT, roles_of
 from ..models import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion, User
 from ..services import guard, storage
 from . import meta, parse
-from .items import ItemMeta, VersionContent, create_draft, create_item
+from .items import ItemMeta, VersionContent, create_draft, create_item, replace_mapping_rows
 
 ROLE_OF = {"content": KNOWLEDGE_EXPERT, "compliance": KNOWLEDGE_ADMIN}
 KNOWLEDGE_ROLES = {KNOWLEDGE_EXPERT, KNOWLEDGE_ADMIN}
@@ -147,6 +147,8 @@ def edit_draft(db: Session, user: User, v: KbVersion, changes: dict) -> KbVersio
         VersionContent(title=v.title, body=v.body, source_type=v.source_type, source_detail=v.source_detail,
                        ref_document=v.ref_document, ref_version=v.ref_version,
                        ref_status=v.ref_status).check(v.item.layer)
+        if "body" in changes:
+            replace_mapping_rows(db, v)          # 映射矩阵草稿：正文表格重新解析（B3）
     except meta.MetaError as e:
         db.rollback()
         raise ReviewError(422, str(e)) from e
