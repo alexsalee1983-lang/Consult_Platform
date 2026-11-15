@@ -105,7 +105,7 @@ def test_scan_marks_often_removed_items(people):
         autopublish.sample_check(db, checker, db.get(KbVersion, v.id), "pass")
         cur = db.get(KbVersion, v.id)
         assert cur.recheck_state == "passed" and cur.sample_state == "" and cur.recheck_reason
-        assert [r.review_role for r in db.scalars(select(KbReview).where(KbReview.version_id == v.id))][-1] == "recheck"
+        assert [r.review_role for r in db.scalars(select(KbReview).where(KbReview.version_id == v.id).order_by(KbReview.id))][-1] == "recheck"
         assert autopublish.sample_stats(db, autopublish.AGENT) == before          # 不计入自动发布抽检率
         assert v.id not in [x.id for x in autopublish.sample_queue(db)]
         with pytest.raises(rv.ReviewError) as e:
