@@ -13,7 +13,7 @@ POST /api/kb/versions/{id}/review        审核：role=content|compliance，deci
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
 GET  /api/kb/samples                     抽检队列：自动发布（平台核验的依据原文、知识审核 Agent 审过的）中待抽检、
-                                         抽检不通过的，附两类各自的问题率（同上；B11）
+                                         抽检不通过的，附两类各自的问题率（同上；B11）；另含使用反馈待复查的条目（B13）
 POST /api/kb/versions/{id}/sample        抽检：decision=pass|fail（知识专家，不能是导入人；二期 B10）
 GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
 GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
@@ -132,6 +132,8 @@ class VersionBrief(BaseModel):
     auto_review: str = ""               # platform：平台核验自动发布（二期 B10）；agent：知识审核 Agent（B11）
     sample_state: str = ""              # 抽检：pending / passed / failed
     required_roles: list[str] = []      # 发布需要的审核（B12：第三级只要 content）
+    recheck_state: str = ""             # 使用反馈待复查（B13）：pending / passed / failed
+    recheck_reason: str = ""
 
 
 class ReviewOut(BaseModel):

@@ -26,6 +26,7 @@ function Findings({ f }) {
     </ul>
   );
 }
+const RECHECK_STATE = { pending: ["c-a", "待复查（使用反馈）"], passed: ["c-g", "复查通过"], failed: ["c-r", "复查不通过"] };
 const SAMPLE_STATE = { pending: ["c-a", "待抽检"], passed: ["c-g", "抽检通过"], failed: ["c-r", "抽检不通过"] };
 
 function SampleActions({ v, onDone }) {
@@ -348,7 +349,9 @@ export default function KbReview() {
                   {v.single_review && <span className="chip c-a">单人发布 · 待补复审</span>}
                   {AUTO_LABEL[v.auto_review] && <span className="chip c-c">{AUTO_LABEL[v.auto_review]}</span>}
                   {SAMPLE_STATE[v.sample_state] && <span className={`chip ${SAMPLE_STATE[v.sample_state][0]}`}>{SAMPLE_STATE[v.sample_state][1]}</span>}
+                  {RECHECK_STATE[v.recheck_state] && <span className={`chip ${RECHECK_STATE[v.recheck_state][0]}`}>{RECHECK_STATE[v.recheck_state][1]}</span>}
                 </div>
+                {v.recheck_reason && <div className="sub">{v.recheck_reason}。请按七项清单复查：通过清除标记；不通过写明问题，改出新版本或下线后移出队列。</div>}
               </div>
               <div className="pad" style={{ gap: 14 }}>
                 {v.summary && <p style={{ margin: 0, color: "var(--tx2)", lineHeight: 1.75 }}>{v.summary}</p>}
@@ -381,7 +384,7 @@ export default function KbReview() {
                   {v.reviews.length === 0 && <li className="sub">还没有审核记录</li>}
                 </ul>
                 {v.auto_review === "platform" ? <div className="sub">依据原文：平台核验官方来源、原件哈希、文号和切分后自动发布，按比例抽检</div> : v.auto_review === "agent" ? <div className="sub">程序规则和知识审核 Agent 逐项检查通过后自动发布，按比例抽检</div> : v.required_roles?.length === 1 ? <div className="sub">项目沉淀、专家经验、内部制度改造：合规已在去标识确认时完成；知识审核 Agent 先审、只出意见，一位知识专家（不能是作者）拍板发布</div> : <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve" && ["content", "compliance"].includes(r.review_role)).map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>}
-                {AUTO_LABEL[v.auto_review] && v.status === "published" && !["passed", "failed"].includes(v.sample_state) && hasRole(user, "knowledge_expert") && <SampleActions v={v} onDone={refresh} />}
+                {v.status === "published" && ((AUTO_LABEL[v.auto_review] && !["passed", "failed"].includes(v.sample_state)) || v.recheck_state === "pending") && hasRole(user, "knowledge_expert") && <SampleActions v={v} onDone={refresh} />}
                 {v.status === "in_review" && <ReviewActions v={v} onDone={refresh} />}
                 {v.status === "published" && <PublishedActions v={v} onDone={refresh} />}
               </section>
