@@ -223,6 +223,7 @@ def test_draft_rejects_clauses_not_in_source(model, tmp_path):
     with SessionLocal() as db:
         report = drafting.draft(db, db.merge(expert), "law.md", SOURCE.encode(), source_detail="某某法全文（公开）")
     assert [e.key for e in report.accepted] == ["demo-art21", "demo-method"]
+    assert report.pending == {"demo-art21": ["某某法 第二十一条"]}      # 二期 B8：库里还没有某某法的依据原文
     reasons = [r for _, r in report.rejected]
     assert any("第九十九条" in r for r in reasons) and len(reasons) == 2       # 编造的条款号 + 格式不对
     assert all(e.content.source_detail == "某某法全文（公开）" for e in report.accepted)

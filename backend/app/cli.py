@@ -588,7 +588,10 @@ def kb_draft(args: argparse.Namespace) -> int:
     print(f"调用模型 {report.calls} 次（{report.model}）。{report.note}")
     print(f"起草 {len(report.accepted)} 条，写到 {args.out}；退回 {len(report.rejected)} 条（见 {args.out}/_rejected/）")
     for p in written:
-        print(f"  {p.name}")
+        todo = report.pending.get(p.name.removesuffix(".new.md").removesuffix(".md"))
+        print(f"  {p.name}" + (f"  待核引用 {len(todo)} 处：{'、'.join(todo[:5])}" if todo else ""))
+    if report.pending:
+        print(f"{len(report.pending)} 条有待核引用（库里没有对应的依据原文）：先 kb-source-split 切条入库原文，或改正引用，否则不能提交审核。")
     print("这些只是草稿文件：专家逐条修改核对后，用 kb-import 导入，再经双人审核发布。")
     return 0
 
