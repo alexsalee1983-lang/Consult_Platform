@@ -35,6 +35,10 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A", None),             (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
+    # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
+    (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
+    (("POST", "/api/projects", {"code": "QA-MTX", "tier": "standard", "product": "SOC"}),
+                                                        (403, 403, 403, 403, 403)),
     # 验收与保留期（M4 ①）：member 是 BANK-A 项目经理，验收日写在将来 → 422（不改 BANK-A）；非成员 404
     (("POST", "/api/projects/BANK-A/acceptance", {"accepted_on": "2999-01-01"}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/acceptance", {"accepted_on": "2026-01-01"}), (404, 404, 403, 403, 403)),
@@ -57,6 +61,11 @@ MATRIX = [
     # 仅现场使用（M4 ③）：member 是 BANK-A 项目经理，对观察 O-01 标注 → 422（只有资料能标，不改数据）；非成员 404
     (("POST", "/api/projects/BANK-A/evidences/O-01/local-only", {"request_ref": "函-1"}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/evidences/D-01/local-only", {"request_ref": "函-1"}), (404, 404, 403, 403, 403)),
+    # 证据改名、删除：member 改名为空标题 → 422（不改数据）；删除不存在的 O-99 → 404；非成员 404
+    (("PATCH", "/api/projects/BANK-A/evidences/O-01", {"title": ""}), (422, 404, 403, 403, 403)),
+    (("PATCH", "/api/projects/GRID-B/evidences/D-01", {"title": "新标题"}), (404, 404, 403, 403, 403)),
+    (("DELETE", "/api/projects/BANK-A/evidences/O-99", None), (404, 404, 403, 403, 403)),
+    (("DELETE", "/api/projects/GRID-B/evidences/D-01", None), (404, 404, 403, 403, 403)),
     # 客户同意与摘要卡（M4 ④）：BANK-A 是标准档 → 登记 / 上传 / 模板 422，查看 200；GRID-B（严格档）非成员 404
     (("GET", "/api/projects/BANK-A/consents", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/consents", {"doc_ref": "计划-1", "signed_on": "2026-01-01"}),
@@ -99,6 +108,7 @@ MATRIX = [
      (404, 404, 403, 403, 403)),
     # 交付链运行（M3 ④）：成员可看；发起在 test_runs 里测（这里发起会在 BANK-A 留下排队的运行）
     (("GET", "/api/projects/BANK-A/runs", None),        (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/chain", None),       (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/runs/999999", None), (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/runs", None),       (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/runs/999999/cancel", None), (404, 404, 403, 403, 403)),
@@ -112,6 +122,7 @@ MATRIX = [
     (("GET", "/api/admin/users", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/roles", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/usage", None),                 (403, 403, 200, 403, 403)),
+    (("GET", "/api/admin/models", None),                (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/agent-grants", None),          (403, 403, 200, 403, 403)),
     (("POST", "/api/admin/users", {"username": "matrix_new"}), (403, 403, 201, 403, 403)),
     (("POST", "/api/admin/users/matrix_target/reset-password", None), (403, 403, 200, 403, 403)),

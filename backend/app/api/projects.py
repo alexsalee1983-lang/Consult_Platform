@@ -4,6 +4,9 @@
 某项目的卡（open 待处理 / resolved 已处理 / all）；POST /api/confirmations/{id}/resolve 处理（选选项或写意见），
 规则见 app/project/confirmations.py。
 
+立项（二期 A3）：GET /api/catalog/products 可选的产品和模块；POST /api/projects 项目负责人立项（选产品、勾模块、
+定档、指定首位项目经理），规则见 app/project/configs.py。项目列表和详情带 product、modules、product_version。
+
 保留期（M4 ①）：POST /api/projects/{code}/acceptance 项目经理登记验收日和保留月数；项目列表和详情带
 retention_state、deletion_due_on、days_to_deletion，到期前 30 天显示提醒。规则见 app/project/retention.py。
 """
@@ -19,6 +22,7 @@ from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import (
     BUSINESS_ROLES,
+    PROJECT_LEAD,
     PROJECT_MANAGER,
     membership,
     project_for_member,
@@ -26,6 +30,7 @@ from ..core.permissions import (
     roles_of,
 )
 from ..models import Confirmation, Project, ProjectMember, User
+from ..project import configs
 from ..project import confirmations as conf_svc
 from ..project import retention
 from ..project import runs as run_svc
@@ -40,10 +45,21 @@ def _retention(data, p: Project):
     return data
 
 
-def _out(p: Project, cls=ProjectOut):
+def _product(db: Session, data, p: Project):
+    for k, v in configs.info(db, p).items():
+        setattr(data, k, v)
+    return data
+
+
+def _dnum(code: str) -> int:
+    return int(code[1:]) if code[1:].isdigit() else 0
+
+
+def _out(db: Session, p: Project, cls=ProjectOut):
     data = cls.model_validate(p, from_attributes=True)
     data.phase_name = PHASES[p.phase] if 0 <= p.phase < len(PHASES) else ""
     _retention(data, p)
+    _product(db, data, p)
     data.open_confirmations = sum(1 for c in p.confirmations if c.status == "open")
     return data
 
@@ -62,7 +78,7 @@ def _my_projects(user: User):
 @router.get("/projects", response_model=list[ProjectOut])
 def list_projects(db: Session = Depends(get_db), user: User = Depends(current_user)):
     rows = db.scalars(_my_projects(user).options(selectinload(Project.confirmations)).order_by(Project.code)).all()
-    return [_out(p) for p in rows]
+    return [_out(db, p) for p in rows]
 
 
 @router.get("/projects/{code}", response_model=ProjectDetail)
@@ -72,7 +88,42 @@ def get_project(code: str, db: Session = Depends(get_db), user: User = Depends(c
     detail.phase_name = PHASES[p.phase] if 0 <= p.phase < len(PHASES) else ""
     detail.open_confirmations = sum(1 for c in p.confirmations if c.status == "open")
     detail.confirmations = [_conf_out(c) for c in p.confirmations if c.status == "open"]
+    detail.deliverables = sorted(detail.deliverables, key=lambda d: _dnum(d.code))    # D10 排在 D9 后面
+    _product(db, detail, p)
     return _retention(detail, p)
+
+
+class ProjectIn(BaseModel):
+    code: str = Field(max_length=32)
+    tier: str = Field(pattern="^(standard|strict)$")
+    product: str = Field(max_length=8)
+    modules: list[str] = Field(default=[], max_length=10)
+    manager: str = Field(default="", max_length=64)     # 空 = 立项人本人
+    industry: str = Field(default="", max_length=32)
+    weeks: int = 12
+
+
+@router.get("/catalog/products")
+def catalog_products(user: User = Depends(current_user)) -> list[dict]:
+    """立项可选的产品和模块（只列 ready 的）。"""
+    return configs.options()
+
+
+@router.post("/projects", response_model=ProjectOut, status_code=201)
+def create_project(body: ProjectIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """项目负责人立项；首位项目经理默认是立项人本人。"""
+    if PROJECT_LEAD not in roles_of(db, user.id):
+        audit.record(db, actor=user.username, action="project.create", result="denied", reason="not_lead")
+        raise HTTPException(403, "立项需要“项目负责人”角色")
+    name = body.manager.strip() or user.username
+    manager = db.scalar(select(User).where(User.username == name))
+    try:
+        p = configs.create(db, actor=user.username, code=body.code, tier=body.tier, manager=manager,
+                           product=body.product, modules=body.modules, industry=body.industry, weeks=body.weeks)
+    except configs.CreateError as e:
+        audit.record(db, actor=user.username, action="project.create", result="denied", status=e.status)
+        raise HTTPException(e.status, str(e)) from None
+    return _out(db, p)
 
 
 class AcceptanceIn(BaseModel):
@@ -89,7 +140,7 @@ def set_acceptance(code: str, body: AcceptanceIn, db: Session = Depends(get_db),
         retention.accept(db, user, p, body.accepted_on, body.retention_months)
     except retention.RetentionError as e:
         raise HTTPException(e.status, e.detail) from None
-    return _out(p)
+    return _out(db, p)
 
 
 @router.get("/confirmations", response_model=list[ConfirmationOut])

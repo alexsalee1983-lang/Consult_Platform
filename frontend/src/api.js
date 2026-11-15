@@ -116,6 +116,9 @@ export const api = {
   me: () => request("/api/auth/me", { skipAuthRedirect: true }),
   health: () => request("/api/health"),
   projects: () => request("/api/projects"),
+  // 网页立项（二期 A3）：可选的产品和模块；项目负责人立项
+  catalogProducts: () => request("/api/catalog/products"),
+  createProject: (body) => request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   confirmations: () => request("/api/confirmations"),
   // 处理确认卡：选一个选项（choice）或写意见（resolution），或两者都有
@@ -126,6 +129,12 @@ export const api = {
   // 项目证据（D 资料 / I 访谈 / O 现场观察）
   evidences: (code) => request(`/api/projects/${encodeURIComponent(code)}/evidences`),
   evidence: (code, ev) => request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}`),
+  // 证据改名、删除：录入人或项目经理；删除后编号保留、内容清空，不可撤销
+  renameEvidence: (code, ev, title) =>
+    request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}`,
+      { method: "PATCH", body: JSON.stringify({ title }) }),
+  deleteEvidence: (code, ev) =>
+    request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}`, { method: "DELETE" }),
   // 仅现场使用（M4 ③）：项目经理凭客户书面通知标注，平台删除原件和解析结果，不可撤销
   markLocalOnly: (code, ev, request_ref) =>
     request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}/local-only`,
@@ -140,6 +149,7 @@ export const api = {
     request(`/api/projects/${encodeURIComponent(code)}/notes`, { method: "POST", body: JSON.stringify(note) }),
   // 交付链运行（标准档 3→4→7）
   runs: (code) => request(`/api/projects/${encodeURIComponent(code)}/runs`),
+  chain: (code) => request(`/api/projects/${encodeURIComponent(code)}/chain`),   // 二期 A5：步骤按项目配置快照
   run: (code, id) => request(`/api/projects/${encodeURIComponent(code)}/runs/${id}`),
   startRun: (code) => request(`/api/projects/${encodeURIComponent(code)}/runs`, { method: "POST" }),
   cancelRun: (code, id) => request(`/api/projects/${encodeURIComponent(code)}/runs/${id}/cancel`, { method: "POST" }),
@@ -194,6 +204,7 @@ export const api = {
   lookupUsers: (q) => request(`/api/users/lookup?q=${encodeURIComponent(q)}`),
   // 系统管理员：账号与角色
   adminUsers: () => request("/api/admin/users"),
+  adminModels: () => request("/api/admin/models"),
   createUser: (username, display_name, roles) =>
     request("/api/admin/users", { method: "POST", body: JSON.stringify({ username, display_name, roles }) }),
   setRoles: (username, roles) =>
@@ -272,7 +283,7 @@ export const SEVERITY_CLS = { 阻断: "c-r", 重要: "c-a", 建议: "c-n" };
 export const EVIDENCE_STATUS = {
   received: { label: "待解析", cls: "c-a" }, parsed: { label: "已解析", cls: "c-g" },
   failed: { label: "解析失败", cls: "c-r" }, ready: { label: "已录入", cls: "c-g" },
-  local_only: { label: "仅现场使用", cls: "c-v" },
+  local_only: { label: "仅现场使用", cls: "c-v" }, deleted: { label: "已删除", cls: "c-n" },
 };
 export const RUN_STATUS = {
   queued: { label: "排队中", cls: "c-c" }, running: { label: "运行中", cls: "c-c" },

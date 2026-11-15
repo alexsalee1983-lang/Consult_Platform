@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, RUN_ACTIVE, RUN_STATUS } from "../api.js";
 
-// 标准档交付链 3→4→7（与 backend/app/project/runs.py 的 STEPS 一致）
-const STEPS = [
-  { key: "facts", n: 3, name: "整理事实清单", agent: "调研访谈 Agent", out: "D3" },
-  { key: "gap", n: 4, name: "差距分析", agent: "依据与差距分析 Agent", out: "" },
-  { key: "draft", n: 7, name: "现状评估报告初稿", agent: "报告与汇报 Agent", out: "D4" },
-];
+// 交付链步骤来自 GET /api/projects/{code}/chain（项目立项时的配置快照，二期 A5）
 
 function stepState(run, key) {
   const rec = run.steps?.find((s) => s.step === key);
@@ -28,6 +23,9 @@ export default function RunPanel({ code, strict, onChange }) {
   const [run, setRun] = useState(undefined);   // undefined 加载中，null 没有运行
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [steps, setSteps] = useState([]);
+
+  useEffect(() => { api.chain(code).then(setSteps).catch(setError); }, [code]);
 
   useEffect(() => {
     let alive = true;
@@ -64,16 +62,16 @@ export default function RunPanel({ code, strict, onChange }) {
       </div>
       <>
           <ol className="run-steps">
-            {STEPS.map((s) => {
+            {steps.map((s) => {
               const ss = run ? stepState(run, s.key) : { label: "未开始", cls: "c-n" };
               return (
                 <li key={s.key}>
                   <div className="sb">
-                    <span><span className="mono sub">第 {s.n} 步</span> {s.name}</span>
+                    <span><span className="mono sub">第 {s.number} 步</span> {s.name}</span>
                     <span className={`chip ${ss.cls}`}>{ss.label}</span>
                   </div>
                   <div className="sub">
-                    {s.agent}{s.out && ` → 写 ${s.out}`}
+                    {s.agent_name}{s.output && ` → 写 ${s.output}`}
                     {ss.rec && ` · ${fmt(ss.rec.finished_at)} · ${ss.rec.model || "—"} · ${ss.rec.prompt_tokens + ss.rec.completion_tokens} tokens`}
                   </div>
                 </li>
@@ -99,8 +97,8 @@ export default function RunPanel({ code, strict, onChange }) {
             )}
           </div>
           <div className="sub">{strict
-            ? "读摘要卡（S-xx）写 D3 事实清单 → 差距分析 → 写 D4 现状评估初稿，全文只用占位符。需要有效的客户同意和摘要卡。"
-            : "读项目证据写 D3 事实清单 → 差距分析 → 写 D4 现状评估初稿。"}产出是草稿，需顾问审阅和质量评审后签署。</div>
+            ? "读摘要卡（S-xx）起草，全文只用占位符。需要有效的客户同意和摘要卡。"
+            : "读项目证据，按上面的步骤依次起草；方案取舍、证据不足时发确认卡，等你处理后继续。"}产出是草稿，需顾问审阅和质量评审后签署。</div>
       </>
     </section>
   );
