@@ -20,6 +20,7 @@ class Conversation(Base):
     agent_code: Mapped[str] = mapped_column(ForeignKey("agents.code"))
     title: Mapped[str] = mapped_column(String(128), default="")
     prompt_version: Mapped[str] = mapped_column(String(16))      # 创建时的提示词版本
+    handoff_from: Mapped[int | None] = mapped_column(ForeignKey("conversations.id"), default=None)  # 转交来源对话（C2）
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 

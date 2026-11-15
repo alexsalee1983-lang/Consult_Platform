@@ -12,6 +12,7 @@ Agent 读写数据只能经 invoke()。每次调用依次检查（任一不满�
 已实现：project.read（真实数据）、project.evidence（查证据：清单或某条证据的正文，分段返回；M3）、
 doc.generate（交付件分章节：读大纲 / 读章节、写大纲、写章节新版本，规则见 app/project/deliverables.py；M3）、
 confirm.create（发确认卡：选项、推荐和理由、影响，规则见 app/project/confirmations.py；M3）、
+agent.handoff（对话转交：为专业 Agent 新建对话，规则见 app/agents/handoff.py；二期 C2）、
 quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，只查 L4）；
 kb.stage_write 在 M2 后续接入，目前是占位实现。
 kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用人的可见范围过滤（app/kb/search.py）。
@@ -175,6 +176,15 @@ def _confirm_create(ctx: ToolContext, args: dict) -> dict:
     return confirmations.card_for_agent(c, created)
 
 
+def _agent_handoff(ctx: ToolContext, args: dict) -> dict:
+    from . import handoff
+
+    try:
+        return handoff.create(ctx.db, ctx.user, ctx.project, ctx.agent, args)
+    except handoff.HandoffError as e:
+        raise ToolError(e.detail, status=e.status) from e
+
+
 def _placeholder(milestone: str, empty: dict) -> Callable[[ToolContext, dict], dict]:
     def run(ctx: ToolContext, args: dict) -> dict:
         return {**empty, "placeholder": True, "note": f"该工具在 {milestone} 接入，目前返回空结果"}
@@ -189,9 +199,10 @@ IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "basis.lookup": _basis_lookup,
     "doc.generate": _doc_generate,
     "confirm.create": _confirm_create,
+    "agent.handoff": _agent_handoff,
     "kb.stage_write": _placeholder("M2 投料", {"staged": False}),
 }
-NEEDS_PROJECT = frozenset({"project.read", "project.evidence", "doc.generate", "confirm.create"})
+NEEDS_PROJECT = frozenset({"project.read", "project.evidence", "doc.generate", "confirm.create", "agent.handoff"})
 PROJECT_PREFS = frozenset({"kb.search", "basis.lookup"})   # 在项目里调用时按项目配置快照取默认产品等（B2）
 
 
