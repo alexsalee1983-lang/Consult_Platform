@@ -215,3 +215,36 @@ def test_codes_are_never_reused():
         assert r.json()["code"] == "O-08"
     finally:
         c.__exit__(None, None, None)
+
+
+def _extract(c, filename: str, data: bytes, code: str):
+    return c.post(f"/api/projects/{code}/notes/extract", files={"file": (filename, data)})
+
+
+def test_note_extract_docx_and_txt_fill_form_without_saving(proj):
+    code, c, _ = proj
+    data = docx_bytes([("Heading 1", "SOC 值班访谈"), ("Normal", "目前 7×8 小时值班，夜间告警由短信通知二线。")])
+    r = _extract(c, "访谈纪要.docx", data, code)
+    assert r.status_code == 200, r.text
+    assert "SOC 值班访谈" in r.json()["content"] and "7×8" in r.json()["content"]
+    r = _extract(c, "纪要.txt", "交接班记录为纸质。\n\n未纳入工单系统。".encode("gb18030"), code)
+    assert r.status_code == 200 and "未纳入工单系统" in r.json()["content"]
+    with SessionLocal() as db:            # 不保存、不分配编号
+        pid = db.scalar(select(Project.id).where(Project.code == code))
+        assert db.scalar(select(Evidence).where(Evidence.project_id == pid)) is None
+    a = _last_audit("project.note_extract")
+    assert a.result == "allowed" and "7×8" not in json.dumps(a.detail, ensure_ascii=False)
+
+
+def test_note_extract_refuses_secrets_pdf_large_and_strict(proj):
+    code, c, _ = proj
+    r = _extract(c, "纪要.md", "# 访谈\n\n防火墙管理口令 Abc@12345".encode(), code)
+    assert r.status_code == 422 and r.json()["detail"]["blocked"]
+    a = _last_audit("project.note_extract")
+    assert a.result == "blocked" and "Abc@12345" not in json.dumps(a.detail, ensure_ascii=False)
+    assert _extract(c, "纪要.pdf", blank_pdf_bytes(), code).status_code == 422
+    assert _extract(c, "纪要.txt", b"a" * (2 * 1024 * 1024 + 1), code).status_code == 413
+    strict = _new_project("strict")
+    c2, _ = _member_client(strict)
+    with c2:
+        assert _extract(c2, "纪要.txt", "现状说明".encode(), strict).status_code == 422

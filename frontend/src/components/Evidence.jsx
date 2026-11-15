@@ -103,6 +103,21 @@ function NoteForm({ code, onSaved, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const fileRef = useRef(null);
+  const [note, setNote] = useState("");
+  // 从文件导入：平台提取正文填进录入框（文件不保存），核对、补受访者角色后再保存
+  const importFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    setNote("");
+    api.extractNote(code, file).then((r) => {
+      setF((cur) => ({ ...cur, content: r.content }));   // 标题不取文件名（文件名可能含客户名称）
+      setNote(`已从文件导入 ${r.chars} 字，请核对正文、填写标题；文件本身不保存。`);
+    }).catch(setError).finally(() => setBusy(false));
+  };
   const ok = f.title.trim() && f.content.trim() && (f.kind !== "interview" || f.interviewee_role.trim());
   const save = () => {
     setBusy(true);
@@ -126,8 +141,11 @@ function NoteForm({ code, onSaved, onCancel }) {
       )}
       <textarea className="inp" rows={6} placeholder="正文。不要写口令、密钥、可利用的漏洞细节、完整 IP 规划和个人信息样本。"
         value={f.content} onChange={set("content")} />
+      {note && <div className="sub">{note}</div>}
       {error && <div className="err sub">{error.message}</div>}
       <div className="row" style={{ justifyContent: "flex-end" }}>
+        <button className="btn sm" disabled={busy} onClick={() => fileRef.current?.click()} style={{ marginRight: "auto" }}>从文件导入</button>
+        <input ref={fileRef} type="file" hidden onChange={importFile} accept=".docx,.txt,.md" />
         <button className="btn sm" onClick={onCancel}>取消</button>
         <button className="btnp" disabled={!ok || busy} onClick={save}>{busy ? "保存中…" : "保存"}</button>
       </div>

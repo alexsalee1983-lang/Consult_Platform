@@ -1,0 +1,170 @@
+# 事件后 E2E 评估与整改（二期 D3，草稿：交付件结构、提示词待产品专家核对，负责人同意后改 ready）
+# 格式见 docs/接口约定.md 第二节。边界：复盘与整改咨询，不是司法鉴定、电子数据取证或责任认定；不写可利用的漏洞细节（机密级，平台不收）。
+code: IRE
+name: 事件后 E2E 评估与整改
+domain: RES
+status: draft
+modules: [GFYL, HYJG]
+deliverables:
+- code: D1
+  title: 启动包
+  stage: 启动
+  client_facing: true
+- code: D2
+  title: 调研包
+  stage: 调研
+  client_facing: true
+- code: D3
+  title: 事实清单
+  stage: 调研
+  client_facing: false
+- code: D4
+  title: 事件复盘与差距评估报告
+  stage: 分析
+  client_facing: true
+  outline:
+  - 评估范围与方法
+  - 事件经过与时间线
+  - 根本原因分析
+  - 防护、检测与响应差距
+  - 整改建议方向
+- code: D5
+  title: 整改方案
+  stage: 设计
+  client_facing: true
+- code: D6
+  title: 应急预案与处置剧本包
+  stage: 设计
+  client_facing: true
+- code: D7
+  title: 整改路线图
+  stage: 落地辅导
+  client_facing: true
+- code: D8
+  title: 高层汇报
+  stage: 验收
+  client_facing: true
+baseline:
+  domains:
+  - 事件经过与影响
+  - 防护
+  - 检测与监测
+  - 响应与处置
+  - 恢复与业务连续性
+  - 通报与报告
+  - 治理与改进
+  frameworks:
+  - NIST 事件响应生命周期
+  - ATT&CK
+  - 等保 2.0
+  - 网络安全事件报告与分级要求
+  - 行业要求
+  basis: []
+chain:
+- key: facts
+  number: 3
+  name: 整理事实清单
+  agent: research-interview
+  inputs:
+  - evidence
+  output: D3
+  query: '{product_name} 现状 事实 调研 事件时间线'
+  instruction: 任务：交付链第 {number} 步。根据下面的本项目证据，整理 D3 事实清单：先列事件时间线（发现、研判、遏制、根除、恢复、通报各节点的时间和动作，每条带证据编号），再按评估域（{domains}）分章列出已确认的事实；另起一章列“待补证据与矛盾点”（如时间线缺口、说法不一致）。攻击手法只写类别（如 ATT&CK 战术、技术名称），不写可利用的漏洞细节、利用代码、口令或完整网络拓扑。只写证据里有的事实，不推测原因，不判断责任。
+- key: gap
+  number: 4
+  name: 根因与差距分析
+  agent: compliance-basis
+  inputs:
+  - D3
+  output: ''
+  query: 安全事件 根本原因 防护检测响应 差距分析
+  instruction: 任务：交付链第 {number} 步。以下面的 D3 事实清单为输入，对照评估基线（{frameworks}，依据只能来自知识库检索结果，没有的标【依据待核实】）做根因与差距分析：按攻击链各阶段说明事件为什么能发生、为什么没有更早发现、响应哪里慢了，归纳根本原因（技术、流程、组织）；输出差距分析表（环节、现状、要求与依据、差距、证据充分性）、业务影响 TOP 5、依据库缺口；核对事件报告与通报是否满足适用的时限和分级要求，只写符合性初判。证据不足的项列出来并发“证据不足”确认卡。不写可利用的漏洞细节，不作责任认定或取证结论。
+- key: design
+  number: 5
+  name: 整改设计
+  agent: solution-designer
+  inputs:
+  - run:gap
+  - D3
+  output: ''
+  query: 安全事件 整改措施 加固 检测能力 应急响应
+  instruction: 任务：交付链第 {number} 步。根据下面的根因与差距分析和 D3 事实清单，设计整改方案：按根本原因分为立即整改（遏制同类事件再发）、短期加固、长期能力建设三类，每项写措施、对应的差距和证据编号、责任方类型、验证方式（怎样确认整改有效）；检测与响应能力补强写成可落地的检测用例方向和处置剧本清单；最后一章写整改路线图草案（分阶段目标、主要任务、前置条件）。客户约束（人力、预算、现有工具）找不到的不要假设，发“证据不足”确认卡；有两个以上可行方案时列出选项、推荐和理由，发“方案取舍”确认卡。
+- key: policy
+  number: 6
+  name: 应急预案与剧本起草
+  agent: policy-drafter
+  inputs:
+  - run:design
+  - D3
+  output: D6
+  query: 网络安全事件应急预案 处置剧本 事件分级 报告流程
+  instruction: 任务：交付链第 {number} 步。根据下面的整改设计，起草 D6 应急预案与处置剧本包：网络安全事件应急预案（组织与职责、事件分级、报告与通报流程和时限、响应程序、恢复与总结），针对本次事件类型和整改设计列出的处置剧本（触发条件、研判、遏制、根除、恢复、通报各步谁做什么、留什么记录），演练计划和记录表单，最后一章写落地风险提示。部门名称只用整改设计和事实清单里出现过的，客户实际部门或已有预案不清楚时发“范围确认”确认卡，不编造部门；引用依据只用知识库检索结果；不写具体利用方法。
+- key: draft
+  number: 7
+  name: 复盘与差距评估报告初稿
+  agent: report-writer
+  inputs:
+  - run:gap
+  - D3
+  output: D4
+  query: 安全事件 复盘报告 根本原因 整改建议
+  instruction: 任务：交付链第 {number} 步。根据下面的根因与差距分析和 D3 事实清单，起草 D4 事件复盘与差距评估报告初稿，按大纲分章：评估范围与方法、事件经过与时间线、根本原因分析、防护、检测与响应差距、整改建议方向。结论必须来自分析，并标注证据编号和依据；这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、确认卡、“测试”“内部”等字样）；对事不对人，不点名个人、不作责任认定；不写可利用的漏洞细节。
+- key: design_doc
+  number: 7
+  name: 整改方案成稿
+  agent: report-writer
+  inputs:
+  - run:design
+  - run:gap
+  output: D5
+  query: 安全事件 整改方案 加固 能力建设
+  instruction: 任务：交付链第 {number} 步。根据下面的整改设计和根因与差距分析，起草 D5 整改方案：整改目标与原则、立即整改、短期加固、长期能力建设、整改有效性验证方式、方案取舍说明（以顾问已确认事项为准）、措施与根本原因的对应关系。保留证据编号和依据标注。D5 是交给客户的文件：不写内部工作内容（差距编号 G-xx、确认卡、“测试”“内部”等字样），不写可利用的漏洞细节。
+- key: roadmap
+  number: 7
+  name: 整改路线图成稿
+  agent: report-writer
+  inputs:
+  - run:design
+  - run:gap
+  output: D7
+  query: 安全事件 整改 路线图 分阶段
+  instruction: 任务：交付链第 {number} 步。根据下面整改设计里的路线图草案和根因与差距分析，起草 D7 整改路线图：按立即、短期、长期写阶段目标、主要任务、责任方、前置条件、验证方式和里程碑，优先安排遏制同类事件再发的措施；资源和时间按客户约束写，不清楚的写成待确认事项。D7 是交给客户的文件：不写内部工作内容（差距编号 G-xx、确认卡、“测试”“内部”等字样）。
+- key: briefing
+  number: 7
+  name: 高层汇报起草
+  agent: report-writer
+  inputs:
+  - D4
+  - D5
+  - D7
+  output: D8
+  query: 安全事件 复盘 高层汇报 管理层 决策
+  instruction: 任务：交付链第 {number} 步。根据下面的 D4 事件复盘与差距评估报告、D5 整改方案和 D7 整改路线图，起草 D8 高层汇报：面向客户管理层，每章是一页汇报的要点（事件概况与业务影响、根本原因、整改方案概要、路线图与资源需求、需要管理层决策的事项），结论先行、语言简洁。只用这三份文件里已有的结论并标注来源，不新增结论；对事不对人，不作责任认定；用“差距分析、整改建议”的说法，不出具测评或认证结论。
+gates:
+- id: ire-sections
+  kind: required_sections
+  deliverable: D4
+  sections:
+  - 事件经过与时间线
+  - 根本原因分析
+  level: blocking
+  message: 复盘报告缺少事件时间线或根本原因分析章节
+- id: no-liability-claim
+  kind: forbidden_terms
+  deliverable: ''
+  terms:
+  - 应负主要责任
+  - 应负全部责任
+  - 负有直接责任
+  - 鉴定意见如下
+  level: blocking
+  message: 不得作责任认定、取证或鉴定结论（咨询边界）
+strict:
+  card_items:
+  - 事件经过与影响
+  - 防护
+  - 检测与监测
+  - 响应与处置
+  - 恢复与业务连续性
+  - 通报与报告
+  - 治理与改进
