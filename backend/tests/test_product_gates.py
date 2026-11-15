@@ -109,3 +109,11 @@ def test_iso_soa_gate_lists_all_93_annex_a_controls():
     full = "\n".join(f"{c} 适用" for c in want)
     assert all(covers(full, c) for c in items)
     assert [c for c in items if not covers(full.replace("5.1 适用\n", ""), c)] == ["5.1"]
+def test_dsm_draft_config_loads_with_boundary_gate():
+    """D2：数据安全产品草稿可加载；资质边界门禁覆盖全部交付件。"""
+    cat = config.load()
+    assert not cat.problems
+    dsm = cat.products["DSM"]
+    assert dsm.status == "draft" and [d.code for d in dsm.deliverables] == [f"D{i}" for i in range(1, 9)]
+    g = next(g for g in dsm.gates if g.id == "no-assessment-claim")
+    assert g.deliverable == "" and g.level == "blocking"
