@@ -5,7 +5,7 @@ code: SOC
 name: SOC 运营体系设计
 domain: OPS
 status: ready
-modules: []
+modules: [DJBH, GFYL, HYJG]
 deliverables:
 - code: D1
   title: 启动包
