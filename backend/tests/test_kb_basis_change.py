@@ -32,11 +32,17 @@ def people():
                                      "admin": ("knowledge_admin",)}.items()}
 
 
+def _body(title: str, doc_type: str) -> str:
+    if doc_type == "MAP":  # B3：映射矩阵正文必须有映射表
+        return f"## {title}\n\n| 示范标准甲 | 示范标准乙 | 关系 | 说明 |\n|---|---|---|---|\n| A.1 | B.1 | 部分覆盖 | 示范 |\n"
+    return f"## {title}\n\n示范条目正文。"
+
+
 def _publish(people, title, *, document, code="", version="2020", status="current", doc_type="REF"):
     with SessionLocal() as db:
         u = {k: db.merge(v) for k, v in people.items()}
         m = ItemMeta(layer="L4", domain="CMP", product="GEN", doc_type=doc_type, stage="通用", capabilities=["管理"])
-        c = VersionContent(title=title, body=f"## {title}\n\n示范条目正文。", source_type="public",
+        c = VersionContent(title=title, body=_body(title, doc_type), source_type="public",
                            source_detail="公开资料：示范", ref_document=document, ref_version=version,
                            ref_status=status, ref_code=code)
         v = rv.new_item(db, u["author"], m, c)
