@@ -354,6 +354,15 @@ def retention_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_recheck_scan(args: argparse.Namespace) -> int:
+    """立即执行一次使用反馈扫描（worker 每天自动执行）：顾问常删掉 Agent 引用的知识条目标为待复查（二期 B13）。"""
+    from .kb import recheck
+    with SessionLocal() as db:
+        made = recheck.scan(db, actor="cli")
+    print(f"标记待复查 {len(made)} 条" + ("：" + "、".join(made) if made else ""))
+    return 0
+
+
 def deletion_scan(args: argparse.Namespace) -> int:
     """立即执行一次到期扫描（worker 每小时自动执行），为已到期的项目发起删除申请。"""
     from .project import deletion
@@ -706,6 +715,7 @@ def main(argv: list[str] | None = None) -> int:
     rr = sub.add_parser("retention-report", help="已验收项目的保留期与到期状态（--all 含未验收）")
     rr.add_argument("--all", action="store_true")
     rr.set_defaults(func=retention_report)
+    sub.add_parser("kb-recheck-scan", help="立即扫描交付件里的知识引用，标记使用反馈待复查（worker 每天自动执行）")         .set_defaults(func=kb_recheck_scan)
     sub.add_parser("deletion-scan", help="立即扫描到期项目并发起删除申请（worker 每小时自动执行）")         .set_defaults(func=deletion_scan)
     dr = sub.add_parser("deletion-report", help="未完成的删除申请（--all 含已删除、已撤销）")
     dr.add_argument("--all", action="store_true")
