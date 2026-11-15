@@ -121,7 +121,7 @@ def _mutate(fn) -> dict:
     (_mutate(lambda p: p["gates"][1].update(id="annex")), "重复"),
     (_mutate(lambda p: p["gates"][0].update(deliverable="D7")), "D7"),
     (_mutate(lambda p: p["chain"][0].update(instruction="测试口令：password=Abc@12345678")), "机密级"),
-    (_mutate(lambda p: p.update(code="ISO")), "PRODUCTS"),
+    (_mutate(lambda p: p.update(code="XYZ")), "PRODUCTS"),
     (_mutate(lambda p: p.update(chain=[])), "交付链步骤"),
 ], ids=lambda v: v if isinstance(v, str) else "")
 def test_product_problems(tmp_path: Path, product: dict, expect: str) -> None:

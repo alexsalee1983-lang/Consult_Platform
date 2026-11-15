@@ -338,7 +338,7 @@ export default function KbReview() {
             <section className="pnl" aria-label="版本详情">
               <div className="vhead">
                 <div className="row"><span className="mono sub">{v.doc_id} · v{v.version}</span><Chip map={VERSION_STATUS} value={v.status} /></div>
-                <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>{v.title}</h2>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{v.title}</h2>
                 <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                   <span className="chip c-c">来源：{{ public: "公开资料", expert: "专家萃取", project: "项目沉淀", internal: "内部制度改造" }[v.source_type] || v.source_type}</span>
                   <span className="chip c-n">去标识：{{ passed: "已通过", not_needed: "无需", pending: "未完成" }[v.deid_status] || v.deid_status}</span>
