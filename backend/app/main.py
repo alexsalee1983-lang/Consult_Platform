@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import DataError
 
-from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health,
+from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health, portfolio,
                   kb, kb_items, projects, quality, runs)
 from .core import audit as core_audit
 from .core.auth import authenticate
@@ -65,6 +65,7 @@ app.add_middleware(MetricsMiddleware)  # 只记路由模板、方法、状态码
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)
+app.include_router(portfolio.router)
 app.include_router(deletions.router)
 app.include_router(evidence.router)
 app.include_router(cards.router)

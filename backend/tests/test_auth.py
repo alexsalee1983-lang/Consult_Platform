@@ -16,6 +16,7 @@ from .conftest import TEST_PASSWORD, TEST_USER, login, totp_code
 # 所有业务接口：未登录一律 401。新增接口时加到这里。
 PROTECTED = [
     ("GET", "/api/projects"),
+    ("GET", "/api/portfolio"),
     ("GET", "/api/projects/BANK-A"),
     ("POST", "/api/projects"),
     ("GET", "/api/catalog/products"),

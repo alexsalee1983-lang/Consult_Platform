@@ -64,7 +64,7 @@ export default function Sidebar() {
       { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
       { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
       { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
-      ...(hasRole(user, "project_lead") ? [{ to: "/deletions", icon: "trash", label: "资料删除" }] : []),
+      ...(hasRole(user, "project_lead") ? [{ to: "/portfolio", icon: "map", label: "项目总览" }, { to: "/deletions", icon: "trash", label: "资料删除" }] : []),
     ] : []),
     ...(hasBusinessRole(user) ? [
       { group: "知识" },
