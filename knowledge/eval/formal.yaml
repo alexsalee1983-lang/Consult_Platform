@@ -99,12 +99,20 @@
 - {id: R024, mode: basis, category: industry, question: 人民银行业务领域数据资源目录多久更新一次？, expect: [src-efca6378-10], expect_refs: ["《中国人民银行业务领域数据安全管理办法》第十条"]}
 - {id: R025, mode: basis, category: industry, question: 业务数据安全事件发生后金融机构要怎么向人民银行报告？, expect: [src-efca6378-44], expect_refs: ["《中国人民银行业务领域数据安全管理办法》第四十四条"]}
 
+# ---- 第三批：证券期货、电力行业 ----
+- {id: S001, mode: basis, category: industry, question: 证券期货经营机构的重要信息系统多久至少备份一次数据？, expect: [src-970fa078-20], expect_refs: ["《证券期货业网络和信息安全管理办法》第二十条"]}
+- {id: S002, mode: basis, category: industry, question: 证券期货业关键信息基础设施运营者多久做一次网络和信息安全检测和风险评估？, expect: [src-970fa078-46], expect_refs: ["《证券期货业网络和信息安全管理办法》第四十六条"]}
+- {id: S003, mode: basis, category: industry, question: 证券期货核心机构的网络安全应急演练有什么频次要求？, expect: [src-970fa078-38], expect_refs: ["《证券期货业网络和信息安全管理办法》第三十八条"]}
+- {id: S004, mode: basis, category: industry, question: 电力企业网络安全事件应急预案多久至少演练一次？, expect: [src-a9e22849-21], expect_refs: ["《电力行业网络安全管理办法》第二十一条"]}
+- {id: S005, mode: basis, category: industry, question: 电力企业对重要系统和重要数据的容灾备份要求是什么？, expect: [src-a9e22849-24], expect_refs: ["《电力行业网络安全管理办法》第二十四条"]}
+- {id: S006, mode: basis, category: industry, question: 电力企业网络定级审核通过后如何备案？, expect: [src-cebd0090-10], expect_refs: ["《电力行业网络安全等级保护管理办法》第十条"]}
+- {id: S007, mode: basis, category: industry, question: 电力企业选择等级保护测评机构要满足哪些要求？, expect: [src-cebd0090-18], expect_refs: ["《电力行业网络安全等级保护管理办法》第十八条"]}
 # ---- 第三批：附件（按项切分，不带 expect_refs：项号不是“第X条”，只计 kb-eval 准确率）----
 - {id: A001, mode: basis, category: clause, question: 泄露多少人以上的公民个人信息属于特别重大网络安全事件？, expect: [src-8c523c85-1]}
 - {id: A002, mode: basis, category: clause, question: 关键信息基础设施整体中断运行多久算重大网络安全事件？, expect: [src-8c523c85-2]}
 - {id: A003, mode: basis, category: clause, question: 个人信息保护合规审计中，对自动化决策要重点审查哪些事项？, expect: [src-d983abeb-9]}
 - {id: A004, mode: basis, category: clause, question: 合规审计时处理敏感个人信息要审查哪些事项？, expect: [src-d983abeb-13]}
-# ---- 期望查不到（第一批未收）----
-- {id: N001, mode: basis, question: 证券期货业网络安全事件报告与调查处理的要求, expect: []}
+# ---- 期望查不到（第一至三批未收）----
+- {id: N001, mode: basis, question: 医疗卫生机构网络安全管理的行业监管要求, expect: []}
 - {id: N002, mode: basis, question: 银行业金融机构信息科技外包风险管理的监管要求, expect: []}
 - {id: N003, mode: basis, question: 等保 2.0 第三级安全通用要求对身份鉴别的具体条款, expect: []}
