@@ -36,7 +36,7 @@ from datetime import date
 
 import yaml
 
-from . import meta
+from . import mapping, meta
 from .items import ItemMeta, VersionContent
 
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
@@ -100,6 +100,8 @@ def parse_entry(text: str) -> Entry:
     try:
         item_meta.check()
         content.check(item_meta.layer)
+        if item_meta.doc_type == "MAP":
+            mapping.parse_rows(body)          # 映射矩阵：正文表格格式见 app/kb/mapping.py（B3）
     except meta.MetaError as e:
         raise EntryError(str(e)) from e
     return Entry(key=key, meta=item_meta, content=content)

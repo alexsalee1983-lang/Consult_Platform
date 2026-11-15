@@ -13,7 +13,8 @@ Agent 读写数据只能经 invoke()。每次调用依次检查（任一不满�
 doc.generate（交付件分章节：读大纲 / 读章节、写大纲、写章节新版本，规则见 app/project/deliverables.py；M3）、
 confirm.create（发确认卡：选项、推荐和理由、影响，规则见 app/project/confirmations.py；M3）、
 agent.handoff（对话转交：为专业 Agent 新建对话，规则见 app/agents/handoff.py；二期 C2）、
-quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，只查 L4）；
+quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，只查 L4）、
+kb.mapping（控制映射查询，只读知识区映射矩阵；二期 B3，app/kb/mapping.py）；
 kb.stage_write 在 M2 后续接入，目前是占位实现。
 kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用人的可见范围过滤（app/kb/search.py）。
 """
@@ -157,6 +158,17 @@ def _basis_lookup(ctx: ToolContext, args: dict) -> dict:
         raise ToolError(e.detail, status=e.status) from e
 
 
+def _kb_mapping(ctx: ToolContext, args: dict) -> dict:
+    from ..kb import mapping
+
+    try:
+        return mapping.lookup(ctx.db, ctx.user, str(args.get("source", "")), target=str(args.get("target", "")),
+                              control=str(args.get("control", "")), query=str(args.get("query", "")),
+                              limit=_int_arg(args, "limit", mapping.DEFAULT_LIMIT))
+    except mapping.MappingError as e:
+        raise ToolError(e.detail, status=e.status) from e
+
+
 def _doc_generate(ctx: ToolContext, args: dict) -> dict:
     from ..project import deliverables
 
@@ -197,6 +209,7 @@ IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "quality.check": _quality_check,
     "kb.search": _kb_search,
     "basis.lookup": _basis_lookup,
+    "kb.mapping": _kb_mapping,
     "doc.generate": _doc_generate,
     "confirm.create": _confirm_create,
     "agent.handoff": _agent_handoff,
