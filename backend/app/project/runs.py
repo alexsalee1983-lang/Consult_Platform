@@ -130,36 +130,43 @@ def _lock(db: Session, run: AgentRun) -> str:
 
 # ---- 发起、取消、确认卡处理后继续 ----
 
-def start(db: Session, user: User, project: Project) -> AgentRun:
-    action = "run.start"
+def preflight(db: Session, project: Project) -> tuple[int, str, str] | None:
+    """发起前检查：不能发起时返回 (状态码, 拒绝原因, 说明)，可以返回 None（自动发起也用，C5）。"""
     if project.tier == "strict" and cards_svc.active_consent(db, project) is None:
-        _deny(db, user, project, action, "no_consent")
-        raise RunError(422, "严格档项目没有有效的客户书面同意（未登记或已撤回），交付链不能运行")
+        return 422, "no_consent", "严格档项目没有有效的客户书面同意（未登记或已撤回），交付链不能运行"
     active = db.scalar(select(AgentRun).where(AgentRun.project_id == project.id, AgentRun.status.in_(ACTIVE)))
     if active is not None:
-        _deny(db, user, project, action, "active_run")
-        raise RunError(409, f"本项目已有未结束的交付链运行（#{active.id}），请等它结束或先取消")
+        return 409, "active_run", f"本项目已有未结束的交付链运行（#{active.id}），请等它结束或先取消"
     try:
         chain = steps(db, project)
     except config.CatalogError as e:
-        _deny(db, user, project, action, "catalog")
-        raise RunError(503, f"服务产品配置有问题，交付链暂不可用：{e}") from e
+        return 503, "catalog", f"服务产品配置有问题，交付链暂不可用：{e}"
     signed = [s.deliverable for s in chain if s.deliverable and getattr(
         deliverables.get_deliverable(db, project, s.deliverable), "status", "") == "signed"]
     if signed:
-        _deny(db, user, project, action, "signed")
-        raise RunError(422, f"{'、'.join(signed)} 已签署，交付链不能再改写")
+        return 422, "signed", f"{'、'.join(signed)} 已签署，交付链不能再改写"
     for s in chain:
         try:
             runtime.ready_doc(db, s.agent)
         except runtime.AgentNotReady as e:
-            _deny(db, user, project, action, "agent_not_ready")
-            raise RunError(409, str(e)) from e
+            return 409, "agent_not_ready", str(e)
+    return None
+
+
+def start(db: Session, user: User, project: Project, trigger: str = "") -> AgentRun:
+    """发起交付链。trigger：平台规则自动发起时写规则名（app/project/autoflow.py），进审计。"""
+    action = "run.start"
+    refused = preflight(db, project)
+    if refused is not None:
+        status, reason, message = refused
+        _deny(db, user, project, action, reason)
+        raise RunError(status, message)
     run = AgentRun(project_id=project.id, chain=project.tier, status="queued", step_index=0, waiting_cards=[], card_ids=[],
                    created_by=user.username)
     db.add(run)
     db.flush()
-    audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code, run_id=run.id)
+    audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code, run_id=run.id,
+                 **({"trigger": trigger} if trigger else {}))
     db.commit()
     _enqueue(db, run, project)
     db.refresh(run)
@@ -198,7 +205,9 @@ def on_card_resolved(db: Session, card: Confirmation) -> AgentRun | None:
         audit.record(db, actor=card.resolved_by or "system", action="run.resume", result="allowed",
                      project_code=card.project.code, run_id=run.id, step=_step_key(db, card.project, run), next=run.status)
         db.commit()
-        if not finished:
+        if finished:
+            _after_done(db, run)
+        else:
             _enqueue(db, run, card.project)
         return run
     return None
@@ -513,6 +522,18 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     db.commit()
     if run.status == "queued":
         _enqueue(db, run, project)
+    elif run.status == "done":
+        _after_done(db, run)
+
+
+def _after_done(db: Session, run: AgentRun) -> None:
+    """交付链结束：按平台规则给写好的交付件排质量评审（C5 P8）；出错不影响运行结果。"""
+    from . import autoflow
+
+    try:
+        autoflow.after_run(db, run)
+    except Exception:  # noqa: BLE001
+        db.rollback()
 
 
 def _usage(db: Session, user: User, project: Project, level: str, step: Step, status: str) -> None:

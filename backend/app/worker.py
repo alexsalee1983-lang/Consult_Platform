@@ -20,7 +20,7 @@ from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .kb import deid_flow, intake, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed 等任务处理器
-from .project import deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
+from .project import autoflow, deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs
 
 POLL_SECONDS = 5
@@ -93,6 +93,18 @@ def _scan_due() -> None:
         log.warning("到期删除扫描出错：%s", type(e).__name__)
 
 
+def _auto_flow() -> None:
+    """平台规则（C5）：证据齐了自动发起交付链、写好的交付件自动评审（app/project/autoflow.py；可重复执行）。"""
+    try:
+        with SessionLocal() as db:
+            started = autoflow.scan_runs(db)
+            reviewed = autoflow.scan_reviews(db)
+        if started or reviewed:
+            log.info("自动发起交付链 %d 个、质量评审 %d 个", len(started), len(reviewed))
+    except Exception as e:  # noqa: BLE001
+        log.warning("交付流程自动推进出错：%s", type(e).__name__)
+
+
 def _verify_audit() -> None:
     """每小时校验一次审计哈希链，结果只进指标（cp_audit_chain_ok），失败时告警（docs/监控.md）；不写审计，免得每小时一条。"""
     try:
@@ -121,6 +133,7 @@ def main() -> None:
         if time.monotonic() - last_scan >= SCAN_SECONDS:
             last_scan = time.monotonic()
             _scan_due()
+            _auto_flow()
             _verify_audit()
         try:
             with SessionLocal() as db:

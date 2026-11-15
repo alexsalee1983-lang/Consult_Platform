@@ -206,7 +206,8 @@ def gate(db: Session, d: Deliverable) -> Gate:
 
 # ---- 质量评审：发起 ----
 
-def request_review(db: Session, user: User, project: Project, d: Deliverable) -> QualityReview:
+def request_review(db: Session, user: User, project: Project, d: Deliverable, trigger: str = "") -> QualityReview:
+    """发起评审。trigger：平台规则自动发起时写规则名（app/project/autoflow.py），进审计。"""
     action = "quality.request"
     if d.status == "signed":
         _refuse(db, user, project, d, action, "signed", 409, f"{d.code} 已签署，不再评审")
@@ -225,7 +226,8 @@ def request_review(db: Session, user: User, project: Project, d: Deliverable) ->
     db.add(r)
     db.flush()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
-                 deliverable=d.code, review_id=r.id, revision=d.revision, versions=r.versions)
+                 deliverable=d.code, review_id=r.id, revision=d.revision, versions=r.versions,
+                 **({"trigger": trigger} if trigger else {}))
     db.commit()
     jobs.enqueue(db, JOB_KIND, {"review_id": r.id}, created_by=user.username, project_code=project.code,
                  max_attempts=MAX_ATTEMPTS)
@@ -456,6 +458,12 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
                  blocking=blocking, major=major, minor=minor, rule_issues=sum(rule_counts.values()),
                  length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens)
     db.commit()
+    from . import autoflow                     # 门禁通过自动提交签署（C5 P10）；出错不影响评审结果
+
+    try:
+        autoflow.after_review(db, r)
+    except Exception:  # noqa: BLE001
+        db.rollback()
 
 
 # ---- 签署流程 ----
@@ -478,8 +486,9 @@ def _last_submit(db: Session, d: Deliverable) -> SignOff | None:
                      .order_by(SignOff.id.desc()).limit(1))
 
 
-def submit(db: Session, user: User, project: Project, d: Deliverable, comment: str = "") -> SignOff:
-    """顾问审核完成，提交签署。"""
+def submit(db: Session, user: User, project: Project, d: Deliverable, comment: str = "", actor: str = "",
+           trigger: str = "") -> SignOff:
+    """顾问审核完成，提交签署。平台规则自动提交时 actor=platform、trigger 写规则名（app/project/autoflow.py）。"""
     action = "deliverable.submit"
     comment = _comment(comment)
     _lock_deliverable(db, d)
@@ -491,13 +500,14 @@ def submit(db: Session, user: User, project: Project, d: Deliverable, comment: s
     if not g.ok:
         _refuse(db, user, project, d, action, "gate", 409, {"gate": False, "reasons": g.reasons})
     s = SignOff(project_id=project.id, deliverable_id=d.id, action="submit", revision=d.revision,
-                versions=_snapshot(d), review_id=g.review.id, comment=comment, actor=user.username)
+                versions=_snapshot(d), review_id=g.review.id, comment=comment, actor=actor or user.username)
     db.add(s)
     d.status = "review"
     db.flush()
-    audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
+    audit.record(db, actor=actor or user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, revision=d.revision, versions=s.versions, review_id=g.review.id,
-                 major=g.review.major, waived=g.waived, comment_length=len(comment))
+                 major=g.review.major, waived=g.waived, comment_length=len(comment),
+                 **({"trigger": trigger} if trigger else {}))
     db.commit()
     db.refresh(s)
     return s

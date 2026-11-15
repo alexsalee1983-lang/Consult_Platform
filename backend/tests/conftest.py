@@ -45,6 +45,7 @@ elif os.environ.get("TEST_KB_SPLIT") == "1":
 else:
     os.environ["KB_DATABASE_URL"] = ""
 os.environ["APP_ENV"] = "test"
+os.environ["AUTO_FLOW"] = "false"   # 交付流程自动推进（C5）默认关，test_autoflow.py 里按需打开
 os.environ["LLM_BASE_URL"] = ""
 os.environ["REDIS_URL"] = "redis://127.0.0.1:1/0"
 # 对象存储：设了 TEST_S3_ENDPOINT（CI 用平台 MinIO 镜像）就连真实存储，否则不启用（相关测试跳过）
