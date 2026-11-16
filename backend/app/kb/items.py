@@ -86,7 +86,7 @@ def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) 
     rows = mapping.parse_rows(c.body) if item.doc_type == "MAP" else []   # 映射矩阵：正文表格必须能解析（B3）
     n = (db.scalar(select(func.max(KbVersion.version)).where(KbVersion.item_id == item.id)) or 0) + 1
     effective = c.effective_date
-    review = c.review_date or (meta.default_review_date(item.layer, effective) if effective else None)
+    review = c.review_date or (meta.default_review_date(item.layer, effective, item.doc_type) if effective else None)
     v = KbVersion(item_id=item.id, version=n, status="draft", title=c.title.strip(), summary=c.summary,
                   body=c.body, applicability=c.applicability, change_note=c.change_note,
                   source_type=c.source_type, source_detail=c.source_detail, ref_document=c.ref_document,

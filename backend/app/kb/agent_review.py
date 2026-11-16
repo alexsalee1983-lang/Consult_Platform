@@ -1,7 +1,7 @@
 """知识审核 Agent 与自动发布（二期 B11，二期开发计划第十二节第二级，决策记录 2026-11-15“自动化优先”）。
 
 - 适用：来源为公开资料、无需去标识的解读、映射、方法（REF / MAP / MTD），以及只含公开资料的案例、异议应答
-  （CAS / OBJ）。提交审核（review.submit）后排后台任务 kb.agent_review，不在请求里调模型。
+  （CAS / OBJ），执法案例、参考架构、术语对照（ENF / RAR / GLS，决策记录 2026-11-16；ENF 须写依据文件）。提交审核（review.submit）后排后台任务 kb.agent_review，不在请求里调模型。
 - 先过程序规则（RULES）：引用都已核对到依据原文（B8）、没有测评 / 认证结论用语、没有机密级内容、元数据和适用条件齐全；
   再把条目、引用到的依据原文和相近条目交给知识审核 Agent（agents/roles/kb-reviewer.md，经网关 gateway.complete），
   按审核清单 CHECKS 逐项判断。Agent 不授权任何工具，只返回 JSON 审查意见。
@@ -37,7 +37,7 @@ REVIEWER = f"agent:{AGENT}"
 ROLE = "agent"
 KIND = "agent"                       # KbVersion.auto_review
 LEVEL = "standard"
-TYPES = ("REF", "MAP", "MTD", "CAS", "OBJ")
+TYPES = ("REF", "MAP", "MTD", "CAS", "OBJ", "ENF", "RAR", "GLS")
 RULES = {"citations": "引用都已核对到依据原文", "boundary": "没有测评 / 认证结论用语",
          "confidential": "没有机密级内容", "metadata": "摘要、适用条件、依据文件齐全"}
 CHECKS = {"faithful": "忠于原文", "no_addition": "不添加要求", "citation_fit": "引用对得上", "boundary": "资质边界",
@@ -101,7 +101,7 @@ def rule_failures(db: Session, v: KbVersion) -> tuple[list[str], list[citations.
     if guard.check(text).blocked:
         failed.append("confidential")
     if (not v.summary.strip() or not v.applicability.strip()
-            or (v.item.doc_type in ("REF", "MAP") and not v.ref_document.strip())):
+            or (v.item.doc_type in ("REF", "MAP", "ENF") and not v.ref_document.strip())):
         failed.append("metadata")
     return failed, cites
 

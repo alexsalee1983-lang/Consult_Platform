@@ -50,7 +50,7 @@ title: 简明标题
 layer: L1～L5
 domain: GOV / CMP / DAT / OPS / RES / ARC
 product: SOC 或 GEN
-doc_type: TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT
+doc_type: TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT / ENF / RAR / GLS
 stage: 启动 / 调研 / 分析 / 设计 / 落地辅导 / 验收 / 通用
 capabilities: [管理 / 运营 / 技术支撑 中的一项或几项]
 industries: [通用]

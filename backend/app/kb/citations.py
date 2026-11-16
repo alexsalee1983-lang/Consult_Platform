@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from ..models.kb import KbItem, KbVersion
 from . import sources
 
-CITING_TYPES = ("REF", "MAP", "CAS", "OBJ")
+CITING_TYPES = ("REF", "MAP", "CAS", "OBJ", "ENF")
 _NUM = "零〇一二三四五六七八九十百千两\\d"
 _ART = rf"第\s*([{_NUM}]+)\s*条(?:之([{_NUM}]+))?"
 _STD_CLAUSE = r"(\d{1,2}(?:\.\d{1,2}){1,4}|[A-Z]\.\d{1,2}(?:\.\d{1,2}){0,3})"
