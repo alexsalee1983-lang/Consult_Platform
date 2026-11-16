@@ -272,3 +272,9 @@ def test_article_split_suffix_and_repealed():
                    ("Section 3", "3"), ("Section 4", "4"), ("Section 5", "5")]
     assert "Schedule paragraph" not in _art(text)[-1].text
     assert not sources._follows((3, "A"), (2, "B")) and not sources._follows((2, "A"), (2, "B"))
+
+
+def test_article_split_hk_chinese_bare():
+    """香港中文本：行首“1.簡稱及生效日期”“11A.豁免”，條號後直接接中文標題。"""
+    text = "第1部\n導言\n1.簡稱及生效日期\n(1)本條例可引稱為某條例。\n2.釋義\n(1)在本條例中——\n2A.豁免\n本條不適用。\n3.《某條例》的過渡條文\n本條訂定過渡安排。\n"
+    assert [p.clause for p in _art(text)] == ["Article 1", "Article 2", "Article 2A", "Article 3"]

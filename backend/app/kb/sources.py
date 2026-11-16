@@ -289,7 +289,7 @@ def split_items(lines: list[str]) -> list[Piece]:
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩๐๑๒๓๔๕๖๗๘๙", "01234567890123456789")   # 阿拉伯、泰文数字
 _FOREIGN = re.compile(r"^\s*(?:(Article|ARTICLE|Artigo|ARTIGO|Art\.|Section|SECTION|Sec\.|Pasal|PASAL|Điều|ĐIỀU|มาตรา|المادة|مادة)\s*"
                       r"\(?\s*([Pp]remier|PREMIER|1er|[0-9٠-٩๐-๙]{1,3}(?:[A-Z]{1,2}(?![A-Za-z]))?)\s*\)?(?:\.?\s*º|\.?\s*°|\.?ª)?\s*[.:\-–—]*\s*(.*)$"
-                      r"|([0-9]{1,3}(?:[A-Z]{1,2})?)\s*\.\s*(?:[—–-]\s*)?(\(1\)\s*.*|[A-Z(“\"‘\[].*)$)")
+                      r"|([0-9]{1,3}(?:[A-Z]{1,2})?)\s*\.\s*(?:[—–-]\s*)?(\(1\)\s*.*|[A-Z(“\"‘\[一-鿿《「（].*)$)")
 _FOREIGN_END = re.compile(r"^\s*(?:(?:FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ELEVENTH|TWELFTH)\s+)?(SCHEDULES?|Schedules?|ANNEX(?:E|ES)?|Annex(?:e|es)?|ANEXOS?|Anexos?)\b[\s:—–-]*\S{0,60}$")
 
 
