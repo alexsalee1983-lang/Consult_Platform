@@ -27,6 +27,25 @@ OLD_INSTRUCTIONS = {
              "这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、"
              "差距分析表原样照搬、确认卡、“测试”“内部”等字样），差距分析的结论改写成报告语言。",
 }
+# 一期之后经验收的提示词改动：（步骤，原文片段，新片段）。改提示词要在这里登记，其余文字仍须与一期一致。
+CHANGES = [
+    # 二期 A10（负责人 2026-11-16 同意）：差距分析按能力域、带影响和可能性，出成熟度初判表；D4 单列成熟度初判一章
+    ("gap", "输出差距分析表（能力项、现状、要求与依据、差距、证据充分性）",
+     "按能力域（组织与人员、流程、技术平台与数据源、度量与改进）输出差距分析表（能力域、能力项、现状、要求与依据、"
+     "差距、证据充分性、影响和可能性各按高 / 中 / 低）、按能力域的成熟度初判表（现状、目标各 1～5 分，带依据）"),
+    ("draft", "差距分析的结论改写成报告语言。",
+     "差距分析的结论改写成报告语言。单列一章“成熟度初判”，照差距分析的成熟度初判表写一张表（表头：能力域 | "
+     "现状（1～5） | 目标（1～5） | 依据），顾问审核时直接改分数，签署后驾驶舱以这张表为准；称“成熟度初判”，"
+     "不写成等级结论。"),
+]
+
+
+def _expected() -> dict[str, str]:
+    out = dict(OLD_INSTRUCTIONS)
+    for key, old, new in CHANGES:
+        assert out[key].count(old) == 1
+        out[key] = out[key].replace(old, new)
+    return out
 
 
 def test_soc_chain_unchanged() -> None:
@@ -35,7 +54,7 @@ def test_soc_chain_unchanged() -> None:
     assert [s.key for s in runs.chain_of(config.compose_codes("SOC"))] == [
         "facts", "gap", "design", "policy", "draft", "design_doc", "roadmap", "briefing"]
     assert [(s.key, s.number, s.agent, s.deliverable, s.name) for s in chain] == OLD_STEPS
-    assert {s.key: s.instruction for s in chain} == OLD_INSTRUCTIONS
+    assert {s.key: s.instruction for s in chain} == _expected()
     assert {s.key: s.query for s in chain} == OLD_QUERIES
     assert {s.key: f"第 {s.number} 步 {s.name}" for s in chain} == {"facts": "第 3 步 整理事实清单", "gap": "第 4 步 差距分析", "draft": "第 7 步 现状评估报告初稿"}
     assert [s.inputs for s in chain] == [("evidence",), ("D3",), ("run:gap", "D3")]

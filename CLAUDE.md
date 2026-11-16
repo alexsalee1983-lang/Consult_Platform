@@ -190,6 +190,7 @@ Agent 经工具 `project.evidence` 读证据。
 
 交付件约定（M3）：交付件按章节存储，只经 `app/project/deliverables.py` 写入（Agent 经工具 `doc.generate`，顾问经 `/api/projects/{code}/deliverables/...`）：先写大纲再写各章，每次写入新建一个版本、旧版本保留（`section_versions` 只追加）；正文和标题先过机密级检测；严格档只收占位符版本（M4 ④b：`cards.placeholder_problems` 查机构名、人名、联系方式、网络标识、系统名、原话，命中 422 不保存）、已签署拒绝；正文里的来源标注 `[I-01]` `[D-12]` `[O-05]` `[S-02]`（严格档摘要卡）`[L4-…]` `[推断]` 写入时核对并记在版本的 `sources` 里，核对不上的不拒绝、列入 `unresolved`。
 审计只记编号、版本、字数和摘要哈希，不记正文和标题。
+成熟度与符合性（二期 A10）只经 `app/project/assessment.py`：不建表，读取时从最近一次差距分析产出（依据与差距分析 Agent 的运行记录）解析差距分析表（能力域、符合性初判、影响、可能性）和成熟度初判表，D4 已签署时分数取 D4 的成熟度初判表（顾问在 D4 里改，不发确认卡）；产品 `baseline.maturity_scores: false` 不给分数；`GET /api/projects/{code}/assessment` 只给项目成员，只读、不写审计。
 发布影响（二期 B4）只经 `app/project/kb_impact.py`：不建表，读取时比较各章当前版本引用的条目（`sources.knowledge` 里核对上的）的现行版本发布时间与该章写入时间，判出“已更新 / 已下线”；项目侧 `GET /api/projects/{code}/knowledge-updates` 和交付件概览只给项目成员，知识侧 `GET /api/kb/items/{doc_id}/usage` 只给知识专家、知识管理员且只返回计数，不返回项目代号；改写该章后提醒消失。
 
 确认卡约定（M3）：Agent 遇到方案取舍、来源冲突、证据不足、范围确认、入库确认，经工具 `confirm.create` 发卡（选项、推荐和理由、影响，可关联交付件某章），规则只在 `app/project/confirmations.py`：卡片文字过机密级检测；同一 Agent 重复发同标题的未处理卡不新建；顾问经 `POST /api/confirmations/{id}/resolve` 选选项（`choice`）或写意见（`resolution`），处理过的不能再处理。

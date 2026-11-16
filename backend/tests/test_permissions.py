@@ -136,6 +136,8 @@ MATRIX = [
     (("GET", "/api/kb/items/L4-NOPE/usage", None),      (403, 403, 403, 403, 403)),   # 引用计数只限知识专家、知识管理员（B4）
     (("GET", "/api/projects/BANK-A/knowledge-updates", None), (200, 404, 403, 403, 403)),   # B4：只给项目成员
     (("GET", "/api/projects/GRID-B/knowledge-updates", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/assessment", None), (200, 404, 403, 403, 403)),        # A10：只给项目成员
+    (("GET", "/api/projects/GRID-B/assessment", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/kb/search?q=值班", None),            (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
