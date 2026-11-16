@@ -34,7 +34,7 @@ def people():
 
 def _body(title: str, doc_type: str) -> str:
     if doc_type == "MAP":  # B3：映射矩阵正文必须有映射表
-        return f"## {title}\n\n| 示范标准甲 | 示范标准乙 | 关系 | 说明 |\n|---|---|---|---|\n| A.1 | B.1 | 部分覆盖 | 示范 |\n"
+        return f"## {title}\n\n| 示范标准一 | 示范标准二 | 关系 | 说明 |\n|---|---|---|---|\n| A.1 | B.1 | 部分覆盖 | 示范 |\n"
     return f"## {title}\n\n示范条目正文。"
 
 
