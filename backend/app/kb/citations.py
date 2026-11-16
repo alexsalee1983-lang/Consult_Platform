@@ -45,6 +45,7 @@ class Citation:
     ref_version: str = ""
     catalog: bool = False   # 条款目录（标准，无正文）
     excerpt: str = ""       # 原文摘录（前 300 字）
+    doc_known: bool = False  # 文件在库里有依据原文（找不到条款时即条款号不存在，对比评测记“编造条号”）
 
     def label(self) -> str:
         return f"{self.document} {self.clause}"
@@ -139,6 +140,7 @@ def check(db: Session, body: str, own_document: str = "", own_code: str = "") ->
         doc = _match(docs, name)
         if doc is None:
             continue
+        c.doc_known = True
         key = sources.src_key(doc[0], part)
         row = db.execute(
             select(KbItem.doc_id, KbVersion.body, KbVersion.ref_status, KbVersion.ref_version)

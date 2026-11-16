@@ -68,7 +68,7 @@ def lib():
         db.commit()
 
 
-def _submitted(db, author, law: str, body: str, **extra) -> KbVersion:
+def _submitted(db, author, law: str, body: str, level3: bool = False, **extra) -> KbVersion:
     head = {"key": f"t-{uuid.uuid4().hex[:8]}", "title": "示范审核法第二条解读", "layer": "L4", "domain": "CMP",
             "product": "GEN", "doc_type": "REF", "stage": "通用", "capabilities": "[管理]", "source_type": "public",
             "source_detail": "公开资料：示范", "ref_document": law, "ref_version": "2029", "ref_status": "current",
@@ -77,6 +77,9 @@ def _submitted(db, author, law: str, body: str, **extra) -> KbVersion:
     r = importer.import_entry(db, author, e)
     assert r.action == "created", r.message
     v = db.get(KbVersion, r.version_id)
+    if level3:                                   # 模拟去标识已确认的专家经验（只在测试里直接改取值）
+        v.source_type, v.deid_status = "expert", "passed"
+        db.commit()
     rv.submit(db, author, v)
     return v
 
@@ -150,3 +153,58 @@ def test_not_eligible(lib):
         v = _submitted(db, db.merge(author), law, BODY)
         v.source_type = "expert"                                               # 只看内存里的取值，不提交
         assert not agent_review.eligible(v) and agent_review.run(db, v).status == "skipped"
+
+
+def test_level3_agent_advises_one_expert_decides(lib, model, monkeypatch):
+    """第三级（B12）：去标识确认后的项目沉淀、专家经验，Agent 只出意见，一位知识专家拍板，不要合规审核。"""
+    (author, expert, admin), law = lib
+    monkeypatch.setattr(get_settings(), "kb_agent_auto_publish", False)      # 第三级不受自动发布开关影响
+    model(PASS)
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY, level3=True)
+        assert rv.level3(v) and rv.required_roles(v) == ("content",)
+        job = db.scalar(select(Job).where(Job.kind == "kb.agent_review").order_by(Job.id.desc()))
+        assert json.loads(job.payload) == {"version_id": v.id}
+        with pytest.raises(rv.ReviewError) as e:                               # Agent 意见出来之前不能拍板
+            rv.review(db, db.merge(expert), v, "content", "approve")
+        assert e.value.status == 409 and v.status == "in_review"
+        out = agent_review.run(db, v)
+        assert out.status == "manual" and v.status == "in_review" and v.auto_review == "" and v.sample_state == ""
+        r = next(x for x in v.reviews if x.review_role == "agent")
+        assert r.decision == "approve" and r.findings["level"] == 3 and "只出意见" in r.comment
+        log = db.scalar(select(AuditLog).where(AuditLog.action == "kb.agent_review").order_by(AuditLog.id.desc()))
+        assert json.loads(log.detail)["outcome"] == "advice" and "风险评估" not in log.detail
+        with pytest.raises(rv.ReviewError) as e:
+            rv.review(db, db.merge(admin), v, "compliance", "approve")
+        assert e.value.status == 409
+        with pytest.raises(rv.ReviewError):
+            rv.review(db, db.merge(author), v, "content", "approve")          # 作者不能审自己的版本
+        rv.review(db, db.merge(expert), v, "content", "approve")
+        assert v.status == "published" and v.auto_review == ""
+
+
+def test_level3_flag_still_human(lib, model):
+    (author, expert, _), law = lib
+    reply = {**PASS, "checks": {**PASS["checks"], "no_addition": {"pass": False, "reason": "存疑"}},
+             "issues": [{"severity": "阻断", "location": "第二条", "problem": "加入了原文没有的做法", "suggestion": "删去"}],
+             "conclusion": "存疑"}
+    model(reply)
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY, level3=True)
+        assert agent_review.run(db, v).status == "manual"
+        r = next(x for x in v.reviews if x.review_role == "agent")
+        assert r.decision == "flag" and v.status == "in_review"
+        rv.review(db, db.merge(expert), v, "content", "approve")               # 意见供参考，拍板仍由人
+        assert v.status == "published"
+
+
+def test_level3_demo_does_not_block(lib):
+    """没接模型（演示模式）时 Agent 也记一条说明，专家随后即可拍板，不会卡住。"""
+    (author, expert, _), law = lib
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY, level3=True)
+        assert agent_review.run(db, v).status == "manual"
+        r = next(x for x in v.reviews if x.review_role == "agent")
+        assert r.findings["agent"] == "skipped" and r.decision == "flag"
+        rv.review(db, db.merge(expert), v, "content", "approve")
+        assert v.status == "published"

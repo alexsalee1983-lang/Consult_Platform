@@ -6,6 +6,10 @@
   人多了只要把角色分给不同的人，自然回到两人分审，不需要开关。
 - 公开资料单人发布：KB_SINGLE_REVIEWER_PUBLIC=true 时，来源为公开资料、无需去标识的版本，作者本人也可审核；
   这样发布的版本标记 single_review，由作者以外的知识专家复审确认（补复审）后清除。项目回流等其他来源不适用。
+- 第三级（二期 B12，决策记录 2026-11-15）：来源为项目沉淀、专家萃取、内部制度改造且去标识已通过的版本，
+  合规审核并入去标识确认（知识管理员，不能是上传者），发布只要一位知识专家（不能是作者）内容审核拍板；
+  提交后知识审核 Agent 先审、把问题列在审核页，只出意见、不自动发布（app/kb/agent_review.py）；Agent 意见出来之前
+  不能通过（可以驳回）。Agent 调用失败、未登记或没接模型时也记一条说明，之后即可拍板，不会卡住。
 - 任一审核人退回，版本即“已退回”（终态）；要修改就基于它建新版本再提交，审核记录始终对应被审的那一版。
 - 来源：投料来的草稿必须是去标识已通过的投料；不经投料直接写的草稿只允许“公开资料”（deid_status=not_needed），
   正文同样先过机密级检测。
@@ -33,6 +37,16 @@ from .items import ItemMeta, VersionContent, create_draft, create_item, replace_
 
 ROLE_OF = {"content": KNOWLEDGE_EXPERT, "compliance": KNOWLEDGE_ADMIN}
 KNOWLEDGE_ROLES = {KNOWLEDGE_EXPERT, KNOWLEDGE_ADMIN}
+LEVEL3_SOURCES = ("project", "expert", "internal")
+
+
+def level3(v: KbVersion) -> bool:
+    """第三级：非公开来源、去标识已由知识管理员确认（合规审核并入去标识确认）。"""
+    return v.source_type in LEVEL3_SOURCES and v.deid_status == "passed"
+
+
+def required_roles(v: KbVersion) -> tuple[str, ...]:
+    return ("content",) if level3(v) else tuple(ROLE_OF)
 
 
 class ReviewError(ValueError):
@@ -182,9 +196,8 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
     db.commit()
     audit.record(db, actor=user.username, action="kb.submit", result="allowed", doc_id=v.item.doc_id,
                  version=v.version)
-    if get_settings().kb_agent_auto_publish:
-        from . import agent_review          # 公开资料的解读、映射等交知识审核 Agent（二期 B11），后台执行
-
+    from . import agent_review              # 公开资料的解读、映射等交知识审核 Agent（二期 B11），后台执行；
+    if get_settings().kb_agent_auto_publish or level3(v):   # 第三级只出意见（B12），不受自动发布开关影响
         agent_review.enqueue(db, v, created_by=user.username)
     return v
 
@@ -215,6 +228,12 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
         deny(403, "self_review", "不能审核自己提交或创建的版本")
     if any(r.review_role == role and r.decision == "approve" for r in v.reviews):
         deny(409, "role_done", "这个审核角色已有人通过，请由另一角色审核")
+    if role not in required_roles(v):
+        deny(409, "level3_no_compliance", "项目沉淀、专家经验、内部制度改造的合规审核已在去标识确认时完成，"
+                                         "只需一位知识专家内容审核拍板")
+    if level3(v) and decision == "approve" and not any(r.review_role == "agent" for r in v.reviews):
+        deny(409, "level3_wait_agent", "知识审核 Agent 的意见还没出来，请稍后再拍板（Agent 调用失败或没接模型时"
+                                       "也会记一条说明，之后即可拍板）")
 
     db.add(KbReview(version_id=v.id, reviewer=user.username, review_role=role, decision=decision,
                     comment=comment[:1000]))
@@ -225,7 +244,7 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
     audit.record(db, actor=user.username, action="kb.review", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, role=role, decision=decision)
     approved = {r.review_role for r in v.reviews if r.decision == "approve" and r.review_role in ROLE_OF}
-    if v.status == "in_review" and approved == set(ROLE_OF):
+    if v.status == "in_review" and approved >= set(required_roles(v)):
         reviewers = {r.reviewer for r in v.reviews if r.decision == "approve"}
         v.single_review = not (reviewers - _authors(v))     # 没有作者以外的人通过（只在开关允许时可能）
         publish(db, v)

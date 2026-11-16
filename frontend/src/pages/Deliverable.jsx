@@ -323,7 +323,7 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
   const steps = [
     { name: "Agent / 顾问起草", done: d.sections.length > 0 && d.sections.every((s) => s.current_version > 0), info: d.updated_by },
     { name: "质量评审 Agent", done: reviewed || so.status === "signed", info: r?.status === "done" ? `阻断 ${r.open_blocking}${r.waived ? `（已驳回 ${r.waived}）` : ""}` : "" },
-    { name: "顾问审核，提交签署", done: so.status === "review" || so.status === "signed", info: lastSubmit?.actor || "" },
+    { name: "顾问审核，提交签署", done: so.status === "review" || so.status === "signed", info: actorName(lastSubmit?.actor) },
     { name: "项目经理签署", done: so.status === "signed", info: lastSign?.actor || "" },
   ];
   const current = steps.findIndex((s) => !s.done);
@@ -380,7 +380,7 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
         <ul className="lst">
           {[...hist].reverse().map((h) => (
             <li key={h.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <div className="sb"><span>{ACTION_NAMES[h.action] || h.action} · {h.actor}</span><span className="sub mono">r{h.revision}</span></div>
+              <div className="sb"><span>{ACTION_NAMES[h.action] || h.action} · {actorName(h.actor)}</span><span className="sub mono">r{h.revision}</span></div>
               <div className="sub">{fmt(h.created_at)}{h.waived ? ` · 项目经理驳回阻断 ${h.waived} 项` : ""}{h.comment ? ` · ${h.comment}` : ""}</div>
             </li>
           ))}
@@ -390,6 +390,8 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
   );
 }
 
+
+const actorName = (a) => (a === "platform" ? "平台自动（门禁通过）" : a || "");
 export default function Deliverable({ code, dcode }) {
   const { user } = useAuth();
   const navigate = useNavigate();

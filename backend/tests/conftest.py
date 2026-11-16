@@ -45,6 +45,7 @@ elif os.environ.get("TEST_KB_SPLIT") == "1":
 else:
     os.environ["KB_DATABASE_URL"] = ""
 os.environ["APP_ENV"] = "test"
+os.environ["AUTO_FLOW"] = "false"   # 交付流程自动推进（C5）默认关，test_autoflow.py 里按需打开
 os.environ["KB_CITATION_GATE"] = "false"   # 二期 B8：已有测试的示范解读没有依据原文；test_kb_citations 单独打开
 os.environ["LLM_BASE_URL"] = ""
 os.environ["REDIS_URL"] = "redis://127.0.0.1:1/0"
