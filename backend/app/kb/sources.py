@@ -56,7 +56,7 @@ COLUMNS = {
     "industries": ("适用行业", "industries"),
     "replaced_by": ("替代文件", "替代关系", "replaced_by"),
     "obtained": ("获取方式", "obtained"),
-    "sha256": ("sha256", "SHA256", "原件sha256", "原件 sha256", "原件哈希"),
+    "sha256": ("sha256", "SHA256", "原件sha256", "原件 sha256", "原件哈希", "网页原件sha256"),
 }
 STATUS = {"现行": "current", "现行有效": "current", "有效": "current", "即将实施": "upcoming", "尚未施行": "upcoming",
           "已废止": "repealed", "废止": "repealed", "失效": "repealed", "已被替代": "superseded", "被替代": "superseded",
@@ -541,7 +541,7 @@ VERIFY_RULES = {
 # 另加新加坡总检察署法规库 SSO、香港律政司电子版香港法例（负责人在浏览器下载或复制的原件）
 OFFICIAL_HOSTS = ("gov.cn", "nist.gov", "gov.za", "gov.ng", "gov.my", "vie-publique.sn",
                   "egazette.gov.sg", "pdpc.gov.sg", "csa.gov.sg", "sso.agc.gov.sg",
-                  "jdih.komdigi.go.id", "jdih.setneg.go.id",
+                  "jdih.komdigi.go.id", "jdih.setneg.go.id", "ratchakitcha.soc.go.th",
                   "vbpl.vn", "chinhphu.vn",
                   "pcpd.org.hk", "gld.gov.hk", "elegislation.gov.hk",
                   "dspdp.gov.mo",
