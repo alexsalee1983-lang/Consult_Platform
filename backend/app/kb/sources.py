@@ -9,6 +9,9 @@
   - item 按项：附件、指引（如事件分级指南、合规审计指引）按“一、二、三”切，项号必须从一起逐项递增，
     “（一）”“1.”这类下一级编号留在本项正文里；
   - section 按章节：NIST 等允许收原文的资料，按“AC-2 ……”这类控制号或“3.1 ……”这类编号标题切；
+  - article 外文按条：境外法律（英、法、葡、阿拉伯文）按“Article 3”“Article (3):”“Artigo 3.º”“Art. 3”
+    “Section 3”“المادة (3)”或行首“3.”“3.—(1)”切，条号必须从 1 起逐条递增；从每个“第 1 条”起各切一遍，取正文最多的
+    一遍（跳过目录、颁布条款），SCHEDULE / ANNEX / ANEXO 起为附件、不并进最后一条；
   - catalog 条款目录：国家标准、行业标准（GB / GB/T / GB/Z / JR/T / GM/T / DL/T / YD/T 开头的不填也按目录）
     只收条款号和条款标题，**不收正文**（二期开发计划第六节：标准原文版权），原件只留在下载目录供审改对照。
 - 每条一个条目文件（app/kb/files.py 格式）：L4、doc_type SRC（依据原文）、产品 GEN、阶段 通用、来源 public，
@@ -60,7 +63,8 @@ STATUS = {"现行": "current", "现行有效": "current", "有效": "current", "
           "superseded": "superseded"}
 MODES = {"law": "law", "按条": "law", "条": "law", "item": "item", "按项": "item", "项": "item",
          "section": "section", "按章节": "section", "章节": "section",
-         "catalog": "catalog", "条款目录": "catalog", "目录": "catalog"}
+         "catalog": "catalog", "条款目录": "catalog", "目录": "catalog",
+         "article": "article", "外文按条": "article"}
 STANDARD_CODE = re.compile(r"^\s*(GB/T|GB/Z|GB|JR/T|GM/T|DL/T|YD/T|GA/T|GA)\s*\d", re.I)
 CATALOG_NOTE = "（条款目录：标准原文受版权保护，知识库不收全文，请查阅原件。）"
 MAX_CLAUSE_CHARS = 6000
@@ -281,6 +285,70 @@ def split_items(lines: list[str]) -> list[Piece]:
     return pieces
 
 
+_AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+_FOREIGN = re.compile(r"^\s*(?:(Article|ARTICLE|Artigo|ARTIGO|Art\.|Section|SECTION|Sec\.|المادة|مادة)\s*"
+                      r"\(?\s*([Pp]remier|PREMIER|1er|[0-9٠-٩]{1,3})\s*\)?(?:\.?\s*º|\.?\s*°|\.?ª)?\s*[.:\-–—]*\s*(.*)$"
+                      r"|([0-9]{1,3})\s*\.\s*(?:[—–-]\s*)?(\(1\)\s*.*|[A-Z(“\"‘].*)$)")
+_FOREIGN_END = re.compile(r"^\s*(SCHEDULES?|Schedules?|ANNEX(?:E|ES)?|Annex(?:e|es)?|ANEXOS?|Anexos?)\b[\s:—–-]*\S{0,60}$")
+
+
+def _foreign_no(m: re.Match[str]) -> int:
+    raw = m.group(2) or m.group(4) or ""
+    if raw.lower() in ("premier", "1er"):
+        return 1
+    return int(raw.translate(_AR_DIGITS)) if raw else 0
+
+
+def _score(pieces: list[Piece]) -> tuple[int, int]:
+    """目录那一遍每条只有标题、整篇正文并进最后一条：先比有正文（不少于 40 字）的条数，再比正文字数（每条按入库上限计）。"""
+    return (sum(len(p.text) >= 40 for p in pieces), sum(min(len(p.text), MAX_CLAUSE_CHARS) for p in pieces))
+
+
+def split_articles(lines: list[str]) -> list[Piece]:
+    """境外法律按条（article）。条号逐条递增；从每个条号为 1 的行各起一遍，取正文最多的结果。"""
+    cut = len(lines)
+    for i, ln in enumerate(lines):
+        if i > len(lines) // 2 and _FOREIGN_END.match(ln):
+            cut = i
+            break
+    lines = lines[:cut]
+    word = "Article"
+    joined = " ".join(lines[:2000])
+    if len(re.findall(r"\bsection\b", joined, re.I)) > len(re.findall(r"\barticle\b", joined, re.I)):
+        word = "Section"
+    starts = [i for i, ln in enumerate(lines) if (m := _FOREIGN.match(ln)) and _foreign_no(m) == 1]
+    best: list[Piece] = []
+    for start in starts:
+        pieces: list[Piece] = []
+        buf: list[str] = []
+        cur, label = 0, ""
+
+        def flush() -> None:
+            if cur:
+                pieces.append(Piece(clause=label, key_part=str(cur), heading="", text=_join(buf)))
+
+        for ln in lines[start:]:
+            m = _FOREIGN.match(ln)
+            if m and _foreign_no(m) == cur + 1:
+                flush()
+                cur = _foreign_no(m)
+                if m.group(1):
+                    w = {"ARTICLE": "Article", "ARTIGO": "Artigo", "Art.": "Article", "SECTION": "Section",
+                         "Sec.": "Section", "مادة": "المادة"}.get(m.group(1), m.group(1))
+                    label = f"{w} {cur}" + (".º" if w == "Artigo" else "")
+                    rest = m.group(3)
+                else:
+                    label, rest = f"{word} {cur}", m.group(5)
+                buf = [rest] if rest else []
+                continue
+            if cur:
+                buf.append(ln)
+        flush()
+        if _score(pieces) > _score(best):
+            best = pieces
+    return best
+
+
 _END = ("。", "；", "，", "：", ":", ";", ",", ".")
 
 
@@ -343,7 +411,7 @@ def _key(d: Doc, part: str) -> str:
 def to_entry(d: Doc, p: Piece) -> Entry:
     head = f"{p.clause} {p.heading}".strip()
     # 标准条款号前带标准号：条款号 8.1.4.1 形似 IP，机密级检测据“GB/T ××× 8.1.4.1”认作条款号
-    shown = f"{d.code} {head}" if d.mode not in ("law", "item") and d.code else head
+    shown = f"{d.code} {head}" if d.mode not in ("law", "item", "article") and d.code else head
     body = f"## {shown}\n\n{CATALOG_NOTE if d.mode == 'catalog' else p.text[:MAX_CLAUSE_CHARS]}"
     detail = " ".join(x for x in ("公开资料：", d.publisher, d.code, d.url) if x).replace("： ", "：")
     summary = " ".join(x for x in (d.title, d.code, p.context, head) if x)
@@ -364,6 +432,8 @@ def split_doc(d: Doc, data: bytes) -> tuple[list[Entry], list[tuple[str, str]], 
         pieces = split_law(_body(lines))
     elif d.mode == "item":
         pieces = split_items(lines)
+    elif d.mode == "article":
+        pieces = split_articles(lines)
     else:
         pieces = split_sections(lines, with_text=d.mode == "section")
     entries: list[Entry] = []
@@ -385,7 +455,7 @@ def split_doc(d: Doc, data: bytes) -> tuple[list[Entry], list[tuple[str, str]], 
             rejected.append((e.key, f"命中机密级检测（{'、'.join(sorted({f.label for f in g.findings}))}）"))
             continue
         entries.append(e)
-    note = "" if pieces else "没有切出条款：可能是扫描件，或切分方式不对（法规用 law，标准用 catalog，NIST 用 section）"
+    note = "" if pieces else "没有切出条款：可能是扫描件，或切分方式不对（法规用 law，境外法律用 article，标准用 catalog，NIST 用 section）"
     return entries, rejected, note
 
 
