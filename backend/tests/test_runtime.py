@@ -142,6 +142,25 @@ def test_select_body_by_product_and_modules():
     assert registry.select_body(plain, "SOC") == (plain, [])
 
 
+def test_md_product_sections_use_catalog_codes():
+    """二期 C1：各 Agent md 的“## 产品：”只用产品目录里的代号（或未就绪）；按某个产品裁剪后不留别的产品段。"""
+    import yaml
+
+    from app.products.config import catalog_dir
+    known = {yaml.safe_load(p.read_text(encoding="utf-8"))["code"] for p in (catalog_dir() / "products").glob("*.yaml")}
+    used = {}
+    for md in (registry.agents_dir() / "roles").glob("*.md"):
+        body = md.read_text(encoding="utf-8")
+        codes = {m.group(1) for line in body.split("\n") if (m := registry._PRODUCT.match(line))}
+        assert codes <= known | {registry.NOT_READY}, (md.name, codes - known)
+        used[md.stem] = codes
+        for code in codes - {registry.NOT_READY}:
+            kept, picked = registry.select_body(body, code)
+            assert picked == [f"产品：{code}"]
+            assert all(f"## 产品：{c}" not in kept for c in codes - {code})
+    assert {"SOC", "NSG"} <= used["research-interview"] and {"SOC", "NSG"} <= used["report-writer"]
+
+
 def test_strict_project_card_has_no_deliverables():
     user = _user()
     with SessionLocal() as db:
