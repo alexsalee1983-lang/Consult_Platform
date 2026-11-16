@@ -158,3 +158,28 @@ def test_law_stops_at_appendix_and_strips_pdf_page_numbers():
     assert sources.verify(d, text.encode(), entries, rejected) == ["official_source", "sha256", "code"]
     pdf = sources.parse.ParsedDoc(kind="pdf", sections=[sources.parse.Section(heading="", text=text)])
     assert sources._lines(pdf)[0] == "第一条 运营者应当开展定级、等级测评。"
+
+
+FRAMEWORK = """1. Introduction
+This framework is a demo.
+2. Demo Core
+o GV.OC-01: The demo mission is understood
+o GV.OC-02: Demo stakeholders are understood, and their needs and
+expectations are considered
+ID.IM-P1: Demo systems are inventoried
+PO.1.1: Identify and document all demo requirements
+GOVERN 1.1: Demo legal requirements are managed
+GV.OC-01 The demo mission is (table reference without colon, not a heading)
+3.1. Demo Profiles
+A demo profile.
+"""
+
+
+def test_section_split_framework_ids_and_dotted_numbers():
+    ps = sources.split_sections([ln for ln in FRAMEWORK.splitlines() if ln.strip()], with_text=True)
+    assert [p.clause for p in ps] == ["1", "2", "GV.OC-01", "GV.OC-02", "ID.IM-P1", "PO.1.1", "GOVERN 1.1", "3.1"]
+    by = {p.clause: p for p in ps}
+    assert by["GV.OC-01"].text == "The demo mission is understood"        # 整句在标题行里：正文为空时取标题行
+    assert "without colon" in by["GOVERN 1.1"].text  # 没有冒号的引用留在上一条正文
+    assert by["GV.OC-02"].text == "expectations are considered"
+    assert by["1"].heading == "Introduction" and by["3.1"].text == "A demo profile."
