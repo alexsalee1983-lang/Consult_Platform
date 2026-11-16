@@ -4,6 +4,7 @@ GET  /api/kb/items                       条目列表（筛选：layer、product
 POST /api/kb/items                       新建条目和第 1 版草稿（从去标识通过的投料，或公开资料直接填写）
 GET  /api/kb/items/{doc_id}              条目详情：元数据、现行版本、版本历史
 POST /api/kb/items/{doc_id}/versions     基于现行版本建新草稿（修订）
+GET  /api/kb/items/{doc_id}/usage        被引用情况：引用它的项目数、交付件数、章节数（知识侧角色；不返回项目代号，二期 B4）
 POST /api/kb/items/{doc_id}/retire       下线（知识管理员）
 POST /api/kb/items/{doc_id}/reconfirm    复审确认仍有效，复审日期顺延一个周期（知识专家）
 GET  /api/kb/versions/{id}               版本详情：正文、审核记录、与现行版本的差异、相似条目
@@ -17,7 +18,7 @@ GET  /api/kb/samples                     抽检队列：自动发布（平台核
 POST /api/kb/versions/{id}/sample        抽检：decision=pass|fail（知识专家，不能是导入人；二期 B10）
 GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
 GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
-GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵、待复审、本月运营（知识专家、知识管理员）
+GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵（按产品、模块，B6）、缺口 TOP、贡献统计、待复审、本月运营（知识专家、知识管理员）
 GET  /api/kb/search?q=                   知识检索（全文 + 向量，RRF 融合），只返回已发布、看得到的条目
 GET  /api/kb/basis?q=                    依据查询（只查 L4 依据库），附引用格式
 
@@ -38,6 +39,7 @@ from ..kb import meta as kb_meta
 from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
+from ..project import kb_impact
 from ..models import KbItem, KbVersion, User
 
 router = APIRouter(prefix="/api/kb", tags=["kb"], dependencies=[Depends(require_business)])
@@ -273,6 +275,20 @@ def get_item(doc_id: str, db: Session = Depends(get_db), user: User = Depends(cu
     return _item_out(db, item, ItemDetail, versions)
 
 
+class UsageOut(BaseModel):
+    projects: int
+    deliverables: int
+    sections: int
+
+
+@router.get("/items/{doc_id}/usage", response_model=UsageOut)
+def item_usage(doc_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    if not rv.is_knowledge_user(db, user):
+        raise HTTPException(403, "只有知识专家、知识管理员能查看条目的引用情况")
+    item = _item(db, doc_id, user)
+    return kb_impact.usage_counts(db, item.doc_id)
+
+
 @router.post("/items/{doc_id}/versions", response_model=VersionOut, status_code=201)
 def revise(doc_id: str, body: NewVersionIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     item = _item(db, doc_id, user)
@@ -434,7 +450,10 @@ def stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> 
     searches = db.scalars(select(AuditLog.detail).where(AuditLog.action.in_(("kb.search", "kb.basis")),
                                                        AuditLog.result == "allowed", AuditLog.at >= month_ago)).all()
     zero = sum(1 for d in searches if '"results": 0' in (d or ""))
+    from ..kb import kbmap
+
     return {
+        **kbmap.overview(db, [(item, v) for item, v in rows], month_ago),
         "published": len(rows),
         "by_source": by_source,
         "coverage": coverage,

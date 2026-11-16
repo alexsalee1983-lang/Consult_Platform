@@ -376,6 +376,16 @@ def deletion_report(args: argparse.Namespace) -> int:
     """删除申请与删除记录（只有代号、日期、计数和回流情况）。"""
     from .project import deletion
     names = {"pending": "待确认", "confirmed": "执行中", "done": "已删除", "cancelled": "已撤销"}
+    if args.monthly:
+        from .services import ops
+        with SessionLocal() as db:
+            months = ops.monthly_deletions(db)
+        if not months:
+            print("没有删除申请")
+        for m in months:
+            print(f"{m['month']}  发起 {m['requested']:>3}  已删除 {m['done']:>3}（按期 {m['on_time']}）  "
+                  f"撤销 {m['cancelled']:>3}  未完成 {m['open']:>3}（逾期 {m['overdue']}）")
+        return 0
     with SessionLocal() as db:
         rows = db.scalars(select(deletion.ProjectDeletion).order_by(deletion.ProjectDeletion.id)).all()
         if not args.all:
@@ -662,10 +672,22 @@ def kb_eval(args: argparse.Namespace) -> int:
             print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
             return 1
         try:
-            report = evaluate.run(db, user, evaluate.load_questions(Path(args.questions)))
-        except evaluate.EvalError as e:
+            questions = evaluate.load_questions(Path(args.questions))
+            if args.compare:
+                from .kb import compare
+
+                cmp = compare.run(db, user, questions)
+            else:
+                report = evaluate.run(db, user, questions)
+        except (evaluate.EvalError, ValueError) as e:
             print(f"题目文件有问题：{e}", file=sys.stderr)
             return 1
+    if args.compare:
+        print(compare.format_report(cmp))
+        if args.out:
+            Path(args.out).write_text(json.dumps(cmp.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"明细已写到 {args.out}（含题号和识别出的引用，不含答案原文）")
+        return 0 if cmp.passed else 3
     print(evaluate.format_report(report))
     if args.out:
         Path(args.out).write_text(json.dumps(report.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -719,6 +741,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("deletion-scan", help="立即扫描到期项目并发起删除申请（worker 每小时自动执行）")         .set_defaults(func=deletion_scan)
     dr = sub.add_parser("deletion-report", help="未完成的删除申请（--all 含已删除、已撤销）")
     dr.add_argument("--all", action="store_true")
+    dr.add_argument("--monthly", action="store_true", help="按申请月份汇总（只有计数，二期 C5 O6）")
     dr.set_defaults(func=deletion_report)
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
@@ -763,6 +786,8 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("questions", help="评测题目文件（YAML）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
     ke.add_argument("--out", default="", help="把明细写成 JSON 文件")
+    ke.add_argument("--compare", action="store_true",
+                    help="有无知识库对比评测（二期 B1 补充）：同一批题分别不用、用知识库让模型作答，核对文件名和条款号，达标时退出码 0")
     ke.set_defaults(func=kb_eval)
     lt = sub.add_parser("loadtest-accounts", help="压测账号（只在开发、测试环境）：建或重置 lt-xx 并加入压测项目；--disable 停用")
     lt.add_argument("--count", type=int, default=20)

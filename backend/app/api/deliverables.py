@@ -5,6 +5,7 @@ PUT  /api/projects/{code}/deliverables/{dcode}/outline                  设置�
 GET  /api/projects/{code}/deliverables/{dcode}/sections/{seq}           某章正文（默认当前版本，?version= 看历史）和版本列表
 PUT  /api/projects/{code}/deliverables/{dcode}/sections/{seq}           顾问修改某章：新建一个版本（可带 base_version 防覆盖）
 GET  /api/projects/{code}/deliverables/{dcode}/sections/{seq}/diff      两个版本的差异（?a=1&b=2，统一 diff 格式）
+GET  /api/projects/{code}/knowledge-updates                             引用的知识条目已更新或下线、需要复核的章节（二期 B4）
 GET  /api/projects/{code}/deliverables/{dcode}/export                   导出 Word（各章当前版本，套模板；规则见 app/project/export.py）
 
 严格档项目只收占位符版本（真名、IP、系统名 422）；已签署的交付件写入 409；机密级命中 422（不保存）。规则见 app/project/deliverables.py。
@@ -23,6 +24,7 @@ from ..core.permissions import project_for_member, require_business
 from ..models import Deliverable, User
 from ..project import deliverables as svc
 from ..project import export as export_svc
+from ..project import kb_impact
 
 router = APIRouter(prefix="/api/projects", tags=["deliverables"], dependencies=[Depends(require_business)])
 
@@ -35,6 +37,7 @@ class SectionRow(BaseModel):
     updated_at: datetime
     sources: dict
     unresolved: list[str]
+    knowledge_updates: list[dict] = []   # 引用的知识条目已更新 / 下线（二期 B4）
 
 
 class DeliverableDetail(BaseModel):
@@ -93,10 +96,13 @@ def _load(db: Session, code: str, dcode: str, user: User):
         _raise(e)
 
 
-def _detail(d: Deliverable) -> DeliverableDetail:
+def _detail(db: Session, d: Deliverable) -> DeliverableDetail:
+    updates = kb_impact.deliverable_updates(db, d)
     return DeliverableDetail(code=d.code, title=d.title, status=d.status, revision=d.revision,
                              updated_at=d.updated_at, updated_by=d.updated_by,
-                             sections=[SectionRow(**r) for r in svc.outline(d)], totals=svc.totals(d))
+                             sections=[SectionRow(**r, knowledge_updates=updates.get(r["seq"], []))
+                                       for r in svc.outline(d)],
+                             totals={**svc.totals(d), "knowledge_updates": sum(len(x) for x in updates.values())})
 
 
 def _section(d: Deliverable, seq: int, version: int | None = None) -> SectionDetail:
@@ -115,10 +121,27 @@ def _section(d: Deliverable, seq: int, version: int | None = None) -> SectionDet
                          created_at=v.created_at if v else None, versions=metas)
 
 
+class KnowledgeUpdate(BaseModel):
+    deliverable: str
+    deliverable_title: str
+    status: str
+    section: int
+    section_title: str
+    section_version: int
+    doc_id: str
+    change: str                  # updated 条目发布了新版本 / retired 条目已下线
+    current_version: int | None
+
+
+@router.get("/{code}/knowledge-updates", response_model=list[KnowledgeUpdate])
+def knowledge_updates(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return kb_impact.project_updates(db, project_for_member(db, code, user))
+
+
 @router.get("/{code}/deliverables/{dcode}", response_model=DeliverableDetail)
 def get_deliverable(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _, d = _load(db, code, dcode, user)
-    return _detail(d)
+    return _detail(db, d)
 
 
 @router.put("/{code}/deliverables/{dcode}/outline", response_model=DeliverableDetail)
@@ -129,7 +152,7 @@ def put_outline(code: str, dcode: str, body: OutlineIn, db: Session = Depends(ge
         d = svc.set_outline(db, user, p, d, body.titles)
     except svc.DeliverableError as e:
         _raise(e)
-    return _detail(d)
+    return _detail(db, d)
 
 
 @router.get("/{code}/deliverables/{dcode}/sections/{seq}", response_model=SectionDetail)

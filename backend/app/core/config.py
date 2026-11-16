@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     # 最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX 时暂停；超过一半时抽检比例加倍。
     kb_agent_auto_publish: bool = True
     kb_sample_rate_agent: float = 0.2
+    # 有无知识库对比评测（二期 B1 补充）：kb-eval --compare 用知识库的准确率达标线；开启门禁时最近一次对比评测
+    # 未达标就暂停自动发布（B10、B11 两级），直到再跑一次达标
+    kb_eval_min_accuracy: float = 0.9
+    kb_eval_gate: bool = True
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
 
@@ -123,7 +127,7 @@ class Settings(BaseSettings):
     login_lock_minutes: int = 15
     password_min_length: int = 12
     password_max_age_days: int = 180        # 口令有效期（等保自查 ②d），到期登录后只能改口令；0 = 不限
-    inactive_account_days: int = 90         # 超过这么多天没登录的账号在用户页标出，供管理员停用（不自动停用）
+    inactive_account_days: int = 90         # 超过这么多天没登录的账号由 worker 每天自动停用（系统管理员只标出），0 关闭
 
     # 第一个管理员：库里还没有任何用户时，启动时按这里创建一次。也可以用命令行创建：
     #   python -m app.cli create-user --username <名字>
