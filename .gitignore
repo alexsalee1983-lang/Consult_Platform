@@ -38,3 +38,6 @@ loadtest/accounts.json
 # 本地备份目录（scripts/backup.sh 默认位置），不提交
 backups/
 backend/tests/test_kb.db
+
+# Claude Code 工作树（claude --worktree）
+.claude/worktrees/
