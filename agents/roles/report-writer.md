@@ -7,7 +7,7 @@ primary_users: 交付顾问
 knowledge_access:
   read: [L1 写作规范, L2 报告模板与黄金样例, L5 案例]
   write: []
-tools: [RAG 检索, 文件解析]
+tools: [知识检索, 读项目区, 文档生成]
 depends_on: [01_公共规范.md]
 handoff_to: [qa-reviewer]
 ---

@@ -7,7 +7,7 @@ primary_users: 交付顾问
 knowledge_access:
   read: [L2 访谈提纲与问卷模板, L3, L4]
   write: []
-tools: [RAG 检索, 文件解析, 语音转写结果读取]
+tools: [知识检索, 读项目区, 文档生成]
 depends_on: [01_公共规范.md]
 handoff_to: [compliance-basis, report-writer]
 ---

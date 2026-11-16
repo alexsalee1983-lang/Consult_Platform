@@ -7,7 +7,7 @@ primary_users: 交付顾问
 knowledge_access:
   read: [L1, L2, L3, L4, L5 已发布区]
   write: []
-tools: [RAG 检索, 文件解析, 映射查询, 转交 Agent]
+tools: [知识检索, 读项目区, 映射查询, 转交 Agent]
 depends_on: [01_公共规范.md]
 handoff_to: [research-interview, compliance-basis, solution-designer, policy-drafter, report-writer, qa-reviewer, delivery-pm]
 ---
