@@ -10,6 +10,8 @@ python -m app.cli kb-source-publish <清单.csv> --dir <资料目录> --as <知�
   （GET /api/kb/samples）；知识专家逐条对照原件判通过或不通过（不能是这批的导入人）。
 - 暂停：最近 20 次抽检里不通过的比例超过 KB_SAMPLE_FAIL_MAX（默认 10%），或 KB_SRC_AUTO_PUBLISH=false，
   整批转人工审核；知识专家可以对任何自动发布的版本补抽检，问题率降下来后自动恢复。
+- 清单改了标题：条目编号由标题算出，标题一改就成了新编号；若这份的条款正文与库里另一份公开资料的现行条款逐条相同，
+  判为改名，整份跳过并提示（把标题改回原样，或先下线旧条目），不重复入库。
 - 与现行版本相同的跳过；已有未完成的草稿或待审版本时，内容和原件一致的接着处理，不一致的提示先处理它。
 - 审计只记编号、版本、规则、计数和抽检结论，不记正文和意见。
 """
@@ -110,6 +112,23 @@ def _target(db: Session, user: User, e) -> tuple[KbVersion | None, str]:
     return None, f"{e.key}：{r.message}"
 
 
+def renamed_from(db: Session, d: sources.Doc, entries: list) -> str:
+    """清单改了标题时返回库里原来的标题：本份条目编号一个都不在库里，而另一份公开资料的现行条款与本份逐条相同。"""
+    if not entries or db.scalar(select(KbItem.id).where(KbItem.import_key.in_([e.key for e in entries])).limit(1)):
+        return ""
+    bodies = sorted(e.content.body for e in entries)
+    probe = max(bodies, key=len)
+    current = (select(KbItem.import_key, KbVersion.ref_document, KbVersion.body)
+               .join(KbVersion, KbItem.current_version_id == KbVersion.id)
+               .where(KbItem.import_key.like("src-%"), KbItem.retired.is_(False)))
+    for key, title, _ in db.execute(current.where(KbVersion.body == probe)).all():
+        prefix = "-".join(key.split("-")[:2]) + "-"
+        rows = db.execute(current.where(KbItem.import_key.like(prefix + "%"))).all()
+        if title != d.title and sorted(r.body for r in rows) == bodies:
+            return title
+    return ""
+
+
 def _auto_publish(db: Session, user: User, v: KbVersion) -> None:
     if v.status == "draft":
         v.status, v.submitted_by, v.submitted_at = "in_review", user.username, utcnow()
@@ -143,6 +162,11 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
             continue
         out.failed = sources.verify(d, data, entries, rejected)
         out.rejected = len(rejected)
+        old = renamed_from(db, d, entries)
+        if old:
+            out.message = (f"条款正文与库里的“{old}”逐条相同，疑似清单改了标题（条目编号随标题变），整份跳过；"
+                           "请把标题改回原样，或先下线旧条目再发布")
+            continue
         auto = not out.failed and not report.suspended
         for e in entries:
             v, why = _target(db, user, e)
