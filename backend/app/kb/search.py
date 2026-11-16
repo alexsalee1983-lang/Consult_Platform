@@ -258,7 +258,9 @@ def _priorities(db: Session, ids: set[int], prefer: str, boost_tags, boost_refs)
 def search(db: Session, user: User, query: str, *, layer: str = "", product: str = "", stage: str = "",
            doc_type: str = "", limit: int = 8, include_general: bool = True, purpose: str = "kb.search",
            min_similarity: float | None = None, strict: bool = False, min_rerank: float | None = None,
-           boost_tags: tuple[str, ...] | list[str] = (), boost_refs: tuple[str, ...] | list[str] = ()) -> dict:
+           boost_tags: tuple[str, ...] | list[str] = (), boost_refs: tuple[str, ...] | list[str] = (),
+           trace: dict | None = None) -> dict:
+    """trace：评测诊断用（kb-eval），传入空 dict 时填入两路检索和融合后的切片编号顺序，只含编号。"""
     query = query.strip()
     if not query:
         raise SearchError(422, "检索词不能为空")
@@ -291,6 +293,8 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
             full_set_pre = set(full)
             nearest = _vector_pg(db, emb.vectors[0], emb.model, where, params)
             sims = dict(nearest)
+            if trace is not None:
+                trace["vector"] = [cid for cid, _ in nearest]
             # 全文也命中的切片照常参与融合；只有向量命中的，相似度够高才要
             vec_strict = [cid for cid, sim in nearest if cid in full_set_pre or sim >= floor]
             vec_loose = vec_strict
@@ -317,6 +321,10 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
         return scores
 
     scores = candidates(full, vec_loose)
+    if trace is not None:
+        trace["fulltext"], trace["vector_kept"] = list(full), list(vec_loose)
+        trace["fused"] = sorted(scores, key=lambda cid: (-scores[cid], cid))
+        trace.setdefault("vector", [])
     chunks: dict[int, KbChunk] = {}
     rr: dict[int, float] = {}
     rank_before: dict[int, int] = {}
@@ -405,13 +413,14 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
 
 
 def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit: int = 5,
-          min_rerank: float | None = None, product: str = "", boost_refs: tuple[str, ...] | list[str] = ()) -> dict:
+          min_rerank: float | None = None, product: str = "", boost_refs: tuple[str, ...] | list[str] = (),
+          trace: dict | None = None) -> dict:
     """依据查询：只查 L4 依据库。查不到时提示按公共规范第 3 节标注【依据待核实】。
     product、boost_refs 由工具层按项目配置快照填（本产品优先、快照 basis 列出的标准加权）。"""
     q = f"{ref_document} {query}".strip() if ref_document else query
     out = search(db, user, q, layer="L4", product=product, limit=limit, include_general=True, purpose="kb.basis",
                  min_similarity=get_settings().kb_basis_min_similarity, strict=True, min_rerank=min_rerank,
-                 boost_refs=boost_refs)
+                 boost_refs=boost_refs, trace=trace)
     if ref_document:
         out["items"] = [h for h in out["items"] if ref_document in h["ref_document"]] or out["items"]
     if not out["items"]:

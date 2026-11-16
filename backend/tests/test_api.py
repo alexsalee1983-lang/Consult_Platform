@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
 
-from .conftest import login  # noqa: E402
+from .conftest import ask, login, sse  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -48,13 +48,13 @@ def test_unknown_and_non_member_project_both_404(client):
 
 
 def test_chat_demo_reply(client):
-    r = client.post("/api/chat", json={"project_code": "BANK-A", "message": "一期人力模型怎么选？"})
+    r = ask(client, "BANK-A", "一期人力模型怎么选？")
     assert r.status_code == 200
-    assert r.json()["demo"] is True
+    assert sse(r)[-1][1]["demo"] is True
 
 
 def test_chat_blocks_confidential(client):
-    r = client.post("/api/chat", json={"project_code": "BANK-A", "message": "核心交换机 10.1.20.1，密码：Abc@12345"})
+    r = ask(client, "BANK-A", "核心交换机 10.1.20.1，密码：Abc@12345")
     assert r.status_code == 422
     kinds = {f["kind"] for f in r.json()["detail"]["findings"]}
     assert {"ip", "credential"} <= kinds

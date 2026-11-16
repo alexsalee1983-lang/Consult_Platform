@@ -100,7 +100,7 @@ def test_first_login_must_change_password(admin, client):
     assert client.get("/api/auth/me").status_code == 200
     r = client.get("/api/projects")
     assert r.status_code == 403 and "修改初始口令" in r.json()["detail"]
-    assert client.post("/api/chat", json={"project_code": "BANK-A", "message": "x"}).status_code == 403
+    assert client.post("/api/projects/BANK-A/conversations", json={"agent_code": "consultant-lead"}).status_code == 403
 
     pw = {"old_password": cred["initial_password"]}
     assert client.post("/api/auth/password", json={**pw, "new_password": "short"}).status_code == 422

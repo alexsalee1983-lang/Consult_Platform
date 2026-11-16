@@ -105,6 +105,8 @@ BACKUP_PASSPHRASE_FILE=... bash scripts/restore.sh <备份目录>          # 恢
 
 # 知识批量入库与评测（条目文件格式见 backend/app/kb/files.py，示范见 knowledge/samples；正式资料放 /srv/knowledge/downloads，不进代码仓）
 docker compose exec backend python -m app.cli kb-import /srv/knowledge/samples --as <知识专家> [--submit]
+docker compose exec backend python -m app.cli kb-export /tmp/kb-export --as <知识专家>   # 测试机导出已发布公开知识，打印清单哈希
+docker compose exec backend python -m app.cli kb-import-export /srv/kb-export --sha256 <清单哈希> --as <知识专家>   # 生产导入：校验哈希、自动核验后发布
 docker compose exec backend python -m app.cli kb-draft --source <公开资料> --source-detail "<来源>" --out /tmp/drafts --as <知识专家>
 docker compose exec backend python -m app.cli kb-basis-check /srv/knowledge/check.csv --as <知识管理员> [--apply]   # 季度依据变更登记（B5）
 docker compose exec backend python -m app.cli kb-eval /srv/knowledge/eval/samples.yaml --as <用户> [--out /tmp/report.json]
@@ -123,6 +125,7 @@ Agent × 工具授权由迁移写入，改授权要新迁移、同步 `tests/tes
 运行时约定：Agent 的系统提示 = `agents/01_公共规范.md` + 角色 md 正文 + 平台生成的项目卡（`app/agents/runtime.py`）；项目卡经工具层 `project.read` 读取。
 md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier`、`tools`（仅作说明）、`service_modules`。
 每条对话和回复记下提示词版本（md 内容哈希）。
+平台调 Agent（交付链、质量评审、知识审核、脱敏审查、起草）只经 `app/agents/call.py` 的 `call()`：取 md（停用、缺失拒绝）、按 md 的 `model_tier` 定等级、经网关、记用量，传 `parse` 时格式不对带纠正说明重试一次；新增调用点不要直接写 `gateway.complete`。
 后端镜像以仓库根目录为构建范围，`agents/` 打进镜像（`backend/Dockerfile`、根目录 `.dockerignore`）；测试机可只读挂载 `./agents:/srv/agents:ro`，md 改了自动重新加载。
 
 网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。
@@ -148,6 +151,7 @@ md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier
 知识审核 Agent（二期 B11）：公开资料、无需去标识的 REF / MAP / MTD / CAS / OBJ 提交审核后排后台任务 `kb.agent_review`，只经 `app/kb/agent_review.py`：程序规则（引用已核对、无结论用语、无机密级、摘要和适用条件齐全）+ 知识审核 Agent `kb-reviewer`（经网关，不授权工具，平台直接交条目、引用到的依据原文和相近条目）按七项清单逐项判断；全部通过的自动发布（`auto_review=agent`，审核记录 reviewer `agent:kb-reviewer`、review_role agent），按 `KB_SAMPLE_RATE_AGENT`（20%，问题率超上限一半时加倍）抽检，与 B10 共用抽检队列和暂停规则（`KB_AGENT_AUTO_PUBLISH=false` 也暂停）；存疑的审核记录 decision=flag，问题清单在 `kb_reviews.findings`（只在知识区库，不进审计），照常两项人工审核。
 审计 `kb.agent_review` 记规则、Agent、提示词版本和模型，不记正文和意见。
 复审到期（人工环节复查 K7）：同一范围的现行版本复审日期到了，worker 每小时排 `kb.agent_reconfirm`，只经 `app/kb/reconfirm_agent.py`，用同一套程序规则和七项清单复查，通过的顺延复审日期（Agent 审核发布、未抽检过的按比例抽检），存疑的留在“复审到期”由知识专家处理；复查记录 review_role=reconfirm，每版本一条、每周期覆盖；SRC、项目沉淀、专家经验、待补复审的照旧人工复审；应急 `python -m app.cli kb-reconfirm-scan`。
+知识迁移（决策记录 2026-11-16）：测试环境已发布的公开知识搬到生产只经 `app/kb/transfer.py`：`python -m app.cli kb-export <目录> --as <知识专家>` 导出条目文件和 manifest.json（文件 sha256、原 doc_id、作者、审核记录，不带意见原文），打印清单哈希；生产 `kb-import-export <目录> --sha256 <清单哈希> --as <知识专家>` 哈希全对才导入，平台重新自动核验（审核记录完整、机密级、资质边界、引用、元数据），通过的保留原作者和原审核人发布、另记审核 `platform:kb-transfer` / transfer，没通过的提交审核；审计只记编号、计数和规则。
 使用反馈待复查（二期 B13）：只经 `app/kb/recheck.py`（worker 每天扫描，`python -m app.cli kb-recheck-scan`）：Agent 写的章节版本引用了条目、紧接着顾问手改版不再引用，记一次删除；近 90 天被删章节 ≥3、涉及项目 ≥2、占 Agent 引用章节一半以上的现行版本标 `recheck_state=pending`（知识区迁移 k0007），进抽检队列，知识专家（不能是作者）复查，通过清除、不通过留到出新版本或下线；与自动发布抽检分开，不计入抽检不通过率；只数现行版本发布后、上次复查后的删除；原因只写计数，审计 `kb.recheck_mark` 只记条目编号。
 知识地图（二期 B6）：`GET /api/kb/stats` 的覆盖矩阵、缺口 TOP、贡献统计只经 `app/kb/kbmap.py`：行按产品配置（含草稿）、知识元数据、GEN 和模块 kb_tags 列出；缺口按检索审计里的产品、阶段过滤条件和零命中次数归类，反复零命中按 query_sha 计数，不记、不显示检索词。
 
