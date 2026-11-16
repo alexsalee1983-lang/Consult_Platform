@@ -29,7 +29,8 @@ def _content(**kw) -> VersionContent:
 def test_enumerations_match_common_spec():
     assert list(meta.LAYERS) == ["L1", "L2", "L3", "L4", "L5"]
     assert list(meta.DOMAINS) == ["GOV", "CMP", "DAT", "OPS", "RES", "ARC"]
-    assert list(meta.DOC_TYPES) == ["TPL", "GLD", "POL", "MTD", "REF", "MAP", "CAS", "OBJ", "PIT", "SRC"]
+    assert list(meta.DOC_TYPES) == ["TPL", "GLD", "POL", "MTD", "REF", "MAP", "CAS", "OBJ", "PIT", "SRC",
+                                  "ENF", "RAR", "BMK", "GLS"]
     assert meta.STAGES == ("启动", "调研", "分析", "设计", "落地辅导", "验收", "通用")
     assert meta.CAPABILITIES == ("管理", "运营", "技术支撑")
     assert meta.REVIEW_ROLES == {"content": "knowledge_expert", "compliance": "knowledge_admin"}
@@ -47,6 +48,9 @@ def test_doc_id_format_and_parse():
 def test_review_date_defaults():
     assert meta.default_review_date("L2", date(2026, 11, 9)) == date(2027, 11, 9)
     assert meta.default_review_date("L4", date(2026, 11, 9)) == date(2027, 5, 9)     # 依据 6 个月
+    assert meta.default_review_date("L3", date(2026, 11, 9), "ENF") == date(2027, 5, 9)  # 执法案例 6 个月
+    assert meta.default_review_date("L3", date(2026, 11, 9), "BMK") == date(2027, 5, 9)  # 基准数据 6 个月
+    assert meta.default_review_date("L3", date(2026, 11, 9), "RAR") == date(2027, 11, 9)
     assert meta.add_months(date(2026, 8, 31), 6) == date(2027, 2, 28)                 # 月末对齐
 
 

@@ -264,7 +264,7 @@ def publish(db: Session, v: KbVersion) -> None:
         if old is not None and old.status == "published":
             old.status = "superseded"
     v.effective_date = v.effective_date or date.today()
-    v.review_date = v.review_date or meta.default_review_date(item.layer, v.effective_date)
+    v.review_date = v.review_date or meta.default_review_date(item.layer, v.effective_date, item.doc_type)
     v.status, v.published_at = "published", utcnow()
     item.current_version_id, item.updated_at = v.id, utcnow()
     db.commit()
@@ -303,7 +303,7 @@ def reconfirm(db: Session, user: User, item: KbItem) -> KbVersion:
     if v.single_review and user.username in _authors(v):
         raise ReviewError(403, "单人发布的条目须由作者以外的知识专家补复审")
     backfilled = v.single_review
-    v.review_date = meta.default_review_date(item.layer, date.today())
+    v.review_date = meta.default_review_date(item.layer, date.today(), item.doc_type)
     v.single_review = False
     db.commit()
     audit.record(db, actor=user.username, action="kb.reconfirm", result="allowed", doc_id=item.doc_id,
