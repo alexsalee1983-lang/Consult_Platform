@@ -77,12 +77,24 @@ def violates_hard_rule(agent_side: str, tool_zone: str, tool_access: str) -> str
 
 # ---- 工具实现 ----
 
+def _product_of(ctx: ToolContext) -> dict:
+    """项目配置快照里的产品代号和所选模块代号（二期 C1：运行时按它拼 md 的产品段）；快照读不出来时为空。"""
+    from ..products import config
+    from ..project import configs
+
+    try:
+        snap = configs.snapshot(ctx.db, ctx.project)
+    except config.CatalogError:
+        return {"product": "", "modules": []}
+    return {"product": str(snap.get("product") or ""), "modules": [m["code"] for m in snap.get("modules") or []]}
+
+
 def _project_read(ctx: ToolContext, args: dict) -> dict:
     p = ctx.db.scalar(select(Project).where(Project.id == ctx.project.id)
                       .options(selectinload(Project.deliverables), selectinload(Project.confirmations)))
     card = {"code": p.code, "service": p.service, "industry": p.industry, "tier": p.tier,
             "phase": PHASES[p.phase] if 0 <= p.phase < len(PHASES) else "", "week": p.week,
-            "total_weeks": p.total_weeks}
+            "total_weeks": p.total_weeks, **_product_of(ctx)}
     if p.tier == "strict":  # 严格档：只给项目画像，事实只来自摘要卡（M4 ④，经 project.evidence 读取）
         return {"project": card, "note": "严格档项目：客户事实只来自去标识摘要卡（经 project.evidence 读取 S-xx），"
                                          "输出一律用占位符"}
