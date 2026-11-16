@@ -24,8 +24,13 @@
 
 ## 还没收
 
-- **新加坡**（PDPA 2012、Cybersecurity Act 2018）：sso.agc.gov.sg、egazette.gov.sg、csa.gov.sg 返回 403，pdpc.gov.sg 返回 AWS WAF 验证（202 challenge）；没绕过。
+- **新加坡**（Cybersecurity Act 2018 未收；PDPA 2012 已由负责人下载补收，见文末）：sso.agc.gov.sg、egazette.gov.sg、csa.gov.sg 返回 403，pdpc.gov.sg 返回 AWS WAF 验证（202 challenge）；没绕过。
 - **香港**（《个人资料（私隐）条例》第 486 章）：pcpd.org.hk 的网页和 PDF 地址都返回 JS 校验脚本，不是原件；gld.gov.hk 没有该条例文本；elegislation.gov.hk 不在可用白名单里，也未试。没绕过。
 - **印尼**（UU 27/2022 个人数据保护法、PP 71/2019 电子系统与交易）：jdih.komdigi.go.id 下载到了 PDF（UU 27/2022 约 3MB，PP 71/2019 约 5MB），但是扫描件加上质量很差的 OCR 文字层（“Pasal I”“Pasal2T”“Pasal 6O”之类），切分器只能切出 UU 27 的 21 条（实际 76 条）、PP 71 的 50 条（实际 100 条左右），会静默丢条文，所以没入批。要收需有干净文字层的版本（例如 jdih.setneg.go.id 或 peraturan.bpk.go.id 的数字原件，后者不在这次指定的站点里），或人工转录。
 - **科特迪瓦**（Loi n° 2013-450 个人数据保护，以及同站的 Loi n° 2013-451 打击网络犯罪）：artci.ci 下载到了 PDF，都是扫描件、没有文字层（提取为 0 字符），按规则不做 OCR。
 - **澳门第 13/2019 号法律《网络安全法》**：dspdp.gov.mo 站点的法规页只列个人资料保护相关文件，没有这部法律，未收（网络安全监管在澳门网络安全委员会 / 通信事务局，不在指定站点）。
+
+## 新加坡（负责人 11-16 在浏览器下载）
+
+- 《个人数据保护法》（PDPA 2012）：Singapore Statutes Online 现行版本（Current version as at 16 Nov 2026），原件直接切，95 条（第 1～68 条和 27 个修正插入的 15A、26A～26E、48A～48R 等），已废止的第 27～35 条保留“[Repealed by Act 40 of 2020]”条文；附表不收。切分要 #161（带字母后缀的条号）。
+- sso.agc.gov.sg 不在自动发布白名单里，转两人人工审核。
