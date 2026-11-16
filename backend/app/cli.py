@@ -621,6 +621,53 @@ def kb_import(args: argparse.Namespace) -> int:
     return 2 if counts["error"] else 0
 
 
+def kb_export(args: argparse.Namespace) -> int:
+    """导出已发布的公开知识（连同审核记录和哈希），交生产环境 kb-import-export 导入（app/kb/transfer.py）。"""
+    from pathlib import Path
+
+    from .kb import transfer
+
+    with SessionLocal() as db:
+        user = _knowledge_user(db, args.as_user)
+        if user is None:
+            return 1
+        try:
+            r = transfer.export(db, user, Path(args.out))
+        except transfer.TransferError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+    print(f"导出 {r.count} 条到 {r.out}")
+    print(f"清单哈希（导入时用 --sha256 原样提供，经测试机以外的渠道交给生产运维）：{r.manifest_sha256}")
+    return 0
+
+
+def kb_import_export(args: argparse.Namespace) -> int:
+    """生产环境导入 kb-export 的导出包：先校验哈希，再自动核验，通过的保留原审核人发布，其余转审核。"""
+    from pathlib import Path
+
+    from .kb import transfer
+
+    with SessionLocal() as db:
+        user = _knowledge_user(db, args.as_user)
+        if user is None:
+            return 1
+        try:
+            results = transfer.import_export(db, user, Path(args.dir), args.sha256)
+        except transfer.TransferError as e:
+            print(f"校验未通过，整批不导入：{e}", file=sys.stderr)
+            return 2
+    label = {"published": "核验发布", "review": "转审核", "draft": "留作草稿", "unchanged": "无变化",
+             "skipped": "跳过", "error": "失败"}
+    for o in results:
+        if o.action != "unchanged":
+            why = "、".join(transfer.RULES.get(f, f) for f in o.failed)
+            print(f"  {label.get(o.action, o.action)}  {o.file} {o.doc_id}" + (f"  —— 未通过：{why}" if why else "")
+                  + (f"  —— {o.message}" if o.message else ""))
+    counts = {k: sum(1 for o in results if o.action == k) for k in label}
+    print("合计：" + "，".join(f"{label[k]} {n}" for k, n in counts.items() if n))
+    return 2 if counts["error"] else 0
+
+
 def kb_reconfirm_scan(args: argparse.Namespace) -> int:
     """立即扫描复审到期的公开知识条目，排知识审核 Agent 复查（worker 每小时自动执行；复查本身在 worker 里做）。"""
     from .kb import reconfirm_agent
@@ -798,6 +845,15 @@ def main(argv: list[str] | None = None) -> int:
     ki.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份导入")
     ki.add_argument("--submit", action="store_true", help="导入后一并提交审核")
     ki.set_defaults(func=kb_import)
+    ke = sub.add_parser("kb-export", help="导出已发布的公开知识及审核记录、哈希，交生产环境导入")
+    ke.add_argument("out", help="导出目录（必须为空或不存在）")
+    ke.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份导出")
+    ke.set_defaults(func=kb_export)
+    kx = sub.add_parser("kb-import-export", help="导入 kb-export 的导出包：校验哈希、自动核验，通过的保留原审核人发布")
+    kx.add_argument("dir", help="导出目录")
+    kx.add_argument("--sha256", required=True, help="导出时打印的清单哈希")
+    kx.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份导入")
+    kx.set_defaults(func=kb_import_export)
     kd = sub.add_parser("kb-draft", help="由知识库建设 Agent 从公开资料原文起草条目文件（不直接入库）")
     kd.add_argument("--source", required=True, help="公开资料文件：.docx / .pdf / .md / .txt")
     kd.add_argument("--source-detail", required=True, help="来源说明，如“中华人民共和国网络安全法（2016）全文”")
