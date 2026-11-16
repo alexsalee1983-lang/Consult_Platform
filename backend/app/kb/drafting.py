@@ -21,10 +21,10 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from ..agents import registry
+from ..agents import call
 from ..core import audit
-from ..models import Agent, User
-from ..services import gateway, guard, usage
+from ..models import User
+from ..services import gateway, guard
 from . import citations
 from . import parse
 from .files import Entry, EntryError, format_entry, parse_entry
@@ -50,7 +50,7 @@ title: 简明标题
 layer: L1～L5
 domain: GOV / CMP / DAT / OPS / RES / ARC
 product: SOC 或 GEN
-doc_type: TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT
+doc_type: TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT / ENF / RAR / GLS
 stage: 启动 / 调研 / 分析 / 设计 / 落地辅导 / 验收 / 通用
 capabilities: [管理 / 运营 / 技术支撑 中的一项或几项]
 industries: [通用]
@@ -129,23 +129,18 @@ def draft(db: Session, user: User, filename: str, data: bytes, *, source_detail:
     result = guard.check(full)
     if result.blocked:
         raise DraftError(result.summary() + "：资料没有发给模型。公开资料里不应有这类内容，请检查文件")
-    agent = db.get(Agent, AGENT)
-    if agent is None or not agent.enabled:
-        raise DraftError("知识库建设 Agent 未登记或已停用")
-    md = registry.load(AGENT)
-    system = f"{md.common.strip()}\n\n---\n\n{md.body.strip()}{RULES}"
+    try:
+        md = call.load(db, AGENT)
+    except call.AgentUnavailable as e:
+        raise DraftError("知识库建设 Agent 未登记、已停用或 md 缺失") from e
     report = DraftReport()
     for seg in _segments(doc.sections):
         prompt = f"资料来源：{source_detail}\n\n以下是资料原文片段：\n\n{seg}"
         try:
-            out = gateway.complete(prompt, tier="standard", project_code="", level=LEVEL, system=system)
+            out = call.call(db, AGENT, prompt, actor=user.username, doc=md, extra=RULES, level=LEVEL).completion
         except gateway.GatewayError as e:
-            usage.record(db, username=user.username, project_code="", level=LEVEL, model=gateway.model_for(LEVEL),
-                         status="error", stream=False, attempts=e.attempts, agent_code=AGENT)
             audit.record(db, actor=user.username, action="kb.draft_agent", result="error", error=str(e)[:100])
             raise DraftError(f"模型调用失败：{e}") from e
-        usage.record(db, username=user.username, project_code="", level=LEVEL, model=out.model, status="ok",
-                     stream=False, completion=out, agent_code=AGENT)
         report.calls += 1
         report.model = out.model
         if out.demo:

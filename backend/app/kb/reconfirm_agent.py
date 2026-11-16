@@ -94,7 +94,7 @@ def run(db: Session, v: KbVersion) -> str:
     r.decision, r.comment, r.findings, r.created_at = ("approve" if ok else "flag"), comment[:1000], findings, utcnow()
     sampled = False
     if ok:
-        v.review_date = meta.default_review_date(item.layer, date.today())
+        v.review_date = meta.default_review_date(item.layer, date.today(), item.doc_type)
         if v.auto_review == ar.KIND and not v.sample_state:
             sampled = secrets.SystemRandom().random() < ar.sample_rate(db)
             if sampled:

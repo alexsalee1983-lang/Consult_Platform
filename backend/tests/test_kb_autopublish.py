@@ -187,3 +187,5 @@ def test_overseas_official_hosts():
     assert sources.is_official("https://jdih.komdigi.go.id/produk_hukum/view/id/832")
     assert sources.is_official("https://www.pcpd.org.hk/x.pdf") and sources.is_official("https://egazette.gov.sg/a")
     assert not sources.is_official("https://legis-palop.org/x") and not sources.is_official("https://evilvbpl.vn/x")
+    assert sources.is_official("https://ratchakitcha.soc.go.th/documents/1.pdf") and not sources.is_official("https://soc.go.th/x")
+    assert "网页原件sha256" in sources.COLUMNS["sha256"]   # batch13 清单的列名

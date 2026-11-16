@@ -38,7 +38,7 @@ def test_loads_repo_md():
     assert doc is not None and doc.display_name == "方案设计 Agent" and doc.level == "reasoning"
     assert not doc.body.startswith("---") and "# 角色" in doc.body
     assert "公共规范" in doc.common and len(doc.version) == 12
-    assert "SOC 运营体系设计" in doc.service_modules
+    assert "SOC" in doc.service_modules
 
 
 def test_version_changes_and_hot_reload(agents_copy):
@@ -104,6 +104,66 @@ def test_system_prompt_has_common_role_and_card():
     assert prompt.index("公共规范") < prompt.index("# 角色") < prompt.index("# 项目卡（平台生成）")
     assert "服务产品*：SOC 运营体系设计" in prompt and "数据档位*：标准档" in prompt
     assert "name: solution-designer" not in prompt  # frontmatter 不进提示
+    assert card.product == "SOC" and "## 产品：SOC" in prompt and "## 产品：未就绪" not in prompt   # 二期 C1
+    assert "## 产品：未就绪" in doc.body and "# 交接" in prompt and "## 新增产品" in prompt
+
+
+SAMPLE = """# 角色
+通用骨架。
+# 服务产品
+## 产品：未就绪
+按通用流程，发证据不足卡。
+## 产品：SOC
+SOC 维度。
+```
+# 代码块里的井号不是标题
+```
+### 模块：DJBH
+等保要求。
+### 模块：GFYL
+攻防要求。
+### 产品自检
+SOC 自检。
+## 产品：ISO
+ISO 维度。
+## 新增产品
+维护说明。
+# 交接
+交接格式。"""
+
+
+def test_select_body_by_product_and_modules():
+    """二期 C1：只拼本项目产品段和所选模块段；没有产品段的产品拼“未就绪”；不在项目里不裁剪。"""
+    body, picked = registry.select_body(SAMPLE, "SOC", ("DJBH",))
+    assert picked == ["产品：SOC", "模块：DJBH"]
+    assert "SOC 维度" in body and "等保要求" in body and "SOC 自检" in body and "代码块里的井号" in body
+    assert "攻防要求" not in body and "ISO 维度" not in body and "发证据不足卡" not in body
+    assert "通用骨架" in body and "维护说明" in body and "交接格式" in body
+    body, picked = registry.select_body(SAMPLE, "NSG", ())
+    assert picked == ["产品：未就绪"] and "发证据不足卡" in body and "SOC 维度" not in body and "ISO 维度" not in body
+    assert registry.select_body(SAMPLE, "", ())[1] == ["产品：未就绪"]          # 快照读不出来按未就绪
+    assert registry.select_body(SAMPLE, None) == (SAMPLE, [])
+    plain = "# 角色\n没有产品段。"
+    assert registry.select_body(plain, "SOC") == (plain, [])
+
+
+def test_md_product_sections_use_catalog_codes():
+    """二期 C1：各 Agent md 的“## 产品：”只用产品目录里的代号（或未就绪）；按某个产品裁剪后不留别的产品段。"""
+    import yaml
+
+    from app.products.config import catalog_dir
+    known = {yaml.safe_load(p.read_text(encoding="utf-8"))["code"] for p in (catalog_dir() / "products").glob("*.yaml")}
+    used = {}
+    for md in (registry.agents_dir() / "roles").glob("*.md"):
+        body = md.read_text(encoding="utf-8")
+        codes = {m.group(1) for line in body.split("\n") if (m := registry._PRODUCT.match(line))}
+        assert codes <= known | {registry.NOT_READY}, (md.name, codes - known)
+        used[md.stem] = codes
+        for code in codes - {registry.NOT_READY}:
+            kept, picked = registry.select_body(body, code)
+            assert picked == [f"产品：{code}"]
+            assert all(f"## 产品：{c}" not in kept for c in codes - {code})
+    assert {"SOC", "NSG"} <= used["research-interview"] and {"SOC", "NSG"} <= used["report-writer"]
 
 
 def test_strict_project_card_has_no_deliverables():

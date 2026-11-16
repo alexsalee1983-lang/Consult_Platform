@@ -16,7 +16,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
-backend/tests/test.db
+backend/tests/test.db*
 backend/tests/test_kb.db
 backend/*.db
 
@@ -41,3 +41,6 @@ backend/tests/test_kb.db
 
 # Claude Code 工作树（claude --worktree）
 .claude/worktrees/
+
+# 知识资料目录（决策记录 2026-11-16）：不进代码仓
+kb-downloads/

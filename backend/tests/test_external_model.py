@@ -12,7 +12,7 @@ from app.main import app
 from app.models import AuditLog, LlmUsage
 from app.services import gateway
 
-from .conftest import create_user, logged_in_client
+from .conftest import ask, create_user, logged_in_client, sse
 
 
 class Model:
@@ -56,12 +56,9 @@ def _last_audit():
 
 
 def test_strict_project_refused_before_any_request(external, client):
-    for path in ("/api/chat", "/api/chat/stream"):
-        r = client.post(path, json={"project_code": "GRID-B", "message": "梳理访谈提纲"})
-        assert r.status_code == 403 and "严格档" in r.json()["detail"]
     conv = client.post("/api/projects/GRID-B/conversations", json={"agent_code": "consultant-lead"}).json()
     r = client.post(f"/api/conversations/{conv['id']}/messages", json={"message": "梳理访谈提纲"})
-    assert r.status_code == 403
+    assert r.status_code == 403 and "严格档" in r.json()["detail"]
     assert external.requests == []                                   # 没有任何请求发出
     assert client.get(f"/api/conversations/{conv['id']}").json()["messages"] == []   # 也没有保存
     a = _last_audit()
@@ -71,7 +68,7 @@ def test_strict_project_refused_before_any_request(external, client):
 
 
 def test_standard_project_allowed_and_marked_external(external, client):
-    r = client.post("/api/chat", json={"project_code": "BANK-A", "message": "一期人力模型怎么选？"})
+    r = ask(client, "BANK-A", "一期人力模型怎么选？")
     assert r.status_code == 200 and len(external.requests) == 1
     assert json.loads(_last_audit().detail)["external"] is True
 
@@ -87,7 +84,7 @@ def test_internal_model_not_marked(monkeypatch, client):
     m = Model()
     gateway.set_transport(httpx.MockTransport(m.handler))
     try:
-        r = client.post("/api/chat", json={"project_code": "GRID-B", "message": "梳理访谈提纲"})
+        r = ask(client, "GRID-B", "梳理访谈提纲")
         assert r.status_code == 200                                   # 内部模型：严格档照常可用
         assert json.loads(_last_audit().detail)["external"] is False
     finally:
@@ -97,8 +94,8 @@ def test_internal_model_not_marked(monkeypatch, client):
 def test_demo_mode_is_not_external(monkeypatch, client):
     monkeypatch.setattr(get_settings(), "llm_external", True)
     monkeypatch.setattr(get_settings(), "llm_base_url", "")           # 没配地址：演示回复，不出公司
-    r = client.post("/api/chat", json={"project_code": "GRID-B", "message": "梳理访谈提纲"})
-    assert r.status_code == 200 and r.json()["demo"] is True
+    r = ask(client, "GRID-B", "梳理访谈提纲")
+    assert r.status_code == 200 and sse(r)[-1][1]["demo"] is True
 
 
 def test_health_reports_external(external, client):

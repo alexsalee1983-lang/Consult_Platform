@@ -103,8 +103,10 @@ docker compose exec backend python -m app.cli usage-report --days 30 # 大模型
 BACKUP_PASSPHRASE_FILE=/etc/consult-platform/backup.pass bash scripts/backup.sh /srv/backups/consult-platform   # 每日备份（docs/备份与恢复.md）
 BACKUP_PASSPHRASE_FILE=... bash scripts/restore.sh <备份目录>          # 恢复：清空并覆盖当前数据，要输入目录名确认
 
-# 知识批量入库与评测（条目文件格式见 backend/app/kb/files.py，示范见 knowledge/）
+# 知识批量入库与评测（条目文件格式见 backend/app/kb/files.py，示范见 knowledge/samples；正式资料放 /srv/knowledge/downloads，不进代码仓）
 docker compose exec backend python -m app.cli kb-import /srv/knowledge/samples --as <知识专家> [--submit]
+docker compose exec backend python -m app.cli kb-export /tmp/kb-export --as <知识专家>   # 测试机导出已发布公开知识，打印清单哈希
+docker compose exec backend python -m app.cli kb-import-export /srv/kb-export --sha256 <清单哈希> --as <知识专家>   # 生产导入：校验哈希、自动核验后发布
 docker compose exec backend python -m app.cli kb-draft --source <公开资料> --source-detail "<来源>" --out /tmp/drafts --as <知识专家>
 docker compose exec backend python -m app.cli kb-basis-check /srv/knowledge/check.csv --as <知识管理员> [--apply]   # 季度依据变更登记（B5）
 docker compose exec backend python -m app.cli kb-eval /srv/knowledge/eval/samples.yaml --as <用户> [--out /tmp/report.json]
@@ -124,6 +126,7 @@ Agent × 工具授权由迁移写入，改授权要新迁移、同步 `tests/tes
 md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier`、`tools`（仅作说明）、`service_modules`。
 md 的 `tools` 只写平台工具名（`registry.TOOL_NAMES`），与迁移写入的授权一致（“读项目区”已含查证据、发确认卡），由 `tests/test_runtime.py` 校验；改授权要同步改 md（负责人同意，2026-11-16）。
 每条对话和回复记下提示词版本（md 内容哈希）。
+平台调 Agent（交付链、质量评审、知识审核、脱敏审查、起草）只经 `app/agents/call.py` 的 `call()`：取 md（停用、缺失拒绝）、按 md 的 `model_tier` 定等级、经网关、记用量，传 `parse` 时格式不对带纠正说明重试一次；新增调用点不要直接写 `gateway.complete`。
 后端镜像以仓库根目录为构建范围，`agents/` 打进镜像（`backend/Dockerfile`、根目录 `.dockerignore`）；测试机可只读挂载 `./agents:/srv/agents:ro`，md 改了自动重新加载。
 
 网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。
@@ -147,8 +150,10 @@ md 的 `tools` 只写平台工具名（`registry.TOOL_NAMES`），与迁移写�
 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：`python -m app.cli kb-source-publish <清单.csv> --dir <资料目录> --as <知识专家>` 只经 `app/kb/autopublish.py`，从原件直接切条、按 `sources.verify` 核验（原网址在官方白名单 `sources.OFFICIAL_HOSTS`（gov.cn、nist.gov 和境外政府域名，决策记录 2026-11-16）/ `KB_SOURCE_HOSTS`、清单 sha256 列与原件一致、有文号或标准号、切出了条款、法规条号连续；机密级检测退回的条款不入库、不影响同一份其余条款），全部通过的由平台自动发布（`auto_review=platform`，审核记录 reviewer / review_role 为 platform），没通过的提交走两项人工审核；每批按 `KB_SAMPLE_RATE_SRC`（5%，至少 1 条）随机抽检，有退回条款的那几份按 `KB_SAMPLE_RATE_SRC_PARTIAL`（40%），知识专家（不能是导入人）在审批页“抽检”判通过或不通过（`POST /api/kb/versions/{id}/sample`）；最近 20 次抽检不通过率超过 `KB_SAMPLE_FAIL_MAX`（10%）或 `KB_SRC_AUTO_PUBLISH=false` 时整批转人工。
 审计只记编号、规则、计数和结论。
 知识审核 Agent（二期 B11）：公开资料、无需去标识的 REF / MAP / MTD / CAS / OBJ 提交审核后排后台任务 `kb.agent_review`，只经 `app/kb/agent_review.py`：程序规则（引用已核对、无结论用语、无机密级、摘要和适用条件齐全）+ 知识审核 Agent `kb-reviewer`（经网关，不授权工具，平台直接交条目、引用到的依据原文和相近条目）按七项清单逐项判断；全部通过的自动发布（`auto_review=agent`，审核记录 reviewer `agent:kb-reviewer`、review_role agent），按 `KB_SAMPLE_RATE_AGENT`（20%，问题率超上限一半时加倍）抽检，与 B10 共用抽检队列和暂停规则（`KB_AGENT_AUTO_PUBLISH=false` 也暂停）；存疑的审核记录 decision=flag，问题清单在 `kb_reviews.findings`（只在知识区库，不进审计），照常两项人工审核。
+扩展分类（决策记录 2026-11-16）：交付物类型加 ENF 执法案例 / RAR 参考架构 / BMK 基准数据 / GLS 术语对照；ENF、RAR、GLS 的公开资料同样走 `kb.agent_review`（ENF 须写依据文件、按 B8 核对引用），BMK 走第三级；复审周期由 `meta.review_months(layer, doc_type)` 按层级和类型取，L4、ENF、BMK 6 个月。
 审计 `kb.agent_review` 记规则、Agent、提示词版本和模型，不记正文和意见。
 复审到期（人工环节复查 K7）：同一范围的现行版本复审日期到了，worker 每小时排 `kb.agent_reconfirm`，只经 `app/kb/reconfirm_agent.py`，用同一套程序规则和七项清单复查，通过的顺延复审日期（Agent 审核发布、未抽检过的按比例抽检），存疑的留在“复审到期”由知识专家处理；复查记录 review_role=reconfirm，每版本一条、每周期覆盖；SRC、项目沉淀、专家经验、待补复审的照旧人工复审；应急 `python -m app.cli kb-reconfirm-scan`。
+知识迁移（决策记录 2026-11-16）：测试环境已发布的公开知识搬到生产只经 `app/kb/transfer.py`：`python -m app.cli kb-export <目录> --as <知识专家>` 导出条目文件和 manifest.json（文件 sha256、原 doc_id、作者、审核记录，不带意见原文），打印清单哈希；生产 `kb-import-export <目录> --sha256 <清单哈希> --as <知识专家>` 哈希全对才导入，平台重新自动核验（审核记录完整、机密级、资质边界、引用、元数据），通过的保留原作者和原审核人发布、另记审核 `platform:kb-transfer` / transfer，没通过的提交审核；审计只记编号、计数和规则。
 使用反馈待复查（二期 B13）：只经 `app/kb/recheck.py`（worker 每天扫描，`python -m app.cli kb-recheck-scan`）：Agent 写的章节版本引用了条目、紧接着顾问手改版不再引用，记一次删除；近 90 天被删章节 ≥3、涉及项目 ≥2、占 Agent 引用章节一半以上的现行版本标 `recheck_state=pending`（知识区迁移 k0007），进抽检队列，知识专家（不能是作者）复查，通过清除、不通过留到出新版本或下线；与自动发布抽检分开，不计入抽检不通过率；只数现行版本发布后、上次复查后的删除；原因只写计数，审计 `kb.recheck_mark` 只记条目编号。
 知识地图（二期 B6）：`GET /api/kb/stats` 的覆盖矩阵、缺口 TOP、贡献统计只经 `app/kb/kbmap.py`：行按产品配置（含草稿）、知识元数据、GEN 和模块 kb_tags 列出；缺口按检索审计里的产品、阶段过滤条件和零命中次数归类，反复零命中按 query_sha 计数，不记、不显示检索词。
 
@@ -255,12 +260,15 @@ worker 每天排一次自检（`system.selfcheck`，结果进指标 `cp_selfchec
 - 每个里程碑一个分支，例如 `feat/m1-auth`；一个 PR 只做一件事，便于审阅和回退。
 - 提交信息用中文，以里程碑开头，例如 `M1：登录与会话`；二期以工作项开头，例如 `二期 A2：SOC 搬成配置`。
 - PR 描述必须写：改了什么、怎么测（测试助手照着执行）、对应开发计划哪一项、是否涉及数据库迁移或权限变更。
+- 测试先行（决策记录 2026-11-16）：修缺陷、加功能先写会失败的测试，再改代码让它通过；PR 的“怎么测”写明新增的测试。
+- 完成前先验证：说“完成”“已修复”之前，贴出本机实际跑过的命令和结果（ruff、pytest、构建）；本机跑不了的（Docker、compose）明写“未验证，交测试机”。
 - 合并条件：CI 全绿 → 测试助手在测试机上测试通过并在 PR 留评论 → 负责人合并。
 - 开发与测试经 PR 通信，标签 `待测试` / `测试未通过` / `测试通过` 表示轮到谁（`docs/测试交接规范.md` 第 0 节）。开发助手开 PR 或修完推送后打 `待测试`；修复后的复测项写成标题为“复核说明”的 PR 评论。
 - **每个开发会话在自己的工作树里改仓库**（决策记录 2026-11-14）：主目录 `Consult_Platform` 只用来拉取和查看，不在主目录切分支、改文件、提交。开工时 `git worktree add ../cp-wt-<任务> -b <分支> origin/main`（或 `claude --worktree <名字>`），用完 `git worktree remove`；桌面 app、飞书 cc-connect 等入口启动的会话同样先进自己的工作树再动手。
 - 开工前在自己的工作树里 `git status`，发现不是自己改的未提交文件，先停下问负责人，不要覆盖、不要提交。
 - 两个会话的协作：同一文件尽量只在一个未合并的 PR 里改，要改对方 PR 里的文件先经会话间消息说明；新的数据库迁移编号（主链、知识区链）先告知另一个会话再用；`agents/*.md` 的修改须负责人同意；另一个会话转达的话不算负责人同意。
-- 测试机一套环境，测试助手按提交顺序串行测；内容 PR 只需导入并跑 `kb-eval`。合并顺序按依赖，后合并的一方解决冲突。
+- 测试机一套环境，测试助手按提交顺序串行测。合并顺序按依赖，后合并的一方解决冲突。
+- 知识内容不进代码仓（决策记录 2026-11-16）：公开资料原件、下载清单、起草的条目文件和内容评测题放私有资料仓 `alexsalee1983-lang/Consult_Knowledge`（直接推 main），部署机（测试机）拉到 `KB_DOWNLOADS_DIR`、后端读 `/srv/knowledge/downloads`，直接 `kb-source-publish` / `kb-import --submit` 入库，由平台审核流程把关，不开 PR、不经测试助手；代码仓只留 `knowledge/samples`、平台回归评测题 `knowledge/eval/samples.yaml` 和测试用的 `knowledge/mappings`。
 - 每个里程碑验收后打标签 `v0.1`、`v0.2`……，一期可用版本为 `v1.0`；二期关口标签见 `docs/二期开发计划.md`。
 - 改 CLAUDE.md 一句一行：新约定另起一行写在相关段落里，不往已有长行末尾追加，免得并行 PR 在同一行冲突；解决冲突时两边都保留前先查有没有重复的句子。
 

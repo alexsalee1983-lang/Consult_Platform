@@ -1,7 +1,7 @@
 """知识审核 Agent 与自动发布（二期 B11，二期开发计划第十二节第二级，决策记录 2026-11-15“自动化优先”）。
 
 - 适用：来源为公开资料、无需去标识的解读、映射、方法（REF / MAP / MTD），以及只含公开资料的案例、异议应答
-  （CAS / OBJ）。提交审核（review.submit）后排后台任务 kb.agent_review，不在请求里调模型。
+  （CAS / OBJ），执法案例、参考架构、术语对照（ENF / RAR / GLS，决策记录 2026-11-16；ENF 须写依据文件）。提交审核（review.submit）后排后台任务 kb.agent_review，不在请求里调模型。
 - 先过程序规则（RULES）：引用都已核对到依据原文（B8）、没有测评 / 认证结论用语、没有机密级内容、元数据和适用条件齐全；
   再把条目、引用到的依据原文和相近条目交给知识审核 Agent（agents/roles/kb-reviewer.md，经网关 gateway.complete），
   按审核清单 CHECKS 逐项判断。Agent 不授权任何工具，只返回 JSON 审查意见。
@@ -18,19 +18,17 @@
 """
 from __future__ import annotations
 
-import json
-import re
 import secrets
 from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..agents import registry
+from ..agents import call
 from ..core import audit
 from ..core.config import get_settings
-from ..models import Agent, KbItem, KbReview, KbVersion
-from ..services import gateway, guard, jobs, usage
+from ..models import KbItem, KbReview, KbVersion
+from ..services import gateway, guard, jobs
 from . import autopublish, citations
 from . import review as rv
 
@@ -39,7 +37,7 @@ REVIEWER = f"agent:{AGENT}"
 ROLE = "agent"
 KIND = "agent"                       # KbVersion.auto_review
 LEVEL = "standard"
-TYPES = ("REF", "MAP", "MTD", "CAS", "OBJ")
+TYPES = ("REF", "MAP", "MTD", "CAS", "OBJ", "ENF", "RAR", "GLS")
 RULES = {"citations": "引用都已核对到依据原文", "boundary": "没有测评 / 认证结论用语",
          "confidential": "没有机密级内容", "metadata": "摘要、适用条件、依据文件齐全"}
 CHECKS = {"faithful": "忠于原文", "no_addition": "不添加要求", "citation_fit": "引用对得上", "boundary": "资质边界",
@@ -103,7 +101,7 @@ def rule_failures(db: Session, v: KbVersion) -> tuple[list[str], list[citations.
     if guard.check(text).blocked:
         failed.append("confidential")
     if (not v.summary.strip() or not v.applicability.strip()
-            or (v.item.doc_type in ("REF", "MAP") and not v.ref_document.strip())):
+            or (v.item.doc_type in ("REF", "MAP", "ENF") and not v.ref_document.strip())):
         failed.append("metadata")
     return failed, cites
 
@@ -139,16 +137,6 @@ def _message(db: Session, v: KbVersion, cites: list[citations.Citation]) -> str:
             f"## 正文\n{v.body[:MAX_BODY]}\n\n# 引用到的依据原文\n{sources}\n\n# 相近条目\n{sim}")
 
 
-def _parse(text: str) -> dict:
-    m = re.search(r"\{.*\}", text, re.S)
-    if not m:
-        raise ValueError("no json")
-    data = json.loads(m.group(0))
-    if not isinstance(data, dict):
-        raise ValueError("not object")
-    return data
-
-
 def _clean(data: dict) -> tuple[dict, list[dict], str]:
     checks = {}
     raw = data.get("checks") if isinstance(data.get("checks"), dict) else {}
@@ -167,28 +155,23 @@ def _clean(data: dict) -> tuple[dict, list[dict], str]:
 
 def _agent(db: Session, v: KbVersion, cites: list[citations.Citation]) -> tuple[str, str, dict, str, str]:
     """返回 (状态 ok/skipped/failed, 说明, findings, 提示词版本, 模型)。"""
-    agent = db.get(Agent, AGENT)
-    doc = registry.load(AGENT) if agent is not None and agent.enabled else None
-    if doc is None:
-        return "skipped", "知识审核 Agent 未登记、已停用或 md 缺失", {}, "", ""
-    system = f"{doc.common.strip()}\n\n---\n\n{doc.body.strip()}{OUTPUT_RULES}"
-    actor = v.submitted_by or AGENT
     try:
-        out = gateway.complete(_message(db, v, cites), tier="standard", project_code="", level=LEVEL, system=system)
+        doc = call.load(db, AGENT)
+    except call.AgentUnavailable:
+        return "skipped", "知识审核 Agent 未登记、已停用或 md 缺失", {}, "", ""
+    try:
+        r = call.call(db, AGENT, _message(db, v, cites), actor=v.submitted_by or AGENT, doc=doc, extra=OUTPUT_RULES,
+                      level=LEVEL, parse=call.json_object)
     except gateway.BlockedError:
         return "failed", "审查材料含机密级内容，未发送给模型", {}, doc.version, ""
-    except gateway.GatewayError as e:
-        usage.record(db, username=actor, project_code="", level=LEVEL, model=gateway.model_for(LEVEL),
-                     status="error", stream=False, attempts=e.attempts, agent_code=AGENT)
+    except gateway.GatewayError:
         return "failed", "模型调用失败", {}, doc.version, ""
-    usage.record(db, username=actor, project_code="", level=LEVEL, model=out.model, status="ok", stream=False,
-                 completion=out, agent_code=AGENT)
+    except call.OutputInvalid as e:
+        return "failed", "Agent 返回格式无法解析", {}, doc.version, e.completion.model
+    out = r.completion
     if out.demo:
         return "skipped", "未接入模型（演示模式）", {}, doc.version, out.model
-    try:
-        checks, issues, conclusion = _clean(_parse(out.text))
-    except (ValueError, json.JSONDecodeError):
-        return "failed", "Agent 返回格式无法解析", {}, doc.version, out.model
+    checks, issues, conclusion = _clean(r.data)
     return "ok", "", {"checks": checks, "issues": issues, "conclusion": conclusion}, doc.version, out.model
 
 

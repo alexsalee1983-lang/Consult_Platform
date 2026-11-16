@@ -8,16 +8,13 @@
 """
 from __future__ import annotations
 
-import json
-import re
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 
-from ..agents import registry
+from ..agents import call
 from ..core import audit
-from ..models import Agent
-from ..services import gateway, usage
+from ..services import gateway
 from .deid import CATEGORIES, Term
 
 AGENT = "sanitizer"
@@ -58,13 +55,6 @@ class AgentReview:
     calls: int = 0
 
 
-def _parse(text: str) -> dict:
-    m = re.search(r"\{.*\}", text, re.S)
-    if not m:
-        raise ValueError("no json")
-    return json.loads(m.group(0))
-
-
 def _pieces(text: str) -> list[str]:
     out, i = [], 0
     while i < len(text) and len(out) < MAX_CALLS:
@@ -75,32 +65,29 @@ def _pieces(text: str) -> list[str]:
 
 def review(db: Session, text: str, actor: str, upload_id: int) -> AgentReview:
     # 不用 runtime.ready_doc：那是顾问对话的可用性判断（知识侧 Agent 不在对话里开放），这里只要求已登记、已启用
-    agent = db.get(Agent, AGENT)
     try:
-        if agent is None or not agent.enabled:
-            raise LookupError("脱敏审查 Agent 未登记或已停用")
-        doc = registry.load(AGENT)
-    except Exception as e:  # noqa: BLE001  md 缺失或格式不对
+        doc = call.load(db, AGENT)
+    except call.AgentUnavailable as e:
         return AgentReview("skipped", note=str(e)[:200], manual_items=["脱敏审查 Agent 不可用，需人工逐段复核"])
-    system = f"{doc.common.strip()}\n\n---\n\n{doc.body.strip()}{OUTPUT_RULES}"
     r = AgentReview("ok")
     order = {c: i for i, c in enumerate(CONCLUSIONS)}
     for piece in _pieces(text):
         try:
-            out = gateway.complete(piece, tier="standard", project_code="", level=LEVEL, system=system)
+            res = call.call(db, AGENT, piece, actor=actor, doc=doc, extra=OUTPUT_RULES, level=LEVEL,
+                            parse=call.json_object)
+        except call.OutputInvalid as e:
+            return AgentReview("failed", note="Agent 返回格式无法解析", model=e.completion.model, calls=r.calls + 1,
+                               manual_items=["脱敏审查 Agent 返回格式无法解析，需人工逐段复核"])
         except gateway.BlockedError:
             # 规则替换后仍命中机密级内容（不应出现）：不发模型，交人工
             audit.record(db, actor=actor, action="kb.deid_agent", result="blocked", upload_id=upload_id)
             return AgentReview("failed", note="复查文本仍含机密级内容，未发送给模型",
                                manual_items=["复查文本仍含机密级内容，需人工处理后重新去标识"])
         except gateway.GatewayError as e:
-            usage.record(db, username=actor, project_code="", level=LEVEL, model=gateway.model_for(LEVEL),
-                         status="error", stream=False, attempts=e.attempts, agent_code=AGENT)
             audit.record(db, actor=actor, action="kb.deid_agent", result="error", upload_id=upload_id,
                          error=str(e)[:100])
             return AgentReview("failed", note="模型调用失败", manual_items=["脱敏审查 Agent 调用失败，需人工逐段复核"])
-        usage.record(db, username=actor, project_code="", level=LEVEL, model=out.model, status="ok", stream=False,
-                     completion=out, agent_code=AGENT)
+        out, data = res.completion, res.data
         audit.record(db, actor=actor, action="kb.deid_agent", result="allowed", upload_id=upload_id,
                      model=out.model, demo=out.demo, external=out.external, length=len(piece))
         r.calls += 1
@@ -108,11 +95,6 @@ def review(db: Session, text: str, actor: str, upload_id: int) -> AgentReview:
         if out.demo:
             return AgentReview("skipped", note="未接入模型（演示模式）", model=out.model, calls=r.calls,
                                manual_items=["未接入模型，脱敏审查 Agent 没有复查，需人工逐段复核"])
-        try:
-            data = _parse(out.text)
-        except (ValueError, json.JSONDecodeError):
-            return AgentReview("failed", note="Agent 返回格式无法解析", model=out.model, calls=r.calls,
-                               manual_items=["脱敏审查 Agent 返回格式无法解析，需人工逐段复核"])
         c = data.get("conclusion", "")
         if c in order and (not r.conclusion or order[c] > order[r.conclusion]):   # 取最严的结论
             r.conclusion = c

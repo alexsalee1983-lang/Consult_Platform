@@ -13,7 +13,7 @@ from app.services import gateway
 from app.services.gateway import BlockedError, Completion, GatewayError
 from app.services.pseudonym import Pseudonymizer
 
-from .conftest import create_user, logged_in_client
+from .conftest import ask, create_user, logged_in_client, sse
 
 MODEL = "deepseek-v4.1-flash"
 REPLY = "建议采用 5×8 + 远程值守的一期人力模型。"
@@ -261,11 +261,10 @@ def _me(client):
 
 
 def test_chat_records_usage_and_audit(fake, member):
-    r = member.post("/api/chat", json={"project_code": "BANK-A", "message": "一期人力模型怎么选？"})
-    assert r.status_code == 200 and r.json()["reply"] == REPLY and r.json()["demo"] is False
+    r = ask(member, "BANK-A", "一期人力模型怎么选？")
+    assert r.status_code == 200 and sse(r)[-1][1]["demo"] is False
     u = _latest_usage(_me(member))
-    assert (u.status, u.project_code, u.model, u.prompt_tokens, u.completion_tokens, u.stream) == \
-        ("ok", "BANK-A", MODEL, 120, 30, False)
+    assert (u.status, u.project_code, u.model, u.completion_tokens, u.stream) == ("ok", "BANK-A", MODEL, 30, True)
     with SessionLocal() as db:
         a = db.scalars(select(AuditLog).where(AuditLog.action == "llm.chat").order_by(AuditLog.id.desc())).first()
     assert a.result == "allowed" and "一期人力模型" not in a.detail
@@ -273,17 +272,16 @@ def test_chat_records_usage_and_audit(fake, member):
 
 def test_chat_model_down_returns_502_and_records_error(fake, member):
     fake.fail = [503, 503, 503]
-    r = member.post("/api/chat", json={"project_code": "BANK-A", "message": "问题"})
+    r = ask(member, "BANK-A", "问题")
     assert r.status_code == 502
     u = _latest_usage(_me(member))
     assert u.status == "error" and u.attempts == 3
 
 
 def test_chat_stream_sse(fake, member):
-    r = member.post("/api/chat/stream", json={"project_code": "BANK-A", "message": "一期人力模型怎么选？"})
+    r = ask(member, "BANK-A", "一期人力模型怎么选？")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
-    events = [(blk.split("\n")[0][7:], json.loads(blk.split("\n")[1][6:]))
-              for blk in r.text.strip().split("\n\n")]
+    events = sse(r)
     assert "".join(d["text"] for e, d in events if e == "delta") == REPLY
     assert events[-1][0] == "done" and events[-1][1]["completion_tokens"] == 30
     u = _latest_usage(_me(member))
@@ -291,7 +289,7 @@ def test_chat_stream_sse(fake, member):
 
 
 def test_chat_stream_blocked_is_422_not_stream(fake, member):
-    r = member.post("/api/chat/stream", json={"project_code": "BANK-A", "message": "密码：Abc@12345 主机 10.1.1.1"})
+    r = ask(member, "BANK-A", "密码：Abc@12345 主机 10.1.1.1")
     assert r.status_code == 422
     assert _latest_usage(_me(member)).status == "blocked"
     assert fake.calls == []
@@ -299,13 +297,13 @@ def test_chat_stream_blocked_is_422_not_stream(fake, member):
 
 def test_chat_stream_break_reports_error_event(fake, member):
     fake.break_stream = True
-    r = member.post("/api/chat/stream", json={"project_code": "BANK-A", "message": "问题"})
+    r = ask(member, "BANK-A", "问题")
     assert r.status_code == 200 and "event: error" in r.text
     assert _latest_usage(_me(member)).status == "error"
 
 
 def test_admin_usage_report_has_no_project_dimension(fake, member):
-    member.post("/api/chat", json={"project_code": "BANK-A", "message": "问题"})
+    ask(member, "BANK-A", "问题")
     admin = logged_in_client(app, create_user(("sys_admin",)))
     try:
         rows = admin.get("/api/admin/usage").json()

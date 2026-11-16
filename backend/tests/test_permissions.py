@@ -24,7 +24,6 @@ ACTORS = {
 }
 COLUMNS = list(ACTORS)
 
-CHAT = {"project_code": "BANK-A", "message": "一期人力模型怎么选？"}
 OUTLINE = {"titles": ["权限矩阵：现状", "权限矩阵：差距"]}
 SECTION = {"body": "权限矩阵测试正文：值班台交接记录为纸质 [O-01]。"}
 NOTE = {"kind": "observation", "title": "权限矩阵：值班室巡查", "content": "值班台有两块大屏，交接班记录为纸质。"}
@@ -121,8 +120,6 @@ MATRIX = [
     (("POST", "/api/projects/BANK-A/runs/999999/cancel", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/confirmations", None),               (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/confirmations", None), (200, 404, 403, 403, 403)),
-    (("POST", "/api/chat", CHAT),                       (200, 404, 403, 403, 403)),
-    (("POST", "/api/chat/stream", CHAT),                (200, 404, 403, 403, 403)),
     (("POST", "/api/gateway/check", {"text": "问题"}),  (200, 200, 403, 403, 403)),
     (("GET", "/api/audit", None),                       (403, 403, 403, 200, 403)),
     (("GET", "/api/audit/verify", None),                (403, 403, 403, 200, 403)),

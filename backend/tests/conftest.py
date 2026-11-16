@@ -140,3 +140,16 @@ def logged_in_client(app, user):
     assert r.status_code == 200, r.text
     c.headers["X-CSRF-Token"] = r.json()["csrf_token"]
     return c
+
+
+def ask(client, project: str, message: str, agent: str = "consultant-lead"):
+    """顾问提问只经 Agent 对话（/api/chat 已删除，决策记录 2026-11-16）：新建对话后发一条，返回流式响应。"""
+    conv = client.post(f"/api/projects/{project}/conversations", json={"agent_code": agent})
+    if conv.status_code != 201:
+        return conv
+    return client.post(f"/api/conversations/{conv.json()['id']}/messages", json={"message": message})
+
+
+def sse(r) -> list[tuple[str, dict]]:
+    import json
+    return [(b.split("\n")[0][7:], json.loads(b.split("\n")[1][6:])) for b in r.text.strip().split("\n\n")]
