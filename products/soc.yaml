@@ -5,7 +5,7 @@ code: SOC
 name: SOC 运营体系设计
 domain: OPS
 status: ready
-modules: []
+modules: [DJBH, GFYL, HYJG]
 deliverables:
 - code: D1
   title: 启动包
@@ -50,6 +50,22 @@ baseline:
   - 等保 2.0
   - 行业要求
   basis: []
+  # 行业依据（B2 补充）：项目行业与键精确相等时，这些依据在 kb.search / basis.lookup 里加权排前；
+  # 写法与知识库依据条目的 ref_document 一致（法规写全名，见 knowledge/sources/batch2）。
+  industry_basis:
+    银行:
+    - 银行保险机构数据安全管理办法
+    - 中国人民银行业务领域数据安全管理办法
+    保险:
+    - 银行保险机构数据安全管理办法
+    电力:
+    - 电力监控系统安全防护规定
+    - 电力行业网络安全管理办法
+    - 电力行业网络安全等级保护管理办法
+    证券:
+    - 证券期货业网络和信息安全管理办法
+    期货:
+    - 证券期货业网络和信息安全管理办法
 chain:
 - key: facts
   number: 3

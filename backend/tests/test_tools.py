@@ -11,29 +11,36 @@ from sqlalchemy import delete, select
 from app.agents import tools
 from app.core.db import SessionLocal
 from app.main import app
-from app.models import Agent, AgentToolGrant, AuditLog, Tool, User
+from app.models import Agent, AgentToolGrant, AuditLog, Conversation, Project, Tool, User
 
 from .conftest import create_user, logged_in_client
 
 ALL_TOOLS = ["kb.search", "basis.lookup", "project.read", "doc.generate", "quality.check", "kb.stage_write",
-             "project.evidence", "confirm.create"]
-#                      知识检索 依据查询 读项目区 文档生成 质量检查 写待入库区 查证据 发确认卡
+             "project.evidence", "confirm.create", "agent.handoff", "kb.mapping"]
+#                      知识检索 依据查询 读项目区 文档生成 质量检查 写待入库区 查证据 发确认卡 转交 映射查询
 # 查证据（M3，迁移 0017）与读项目区同列；发确认卡（M3，迁移 0019）授权全部 8 个交付侧 Agent（决策记录 2026-11-10）
+# 转交（二期 C2，迁移 0033）只授权咨询师 Agent（决策记录 2026-11-14）
+# 映射查询（二期 B3，迁移 0035）授权依据与差距分析、方案设计、制度起草和咨询师（docs/接口约定.md 第六节）
 EXPECTED = {
-    "consultant-lead":    (1, 0, 1, 0, 0, 0, 1, 1),
-    "delivery-pm":        (1, 0, 1, 1, 0, 0, 1, 1),
-    "research-interview": (1, 0, 1, 1, 0, 0, 1, 1),
-    "compliance-basis":   (1, 1, 1, 0, 0, 0, 1, 1),
-    "solution-designer":  (1, 1, 1, 0, 0, 0, 1, 1),
-    "policy-drafter":     (1, 1, 1, 1, 0, 0, 1, 1),
-    "report-writer":      (1, 0, 1, 1, 0, 0, 1, 1),
-    "qa-reviewer":        (1, 1, 1, 0, 1, 0, 1, 1),
-    "kb-builder":         (1, 1, 0, 0, 0, 1, 0, 0),
-    "sanitizer":          (0, 0, 0, 0, 0, 1, 0, 0),
+    "consultant-lead":    (1, 0, 1, 0, 0, 0, 1, 1, 1, 1),
+    "delivery-pm":        (1, 0, 1, 1, 0, 0, 1, 1, 0, 0),
+    "research-interview": (1, 0, 1, 1, 0, 0, 1, 1, 0, 0),
+    "compliance-basis":   (1, 1, 1, 0, 0, 0, 1, 1, 0, 1),
+    "solution-designer":  (1, 1, 1, 0, 0, 0, 1, 1, 0, 1),
+    "policy-drafter":     (1, 1, 1, 1, 0, 0, 1, 1, 0, 1),
+    "report-writer":      (1, 0, 1, 1, 0, 0, 1, 1, 0, 0),
+    "qa-reviewer":        (1, 1, 1, 0, 1, 0, 1, 1, 0, 0),
+    "kb-builder":         (1, 1, 0, 0, 0, 1, 0, 0, 0, 0),
+    "sanitizer":          (0, 0, 0, 0, 0, 1, 0, 0, 0, 0),
+    "kb-reviewer":        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),   # 二期 B11（迁移 0036）：平台直接交材料，不授权工具
 }
 # 授权矩阵测试里每个工具的调用参数；发确认卡发到严格档 GRID-B（避免改变 BANK-A 演示数据的待确认数）
-MATRIX_CALLS = {"confirm.create": ("GRID-B", {"kind": "证据不足", "title": "授权矩阵测试卡"})}
-KNOWLEDGE_SIDE = {"kb-builder", "sanitizer"}
+MATRIX_CALLS = {"kb.mapping": ("BANK-A", {"source": "ISO 27001"}),
+                "confirm.create": ("GRID-B", {"kind": "证据不足", "title": "授权矩阵测试卡"}),
+                "agent.handoff": ("GRID-B", lambda user: {"from_conversation": _lead_conversation(user, "GRID-B"),
+                                                          "target": "research-interview",
+                                                          "brief": "【交接】目标 Agent：调研访谈 ｜ 任务：授权矩阵测试"})}
+KNOWLEDGE_SIDE = {"kb-builder", "sanitizer", "kb-reviewer"}
 
 
 @pytest.fixture(scope="module")
@@ -42,6 +49,16 @@ def member():
     name, *_ = create_user(("consultant",), {"BANK-A": "member", "GRID-B": "member"})
     with SessionLocal() as db:
         return db.scalar(select(User).where(User.username == name))
+
+
+def _lead_conversation(user, project: str) -> int:
+    """用户在项目里与咨询师 Agent 的一个对话（转交的来源）。"""
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == project))
+        c = Conversation(project_id=p.id, user_id=user.id, agent_code="consultant-lead", title="", prompt_version="t")
+        db.add(c)
+        db.commit()
+        return c.id
 
 
 def _invoke(user, agent, tool, project="BANK-A", args=None):
@@ -53,6 +70,7 @@ def _invoke(user, agent, tool, project="BANK-A", args=None):
 def test_grant_matrix(member, agent):
     for tool, allowed in zip(ALL_TOOLS, EXPECTED[agent]):
         project, args = MATRIX_CALLS.get(tool, ("BANK-A", None))
+        args = args(member) if callable(args) else args
         if allowed:
             assert isinstance(_invoke(member, agent, tool, project, args), dict), f"{agent} 应能用 {tool}"
         else:

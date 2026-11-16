@@ -15,6 +15,10 @@
   重排服务没启用或不可用时退回 RRF 排序和余弦相似度门槛，结果里 rerank 字段会注明。
 - 标准号 / 条款号：查询写了标准号（GB/T 22239 8.1.4）或法规条号（网络安全法第二十一条）时先按元数据精确匹配，
   文件和条款都对上的排最前、不受门槛限制；依据查询只对上文件的，结果限定在该文件内。
+- 按产品（二期 B2）：传了 product（Agent 在项目里调用时默认取项目配置快照的产品）就先本产品、再通用 GEN，
+  本产品条目排在通用条目前面（点到的条款仍排最前）；同一组里带 boost_tags（项目所选模块的 kb_tags）标签的条目、
+  依据查询里 ref_document 属于 boost_refs（快照 basis 列出的标准）的条目，排序分数乘 BOOST。返回体每条带 scope：
+  product / general。
 - 依据查询（basis）：只查 L4 依据库，按公共规范第 3 节给出引用格式，复审日期已过的提示“请确认是否有更新”。
 SQLite（本地快速测试）没有全文和向量索引，用二字词匹配的简化实现，只为让接口和规则可测。
 """
@@ -39,6 +43,7 @@ RRF_K = 60
 # t2：标题 + 摘要 + 章节 + 正文（短条目只有正文时彼此区分度太低，测试 #27 评测发现）
 EMBED_TEXT_VERSION = "t2"
 POOL = 40
+BOOST = 1.5          # 标签 / 快照依据命中时排序分数的倍数（只影响同组内排序，不改门槛）
 MAX_LIMIT = 20
 
 
@@ -72,6 +77,8 @@ class Hit:
     similarity: float | None = None   # 向量余弦相似度（没走向量检索时为空），评测校准门槛用
     rerank_score: float | None = None  # 重排分数 0～1（没重排时为空）；重排时 score 等于它，否则是 RRF 分数
     rank_before_rerank: int | None = None   # 重排前在 RRF 候选里的名次，评测看正确条目有没有进前 N
+    scope: str = "product"            # product 本产品 / general 通用（GEN）
+    boosted: bool = False             # 命中 boost_tags 或 boost_refs 而加权
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -227,9 +234,31 @@ def _rerank_text(c: KbChunk, title: str) -> str:
     return "\n".join(x for x in (title, c.heading, c.text) if x)
 
 
+def _ref_key(s: str) -> str:
+    return re.sub(r"[\s/—–-]+", "", s or "").upper()
+
+
+def _priorities(db: Session, ids: set[int], prefer: str, boost_tags, boost_refs) -> tuple[dict, dict]:
+    """候选切片的分组（0 本产品 / 1 通用，只在 prefer 非空时分）和排序倍数；什么都不传时不查库。"""
+    tags, refs = set(boost_tags or ()), [_ref_key(r) for r in boost_refs or () if _ref_key(r)]
+    if not ids or not (prefer or tags or refs):
+        return {}, {}
+    rows = db.execute(select(KbChunk.id, KbItem.product, KbItem.tags, KbVersion.ref_document)
+                      .join(KbVersion, KbVersion.id == KbChunk.version_id)
+                      .join(KbItem, KbItem.id == KbVersion.item_id).where(KbChunk.id.in_(ids))).all()
+    group, weight = {}, {}
+    for cid, prod, item_tags, ref in rows:
+        group[cid] = 1 if prefer and prod == "GEN" else 0
+        rk = _ref_key(ref)
+        if (tags and tags & set(item_tags or [])) or (refs and rk and any(r in rk or rk in r for r in refs)):
+            weight[cid] = BOOST
+    return group, weight
+
+
 def search(db: Session, user: User, query: str, *, layer: str = "", product: str = "", stage: str = "",
            doc_type: str = "", limit: int = 8, include_general: bool = True, purpose: str = "kb.search",
-           min_similarity: float | None = None, strict: bool = False, min_rerank: float | None = None) -> dict:
+           min_similarity: float | None = None, strict: bool = False, min_rerank: float | None = None,
+           boost_tags: tuple[str, ...] | list[str] = (), boost_refs: tuple[str, ...] | list[str] = ()) -> dict:
     query = query.strip()
     if not query:
         raise SearchError(422, "检索词不能为空")
@@ -311,6 +340,9 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
         except gateway.GatewayError as e:          # 重排不可用：退回 RRF 排序和余弦相似度门槛
             rerank_status = f"unavailable: {str(e)[:60]}"
 
+    group, weight = _priorities(db, set(scores) | pinned, product if include_general and product != "GEN" else "",
+                                boost_tags, boost_refs)
+
     if rerank_status == "ok":
         # 重排分数要达到门槛：依据查询用 KB_BASIS_MIN_RERANK，普通检索用更低的 KB_SEARCH_MIN_RERANK（只挡掉趋近 0 分的
         # 无关结果，测试 #34：S011 返回了 0.0003～0.0008 分的条目）。点到条款的不受限；依据查询点名了文件但没点到条款的，
@@ -318,12 +350,14 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
         floor = min_rerank if min_rerank is not None else (s.kb_basis_min_rerank if strict else s.kb_search_min_rerank)
         keep = [cid for cid in rr if cid in pinned or (strict and exact is not None and not pinned) or rr[cid] >= floor]
         keep += [cid for cid in pinned if cid not in rr]   # 点到的条款没进重排候选时也保留
-        ordered = sorted(keep, key=lambda cid: (cid not in pinned, -rr.get(cid, 0.0), -scores[cid], cid))
+        ordered = sorted(keep, key=lambda cid: (cid not in pinned, group.get(cid, 0),
+                                                -rr.get(cid, 0.0) * weight.get(cid, 1.0), -scores[cid], cid))
         vec_shown = vec_loose
     else:
         if strict:
             scores = candidates(full_strict, vec_strict)
-        ordered = sorted(scores, key=lambda cid: (cid not in pinned, -scores[cid], cid))
+        ordered = sorted(scores, key=lambda cid: (cid not in pinned, group.get(cid, 0),
+                                                  -scores[cid] * weight.get(cid, 1.0), cid))
         vec_shown = vec_strict if strict else vec_loose
 
     full_set, vec_set = set(full), set(vec_shown)
@@ -350,7 +384,8 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
                 review_date=v.review_date.isoformat() if v.review_date else None,
                 similarity=round(sims[cid], 4) if cid in sims else None,
                 rerank_score=round(rr[cid], 4) if cid in rr else None,
-                rank_before_rerank=rank_before.get(cid))
+                rank_before_rerank=rank_before.get(cid),
+                scope="general" if item.product == "GEN" else "product", boosted=weight.get(cid, 1.0) > 1.0)
         if item.layer == "L4":
             h.ref_document, h.ref_version, h.ref_status = v.ref_document, v.ref_version, v.ref_status
             h.needs_update_check = bool(v.review_date and v.review_date < today)
@@ -363,17 +398,20 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
                  query_sha=audit.digest(query), results=len(hits), vector=vector_status.split(":")[0],
                  rerank=rerank_status.split(":")[0],
                  filters={k: val for k, val in (("layer", layer), ("product", product), ("stage", stage),
-                                                ("doc_type", doc_type)) if val})
+                                                ("doc_type", doc_type)) if val},
+                 boost_tags=len(boost_tags), boost_refs=len(boost_refs))
     return {"query_length": len(query), "vector": vector_status, "rerank": rerank_status,
             "items": [h.to_json() for h in hits]}
 
 
 def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit: int = 5,
-          min_rerank: float | None = None) -> dict:
-    """依据查询：只查 L4 依据库。查不到时提示按公共规范第 3 节标注【依据待核实】。"""
+          min_rerank: float | None = None, product: str = "", boost_refs: tuple[str, ...] | list[str] = ()) -> dict:
+    """依据查询：只查 L4 依据库。查不到时提示按公共规范第 3 节标注【依据待核实】。
+    product、boost_refs 由工具层按项目配置快照填（本产品优先、快照 basis 列出的标准加权）。"""
     q = f"{ref_document} {query}".strip() if ref_document else query
-    out = search(db, user, q, layer="L4", limit=limit, include_general=True, purpose="kb.basis",
-                 min_similarity=get_settings().kb_basis_min_similarity, strict=True, min_rerank=min_rerank)
+    out = search(db, user, q, layer="L4", product=product, limit=limit, include_general=True, purpose="kb.basis",
+                 min_similarity=get_settings().kb_basis_min_similarity, strict=True, min_rerank=min_rerank,
+                 boost_refs=boost_refs)
     if ref_document:
         out["items"] = [h for h in out["items"] if ref_document in h["ref_document"]] or out["items"]
     if not out["items"]:

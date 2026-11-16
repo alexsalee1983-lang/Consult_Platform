@@ -139,6 +139,11 @@ export const api = {
   markLocalOnly: (code, ev, request_ref) =>
     request(`/api/projects/${encodeURIComponent(code)}/evidences/${encodeURIComponent(ev)}/local-only`,
       { method: "POST", body: JSON.stringify({ request_ref }) }),
+  extractNote: (code, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request(`/api/projects/${encodeURIComponent(code)}/notes/extract`, { method: "POST", body: fd });
+  },
   uploadDocument: (code, file, title = "") => {
     const fd = new FormData();
     fd.append("file", file);
@@ -160,6 +165,8 @@ export const api = {
   createConversation: (code, agent_code) =>
     request(`/api/projects/${encodeURIComponent(code)}/conversations`, { method: "POST", body: JSON.stringify({ agent_code }) }),
   conversation: (id) => request(`/api/conversations/${id}`),
+  handoff: (id, message_id, agent_code) =>
+    request(`/api/conversations/${id}/handoff`, { method: "POST", body: JSON.stringify({ message_id, agent_code }) }),
   audit: (params) => request(`/api/audit?${new URLSearchParams(
     Object.entries(params).filter(([, v]) => v !== "" && v != null))}`),
   changePassword: (old_password, new_password) =>
@@ -196,6 +203,8 @@ export const api = {
   setFlowback: (code, allowed) =>
     request(`/api/projects/${encodeURIComponent(code)}/flowback`, { method: "PUT", body: JSON.stringify({ allowed }) }),
   deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
+  portfolio: () => request("/api/portfolio"),
+  workbench: () => request("/api/workbench"),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
     request(`/api/deletions/${id}/confirm`, { method: "POST", body: JSON.stringify({ flowback, flowback_refs }) }),
@@ -241,6 +250,8 @@ export const api = {
   kbReview: (id, role, decision, comment) =>
     request(`/api/kb/versions/${id}/review`, { method: "POST", body: JSON.stringify({ role, decision, comment }) }),
   kbQueue: () => request("/api/kb/review-queue"),
+  kbSamples: () => request("/api/kb/samples"),
+  kbSample: (versionId, decision, comment = "") => request(`/api/kb/versions/${versionId}/sample`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
   kbBasis: (q) => request(`/api/kb/basis?q=${encodeURIComponent(q)}`),

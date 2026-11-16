@@ -7,6 +7,8 @@ import Sidebar from "./components/Sidebar.jsx";
 import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
 import Deletions from "./pages/Deletions.jsx";
+import Portfolio from "./pages/Portfolio.jsx";
+import Workbench from "./pages/Workbench.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
 import KbMap from "./pages/KbMap.jsx";
@@ -73,12 +75,14 @@ export default function App() {
       <Route element={<Shell />}>
         <Route index element={<HomeRedirect />} />
         <Route element={<Business />}>
+          <Route path="/workbench" element={<Workbench />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/project/:code" element={<OverviewPage />} />
           <Route path="/project/:code/deliverables" element={<DeliverableHome />} />
           <Route path="/project/:code/deliverables/:dcode" element={<DeliverablePage />} />
           <Route path="/chat/:code" element={<ChatPage />} />
           <Route path="/deletions" element={<RequireLead><Deletions /></RequireLead>} />
+          <Route path="/portfolio" element={<RequireLead><Portfolio /></RequireLead>} />
           <Route path="/kb/search" element={<KbSearch />} />
           <Route path="/kb/intake" element={<KbIntake />} />
           <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />

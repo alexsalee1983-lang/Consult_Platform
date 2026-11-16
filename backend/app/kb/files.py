@@ -10,13 +10,17 @@
     stage: 设计
     capabilities: [运营]
     industries: [通用]
+    tags: [等保]                     # 可选：检索加权标签，对应模块配置的 kb_tags（二期 B2）
     source_type: public              # 批量导入只收公开资料；其他来源走投料箱 + 去标识
     source_detail: 公开资料：……       # 文件名、标准编号、发布机关
     summary: ……                      # 可选
     applicability: ……                # 可选
     ref_document: 中华人民共和国网络安全法   # L4 依据必填：文件名、版本号、生效状态
     ref_version: 2016
-    ref_status: current
+    ref_status: current              # current / upcoming / repealed / superseded
+    ref_code: GB/T 22239-2019        # 可选（二期 B7）：文号或标准号
+    ref_replaced_by: ……              # 可选：已被替代时写替代文件名和版本
+    effective_date: 2017-06-01       # 可选：施行日期
     ---
     ## 章节标题（依据类用条款号，如“第二十一条 网络安全等级保护”）
 
@@ -28,17 +32,18 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 
 import yaml
 
-from . import meta
+from . import mapping, meta
 from .items import ItemMeta, VersionContent
 
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 META_KEYS = ("layer", "domain", "product", "doc_type", "stage", "capabilities", "industries", "classification",
-             "visible_roles", "owner")
+             "visible_roles", "owner", "tags")
 CONTENT_KEYS = ("title", "source_type", "source_detail", "summary", "applicability", "change_note", "ref_document",
-                "ref_version", "ref_status")
+                "ref_version", "ref_status", "ref_code", "ref_replaced_by")
 
 
 class EntryError(ValueError):
@@ -76,7 +81,7 @@ def parse_entry(text: str) -> Entry:
         return v if isinstance(v, list) else [x.strip() for x in str(v).split(",") if x.strip()]
 
     meta_kw = {k: head[k] for k in META_KEYS if k in head}
-    for k in ("capabilities", "industries", "visible_roles"):
+    for k in ("capabilities", "industries", "visible_roles", "tags"):
         if k in meta_kw:
             meta_kw[k] = [str(x) for x in as_list(meta_kw[k])]
     try:
@@ -87,9 +92,16 @@ def parse_entry(text: str) -> Entry:
     if "title" not in content_kw or "source_type" not in content_kw:
         raise EntryError("元数据缺少 title 或 source_type")
     content = VersionContent(body=body, **content_kw)
+    if head.get("effective_date") not in (None, ""):
+        try:
+            content.effective_date = date.fromisoformat(str(head["effective_date"]))
+        except ValueError as e:
+            raise EntryError(f"effective_date 不是 YYYY-MM-DD 日期：{head['effective_date']!r}") from e
     try:
         item_meta.check()
         content.check(item_meta.layer)
+        if item_meta.doc_type == "MAP":
+            mapping.parse_rows(body)          # 映射矩阵：正文表格格式见 app/kb/mapping.py（B3）
     except meta.MetaError as e:
         raise EntryError(str(e)) from e
     return Entry(key=key, meta=item_meta, content=content)
@@ -106,5 +118,7 @@ def format_entry(e: Entry) -> str:
         v = getattr(e.content, k)
         if k != "title" and v:
             head[k] = v
+    if e.content.effective_date:
+        head["effective_date"] = e.content.effective_date.isoformat()
     return "---\n" + yaml.safe_dump(head, allow_unicode=True, sort_keys=False).strip() + "\n---\n\n" + \
         e.content.body.strip() + "\n"

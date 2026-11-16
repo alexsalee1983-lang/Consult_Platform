@@ -43,6 +43,9 @@ AUDIT_CHAIN_OK = Gauge("cp_audit_chain_ok", "worker 最近一次校验审计哈�
                        registry=REGISTRY)
 AUDIT_CHAIN_VERIFIED = Gauge("cp_audit_chain_verified_timestamp_seconds", "worker 最近一次校验审计哈希链的时间",
                              registry=REGISTRY)
+SELFCHECK_OK = Gauge("cp_selfcheck_ok", "worker 最近一次每日自检的结果（1 通过，0 失败）", registry=REGISTRY)
+SELFCHECK_DONE = Gauge("cp_selfcheck_timestamp_seconds", "worker 最近一次完成每日自检的时间（通过或失败）",
+                       registry=REGISTRY)
 LOGINS = Counter("cp_auth_logins_total", "登录结果（allowed 成功 / blocked 失败 / locked 失败并锁定）",
                  ["result"], registry=REGISTRY)
 
@@ -54,23 +57,35 @@ def upstream_service(url: str) -> str:
 
 
 class _StateCollector(Collector):
-    """抓取时才查的状态量：任务队列积压、在线 worker 数。只在后端进程注册。"""
+    """抓取时才查的状态量：任务队列积压、删除申请逾期、最近一次备份、在线 worker 数。只在后端进程注册。"""
 
     def collect(self) -> Iterator[GaugeMetricFamily]:
-        from ..services import jobs
+        from ..services import jobs, ops
         from ..worker import online_workers
         from .db import SessionLocal
 
         queue = GaugeMetricFamily("cp_jobs_by_status", "各状态的后台任务数", labels=["kind", "status"])
         up = GaugeMetricFamily("cp_state_up", "状态量查询是否成功（1 成功）", labels=["source"])
+        dels = GaugeMetricFamily("cp_deletions_open", "未完成的项目删除申请数")
+        overdue = GaugeMetricFamily("cp_deletions_overdue", "未完成且已过应完成日期的项目删除申请数")
+        backup = GaugeMetricFamily("cp_backup_last_success_timestamp_seconds",
+                                   "最近一次备份成功的时间（backup.create 审计；从没备份过为 0）")
         try:
             with SessionLocal() as db:
                 for kind, by_status in jobs.summary(db).items():
                     for status, n in by_status.items():
                         queue.add_metric([kind, status], n)
+                n_open, n_overdue = ops.deletion_counts(db)
+                last = ops.last_backup(db)
+            dels.add_metric([], n_open)
+            overdue.add_metric([], n_overdue)
+            backup.add_metric([], last.timestamp() if last else 0)
             up.add_metric(["database"], 1)
+            yield dels
+            yield overdue
+            yield backup
         except Exception as e:  # noqa: BLE001  数据库不可用时照样输出其他指标
-            log.warning("指标查询任务队列失败：%s", type(e).__name__)
+            log.warning("指标查询数据库状态失败：%s", type(e).__name__)
             up.add_metric(["database"], 0)
         yield queue
         workers = GaugeMetricFamily("cp_workers_online", "心跳未过期的 worker 数")

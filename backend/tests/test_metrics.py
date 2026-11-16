@@ -129,7 +129,9 @@ def test_single_process_metrics_filtered_by_job():
     text_all = (root / "prometheus" / "alerts.yml").read_text(encoding="utf-8") + \
         (root / "grafana" / "dashboards" / "platform.json").read_text(encoding="utf-8").replace('\\"', '"')
     owner = {"cp_audit_chain_ok": "worker", "cp_audit_chain_verified_timestamp_seconds": "worker",
-             "cp_workers_online": "backend", "cp_state_up": "backend"}
+             "cp_workers_online": "backend", "cp_state_up": "backend",
+             "cp_selfcheck_ok": "worker", "cp_selfcheck_timestamp_seconds": "worker",
+             "cp_deletions_overdue": "backend", "cp_backup_last_success_timestamp_seconds": "backend"}
     for name, job in owner.items():
         uses = [m.group(0) for m in re.finditer(rf"{name}(\{{[^}}]*\}})?", text_all)]
         assert uses, name

@@ -2,7 +2,7 @@
 name: report-writer
 display_name: 报告与汇报 Agent
 version: 0.3
-phase: 一期以咨询师 Agent 的"报告模式"运行；二期独立
+phase: 二期起独立运行，由咨询师 Agent 转交（一期曾以咨询师 Agent 的"报告模式"运行）
 primary_users: 交付顾问
 knowledge_access:
   read: [L1 写作规范, L2 报告模板与黄金样例, L5 案例]

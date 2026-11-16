@@ -8,6 +8,12 @@
   章节没有正文 → 阻断；正文命中机密级检测 → 阻断（此时不发往模型，只出硬规则结果）；
   出现测评 / 认证结论用语（资质边界）→ 阻断；来源标注核对不上（证据编号不存在、知识库条目不存在或已下线）→ 阻断；
   整章只有 [推断]、没有证据和知识库来源 → 重要。
+  依据时效（二期 B9）：评审时按知识库当前状态重新核对引用的条目——已下线、依据已废止或已被替代（ref_status repealed / superseded）→ 阻断；
+  依据即将实施（upcoming，或施行日期晚于今天）→ 重要。签署门禁再实时查一次已下线 / 已废止。
+  以上是通用层（所有产品都查，资质边界用语规则只在这里）。二期 A6 起再查本项目配置快照里的产品层、模块层规则
+  （products/*.yaml、modules/*.yaml 的 gates，类型只有 coverage / required_sections / forbidden_terms / min_sources，
+  见 docs/接口约定.md 第二节），level blocking → 阻断、major → 重要，同样 by = rule、不能驳回；
+  快照读不出来时记一条阻断“产品门禁规则无法核对”，不放行。
 - 再由质量评审与异议应答 Agent 经网关评审（平台按发起人的成员身份把正文交给它，它没有 doc.generate 授权）。
   解析输出的问题表（严重度 阻断 / 重要 / 建议）和“统计：阻断 X 项，重要 X 项，建议 X 项”；
   两者不一致取较大值。评审结论由平台按规则重算，不采信模型自报：
@@ -25,7 +31,7 @@
 
 驳回阻断（负责人 2026-11-12 定，迁移 0022）：AI 给意见、人来定夺。
 - 项目经理可以逐条驳回质量评审 Agent（by = agent）提出的阻断问题，必须写理由（去掉空白至少 10 个字）；只追加，不能撤销（要恢复就重新评审）。
-- 平台硬规则（by = rule）判出的阻断不能驳回：缺正文、机密级、测评 / 认证结论用语、来源核对不上。
+- 平台硬规则（by = rule）判出的阻断不能驳回：缺正文、机密级、测评 / 认证结论用语、来源核对不上、引用已下线条目或已废止依据。
 - 只能驳回最近一次已完成、且针对当前修订的评审；交付件一改，新评审的阻断要重新处理。
 - Agent 统计的阻断数比问题清单里列出的多（没法逐条驳回）时，多出的部分照样算阻断，要重新评审。
 - 门禁用“未驳回的阻断”判断；驳回记录在签署流程里显示，提交、签署的审计记下驳回条数。
@@ -36,6 +42,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -44,9 +51,10 @@ from ..agents import knowledge, runtime, tools
 from ..core import audit
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
-from ..models import Deliverable, Project, QualityReview, ReviewWaiver, SignOff, User
+from ..models import Deliverable, KbItem, KbVersion, Project, QualityReview, ReviewWaiver, SignOff, User
+from ..products import config
 from ..services import gateway, guard, jobs, usage
-from . import cards, deliverables
+from . import cards, configs, deliverables
 from . import evidence as evidence_svc
 
 AGENT = "qa-reviewer"
@@ -118,6 +126,44 @@ class Blocking:
 
 # ---- 公共 ----
 
+KB_GONE, KB_REPEALED, KB_UPCOMING = "gone", "repealed", "upcoming"
+
+
+def cited_kb_refs(d: Deliverable, versions: dict | None = None) -> set[str]:
+    """各章（versions 指定的版本，不传取当前版本）引用的、写入时核对得上的知识库条目编号。"""
+    refs: set[str] = set()
+    for s in d.sections:
+        if versions is None:
+            v = deliverables.get_version(s)
+        else:
+            ver = int(versions.get(str(s.seq), 0) or 0)
+            v = deliverables.get_version(s, ver) if ver else None
+        if v is not None:
+            refs |= {x["ref"] for x in (v.sources or {}).get("knowledge", []) if x.get("found")}
+    return refs
+
+
+def kb_ref_states(db: Session, refs: set[str], today: date | None = None) -> dict[str, str]:
+    """按知识库当前状态核对条目：已下线 / 没有现行版本 → gone；依据已废止 → repealed；
+    即将实施（或施行日期晚于今天）→ upcoming；正常的不返回。"""
+    if not refs:
+        return {}
+    today = today or date.today()
+    rows = {doc_id: (retired, status, eff) for doc_id, retired, status, eff in db.execute(
+        select(KbItem.doc_id, KbItem.retired, KbVersion.ref_status, KbVersion.effective_date)
+        .outerjoin(KbVersion, KbVersion.id == KbItem.current_version_id)
+        .where(KbItem.doc_id.in_(refs))).all()}
+    out: dict[str, str] = {}
+    for ref in refs:
+        row = rows.get(ref)
+        if row is None or row[0] or row[1] is None:
+            out[ref] = KB_GONE
+        elif row[1] in ("repealed", "superseded"):
+            out[ref] = KB_REPEALED
+        elif row[1] == "upcoming" or (row[2] is not None and row[2] > today):
+            out[ref] = KB_UPCOMING
+    return out
+
 def _snapshot(d: Deliverable) -> dict:
     return {str(s.seq): s.current_version for s in d.sections}
 
@@ -187,6 +233,10 @@ def gate(db: Session, d: Deliverable) -> Gate:
         if cited:
             listed = "、".join(f"{c}（{local[c]}）" for c in cited)
             reasons.append(f"正文引用了不能使用的证据 {listed}，删去后重新评审")
+    stale = kb_ref_states(db, cited_kb_refs(d))      # 评审之后条目下线、依据废止：签署前实时检查
+    bad = sorted(ref for ref, st in stale.items() if st in (KB_GONE, KB_REPEALED))
+    if bad:
+        reasons.append(f"正文引用的知识库条目已下线或依据已废止：{'、'.join(bad[:10])}，改正后重新评审")
     r = latest_done_review(db, d)
     if r is None:
         reasons.append("还没有完成的质量评审")
@@ -206,7 +256,8 @@ def gate(db: Session, d: Deliverable) -> Gate:
 
 # ---- 质量评审：发起 ----
 
-def request_review(db: Session, user: User, project: Project, d: Deliverable) -> QualityReview:
+def request_review(db: Session, user: User, project: Project, d: Deliverable, trigger: str = "") -> QualityReview:
+    """发起评审。trigger：平台规则自动发起时写规则名（app/project/autoflow.py），进审计。"""
     action = "quality.request"
     if d.status == "signed":
         _refuse(db, user, project, d, action, "signed", 409, f"{d.code} 已签署，不再评审")
@@ -225,7 +276,8 @@ def request_review(db: Session, user: User, project: Project, d: Deliverable) ->
     db.add(r)
     db.flush()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
-                 deliverable=d.code, review_id=r.id, revision=d.revision, versions=r.versions)
+                 deliverable=d.code, review_id=r.id, revision=d.revision, versions=r.versions,
+                 **({"trigger": trigger} if trigger else {}))
     db.commit()
     jobs.enqueue(db, JOB_KIND, {"review_id": r.id}, created_by=user.username, project_code=project.code,
                  max_attempts=MAX_ATTEMPTS)
@@ -234,6 +286,12 @@ def request_review(db: Session, user: User, project: Project, d: Deliverable) ->
 
 
 # ---- 质量评审：硬规则 ----
+
+def covers(text: str, item: str) -> bool:
+    """coverage 规则：清单项在正文里单独出现才算。条款号按边界判断，“5.1”不会被“5.10”“15.1”“A.5.1.2”冒充。"""
+    pat = rf"(?<![0-9A-Za-z.]){re.escape(item)}(?![0-9A-Za-z]|\.[0-9A-Za-z])"
+    return re.search(pat, text) is not None
+
 
 def _issue(severity: str, location: str, dimension: str, problem: str, suggestion: str, by: str) -> dict:
     return {"severity": severity, "location": location[:100], "dimension": dimension[:40],
@@ -250,9 +308,11 @@ def qualification_hits(text: str) -> int:
 
 def rule_issues(d: Deliverable, versions: dict,
                 local_only: set[str] | frozenset[str] | dict[str, str] = frozenset(),
-                strict: bool = False) -> tuple[list[dict], bool]:
+                strict: bool = False, kb_states: dict[str, str] | None = None) -> tuple[list[dict], bool]:
     """返回 (问题清单, 是否命中机密级)。只用标注和类别描述，不摘正文。
-    local_only：不能引用的证据编号；传 withdrawn_codes() 的 {编号: 原因} 时区分仅现场使用和已删除，传集合时都按仅现场使用。"""
+    local_only：不能引用的证据编号；传 withdrawn_codes() 的 {编号: 原因} 时区分仅现场使用和已删除，传集合时都按仅现场使用。
+    kb_states：kb_ref_states 的结果（引用条目的当前状态）。"""
+    kb_states = kb_states or {}
     issues: list[dict] = []
     confidential = False
     for s in d.sections:
@@ -281,6 +341,14 @@ def rule_issues(d: Deliverable, versions: dict,
         if unresolved:
             issues.append(_issue("阻断", loc, "证据链 / 依据", f"来源标注核对不上：{'、'.join(unresolved[:10])}",
                                  "核对证据编号和知识库条目编号，改正或删除", "rule"))
+        refs = {x["ref"] for x in src.get("knowledge", []) if x.get("found")}
+        for state, severity, problem, suggestion in (
+                (KB_GONE, "阻断", "引用的知识库条目已下线", "改引现行条目，或删除据此写的内容"),
+                (KB_REPEALED, "阻断", "引用的依据已废止或已被替代", "改引现行依据（新版或替代文件），并核对据此写的结论"),
+                (KB_UPCOMING, "重要", "引用的依据尚未施行", "注明施行日期，或同时引用现行依据")):
+            hit = sorted(r for r in refs if kb_states.get(r) == state)
+            if hit:
+                issues.append(_issue(severity, loc, "证据链 / 依据", f"{problem}：{'、'.join(hit[:10])}", suggestion, "rule"))
         cited = {x.get("code") for x in src.get("evidence", [])} & set(local_only)
         reasons = local_only if isinstance(local_only, dict) else {}
         local = sorted(c for c in cited if reasons.get(c, "已标为仅现场使用") == "已标为仅现场使用")
@@ -296,6 +364,61 @@ def rule_issues(d: Deliverable, versions: dict,
             issues.append(_issue("重要", loc, "证据链", "本章结论只有推断，没有客户证据或知识库来源",
                                  "补充证据编号或依据，或明确标注为假设", "rule"))
     return issues, confidential
+
+
+GATE_SEVERITY = {"blocking": "阻断", "major": "重要"}
+
+
+def gate_issues(d: Deliverable, versions: dict, gates: list[dict]) -> list[dict]:
+    """产品层、模块层门禁规则（二期 A6）。只列规则编号、配置里的清单项和计数，不摘正文。没有正文的章不查（通用层已阻断）。"""
+    issues: list[dict] = []
+    chapters: list[tuple[str, str, dict]] = []          # (位置, 正文, 来源计数)
+    for s in d.sections:
+        ver = int(versions.get(str(s.seq), 0) or 0)
+        v = deliverables.get_version(s, ver) if ver else None
+        if v is not None:
+            chapters.append((f"第 {s.seq} 章 {s.title}", v.body, (v.sources or {}).get("counts", {})))
+    titles = [s.title for s in d.sections]
+    full = "\n".join(titles + [b for _, b, _ in chapters])
+    for g in gates:
+        if g.get("deliverable") and g["deliverable"] != d.code:
+            continue
+        sev = GATE_SEVERITY.get(g.get("level", ""), "阻断")
+        dim = f"产品规则 {g.get('source', '')}/{g.get('id', '')}"
+        msg = g.get("message", "")
+        kind = g.get("kind")
+        if kind == "coverage":
+            missing = [i for i in g.get("items", []) if not covers(full, i)]
+            if missing:
+                more = f" 等 {len(missing)} 项" if len(missing) > 20 else ""
+                issues.append(_issue(sev, "全文", dim, f"{msg}：缺 {'、'.join(missing[:20])}{more}",
+                                     "补齐缺的各项；确实不适用的写明不适用理由", "rule"))
+        elif kind == "required_sections":
+            missing = [x for x in g.get("sections", []) if not any(x in t for t in titles)]
+            if missing:
+                issues.append(_issue(sev, "大纲", dim, f"{msg}：缺章节 {'、'.join(missing)}",
+                                     "在大纲里加上这些章节并写正文", "rule"))
+        elif kind == "forbidden_terms":
+            for loc, body, _ in chapters:
+                hits = [t for t in g.get("terms", []) if t in body]
+                if hits:
+                    issues.append(_issue(sev, loc, dim, f"{msg}：出现 {'、'.join(hits)}", "改用合规的说法", "rule"))
+        elif kind == "min_sources":
+            need = int(g.get("min", 1))
+            for loc, _, counts in chapters:
+                n = int(counts.get("evidence", 0)) + int(counts.get("knowledge", 0))
+                if n < need:
+                    issues.append(_issue(sev, loc, dim, f"{msg}：来源标注 {n} 个，少于 {need} 个",
+                                         "补充证据编号或知识库依据", "rule"))
+    return issues
+
+
+def project_gates(db: Session, project: Project) -> list[dict] | None:
+    """本项目快照里的产品层、模块层门禁规则；快照读不出来返回 None。"""
+    try:
+        return list(configs.snapshot(db, project)["gates"])
+    except config.CatalogError:
+        return None
 
 
 # ---- 质量评审：解析 Agent 输出 ----
@@ -401,7 +524,14 @@ def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverab
 
 def _execute(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview) -> None:
     issues, confidential = rule_issues(d, r.versions, evidence_svc.withdrawn_codes(db, project),
-                                       strict=project.tier == "strict")
+                                       strict=project.tier == "strict",
+                                       kb_states=kb_ref_states(db, cited_kb_refs(d, r.versions)))
+    gates = project_gates(db, project)
+    if gates is None:
+        issues.append(_issue("阻断", "全文", "产品规则", "服务产品配置有问题，产品门禁规则无法核对",
+                             "请系统管理员运行 catalog-check 修好配置后重新评审", "rule"))
+    else:
+        issues += gate_issues(d, r.versions, gates)
     report, counts = "", {s: 0 for s in SEVERITIES}
     if confidential:
         report = "（交付件正文命中机密级检测，未发往模型评审。请先处理阻断项，再重新评审。）"
@@ -456,6 +586,12 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
                  blocking=blocking, major=major, minor=minor, rule_issues=sum(rule_counts.values()),
                  length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens)
     db.commit()
+    from . import autoflow                     # 门禁通过自动提交签署（C5 P10）；出错不影响评审结果
+
+    try:
+        autoflow.after_review(db, r)
+    except Exception:  # noqa: BLE001
+        db.rollback()
 
 
 # ---- 签署流程 ----
@@ -478,8 +614,9 @@ def _last_submit(db: Session, d: Deliverable) -> SignOff | None:
                      .order_by(SignOff.id.desc()).limit(1))
 
 
-def submit(db: Session, user: User, project: Project, d: Deliverable, comment: str = "") -> SignOff:
-    """顾问审核完成，提交签署。"""
+def submit(db: Session, user: User, project: Project, d: Deliverable, comment: str = "", actor: str = "",
+           trigger: str = "") -> SignOff:
+    """顾问审核完成，提交签署。平台规则自动提交时 actor=platform、trigger 写规则名（app/project/autoflow.py）。"""
     action = "deliverable.submit"
     comment = _comment(comment)
     _lock_deliverable(db, d)
@@ -491,13 +628,14 @@ def submit(db: Session, user: User, project: Project, d: Deliverable, comment: s
     if not g.ok:
         _refuse(db, user, project, d, action, "gate", 409, {"gate": False, "reasons": g.reasons})
     s = SignOff(project_id=project.id, deliverable_id=d.id, action="submit", revision=d.revision,
-                versions=_snapshot(d), review_id=g.review.id, comment=comment, actor=user.username)
+                versions=_snapshot(d), review_id=g.review.id, comment=comment, actor=actor or user.username)
     db.add(s)
     d.status = "review"
     db.flush()
-    audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
+    audit.record(db, actor=actor or user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, revision=d.revision, versions=s.versions, review_id=g.review.id,
-                 major=g.review.major, waived=g.waived, comment_length=len(comment))
+                 major=g.review.major, waived=g.waived, comment_length=len(comment),
+                 **({"trigger": trigger} if trigger else {}))
     db.commit()
     db.refresh(s)
     return s
