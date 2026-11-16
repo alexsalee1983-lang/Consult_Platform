@@ -73,7 +73,8 @@ def test_out_of_scope(lib, model):  # noqa: F811
         v = _published_due(db, db.merge(author), law)
         v.single_review = True                                              # 待补复审的要人补
         db.commit()
-        src = db.scalars(select(KbItem).where(KbItem.doc_type == "SRC", KbItem.retired.is_(False))).first()
+        src = db.scalars(select(KbItem).where(KbItem.doc_type == "SRC", KbItem.retired.is_(False),
+                                         KbItem.current_version_id.is_not(None)).order_by(KbItem.id)).first()
         cur = db.get(KbVersion, src.current_version_id)
         cur.review_date = YESTERDAY                                          # 依据原文照旧人工复审
         db.commit()
