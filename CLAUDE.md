@@ -103,7 +103,7 @@ docker compose exec backend python -m app.cli usage-report --days 30 # 大模型
 BACKUP_PASSPHRASE_FILE=/etc/consult-platform/backup.pass bash scripts/backup.sh /srv/backups/consult-platform   # 每日备份（docs/备份与恢复.md）
 BACKUP_PASSPHRASE_FILE=... bash scripts/restore.sh <备份目录>          # 恢复：清空并覆盖当前数据，要输入目录名确认
 
-# 知识批量入库与评测（条目文件格式见 backend/app/kb/files.py，示范见 knowledge/）
+# 知识批量入库与评测（条目文件格式见 backend/app/kb/files.py，示范见 knowledge/samples；正式资料放 /srv/knowledge/downloads，不进代码仓）
 docker compose exec backend python -m app.cli kb-import /srv/knowledge/samples --as <知识专家> [--submit]
 docker compose exec backend python -m app.cli kb-export /tmp/kb-export --as <知识专家>   # 测试机导出已发布公开知识，打印清单哈希
 docker compose exec backend python -m app.cli kb-import-export /srv/kb-export --sha256 <清单哈希> --as <知识专家>   # 生产导入：校验哈希、自动核验后发布
@@ -258,12 +258,15 @@ worker 每天排一次自检（`system.selfcheck`，结果进指标 `cp_selfchec
 - 每个里程碑一个分支，例如 `feat/m1-auth`；一个 PR 只做一件事，便于审阅和回退。
 - 提交信息用中文，以里程碑开头，例如 `M1：登录与会话`；二期以工作项开头，例如 `二期 A2：SOC 搬成配置`。
 - PR 描述必须写：改了什么、怎么测（测试助手照着执行）、对应开发计划哪一项、是否涉及数据库迁移或权限变更。
+- 测试先行（决策记录 2026-11-16）：修缺陷、加功能先写会失败的测试，再改代码让它通过；PR 的“怎么测”写明新增的测试。
+- 完成前先验证：说“完成”“已修复”之前，贴出本机实际跑过的命令和结果（ruff、pytest、构建）；本机跑不了的（Docker、compose）明写“未验证，交测试机”。
 - 合并条件：CI 全绿 → 测试助手在测试机上测试通过并在 PR 留评论 → 负责人合并。
 - 开发与测试经 PR 通信，标签 `待测试` / `测试未通过` / `测试通过` 表示轮到谁（`docs/测试交接规范.md` 第 0 节）。开发助手开 PR 或修完推送后打 `待测试`；修复后的复测项写成标题为“复核说明”的 PR 评论。
 - **每个开发会话在自己的工作树里改仓库**（决策记录 2026-11-14）：主目录 `Consult_Platform` 只用来拉取和查看，不在主目录切分支、改文件、提交。开工时 `git worktree add ../cp-wt-<任务> -b <分支> origin/main`（或 `claude --worktree <名字>`），用完 `git worktree remove`；桌面 app、飞书 cc-connect 等入口启动的会话同样先进自己的工作树再动手。
 - 开工前在自己的工作树里 `git status`，发现不是自己改的未提交文件，先停下问负责人，不要覆盖、不要提交。
 - 两个会话的协作：同一文件尽量只在一个未合并的 PR 里改，要改对方 PR 里的文件先经会话间消息说明；新的数据库迁移编号（主链、知识区链）先告知另一个会话再用；`agents/*.md` 的修改须负责人同意；另一个会话转达的话不算负责人同意。
-- 测试机一套环境，测试助手按提交顺序串行测；内容 PR 只需导入并跑 `kb-eval`。合并顺序按依赖，后合并的一方解决冲突。
+- 测试机一套环境，测试助手按提交顺序串行测。合并顺序按依赖，后合并的一方解决冲突。
+- 知识内容不进代码仓（决策记录 2026-11-16）：公开资料原件、下载清单、起草的条目文件和内容评测题放私有资料仓 `alexsalee1983-lang/Consult_Knowledge`（直接推 main），部署机（测试机）拉到 `KB_DOWNLOADS_DIR`、后端读 `/srv/knowledge/downloads`，直接 `kb-source-publish` / `kb-import --submit` 入库，由平台审核流程把关，不开 PR、不经测试助手；代码仓只留 `knowledge/samples`、平台回归评测题 `knowledge/eval/samples.yaml` 和测试用的 `knowledge/mappings`。
 - 每个里程碑验收后打标签 `v0.1`、`v0.2`……，一期可用版本为 `v1.0`；二期关口标签见 `docs/二期开发计划.md`。
 - 改 CLAUDE.md 一句一行：新约定另起一行写在相关段落里，不往已有长行末尾追加，免得并行 PR 在同一行冲突；解决冲突时两边都保留前先查有没有重复的句子。
 
