@@ -75,6 +75,12 @@ _PAGE_NO = re.compile(r"\s*(?:[—－]\s*\d{1,3}\s*[—－]|-\s\d{1,3}\s-)\s*")
 _ITEM = re.compile(rf"^\s*([{_NUM}]+)、[\s　]*(.*)$")
 _CONTROL = re.compile(r"^\s*([A-Z]{2,3}-\d{1,2}(?:\(\d{1,2}\))?)\s+(\S.{0,80})$")
 _NUMBERED = re.compile(r"^\s*((?:[A-Z]\.)?\d{1,2}(?:\.\d{1,2}){0,3})[\s　]+([^\s　].{0,60})$")
+# CSF 2.0 子类 GV.OC-01、隐私框架 ID.IM-P1、SSDF 任务 PO.1.1 / 实践 PO.1、AI RMF GOVERN 1.1：编号后必须带冒号
+#（800-61r3 等引用 CSF 编号的表格没有冒号，不当标题）；行首可有列表符 o / •
+_FRAMEWORK_ID = re.compile(r"^\s*(?:[o•▪]\s+)?([A-Z]{2}\.[A-Z]{2}-P?\d{1,2}|[A-Z]{2}\.\d{1,2}(?:\.\d{1,2})?"
+                           r"|(?:GOVERN|MAP|MEASURE|MANAGE) \d{1,2}\.\d{1,2}):\s*(\S.*)$")
+# 英文文献章节号后带点：“1. Introduction”“3.1. CSF Profiles”（只认大写字母开头的英文标题）
+_NUMBERED_DOT = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){0,3})\.\s+([A-Z][^\s].{0,60})$")
 
 
 def cn_int(s: str) -> int:
@@ -300,7 +306,10 @@ def _heading(ln: str) -> tuple[str, str] | None:
     m = _CONTROL.match(ln)
     if m:
         return m.group(1), m.group(2).strip()
-    m = _NUMBERED.match(ln)
+    m = _FRAMEWORK_ID.match(ln)
+    if m:
+        return m.group(1), m.group(2).strip()[:80]
+    m = _NUMBERED.match(ln) or _NUMBERED_DOT.match(ln)
     if m and not ln.endswith(("。", "；", "，", ".", ";", ",")) and not re.search(r"\.{4,}|…{2,}|\s\d+$", ln):
         return m.group(1), m.group(2).strip()
     return None
@@ -312,12 +321,18 @@ def split_sections(lines: list[str], with_text: bool) -> list[Piece]:
     seen: set[str] = set()
     buf: list[str] = []
     cur: Piece | None = None
+    def close(c: Piece) -> None:
+        c.text = _join(buf) if with_text else ""
+        # 框架编号（CSF 子类等）的条文常常整句都在标题行里：正文为空时以标题行为正文，不丢条目
+        if with_text and not c.text and _FRAMEWORK_ID.match(f"{c.clause}: {c.heading}"):
+            c.text = c.heading
+        pieces.append(c)
+
     for ln in lines:
         h = _heading(ln)
         if h and h[0] not in seen:
             if cur is not None:
-                cur.text = _join(buf) if with_text else ""
-                pieces.append(cur)
+                close(cur)
             seen.add(h[0])
             cur = Piece(clause=h[0], key_part=re.sub(r"[^a-z0-9]+", "-", h[0].lower()).strip("-"), heading=h[1],
                         text="")
@@ -325,8 +340,7 @@ def split_sections(lines: list[str], with_text: bool) -> list[Piece]:
         elif cur is not None and with_text:
             buf.append(ln)
     if cur is not None:
-        cur.text = _join(buf) if with_text else ""
-        pieces.append(cur)
+        close(cur)
     return pieces
 
 
