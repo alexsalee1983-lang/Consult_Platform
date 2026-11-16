@@ -39,6 +39,7 @@ def _batch(tmp_path, rows):
     for name, text, change in rows:
         title = f"示范条例{uuid.uuid4().hex[:6]}"
         titles[name] = title
+        text = text.replace("第一条 ", f"第一条 （{title}）", 1)    # 各份正文不同，免得被判成改名（renamed_from）
         data = text.encode()
         (src / name).write_bytes(data)
         row = {"code": "示范令第1号", "url": "https://www.example.gov.cn/1", "sha": hashlib.sha256(data).hexdigest(),
@@ -134,6 +135,32 @@ def test_rejected_clause_does_not_block_rest(tmp_path, monkeypatch):
         assert len(vs) == 2 and {v.status for v in vs} == {"published"}
         assert all("Zx9#kq2Lm8Q" not in v.body for v in vs)
         assert len(r.sampled) == 2 and all(v.sample_state == "pending" for v in vs)
+
+
+def test_renamed_title_not_duplicated(tmp_path, monkeypatch):
+    """清单只改了标题（编号随标题变）：正文与库里另一份逐条相同 → 整份跳过并提示，不重复入库（#160 测试发现）。"""
+    op = _users()[0]
+    monkeypatch.setattr(get_settings(), "kb_sample_rate_src", 0.0)
+    manifest, src, titles = _batch(tmp_path, [("law.txt", LAW, {})])
+    old = titles["law.txt"]
+    with SessionLocal() as db:
+        assert autopublish.run(db, db.merge(op), manifest, src).docs[0].published == 3
+    text = manifest.read_text(encoding="utf-8").replace(f",{old},", f",{old}（原文名）,")
+    manifest.write_text(text, encoding="utf-8")
+    with SessionLocal() as db:
+        d = autopublish.run(db, db.merge(op), manifest, src).docs[0]
+        assert (d.published, d.manual) == (0, 0) and old in d.message and "改了标题" in d.message
+        assert _versions(db, f"{old}（原文名）") == []
+    # 正文有一条不同（例如修正后的新文本）就不算改名，照常发布
+    (src / "law.txt").write_text((src / "law.txt").read_text(encoding="utf-8").replace("管理制度", "管理制度和应急预案"),
+                                 encoding="utf-8")
+    data = (src / "law.txt").read_bytes()
+    lines = manifest.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines[1] = lines[1].rsplit(",", 1)[0] + "," + hashlib.sha256(data).hexdigest() + "\n"
+    manifest.write_text("".join(lines), encoding="utf-8")
+    with SessionLocal() as db:
+        d = autopublish.run(db, db.merge(op), manifest, src).docs[0]
+        assert d.published == 3 and not d.message.startswith("条款正文")
 
 
 def test_samples_api(tmp_path):
