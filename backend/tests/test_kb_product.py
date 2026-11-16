@@ -177,3 +177,7 @@ def test_industry_basis_config_and_boost(people, tmp_path):  # noqa: F811
         db.commit()
         ids = _ids(tools.invoke(db, user, "compliance-basis", "basis.lookup", q, code))
         assert ids.index(strong.doc_id) < ids.index(weak.doc_id)          # 行业对不上：不加权
+        p.industry = "银行/金融"                                         # 立项下拉的合并行业：任一部分对上即加权
+        db.commit()
+        ids = _ids(tools.invoke(db, user, "compliance-basis", "basis.lookup", q, code))
+        assert ids.index(weak.doc_id) < ids.index(strong.doc_id)

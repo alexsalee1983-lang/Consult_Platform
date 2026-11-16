@@ -105,7 +105,7 @@ class ProjectIn(BaseModel):
 
 @router.get("/catalog/products")
 def catalog_products(user: User = Depends(current_user)) -> list[dict]:
-    """立项可选的产品和模块（只列 ready 的）。"""
+    """立项可选的产品和模块（草稿产品 ready=false，只显示不能立项）。"""
     return configs.options()
 
 

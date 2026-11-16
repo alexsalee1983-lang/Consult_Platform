@@ -3,6 +3,9 @@ import { useNavigate } from "react-router";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 
+// 立项行业下拉（负责人 11-16）；产品配置 industry_basis 的键对上任一部分即加权（app/agents/tools.py），新增行业在这里加
+const INDUSTRIES = ["银行/金融", "电力", "制造", "政府", "其他"];
+
 // 网页立项（二期 A3）：项目负责人选产品、勾模块、定档、指定首位项目经理（默认本人）。规则见 app/project/configs.py
 export default function NewProject({ onClose }) {
   const { user } = useAuth();
@@ -15,7 +18,8 @@ export default function NewProject({ onClose }) {
   useEffect(() => {
     api.catalogProducts().then((ps) => {
       setProducts(ps);
-      if (ps.length) setF((x) => ({ ...x, product: ps[0].code }));
+      const first = ps.find((p) => p.ready);
+      if (first) setF((x) => ({ ...x, product: first.code }));
     }).catch((e) => setError(e.message));
   }, []);
 
@@ -41,13 +45,14 @@ export default function NewProject({ onClose }) {
   return (
     <section className="pnl pad" aria-label="新建项目" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div className="sb"><h2 className="h2">新建项目</h2><button className="btn sm" onClick={onClose}>取消</button></div>
-      {products && products.length === 0 && <div className="sub err">没有可立项的服务产品（配置有问题时不能立项，请联系系统管理员）。</div>}
+      {products && !products.some((p) => p.ready) && <div className="sub err">没有可立项的服务产品（配置有问题时不能立项，请联系系统管理员）。</div>}
       <label className="sub">项目代号（只用客户代号，如 BANK-D，不写客户真实名称）
         <input className="inp mono" maxLength={15} value={f.code} onChange={set("code")} placeholder="BANK-D" />
       </label>
       <label className="sub">服务产品
         <select className="inp" value={f.product} onChange={(e) => setF({ ...f, product: e.target.value, modules: [] })}>
-          {(products || []).map((p) => <option key={p.code} value={p.code}>{p.code} · {p.name}</option>)}
+          {(products || []).map((p) => <option key={p.code} value={p.code} disabled={!p.ready}>
+            {p.code} · {p.name}{p.ready ? "" : "（筹备中）"}</option>)}
         </select>
       </label>
       {prod && prod.modules.length > 0 && (
@@ -68,11 +73,16 @@ export default function NewProject({ onClose }) {
         <input className="inp" maxLength={64} value={f.manager} onChange={set("manager")} placeholder={user?.username} />
       </label>
       <div className="row">
-        <label className="sub">行业<input className="inp" maxLength={32} value={f.industry} onChange={set("industry")} placeholder="银行" /></label>
+        <label className="sub">行业
+          <select className="inp" value={f.industry} onChange={set("industry")}>
+            <option value="">请选择</option>
+            {INDUSTRIES.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </label>
         <label className="sub">计划周数<input className="inp" type="number" min={1} max={104} value={f.weeks} onChange={set("weeks")} /></label>
       </div>
       {error && <div className="sub err">{error}</div>}
-      <div className="row"><button className="btnp" disabled={busy || !f.code.trim() || !f.product || !f.tier} onClick={submit}>立项</button>
+      <div className="row"><button className="btnp" disabled={busy || !f.code.trim() || !prod?.ready || !f.tier || !f.industry} onClick={submit}>立项</button>
         <span className="sub">立项后产品和模块不能再改；配置改版只影响之后立项的项目。</span></div>
     </section>
   );
