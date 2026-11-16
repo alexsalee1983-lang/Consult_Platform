@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # 每批按比例随机抽检；最近 20 次抽检不通过率超过上限时暂停自动发布、全部转人工审核，直到抽检恢复。
     kb_src_auto_publish: bool = True
     kb_sample_rate_src: float = 0.05
+    kb_sample_rate_src_partial: float = 0.4   # 有条款被机密级检测退回的那几份（负责人 2026-11-16）
     kb_sample_fail_max: float = 0.1
     # 知识审核 Agent（二期 B11，二期开发计划第十二节第二级）：公开资料的解读、映射、方法和只含公开资料的案例、异议应答，
     # 提交后由程序规则 + 知识审核 Agent（经网关）逐项检查，全部通过的自动发布并按比例抽检，存疑的进人工队列。
