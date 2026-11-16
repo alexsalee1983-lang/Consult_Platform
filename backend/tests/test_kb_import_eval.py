@@ -309,3 +309,17 @@ def test_eval_reports_rerank_scores(monkeypatch):
     assert r2.correct and r2.top_wrong_rerank == 0.001                       # 门槛挡掉了，但分数取到了
     assert report.in_candidates == 1.0 and report.rerank_scores["negatives_max"]["max"] == 0.001
     assert "重排分数分布" in evaluate.format_report(report)
+
+
+def test_eval_recall_diagnosis():
+    """答错的题带召回诊断：期望条目未发布的注明；已发布但没召回的给出各层名次（没进为空）。"""
+    qs = [{"id": "D1", "mode": "search", "question": "乙丙丁戊己庚辛", "expect": ["ev-csl-art21-mlps"]},
+          {"id": "D2", "mode": "basis", "question": "网络日志 留存", "expect": ["ev-no-such-key"]}]
+    with SessionLocal() as db:
+        report = evaluate.run(db, db.merge(_user(("consultant",))), qs)
+    d1, d2 = report.results
+    assert not d1.correct and d1.recall == {"published": True, "fulltext": None, "vector": None,
+                                            "vector_kept": None, "fused": None}
+    assert not d2.correct and d2.recall == {"published": False}
+    text = evaluate.format_report(report)
+    assert "全文 没进、向量 没进、融合 没进" in text and "期望条目没有已发布的现行版本" in text
