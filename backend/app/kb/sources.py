@@ -294,16 +294,65 @@ def split_items(lines: list[str]) -> list[Piece]:
 
 _AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩๐๑๒๓๔๕๖๗๘๙", "01234567890123456789")   # 阿拉伯、泰文数字
 _FOREIGN = re.compile(r"^\s*(?:(Article|ARTICLE|Artigo|ARTIGO|Art\.|Section|SECTION|Sec\.|Pasal|PASAL|Điều|ĐIỀU|มาตรา|المادة|مادة)\s*"
-                      r"\(?\s*([Pp]remier|PREMIER|1er|[0-9٠-٩๐-๙]{1,3})\s*\)?(?:\.?\s*º|\.?\s*°|\.?ª)?\s*[.:\-–—]*\s*(.*)$"
-                      r"|([0-9]{1,3})\s*\.\s*(?:[—–-]\s*)?(\(1\)\s*.*|[A-Z(“\"‘].*)$)")
-_FOREIGN_END = re.compile(r"^\s*(SCHEDULES?|Schedules?|ANNEX(?:E|ES)?|Annex(?:e|es)?|ANEXOS?|Anexos?)\b[\s:—–-]*\S{0,60}$")
+                      r"\(?\s*([Pp]remier|PREMIER|1er|[0-9٠-٩๐-๙]{1,3}(?:[A-Z]{1,2}(?![A-Za-z]))?)\s*\)?(?:\.?\s*º|\.?\s*°|\.?ª)?\s*[.:\-–—]*\s*(.*)$"
+                      r"|([0-9]{1,3}(?:[A-Z]{1,2})?)\s*\.\s*(?:[—–-]\s*)?(\(1\)\s*.*|[A-Z(“\"‘\[一-鿿《「（].*)$)")
+_FOREIGN_END = re.compile(r"^\s*(?:(?:FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ELEVENTH|TWELFTH)\s+)?(SCHEDULES?|Schedules?|ANNEX(?:E|ES)?|Annex(?:e|es)?|ANEXOS?|Anexos?)\b[\s:—–-]*\S{0,60}$")
+
+
+_PART = re.compile(r"^\s*(PART|Part)\s+([0-9]{1,3}[A-Z]{0,2}|[IVXLC]{1,6})\b\s*[.:—–-]?\s*(.*)$")
+_PART_NOTE = re.compile(r"^\s*\((?:PART|Part)\s+\S+\s.*\)\s*$")
+_SMALL = {"of", "and", "the", "to", "for", "in", "on", "by", "or", "a", "an", "with", "without", "under", "from", "into"}
+
+
+def _title_like(s: str) -> bool:
+    """大标题：全大写，或每个实词首字母大写；句号、分号结尾的是正文。"""
+    s = s.strip()
+    if not s or len(s) > 160 or s.endswith((".", ";", ",", ":")):
+        return False
+    if not re.search(r"[a-z]", s):
+        return True
+    return all(w[0].isupper() or w in _SMALL or not w[0].isalpha() for w in s.split())
+
+
+def _drop_parts(lines: list[str]) -> list[str]:
+    """PART 大标题（新加坡写成一行“PART 6A NOTIFICATION …”，香港分两行“Part 6A”+ 标题，再跟“(Part 6A added …)”）是边界不是正文，去掉。"""
+    out: list[str] = []
+    skip_title = False
+    for ln in lines:
+        if skip_title:
+            skip_title = False
+            # 单独一行的“Part 7”后面紧跟的是本 Part 标题（不是条文、不以标点结尾）
+            if not _FOREIGN.match(ln) and len(ln.strip()) <= 160 and not ln.rstrip().endswith((".", ";", ",", ":")):
+                continue
+        if _PART_NOTE.match(ln):
+            continue
+        m = _PART.match(ln)
+        if m and (not m.group(3) or _title_like(m.group(3))):
+            skip_title = not m.group(3)
+            continue
+        out.append(ln)
+    return out
+
+
+def _foreign_id(m: re.Match[str]) -> tuple[int, str]:
+    """条号和字母后缀：新加坡等修正插入的条文写作“15A.”“26B.”，排在 15、26 之后。"""
+    raw = m.group(2) or m.group(4) or ""
+    if raw.lower() in ("premier", "1er"):
+        return 1, ""
+    n = re.match(r"([0-9٠-٩๐-๙]+)([A-Z]*)$", raw)
+    return (int(n.group(1).translate(_AR_DIGITS)), n.group(2)) if n else (0, "")
 
 
 def _foreign_no(m: re.Match[str]) -> int:
-    raw = m.group(2) or m.group(4) or ""
-    if raw.lower() in ("premier", "1er"):
-        return 1
-    return int(raw.translate(_AR_DIGITS)) if raw else 0
+    return _foreign_id(m)[0]
+
+
+def _follows(nxt: tuple[int, str], cur: tuple[int, str]) -> bool:
+    """下一条：条号加 1 且不带后缀，或同一条号、后缀往后排（15 → 15A → 15B）。"""
+    n, suf = nxt
+    if not suf:
+        return n == cur[0] + 1
+    return n == cur[0] and cur[0] > 0 and (len(suf), suf) > (len(cur[1]), cur[1])
 
 
 def _score(pieces: list[Piece]) -> tuple[int, int]:
@@ -318,7 +367,7 @@ def split_articles(lines: list[str]) -> list[Piece]:
         if i > len(lines) // 2 and _FOREIGN_END.match(ln):
             cut = i
             break
-    lines = lines[:cut]
+    lines = _drop_parts(lines[:cut])
     word = "Article"
     joined = " ".join(lines[:2000])
     if len(re.findall(r"\bsection\b", joined, re.I)) > len(re.findall(r"\barticle\b", joined, re.I)):
@@ -328,28 +377,29 @@ def split_articles(lines: list[str]) -> list[Piece]:
     for start in starts:
         pieces: list[Piece] = []
         buf: list[str] = []
-        cur, label = 0, ""
+        cur, label = (0, ""), ""
 
         def flush() -> None:
-            if cur:
-                pieces.append(Piece(clause=label, key_part=str(cur), heading="", text=_join(buf)))
+            if cur[0]:
+                pieces.append(Piece(clause=label, key_part=f"{cur[0]}{cur[1].lower()}", heading="", text=_join(buf)))
 
         for ln in lines[start:]:
             m = _FOREIGN.match(ln)
-            if m and _foreign_no(m) == cur + 1:
+            if m and _follows(_foreign_id(m), cur):
                 flush()
-                cur = _foreign_no(m)
+                cur = _foreign_id(m)
+                no = f"{cur[0]}{cur[1]}"
                 if m.group(1):
                     w = {"ARTICLE": "Article", "ARTIGO": "Artigo", "Art.": "Article", "SECTION": "Section",
                          "Sec.": "Section", "PASAL": "Pasal", "ĐIỀU": "Điều",
                          "مادة": "المادة"}.get(m.group(1), m.group(1))
-                    label = f"{w} {cur}" + (".º" if w == "Artigo" else "")
+                    label = f"{w} {no}" + (".º" if w == "Artigo" else "")
                     rest = m.group(3)
                 else:
-                    label, rest = f"{word} {cur}", m.group(5)
+                    label, rest = f"{word} {no}", m.group(5)
                 buf = [rest] if rest else []
                 continue
-            if cur:
+            if cur[0]:
                 buf.append(ln)
         flush()
         if _score(pieces) > _score(best):
