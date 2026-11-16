@@ -2,7 +2,7 @@
 # 开发线 2 起草，待知识专家评审；expect 用 kb-source-split 生成的稳定 key（同一原文、同一条号不变）。
 # 网络安全法按 2025 年修正后的条号（主席令第六十一号，2026-01-01 施行）。
 # expect_refs / category 供有无知识库对比评测（kb-eval --compare，app/kb/compare.py）；expect 供检索评测。
-# 末尾 N 开头的题期望查不到（前两批没收），后续批次收入后改为正向题。
+# 末尾 N 开头的题期望查不到：选与网络安全、数据保护无关的问题，后续批次收资料也不会变成能查到。
 
 # ---- 网络安全法 ----
 - {id: L001, mode: basis, category: clause, question: 网络日志至少要留存多久？依据是哪一条？, expect: [src-58361819-23], expect_refs: ["《网络安全法》第二十三条"]}
@@ -112,7 +112,7 @@
 - {id: A002, mode: basis, category: clause, question: 关键信息基础设施整体中断运行多久算重大网络安全事件？, expect: [src-8c523c85-2]}
 - {id: A003, mode: basis, category: clause, question: 个人信息保护合规审计中，对自动化决策要重点审查哪些事项？, expect: [src-d983abeb-9]}
 - {id: A004, mode: basis, category: clause, question: 合规审计时处理敏感个人信息要审查哪些事项？, expect: [src-d983abeb-13]}
-# ---- 期望查不到（第一至三批未收）----
-- {id: N001, mode: basis, question: 医疗卫生机构网络安全管理的行业监管要求, expect: []}
-- {id: N002, mode: basis, question: 银行业金融机构信息科技外包风险管理的监管要求, expect: []}
-- {id: N003, mode: basis, question: 等保 2.0 第三级安全通用要求对身份鉴别的具体条款, expect: []}
+# ---- 期望查不到（与网络安全、数据保护无关，知识库不会收）----
+- {id: N001, mode: basis, question: 食品生产企业申请食品生产许可要提交哪些材料？, expect: []}
+- {id: N002, mode: basis, question: 个人所得税专项附加扣除中子女教育的扣除标准, expect: []}
+- {id: N003, mode: basis, question: 建筑施工企业安全生产许可证的有效期是多久？, expect: []}
