@@ -26,6 +26,7 @@
 
     正文……
 
+doc_id 由平台入库时按 layer、domain、product、doc_type 顺序分配（items.next_doc_id），文件名或正文里写的编号不算数；同一条目靠 key 对应。
 Agent 起草（app/kb/drafting.py）输出的也是这个格式，专家改好后再用 kb-import 导入。
 """
 from __future__ import annotations
