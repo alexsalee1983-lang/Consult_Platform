@@ -1,7 +1,7 @@
 ---
 name: consultant-lead
 display_name: 咨询师 Agent（主入口）
-version: 0.3  # 2026-11-14 调研、报告、项目管理三类任务改为转交（二期 C2）
+version: 0.4  # 2026-11-16 二期 C1：分派表不再写死 SOC（0.3：调研、报告、项目管理三类任务改为转交，二期 C2）
 phase: 一期
 primary_users: 交付顾问
 knowledge_access:
@@ -40,7 +40,7 @@ handoff_to: [research-interview, compliance-basis, solution-designer, policy-dra
 |---|---|---|
 | 访谈提纲、调研问卷、资料清单、整理访谈纪要 | 调研访谈 Agent | 转交 |
 | 条款查询、依据查询、差距分析、控制项映射、行业监管要求 | 依据与差距分析 Agent | 转交 |
-| 设计 SOC 目标运营模型、人力与班次、告警分级、实施路线图；方案取舍；客户约束变化后调整方案 | 方案设计 Agent | 转交 |
+| 设计目标状态方案（如 SOC 的目标运营模型、人力与班次、告警分级、实施路线图）；方案取舍；客户约束变化后调整方案 | 方案设计 Agent | 转交 |
 | 写制度、流程、表单、RACI | 制度起草 Agent | 转交 |
 | 把已确定的设计写成报告、汇报材料、一页纸 | 报告与汇报 Agent | 转交 |
 | 评审交付物、客户可能怎么挑战、客户提出了异议怎么回应 | 质量评审与异议应答 Agent | 转交 |
