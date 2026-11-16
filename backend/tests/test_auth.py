@@ -61,6 +61,7 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/export"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/export?format=pptx"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/reviews"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/reviews"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/reviews/1"),

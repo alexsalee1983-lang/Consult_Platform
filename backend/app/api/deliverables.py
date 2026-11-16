@@ -7,6 +7,7 @@ PUT  /api/projects/{code}/deliverables/{dcode}/sections/{seq}           顾问�
 GET  /api/projects/{code}/deliverables/{dcode}/sections/{seq}/diff      两个版本的差异（?a=1&b=2，统一 diff 格式）
 GET  /api/projects/{code}/knowledge-updates                             引用的知识条目已更新或下线、需要复核的章节（二期 B4）
 GET  /api/projects/{code}/deliverables/{dcode}/export                   导出 Word（各章当前版本，套模板；规则见 app/project/export.py）
+     ?format=pptx 导出 PowerPoint（二期 A9，规则见 app/project/export_pptx.py）
 
 严格档项目只收占位符版本（真名、IP、系统名 422）；已签署的交付件写入 409；机密级命中 422（不保存）。规则见 app/project/deliverables.py。
 """
@@ -24,6 +25,7 @@ from ..core.permissions import project_for_member, require_business
 from ..models import Deliverable, User
 from ..project import deliverables as svc
 from ..project import export as export_svc
+from ..project import export_pptx
 from ..project import kb_impact
 
 router = APIRouter(prefix="/api/projects", tags=["deliverables"], dependencies=[Depends(require_business)])
@@ -185,12 +187,14 @@ def section_diff(code: str, dcode: str, seq: int, a: int = Query(ge=1), b: int =
 
 
 @router.get("/{code}/deliverables/{dcode}/export")
-def export_deliverable(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def export_deliverable(code: str, dcode: str, format: str = Query(default="docx", pattern="^(docx|pptx)$"),
+                       db: Session = Depends(get_db), user: User = Depends(current_user)):
     p, d = _load(db, code, dcode, user)
+    mod = export_pptx if format == "pptx" else export_svc
     try:
-        r = export_svc.export_deliverable(db, user, p, d)
+        r = mod.export_deliverable(db, user, p, d)
     except export_svc.ExportError as e:
         raise HTTPException(e.status, e.detail) from e
-    return Response(r.data, media_type=export_svc.MIME, headers={
-        "Content-Disposition": f"attachment; filename=\"{p.code}-{d.code}.docx\"; filename*=UTF-8''{quote(r.filename)}",
+    return Response(r.data, media_type=mod.MIME, headers={
+        "Content-Disposition": f"attachment; filename=\"{p.code}-{d.code}.{format}\"; filename*=UTF-8''{quote(r.filename)}",
         "X-Export-Id": r.export_id, "Cache-Control": "no-store"})
