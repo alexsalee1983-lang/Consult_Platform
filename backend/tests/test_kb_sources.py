@@ -259,3 +259,16 @@ def test_article_mode_manifest():
     assert d.mode == "article"
     entries, rejected, _ = sources.split_doc(d, FOREIGN_EN.encode())
     assert [e.content.title for e in entries][0] == "Demo Data Protection Act Section 1" and not rejected
+
+
+def test_article_split_suffix_and_repealed():
+    """新加坡式：修正插入的“15A.”“26B.”接在 15、26 后面，“[Repealed …]”的条文照样切出，不中断。"""
+    text = ("Short title\n1.  This Act is the Example Act.\n2.  In this Act, organisation means any person.\n"
+            "2A.—(1)  This section applies to deemed consent.\n2B.  Notification required.\n"
+            "3.  [Repealed by Act 40 of 2020]\n4.—(1)  An organisation must protect personal data.\n"
+            "5.  See section 2A.\n")
+    got = [(p.clause, p.key_part) for p in _art(text)]
+    assert got == [("Section 1", "1"), ("Section 2", "2"), ("Section 2A", "2a"), ("Section 2B", "2b"),
+                   ("Section 3", "3"), ("Section 4", "4"), ("Section 5", "5")]
+    assert "Schedule paragraph" not in _art(text)[-1].text
+    assert not sources._follows((3, "A"), (2, "B")) and not sources._follows((2, "A"), (2, "B"))
