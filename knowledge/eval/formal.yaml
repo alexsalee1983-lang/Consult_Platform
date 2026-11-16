@@ -1,4 +1,4 @@
-# 正式评测题初稿 · 第一、二批依据原文（knowledge/sources/batch1 法律法规 742 条、batch2 部门规章 299 条）。
+# 正式评测题初稿 · 第一、二批依据原文（依据原文 batch1 法律法规 742 条、batch2 部门规章 299 条）。
 # 开发线 2 起草，待知识专家评审；expect 用 kb-source-split 生成的稳定 key（同一原文、同一条号不变）。
 # 网络安全法按 2025 年修正后的条号（主席令第六十一号，2026-01-01 施行）。
 # expect_refs / category 供有无知识库对比评测（kb-eval --compare，app/kb/compare.py）；expect 供检索评测。
@@ -72,7 +72,7 @@
 - {id: L094, mode: basis, category: industry, question: 银行开立企业账户的异常情形风险防控依据, expect: [src-da1d95c7-17], expect_refs: ["《反电信网络诈骗法》第十七条"]}
 - {id: L095, mode: basis, category: clause, question: 发现间谍行为应当向哪个机关举报？, expect: [src-06fd5c0a-16], expect_refs: ["《反间谍法》第十六条"]}
 
-# ---- 第二批：部门规章（knowledge/sources/batch2）----
+# ---- 第二批：部门规章（依据原文 batch2）----
 - {id: R001, mode: basis, category: clause, question: 掌握多少用户个人信息的平台赴国外上市要申报网络安全审查？, expect: [src-424e2318-7], expect_refs: ["《网络安全审查办法》第七条"]}
 - {id: R002, mode: basis, category: clause, question: 关基运营者采购网络产品和服务什么情况下要申报网络安全审查？, expect: [src-424e2318-2], expect_refs: ["《网络安全审查办法》第二条"]}
 - {id: R003, mode: basis, category: clause, question: 哪些情形向境外提供数据要申报数据出境安全评估？, expect: [src-198ae1d9-4, src-aee15c90-7], expect_refs: ["《数据出境安全评估办法》第四条", "《促进和规范数据跨境流动规定》第七条"]}

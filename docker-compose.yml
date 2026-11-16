@@ -132,6 +132,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    volumes:
+      # 知识资料目录（决策记录 2026-11-16）：公开资料原件、下载清单、条目文件，不进代码仓，
+      # 后端容器里 kb-source-publish / kb-import 从 /srv/knowledge/downloads/<批次> 读取
+      - ${KB_DOWNLOADS_DIR:-./kb-downloads}:/srv/knowledge/downloads:ro
     ports:
       - "127.0.0.1:${BACKEND_DEBUG_PORT:-8000}:8000"   # 接口调试端口，只在本机访问；正式访问走 WEB_PORT。生产用 deploy/prod/docker-compose.override.yml 去掉
     # 测试机在 Agent 冲刺期间想让 md 改了立刻生效，可在 docker-compose.override.yml 里加：
