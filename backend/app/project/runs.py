@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..agents import knowledge, runtime, tools
+from ..agents import call, knowledge, registry, runtime, tools
 from ..core import audit
 from ..core.db import SessionLocal, utcnow
 from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMember, User
@@ -54,6 +54,11 @@ MAX_ATTEMPTS = 3
 ACTIVE = ("queued", "running", "waiting")
 EVIDENCE_CHARS = 6000        # 每条证据最多交给模型的字数
 INPUT_CHARS = 24000          # 一步的输入材料总字数上限
+MAX_CONDENSE = 4             # 证据超过上限时最多分几批提炼（每批不超过 INPUT_CHARS）
+CONDENSE_MARK = "【证据要点提炼】"
+CONDENSE_RULES = ("把下面的证据提炼成要点，供后续起草使用：只写与安全管理、运营、技术现状和问题有关的事实，"
+                  "每条要点末尾保留来源编号（如 [D-01] [I-02] [O-03] [S-01]），不推断、不评价，"
+                  "不写人名、机构名和网络标识；只输出要点列表。")
 MAX_CARDS = 3                # 一步最多发几张确认卡
 
 
@@ -276,17 +281,13 @@ def parse_output(text: str, default_title: str) -> tuple[list[tuple[str, str]], 
 
 # ---- 每一步的输入 ----
 
-def _evidence_input(db: Session, user: User, agent: str, project: Project) -> str:
+def _evidence_blocks(db: Session, user: User, agent: str, project: Project) -> list[str]:
     listing = tools.invoke(db, user, agent, "project.evidence", {}, project.code).get("evidences", [])
-    parts, total = [], 0
+    parts = []
     for e in listing:
-        if total >= INPUT_CHARS:
-            parts.append(f"（证据较多，其余 {len(listing) - len(parts)} 条未附正文，需要时按编号索取）")
-            break
-        r = tools.invoke(db, user, agent, "project.evidence",
-                         {"code": e["code"], "limit": min(EVIDENCE_CHARS, INPUT_CHARS - total)}, project.code)
+        r = tools.invoke(db, user, agent, "project.evidence", {"code": e["code"], "limit": EVIDENCE_CHARS},
+                         project.code)
         text = r.get("text", "")
-        total += len(text)
         more = "（正文较长，已截取前部）" if r.get("next_offset") else ""
         if e.get("kind") == "summary_card":           # 严格档摘要卡：评估项、数量级、现场证据编号
             extra = "；".join(x for x in (e.get("magnitude") and f"数量级：{e['magnitude']}",
@@ -295,7 +296,34 @@ def _evidence_input(db: Session, user: User, agent: str, project: Project) -> st
             continue
         role = f"，受访角色：{e['interviewee_role']}" if e.get("interviewee_role") else ""
         parts.append(f"### [{e['code']}] {e['title']}{role}{more}\n{text}")
-    return "\n\n".join(parts)
+    return parts
+
+
+def _evidence_input(db: Session, user: User, project: Project, step: Step,
+                    doc: registry.AgentDoc) -> tuple[str, dict]:
+    """证据全文不超过上限直接交给本步；超过的按批（每批 ≤ INPUT_CHARS）先让本步 Agent 提炼要点、保留来源编号，
+    不再截掉后面的证据（决策记录 2026-11-16）。超过 MAX_CONDENSE 批的部分不附，记在 included 里。"""
+    blocks = _evidence_blocks(db, user, step.agent, project)
+    stats = {"total": len(blocks), "included": len(blocks), "condensed": False}
+    joined = "\n\n".join(blocks)
+    if len(joined) <= INPUT_CHARS:
+        return joined, stats
+    batches: list[list[str]] = [[]]
+    for b in blocks:
+        if batches[-1] and len("\n\n".join(batches[-1] + [b])) > INPUT_CHARS:
+            batches.append([])
+        batches[-1].append(b)
+    batches = batches[:MAX_CONDENSE]
+    stats.update(included=sum(len(x) for x in batches), condensed=True)
+    cap = INPUT_CHARS // len(batches)
+    points = []
+    for batch in batches:
+        res = call.call(db, step.agent, f"{CONDENSE_MARK}\n\n{CONDENSE_RULES}\n\n" + "\n\n".join(batch),
+                        actor=user.username, doc=doc, project=project, level=doc.level)
+        points.append(res.completion.text.strip()[:cap])
+    left = stats["total"] - stats["included"]
+    tail = f"\n\n（另有 {left} 条证据超出本步处理量，未纳入）" if left else ""
+    return "（证据较多，以下为分批提炼的要点，编号为原证据编号）\n\n" + "\n\n".join(points) + tail, stats
 
 
 def _step_inputs(db: Session, project: Project, run: AgentRun, step: Step) -> tuple[str, str]:
@@ -449,7 +477,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
                           prompt_version=doc.version, refs={})
     try:
         if "evidence" in step.inputs:
-            material = _evidence_input(db, user, step.agent, project)
+            material, record.refs["evidence"] = _evidence_input(db, user, project, step, doc)
             if not material:
                 _ask_for_evidence(db, user, project, run, step, record)
                 return
@@ -459,25 +487,28 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
         kb_block, refs = knowledge.retrieve(db, user, step.agent, project, query)
     except tools.ToolError as e:
         raise StepFailed(f"工具调用被拒绝（{e.status}）") from e
+    except gateway.BlockedError as e:                   # 证据提炼
+        raise StepFailed("证据提炼输入命中机密级内容，未发往模型") from e
+    except gateway.ExternalModelForbidden as e:
+        raise StepFailed("当前配置不允许把本项目发往外部模型") from e
+    except gateway.GatewayError as e:
+        raise StepRetry("模型暂不可用") from e
 
     confirmed = _resolved_cards(db, run)
     strict = STRICT_RULES if project.tier == "strict" else ""
     message = "\n\n".join(x for x in (step.instruction, OUTPUT_RULES, strict, confirmed, inputs) if x)
     try:
-        c = gateway.complete(message, tier=project.tier, project_code=project.code, level=doc.level,
-                             system=runtime.system_prompt(doc, card, kb_block))
+        c = call.call(db, step.agent, message, actor=user.username, doc=doc, project=project, level=doc.level,
+                      system=runtime.system_prompt(doc, card, kb_block)).completion
     except gateway.BlockedError as e:
         _usage(db, user, project, doc.level, step, "blocked")
         raise StepFailed("输入命中机密级内容，未发往模型") from e
     except gateway.ExternalModelForbidden as e:
         raise StepFailed("当前配置不允许把本项目发往外部模型") from e
     except gateway.GatewayError as e:
-        _usage(db, user, project, doc.level, step, "error")
         raise StepRetry("模型暂不可用") from e
     if c.demo:
         raise StepFailed("未配置大模型，交付链不能运行")
-    usage.record(db, username=user.username, project_code=project.code, level=doc.level, model=c.model,
-                 status="ok", stream=False, completion=c, agent_code=step.agent)
     if guard.check(c.text).blocked:
         raise StepFailed("模型输出命中机密级内容，未保存")
     default_title = deliverables.get_deliverable(db, project, step.deliverable).title if step.deliverable else step.name
@@ -487,7 +518,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
         raise StepCancelled()
 
     record.model, record.prompt_tokens, record.completion_tokens = c.model[:64], c.prompt_tokens, c.completion_tokens
-    record.refs = {"kb_refs": len(refs)}
+    record.refs = {**record.refs, "kb_refs": len(refs)}
     try:
         if step.deliverable:
             record.refs.update(_write_deliverable(db, user, project, step, sections))

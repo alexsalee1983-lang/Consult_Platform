@@ -9,6 +9,9 @@
   - item 按项：附件、指引（如事件分级指南、合规审计指引）按“一、二、三”切，项号必须从一起逐项递增，
     “（一）”“1.”这类下一级编号留在本项正文里；
   - section 按章节：NIST 等允许收原文的资料，按“AC-2 ……”这类控制号或“3.1 ……”这类编号标题切；
+  - article 外文按条：境外法律（英、法、葡、阿拉伯、印尼、越南、泰文）按“Article 3”“Article (3):”“Artigo 3.º”
+    “Art. 3”“Section 3”“Pasal 3”“Điều 3.”“มาตรา ๓”“المادة (3)”或行首“3.”“3.—(1)”切，条号必须从 1 起逐条递增；从每个“第 1 条”起各切一遍，取正文最多的
+    一遍（跳过目录、颁布条款），SCHEDULE / ANNEX / ANEXO 起为附件、不并进最后一条；
   - catalog 条款目录：国家标准、行业标准（GB / GB/T / GB/Z / JR/T / GM/T / DL/T / YD/T 开头的不填也按目录）
     只收条款号和条款标题，**不收正文**（二期开发计划第六节：标准原文版权），原件只留在下载目录供审改对照。
 - 每条一个条目文件（app/kb/files.py 格式）：L4、doc_type SRC（依据原文）、产品 GEN、阶段 通用、来源 public，
@@ -16,8 +19,9 @@
   同一文件重新下载新版后再切，key 不变，kb-import 建新版本、历史版本保留。
 - 每条先过机密级检测，命中的写进 _rejected/ 并注明类别（不写原文）。
 - 只生成文件，不入库、不调模型：核对后用 kb-import --submit 导入，审核时抽检即可（机械切分）。
-- 核验（二期 B10，verify）：原网址在官方网站白名单里、清单写了原件 sha256 且一致、写了文号或标准号、切出条款且没有
-  退回、法规条号连续没有漏切。结果写进 _report.json 的 failed；kb-source-publish 据此决定自动发布还是转人工
+- 核验（二期 B10，verify）：原网址在官方网站白名单里、清单写了原件 sha256 且一致、写了文号或标准号、切出了条款、法规条号连续
+  没有漏切。被机密级检测退回的条款不入库、单列在 _rejected/，不影响同一份其余条款自动发布，这一份按
+  KB_SAMPLE_RATE_SRC_PARTIAL 抽检（负责人 2026-11-16 定）。结果写进 _report.json 的 failed；kb-source-publish 据此决定自动发布还是转人工
   （app/kb/autopublish.py）。
 """
 from __future__ import annotations
@@ -60,7 +64,8 @@ STATUS = {"现行": "current", "现行有效": "current", "有效": "current", "
           "superseded": "superseded"}
 MODES = {"law": "law", "按条": "law", "条": "law", "item": "item", "按项": "item", "项": "item",
          "section": "section", "按章节": "section", "章节": "section",
-         "catalog": "catalog", "条款目录": "catalog", "目录": "catalog"}
+         "catalog": "catalog", "条款目录": "catalog", "目录": "catalog",
+         "article": "article", "外文按条": "article"}
 STANDARD_CODE = re.compile(r"^\s*(GB/T|GB/Z|GB|JR/T|GM/T|DL/T|YD/T|GA/T|GA)\s*\d", re.I)
 CATALOG_NOTE = "（条款目录：标准原文受版权保护，知识库不收全文，请查阅原件。）"
 MAX_CLAUSE_CHARS = 6000
@@ -68,13 +73,19 @@ MAX_CLAUSE_CHARS = 6000
 _CN = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 _CN_UNIT = {"十": 10, "百": 100, "千": 1000}
 _NUM = "零〇一二三四五六七八九十百千两"
-_ARTICLE = re.compile(rf"^\s*第([{_NUM}\d]+)条(?:之([{_NUM}\d]+))?[\s　]*(.*)$")
-_CHAPTER = re.compile(rf"^\s*第([{_NUM}\d]+)(章|节)[\s　]*(.*)$")
+_ARTICLE = re.compile(rf"^\s*第([{_NUM}\d]+)[条條](?:之([{_NUM}\d]+))?[\s　]*(.*)$")
+_CHAPTER = re.compile(rf"^\s*第([{_NUM}\d]+)(章|节|節)[\s　]*(.*)$")
 _APPENDIX = re.compile(r"^\s*附\s*件[一二三四五六七八九十\d]*[:：]?\s*[^。；，]{0,40}$")
 _PAGE_NO = re.compile(r"\s*(?:[—－]\s*\d{1,3}\s*[—－]|-\s\d{1,3}\s-)\s*")
 _ITEM = re.compile(rf"^\s*([{_NUM}]+)、[\s　]*(.*)$")
 _CONTROL = re.compile(r"^\s*([A-Z]{2,3}-\d{1,2}(?:\(\d{1,2}\))?)\s+(\S.{0,80})$")
 _NUMBERED = re.compile(r"^\s*((?:[A-Z]\.)?\d{1,2}(?:\.\d{1,2}){0,3})[\s　]+([^\s　].{0,60})$")
+# CSF 2.0 子类 GV.OC-01、隐私框架 ID.IM-P1、SSDF 任务 PO.1.1 / 实践 PO.1、AI RMF GOVERN 1.1：编号后必须带冒号
+#（800-61r3 等引用 CSF 编号的表格没有冒号，不当标题）；行首可有列表符 o / •
+_FRAMEWORK_ID = re.compile(r"^\s*(?:[o•▪]\s+)?([A-Z]{2}\.[A-Z]{2}-P?\d{1,2}|[A-Z]{2}\.\d{1,2}(?:\.\d{1,2})?"
+                           r"|(?:GOVERN|MAP|MEASURE|MANAGE) \d{1,2}\.\d{1,2}):\s*(\S.*)$")
+# 英文文献章节号后带点：“1. Introduction”“3.1. CSF Profiles”（只认大写字母开头的英文标题）
+_NUMBERED_DOT = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){0,3})\.\s+([A-Z][^\s].{0,60})$")
 
 
 def cn_int(s: str) -> int:
@@ -237,7 +248,8 @@ def split_law(lines: list[str]) -> list[Piece]:
             last, last_sub = (cur[0], cur[1]) if cur else (0, 0)
             if n and ((n == last + 1 and not sub) or (n == last and sub == last_sub + 1)):
                 flush()
-                cur = (n, sub, f"第{m.group(1)}条" + (f"之{m.group(2)}" if m.group(2) else ""))
+                ch = ln.lstrip()[1 + len(m.group(1))]      # 条 或繁体 條
+                cur = (n, sub, f"第{m.group(1)}{ch}" + (f"之{m.group(2)}" if m.group(2) else ""))
                 buf = [m.group(3)] if m.group(3) else []
                 continue
         c = _CHAPTER.match(ln)
@@ -245,7 +257,7 @@ def split_law(lines: list[str]) -> list[Piece]:
             if c.group(2) == "章":
                 context = {"章": f"第{c.group(1)}章 {c.group(3)}".strip(), "节": ""}
             else:
-                context["节"] = f"第{c.group(1)}节 {c.group(3)}".strip()
+                context["节"] = f"第{c.group(1)}{c.group(2)} {c.group(3)}".strip()
             continue
         if cur is not None:
             buf.append(ln)
@@ -281,6 +293,121 @@ def split_items(lines: list[str]) -> list[Piece]:
     return pieces
 
 
+_AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩๐๑๒๓๔๕๖๗๘๙", "01234567890123456789")   # 阿拉伯、泰文数字
+_FOREIGN = re.compile(r"^\s*(?:(Article|ARTICLE|Artigo|ARTIGO|Art\.|Section|SECTION|Sec\.|Pasal|PASAL|Điều|ĐIỀU|มาตรา|المادة|مادة)\s*"
+                      r"\(?\s*([Pp]remier|PREMIER|1er|[0-9٠-٩๐-๙]{1,3}(?:[A-Z]{1,2}(?![A-Za-z]))?)\s*\)?(?:\.?\s*º|\.?\s*°|\.?ª)?\s*[.:\-–—]*\s*(.*)$"
+                      r"|([0-9]{1,3}(?:[A-Z]{1,2})?)\s*\.\s*(?:[—–-]\s*)?(\(1\)\s*.*|[A-Z(“\"‘\[一-鿿《「（].*)$)")
+_FOREIGN_END = re.compile(r"^\s*(?:(?:FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ELEVENTH|TWELFTH)\s+)?(SCHEDULES?|Schedules?|ANNEX(?:E|ES)?|Annex(?:e|es)?|ANEXOS?|Anexos?)\b[\s:—–-]*\S{0,60}$")
+
+
+_PART = re.compile(r"^\s*(PART|Part)\s+([0-9]{1,3}[A-Z]{0,2}|[IVXLC]{1,6})\b\s*[.:—–-]?\s*(.*)$")
+_PART_NOTE = re.compile(r"^\s*\((?:PART|Part)\s+\S+\s.*\)\s*$")
+_SMALL = {"of", "and", "the", "to", "for", "in", "on", "by", "or", "a", "an", "with", "without", "under", "from", "into"}
+
+
+def _title_like(s: str) -> bool:
+    """大标题：全大写，或每个实词首字母大写；句号、分号结尾的是正文。"""
+    s = s.strip()
+    if not s or len(s) > 160 or s.endswith((".", ";", ",", ":")):
+        return False
+    if not re.search(r"[a-z]", s):
+        return True
+    return all(w[0].isupper() or w in _SMALL or not w[0].isalpha() for w in s.split())
+
+
+def _drop_parts(lines: list[str]) -> list[str]:
+    """PART 大标题（新加坡写成一行“PART 6A NOTIFICATION …”，香港分两行“Part 6A”+ 标题，再跟“(Part 6A added …)”）是边界不是正文，去掉。"""
+    out: list[str] = []
+    skip_title = False
+    for ln in lines:
+        if skip_title:
+            skip_title = False
+            # 单独一行的“Part 7”后面紧跟的是本 Part 标题（不是条文、不以标点结尾）
+            if not _FOREIGN.match(ln) and len(ln.strip()) <= 160 and not ln.rstrip().endswith((".", ";", ",", ":")):
+                continue
+        if _PART_NOTE.match(ln):
+            continue
+        m = _PART.match(ln)
+        if m and (not m.group(3) or _title_like(m.group(3))):
+            skip_title = not m.group(3)
+            continue
+        out.append(ln)
+    return out
+
+
+def _foreign_id(m: re.Match[str]) -> tuple[int, str]:
+    """条号和字母后缀：新加坡等修正插入的条文写作“15A.”“26B.”，排在 15、26 之后。"""
+    raw = m.group(2) or m.group(4) or ""
+    if raw.lower() in ("premier", "1er"):
+        return 1, ""
+    n = re.match(r"([0-9٠-٩๐-๙]+)([A-Z]*)$", raw)
+    return (int(n.group(1).translate(_AR_DIGITS)), n.group(2)) if n else (0, "")
+
+
+def _foreign_no(m: re.Match[str]) -> int:
+    return _foreign_id(m)[0]
+
+
+def _follows(nxt: tuple[int, str], cur: tuple[int, str]) -> bool:
+    """下一条：条号加 1 且不带后缀，或同一条号、后缀往后排（15 → 15A → 15B）。"""
+    n, suf = nxt
+    if not suf:
+        return n == cur[0] + 1
+    return n == cur[0] and cur[0] > 0 and (len(suf), suf) > (len(cur[1]), cur[1])
+
+
+def _score(pieces: list[Piece]) -> tuple[int, int]:
+    """目录那一遍每条只有标题、整篇正文并进最后一条：先比有正文（不少于 40 字）的条数，再比正文字数（每条按入库上限计）。"""
+    return (sum(len(p.text) >= 40 for p in pieces), sum(min(len(p.text), MAX_CLAUSE_CHARS) for p in pieces))
+
+
+def split_articles(lines: list[str]) -> list[Piece]:
+    """境外法律按条（article）。条号逐条递增；从每个条号为 1 的行各起一遍，取正文最多的结果。"""
+    cut = len(lines)
+    for i, ln in enumerate(lines):
+        if i > len(lines) // 2 and _FOREIGN_END.match(ln):
+            cut = i
+            break
+    lines = _drop_parts(lines[:cut])
+    word = "Article"
+    joined = " ".join(lines[:2000])
+    if len(re.findall(r"\bsection\b", joined, re.I)) > len(re.findall(r"\barticle\b", joined, re.I)):
+        word = "Section"
+    starts = [i for i, ln in enumerate(lines) if (m := _FOREIGN.match(ln)) and _foreign_no(m) == 1]
+    best: list[Piece] = []
+    for start in starts:
+        pieces: list[Piece] = []
+        buf: list[str] = []
+        cur, label = (0, ""), ""
+
+        def flush() -> None:
+            if cur[0]:
+                pieces.append(Piece(clause=label, key_part=f"{cur[0]}{cur[1].lower()}", heading="", text=_join(buf)))
+
+        for ln in lines[start:]:
+            m = _FOREIGN.match(ln)
+            if m and _follows(_foreign_id(m), cur):
+                flush()
+                cur = _foreign_id(m)
+                no = f"{cur[0]}{cur[1]}"
+                if m.group(1):
+                    w = {"ARTICLE": "Article", "ARTIGO": "Artigo", "Art.": "Article", "SECTION": "Section",
+                         "Sec.": "Section", "PASAL": "Pasal", "ĐIỀU": "Điều",
+                         "مادة": "المادة"}.get(m.group(1), m.group(1))
+                    label = f"{w} {no}" + (".º" if w == "Artigo" else "")
+                    rest = m.group(3)
+                else:
+                    label, rest = f"{word} {no}", m.group(5)
+                buf = [rest] if rest else []
+                continue
+            if cur[0]:
+                buf.append(ln)
+        flush()
+        if _score(pieces) > _score(best):
+            best = pieces
+    return best
+
+
 _END = ("。", "；", "，", "：", ":", ";", ",", ".")
 
 
@@ -300,7 +427,10 @@ def _heading(ln: str) -> tuple[str, str] | None:
     m = _CONTROL.match(ln)
     if m:
         return m.group(1), m.group(2).strip()
-    m = _NUMBERED.match(ln)
+    m = _FRAMEWORK_ID.match(ln)
+    if m:
+        return m.group(1), m.group(2).strip()[:80]
+    m = _NUMBERED.match(ln) or _NUMBERED_DOT.match(ln)
     if m and not ln.endswith(("。", "；", "，", ".", ";", ",")) and not re.search(r"\.{4,}|…{2,}|\s\d+$", ln):
         return m.group(1), m.group(2).strip()
     return None
@@ -312,12 +442,18 @@ def split_sections(lines: list[str], with_text: bool) -> list[Piece]:
     seen: set[str] = set()
     buf: list[str] = []
     cur: Piece | None = None
+    def close(c: Piece) -> None:
+        c.text = _join(buf) if with_text else ""
+        # 框架编号（CSF 子类等）的条文常常整句都在标题行里：正文为空时以标题行为正文，不丢条目
+        if with_text and not c.text and _FRAMEWORK_ID.match(f"{c.clause}: {c.heading}"):
+            c.text = c.heading
+        pieces.append(c)
+
     for ln in lines:
         h = _heading(ln)
         if h and h[0] not in seen:
             if cur is not None:
-                cur.text = _join(buf) if with_text else ""
-                pieces.append(cur)
+                close(cur)
             seen.add(h[0])
             cur = Piece(clause=h[0], key_part=re.sub(r"[^a-z0-9]+", "-", h[0].lower()).strip("-"), heading=h[1],
                         text="")
@@ -325,8 +461,7 @@ def split_sections(lines: list[str], with_text: bool) -> list[Piece]:
         elif cur is not None and with_text:
             buf.append(ln)
     if cur is not None:
-        cur.text = _join(buf) if with_text else ""
-        pieces.append(cur)
+        close(cur)
     return pieces
 
 
@@ -343,7 +478,7 @@ def _key(d: Doc, part: str) -> str:
 def to_entry(d: Doc, p: Piece) -> Entry:
     head = f"{p.clause} {p.heading}".strip()
     # 标准条款号前带标准号：条款号 8.1.4.1 形似 IP，机密级检测据“GB/T ××× 8.1.4.1”认作条款号
-    shown = f"{d.code} {head}" if d.mode not in ("law", "item") and d.code else head
+    shown = f"{d.code} {head}" if d.mode not in ("law", "item", "article") and d.code else head
     body = f"## {shown}\n\n{CATALOG_NOTE if d.mode == 'catalog' else p.text[:MAX_CLAUSE_CHARS]}"
     detail = " ".join(x for x in ("公开资料：", d.publisher, d.code, d.url) if x).replace("： ", "：")
     summary = " ".join(x for x in (d.title, d.code, p.context, head) if x)
@@ -364,6 +499,8 @@ def split_doc(d: Doc, data: bytes) -> tuple[list[Entry], list[tuple[str, str]], 
         pieces = split_law(_body(lines))
     elif d.mode == "item":
         pieces = split_items(lines)
+    elif d.mode == "article":
+        pieces = split_articles(lines)
     else:
         pieces = split_sections(lines, with_text=d.mode == "section")
     entries: list[Entry] = []
@@ -385,7 +522,7 @@ def split_doc(d: Doc, data: bytes) -> tuple[list[Entry], list[tuple[str, str]], 
             rejected.append((e.key, f"命中机密级检测（{'、'.join(sorted({f.label for f in g.findings}))}）"))
             continue
         entries.append(e)
-    note = "" if pieces else "没有切出条款：可能是扫描件，或切分方式不对（法规用 law，标准用 catalog，NIST 用 section）"
+    note = "" if pieces else "没有切出条款：可能是扫描件，或切分方式不对（法规用 law，境外法律用 article，标准用 catalog，NIST 用 section）"
     return entries, rejected, note
 
 
@@ -395,10 +532,20 @@ VERIFY_RULES = {
     "official_source": "原网址在官方网站白名单里",
     "sha256": "清单写了原件 sha256，与文件一致",
     "code": "清单写了文号或标准号",
-    "complete": "切出了条款，没有退回的条款",
+    "complete": "切出了条款（机密级检测退回的条款不入库，单列）",
     "continuous": "法规条号从第一条起连续、附件项号从一起连续，没有漏切",
 }
-OFFICIAL_HOSTS = ("gov.cn", "nist.gov")
+# 境外（决策记录 2026-11-16）：南非、尼日利亚、马来西亚政府域名，塞内加尔 vie-publique.sn；
+# 原法规库拒绝脚本下载的替代来源：新加坡公报和监管机构、印尼部委法规库、越南法规库和政府公报、
+# 香港私隐专员公署和宪报、澳门个人资料保护局、科特迪瓦电信监管局；只收发布机关或其官方法规库的网站；
+# 另加新加坡总检察署法规库 SSO、香港律政司电子版香港法例（负责人在浏览器下载或复制的原件）
+OFFICIAL_HOSTS = ("gov.cn", "nist.gov", "gov.za", "gov.ng", "gov.my", "vie-publique.sn",
+                  "egazette.gov.sg", "pdpc.gov.sg", "csa.gov.sg", "sso.agc.gov.sg",
+                  "jdih.komdigi.go.id", "jdih.setneg.go.id",
+                  "vbpl.vn", "chinhphu.vn",
+                  "pcpd.org.hk", "gld.gov.hk", "elegislation.gov.hk",
+                  "dspdp.gov.mo",
+                  "artci.ci")
 
 
 def official_hosts() -> tuple[str, ...]:
@@ -428,10 +575,10 @@ def verify(d: Doc, data: bytes, entries: list[Entry], rejected: list[tuple[str, 
         failed.append("sha256")
     if not d.code.strip():
         failed.append("code")
-    if not entries or rejected:
+    if not entries:
         failed.append("complete")
     if d.mode == "law":
-        got = {e.key for e in entries}
+        got = {e.key for e in entries} | {k for k, _ in rejected}      # 退回的条款也算切出来了
         for ln in _body(_lines(parse.parse(d.file, data))):
             m = _ARTICLE.match(ln)
             if m and cn_int(m.group(1)):
@@ -440,7 +587,7 @@ def verify(d: Doc, data: bytes, entries: list[Entry], rejected: list[tuple[str, 
                     failed.append("continuous")
                     break
     elif d.mode == "item":
-        got = {e.key for e in entries}
+        got = {e.key for e in entries} | {k for k, _ in rejected}      # 退回的条款也算切出来了
         for ln in _lines(parse.parse(d.file, data)):
             m = _ITEM.match(ln)
             if m and cn_int(m.group(1)) and _key(d, str(cn_int(m.group(1)))) not in got:

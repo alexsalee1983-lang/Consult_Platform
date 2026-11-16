@@ -106,6 +106,14 @@ _ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
 _ID_CHECK = "10X98765432"
 
 
+# 法文法律术语“secret professionnel”（职业保密义务）不是口令（负责人 2026-11-16 同意，只放行这一个术语）。
+_SECRET_TERMS = frozenset({"professionnel", "professionnelle", "professionnels", "professionnelles"})
+
+
+def _legal_term(keyword: str, value: str) -> bool:
+    return keyword.lower() == "secret" and value.rstrip(".,;:!?)").lower() in _SECRET_TERMS
+
+
 def _looks_like_secret(s: str) -> bool:
     classes = (
         any(c.isascii() and c.isalpha() for c in s),
@@ -214,7 +222,7 @@ def _check(text: str) -> GuardResult:
         _add(findings, "credential", "账号口令或密钥", m, 2)
     cred_spans = [(f.start, f.end) for f in findings if f.kind == "credential"]
     for m in _CREDENTIAL_BARE.finditer(text):
-        if not _looks_like_secret(m.group(2)):
+        if not _looks_like_secret(m.group(2)) or _legal_term(m.group(1), m.group(2)):
             continue
         if any(s < m.end(2) and m.start(2) < e for s, e in cred_spans):
             continue  # 已被带分隔符的规则命中

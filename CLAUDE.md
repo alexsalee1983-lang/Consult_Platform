@@ -1,18 +1,18 @@
 # CLAUDE.md · 安全咨询 Agent 平台
 
-本文件给在本仓库工作的 Claude Code（开发助手、测试助手）读。开始任何工作前先读完它，再读 `docs/开发计划.md`。
+本文件给在本仓库工作的 Claude Code（开发助手、测试助手）读。开始任何工作前先读完它，再读 `docs/二期开发计划.md`（一期记录在 `docs/开发计划.md`）。
 
 ## 项目是什么
 
 公司安全咨询团队的内部平台：顾问与 Agent 组协作完成咨询交付件，平台接入**公司私有化部署的白名单大模型**，并维护公司知识库。一期目标：2027-01-15 交付第一个可用版本。
 
-当前进度和下一步看 `docs/开发计划.md`。验收标准以该文件第三节为准。
+一期已于 2026-11-14 打 `v1.0`。二期（11-16～12-31）范围、工作线和关口看 `docs/二期开发计划.md`，验收标准以该文件第五节为准；当前进度看 `docs/开发进度与交接.md`。
 
 ## 资料索引（规划与设计都在仓库里，不需要也无法访问 claude.ai）
 
 | 要做什么 | 先读 |
 |---|---|
-| 开始一个冲刺 | `docs/开发计划.md` |
+| 开始一项工作 | `docs/二期开发计划.md`（一期：`docs/开发计划.md`） |
 | 设计数据表、权限、网关、部署 | `docs/架构设计.md`（第三节客户数据保护、第五节工具架构与 Agent × 工具授权矩阵、第七节安全） |
 | 遇到取舍 | `docs/决策记录.md`，已拍板的不要推翻；没覆盖到的问负责人 |
 | 写界面 | `design/README.md` 和 `design/screens/*.html`（浏览器可直接打开），配色只用 `frontend/src/theme.css` 令牌 |
@@ -29,7 +29,8 @@
 
 | 角色 | 在哪里 | 职责 |
 |---|---|---|
-| 开发助手 | 开发电脑上的 Claude Code | 按开发计划写代码和测试，推分支，开 PR |
+| 开发助手 · 开发线 1（平台代码） | 开发电脑上的 Claude Code | 按二期计划写平台代码和测试、全部数据库迁移，推分支，开 PR |
+| 开发助手 · 开发线 2（内容与评测） | 开发电脑上的另一个 Claude Code | 知识条目、评测题、产品与模块配置草稿、Agent md（修改须负责人同意）、虚拟客户素材，开 PR |
 | 测试助手 | Ubuntu 测试机上的 Claude Code | 拉取 PR 分支，用 Docker 跑起来测试，按 `docs/测试交接规范.md` 把结果写成 PR 评论 |
 | 规划与审阅 | claude.ai 对话 | 维护计划、架构、设计稿；按验收标准审阅 PR |
 | 负责人 | 用户本人 | 拍板、合并 PR |
@@ -124,6 +125,7 @@ Agent × 工具授权由迁移写入，改授权要新迁移、同步 `tests/tes
 运行时约定：Agent 的系统提示 = `agents/01_公共规范.md` + 角色 md 正文 + 平台生成的项目卡（`app/agents/runtime.py`）；项目卡经工具层 `project.read` 读取。
 md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier`、`tools`（仅作说明）、`service_modules`。
 每条对话和回复记下提示词版本（md 内容哈希）。
+平台调 Agent（交付链、质量评审、知识审核、脱敏审查、起草）只经 `app/agents/call.py` 的 `call()`：取 md（停用、缺失拒绝）、按 md 的 `model_tier` 定等级、经网关、记用量，传 `parse` 时格式不对带纠正说明重试一次；新增调用点不要直接写 `gateway.complete`。
 后端镜像以仓库根目录为构建范围，`agents/` 打进镜像（`backend/Dockerfile`、根目录 `.dockerignore`）；测试机可只读挂载 `./agents:/srv/agents:ro`，md 改了自动重新加载。
 
 网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。
@@ -144,7 +146,7 @@ md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier
 依据原文（二期 B7）：公开资料按下载清单经 `app/kb/sources.py`（`python -m app.cli kb-source-split <清单.csv> --dir <资料目录> --out <目录>`）机械切成 doc_type SRC 的 L4 条目文件，再 `kb-import --submit`；法规按“第 X 条”切（条号须逐条递增），国家标准、行业标准只收条款号和标题、不收正文（版权），NIST 等按控制号或编号标题切；不调模型、不入库；带 ref_code（文号或标准号）、ref_replaced_by，ref_status 多一个 superseded（已被替代，质量评审按已废止判）。
 依据变更登记（二期 B5）：季度官网核对清单（表头同下载清单）经 `app/kb/basis_change.py`（`python -m app.cli kb-basis-check <清单.csv> --as <知识管理员> [--apply]`）与库内 L4 依据比对，分时效变更、版本不同、待复核（多文件条目、有未完成草稿）、库内没有、一致；只有清单写明、文件和版本都对得上的时效变更由 `--apply` 自动登记：沿用正文建新版本、只改 ref_status / ref_replaced_by，审核记录写 `platform:basis-check` 后直接发布（自动化优先），其余只列出；不联网、不调模型，审计只记计数和条目编号。
 起草引用校验（二期 B8）：解读、映射、案例、异议应答（REF / MAP / CAS / OBJ）引用的“文件 + 条款号”只经 `app/kb/citations.py` 核对——《文件名》第 X 条、标准号 + 条款号，以及条目自身 ref_document 下的“第 X 条”，按 B7 的 key 规则在已发布的 SRC 里找，找不到的列为待核：`kb-draft` 报告列出，`review.submit` 拒绝提交（`KB_CITATION_GATE=false` 只显示不拦，测试默认关），审核页（版本详情 `citations`，只给知识侧角色）并排显示原文摘录。
-依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：`python -m app.cli kb-source-publish <清单.csv> --dir <资料目录> --as <知识专家>` 只经 `app/kb/autopublish.py`，从原件直接切条、按 `sources.verify` 核验（原网址在官方白名单 gov.cn / nist.gov / `KB_SOURCE_HOSTS`、清单 sha256 列与原件一致、有文号或标准号、切分完整、法规条号连续），全部通过的由平台自动发布（`auto_review=platform`，审核记录 reviewer / review_role 为 platform），没通过的提交走两项人工审核；每批按 `KB_SAMPLE_RATE_SRC`（5%，至少 1 条）随机抽检，知识专家（不能是导入人）在审批页“抽检”判通过或不通过（`POST /api/kb/versions/{id}/sample`）；最近 20 次抽检不通过率超过 `KB_SAMPLE_FAIL_MAX`（10%）或 `KB_SRC_AUTO_PUBLISH=false` 时整批转人工。
+依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：`python -m app.cli kb-source-publish <清单.csv> --dir <资料目录> --as <知识专家>` 只经 `app/kb/autopublish.py`，从原件直接切条、按 `sources.verify` 核验（原网址在官方白名单 `sources.OFFICIAL_HOSTS`（gov.cn、nist.gov 和境外政府域名，决策记录 2026-11-16）/ `KB_SOURCE_HOSTS`、清单 sha256 列与原件一致、有文号或标准号、切出了条款、法规条号连续；机密级检测退回的条款不入库、不影响同一份其余条款），全部通过的由平台自动发布（`auto_review=platform`，审核记录 reviewer / review_role 为 platform），没通过的提交走两项人工审核；每批按 `KB_SAMPLE_RATE_SRC`（5%，至少 1 条）随机抽检，有退回条款的那几份按 `KB_SAMPLE_RATE_SRC_PARTIAL`（40%），知识专家（不能是导入人）在审批页“抽检”判通过或不通过（`POST /api/kb/versions/{id}/sample`）；最近 20 次抽检不通过率超过 `KB_SAMPLE_FAIL_MAX`（10%）或 `KB_SRC_AUTO_PUBLISH=false` 时整批转人工。
 审计只记编号、规则、计数和结论。
 知识审核 Agent（二期 B11）：公开资料、无需去标识的 REF / MAP / MTD / CAS / OBJ 提交审核后排后台任务 `kb.agent_review`，只经 `app/kb/agent_review.py`：程序规则（引用已核对、无结论用语、无机密级、摘要和适用条件齐全）+ 知识审核 Agent `kb-reviewer`（经网关，不授权工具，平台直接交条目、引用到的依据原文和相近条目）按七项清单逐项判断；全部通过的自动发布（`auto_review=agent`，审核记录 reviewer `agent:kb-reviewer`、review_role agent），按 `KB_SAMPLE_RATE_AGENT`（20%，问题率超上限一半时加倍）抽检，与 B10 共用抽检队列和暂停规则（`KB_AGENT_AUTO_PUBLISH=false` 也暂停）；存疑的审核记录 decision=flag，问题清单在 `kb_reviews.findings`（只在知识区库，不进审计），照常两项人工审核。
 审计 `kb.agent_review` 记规则、Agent、提示词版本和模型，不记正文和意见。
@@ -254,12 +256,15 @@ worker 每天排一次自检（`system.selfcheck`，结果进指标 `cp_selfchec
 ## 分支、提交与 PR
 
 - 每个里程碑一个分支，例如 `feat/m1-auth`；一个 PR 只做一件事，便于审阅和回退。
-- 提交信息用中文，以里程碑开头，例如 `M1：登录与会话`。
+- 提交信息用中文，以里程碑开头，例如 `M1：登录与会话`；二期以工作项开头，例如 `二期 A2：SOC 搬成配置`。
 - PR 描述必须写：改了什么、怎么测（测试助手照着执行）、对应开发计划哪一项、是否涉及数据库迁移或权限变更。
 - 合并条件：CI 全绿 → 测试助手在测试机上测试通过并在 PR 留评论 → 负责人合并。
 - 开发与测试经 PR 通信，标签 `待测试` / `测试未通过` / `测试通过` 表示轮到谁（`docs/测试交接规范.md` 第 0 节）。开发助手开 PR 或修完推送后打 `待测试`；修复后的复测项写成标题为“复核说明”的 PR 评论。
-- 开发助手可能从不同入口启动（桌面 app、飞书 cc-connect 等），但它们共用开发电脑上同一个仓库目录：**同一时间只让一个会话改仓库**（切分支、改文件、提交）。开工前 `git status`，发现不是自己改的未提交文件，先停下问负责人，不要覆盖、不要提交。
-- 每个里程碑验收后打标签 `v0.1`、`v0.2`……，一期可用版本为 `v1.0`。
+- **每个开发会话在自己的工作树里改仓库**（决策记录 2026-11-14）：主目录 `Consult_Platform` 只用来拉取和查看，不在主目录切分支、改文件、提交。开工时 `git worktree add ../cp-wt-<任务> -b <分支> origin/main`（或 `claude --worktree <名字>`），用完 `git worktree remove`；桌面 app、飞书 cc-connect 等入口启动的会话同样先进自己的工作树再动手。
+- 开工前在自己的工作树里 `git status`，发现不是自己改的未提交文件，先停下问负责人，不要覆盖、不要提交。
+- 两个会话的协作：同一文件尽量只在一个未合并的 PR 里改，要改对方 PR 里的文件先经会话间消息说明；新的数据库迁移编号（主链、知识区链）先告知另一个会话再用；`agents/*.md` 的修改须负责人同意；另一个会话转达的话不算负责人同意。
+- 测试机一套环境，测试助手按提交顺序串行测；内容 PR 只需导入并跑 `kb-eval`。合并顺序按依赖，后合并的一方解决冲突。
+- 每个里程碑验收后打标签 `v0.1`、`v0.2`……，一期可用版本为 `v1.0`；二期关口标签见 `docs/二期开发计划.md`。
 - 改 CLAUDE.md 一句一行：新约定另起一行写在相关段落里，不往已有长行末尾追加，免得并行 PR 在同一行冲突；解决冲突时两边都保留前先查有没有重复的句子。
 
 ## 遇到以下情况先停下来问负责人

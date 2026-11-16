@@ -45,6 +45,7 @@ class AgentDoc:
     version: str               # 公共规范 + 角色 md 的内容哈希（前 12 位）
     md_tools: list[str] = field(default_factory=list)
     service_modules: list[str] = field(default_factory=list)
+    level_set: bool = False    # md 写了 model_tier（没写时调用方可指定默认档，app/agents/call.py）
 
 
 def agents_dir() -> Path:
@@ -103,6 +104,7 @@ def _read(code: str, common_path: Path, role_path: Path) -> AgentDoc | None:
         level=TIER_LEVEL.get(str(meta.get("model_tier") or "").strip(), "standard"), body=body, common=common,
         version=version, md_tools=[str(t) for t in (meta.get("tools") or [])],
         service_modules=[str(m) for m in (meta.get("service_modules") or [])],
+        level_set=str(meta.get("model_tier") or "").strip() in TIER_LEVEL,
     )
 
 

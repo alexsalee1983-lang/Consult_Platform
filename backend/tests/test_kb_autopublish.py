@@ -15,6 +15,8 @@ from .conftest import create_user, logged_in_client
 
 LAW = "示范条例\n第一条 为了规范示范管理，制定本条例。\n第二条 运营者应当建立管理制度。\n第三条 本条例自公布之日起施行。\n"
 SKIP = "示范条例\n第一条 为了规范示范管理，制定本条例。\n第二条 运营者应当建立管理制度。\n第四条 跳号的条文。\n"
+LEAK = ("示范条例\n第一条 为了规范示范管理，制定本条例。\n第二条 默认管理口令：Zx9#kq2Lm8Q，应当在上线前修改。\n"
+        "第三条 本条例自公布之日起施行。\n")
 HEAD = "文件名,名称,文号/标准号,现行状态,原网址,获取方式,sha256\n"
 
 
@@ -37,6 +39,7 @@ def _batch(tmp_path, rows):
     for name, text, change in rows:
         title = f"示范条例{uuid.uuid4().hex[:6]}"
         titles[name] = title
+        text = text.replace("第一条 ", f"第一条 （{title}）", 1)    # 各份正文不同，免得被判成改名（renamed_from）
         data = text.encode()
         (src / name).write_bytes(data)
         row = {"code": "示范令第1号", "url": "https://www.example.gov.cn/1", "sha": hashlib.sha256(data).hexdigest(),
@@ -59,6 +62,10 @@ def test_verify_rules():
     bad = sources.Doc(file="a.txt", title="示范条例", url="https://example.com.cn.evil.com/gov.cn", sha256="00")
     assert sources.verify(bad, LAW.encode(), entries, rejected) == ["official_source", "sha256", "code"]
     assert not sources.is_official("ftp://www.gov.cn/x") and sources.is_official("http://csrc.nist.gov/pubs")
+    assert sources.is_official("https://www.gov.za/a") and sources.is_official("https://lom.agc.gov.my/x")
+    assert sources.is_official("https://sso.agc.gov.sg/Act/CA2018")
+    assert sources.is_official("https://www.elegislation.gov.hk/hk/cap486")
+    assert not sources.is_official("https://gov.za.evil.com/a") and not sources.is_official("https://196.188.1.2/x")
     gap = sources.Doc(file="b.txt", title="示范条例", code="示范令第1号", url="https://www.gov.cn/1",
                       sha256=hashlib.sha256(SKIP.encode()).hexdigest())
     e2, r2, _ = sources.split_doc(gap, SKIP.encode())
@@ -114,6 +121,48 @@ def test_suspended_when_fail_rate_high(tmp_path, monkeypatch):
         assert autopublish.suspended(db) == "KB_SRC_AUTO_PUBLISH=false"
 
 
+def test_rejected_clause_does_not_block_rest(tmp_path, monkeypatch):
+    """负责人 2026-11-16：机密级检测退回的条款不入库，同一份其余条款照常自动发布，按更高比例抽检。"""
+    op = _users()[0]
+    monkeypatch.setattr(get_settings(), "kb_sample_rate_src", 0.0)
+    monkeypatch.setattr(get_settings(), "kb_sample_rate_src_partial", 1.0)
+    manifest, src, titles = _batch(tmp_path, [("leak.txt", LEAK, {})])
+    with SessionLocal() as db:
+        r = autopublish.run(db, db.merge(op), manifest, src)
+        d = r.docs[0]
+        assert (d.published, d.manual, d.rejected, d.failed) == (2, 0, 1, [])
+        vs = _versions(db, titles["leak.txt"])
+        assert len(vs) == 2 and {v.status for v in vs} == {"published"}
+        assert all("Zx9#kq2Lm8Q" not in v.body for v in vs)
+        assert len(r.sampled) == 2 and all(v.sample_state == "pending" for v in vs)
+
+
+def test_renamed_title_not_duplicated(tmp_path, monkeypatch):
+    """清单只改了标题（编号随标题变）：正文与库里另一份逐条相同 → 整份跳过并提示，不重复入库（#160 测试发现）。"""
+    op = _users()[0]
+    monkeypatch.setattr(get_settings(), "kb_sample_rate_src", 0.0)
+    manifest, src, titles = _batch(tmp_path, [("law.txt", LAW, {})])
+    old = titles["law.txt"]
+    with SessionLocal() as db:
+        assert autopublish.run(db, db.merge(op), manifest, src).docs[0].published == 3
+    text = manifest.read_text(encoding="utf-8").replace(f",{old},", f",{old}（原文名）,")
+    manifest.write_text(text, encoding="utf-8")
+    with SessionLocal() as db:
+        d = autopublish.run(db, db.merge(op), manifest, src).docs[0]
+        assert (d.published, d.manual) == (0, 0) and old in d.message and "改了标题" in d.message
+        assert _versions(db, f"{old}（原文名）") == []
+    # 正文有一条不同（例如修正后的新文本）就不算改名，照常发布
+    (src / "law.txt").write_text((src / "law.txt").read_text(encoding="utf-8").replace("管理制度", "管理制度和应急预案"),
+                                 encoding="utf-8")
+    data = (src / "law.txt").read_bytes()
+    lines = manifest.read_text(encoding="utf-8").splitlines(keepends=True)
+    lines[1] = lines[1].rsplit(",", 1)[0] + "," + hashlib.sha256(data).hexdigest() + "\n"
+    manifest.write_text("".join(lines), encoding="utf-8")
+    with SessionLocal() as db:
+        d = autopublish.run(db, db.merge(op), manifest, src).docs[0]
+        assert d.published == 3 and not d.message.startswith("条款正文")
+
+
 def test_samples_api(tmp_path):
     from app.main import app
 
@@ -132,3 +181,9 @@ def test_samples_api(tmp_path):
     assert res.status_code == 200 and res.json()["sample_state"] == "passed"
     consultant = logged_in_client(app, create_user(("consultant",)))
     assert consultant.get("/api/kb/samples").status_code == 403
+
+
+def test_overseas_official_hosts():
+    assert sources.is_official("https://jdih.komdigi.go.id/produk_hukum/view/id/832")
+    assert sources.is_official("https://www.pcpd.org.hk/x.pdf") and sources.is_official("https://egazette.gov.sg/a")
+    assert not sources.is_official("https://legis-palop.org/x") and not sources.is_official("https://evilvbpl.vn/x")

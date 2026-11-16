@@ -32,7 +32,9 @@ def test_wrong_field_name_does_not_echo_password(client):
 
 
 def test_too_long_message_does_not_echo_text(client):
-    r = client.post("/api/chat", json={"project_code": "BANK-A", "message": TEXT})
+    conv = client.post("/api/projects/BANK-A/conversations", json={"agent_code": "consultant-lead"}).json()
+    r = client.post(f"/api/conversations/{conv['id']}/messages", json={"message": TEXT})
+    assert r.status_code == 422
     _assert_clean(r, "某某城商行")
 
 

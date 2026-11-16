@@ -39,13 +39,8 @@ async function request(path, options = {}) {
   return data;
 }
 
-// 流式接口返回 Server-Sent Events（event: delta / done / error）。
+// Agent 对话：发一条消息，流式返回 Server-Sent Events（event: delta / done / error）。
 // onDelta(text) 每收到一段调用一次；返回 done 事件的数据。拦截（422）、无权限等在开始输出前以 ApiError 抛出。
-export function chatStream(project_code, message, onDelta) {
-  return streamPost("/api/chat/stream", { project_code, message }, onDelta);
-}
-
-// Agent 对话：发一条消息，流式返回
 export function sendMessage(conversationId, message, onDelta) {
   return streamPost(`/api/conversations/${conversationId}/messages`, { message }, onDelta);
 }
@@ -158,8 +153,6 @@ export const api = {
   run: (code, id) => request(`/api/projects/${encodeURIComponent(code)}/runs/${id}`),
   startRun: (code) => request(`/api/projects/${encodeURIComponent(code)}/runs`, { method: "POST" }),
   cancelRun: (code, id) => request(`/api/projects/${encodeURIComponent(code)}/runs/${id}/cancel`, { method: "POST" }),
-  chat: (project_code, message) =>
-    request("/api/chat", { method: "POST", body: JSON.stringify({ project_code, message }) }),
   agents: () => request("/api/agents"),
   conversations: (code) => request(`/api/projects/${encodeURIComponent(code)}/conversations`),
   createConversation: (code, agent_code) =>
