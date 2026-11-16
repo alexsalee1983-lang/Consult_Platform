@@ -405,7 +405,7 @@ VERIFY_RULES = {
 OFFICIAL_HOSTS = ("gov.cn", "nist.gov", "gov.za", "gov.ng", "gov.my", "vie-publique.sn",
                   "egazette.gov.sg", "pdpc.gov.sg", "csa.gov.sg",
                   "jdih.komdigi.go.id", "jdih.setneg.go.id",
-                  "vbpl.vn", "congbao.chinhphu.vn",
+                  "vbpl.vn", "chinhphu.vn",
                   "pcpd.org.hk", "gld.gov.hk",
                   "dspdp.gov.mo",
                   "artci.ci")
