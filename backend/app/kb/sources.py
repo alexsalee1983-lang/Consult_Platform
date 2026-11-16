@@ -299,6 +299,41 @@ _FOREIGN = re.compile(r"^\s*(?:(Article|ARTICLE|Artigo|ARTIGO|Art\.|Section|SECT
 _FOREIGN_END = re.compile(r"^\s*(?:(?:FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ELEVENTH|TWELFTH)\s+)?(SCHEDULES?|Schedules?|ANNEX(?:E|ES)?|Annex(?:e|es)?|ANEXOS?|Anexos?)\b[\s:—–-]*\S{0,60}$")
 
 
+_PART = re.compile(r"^\s*(PART|Part)\s+([0-9]{1,3}[A-Z]{0,2}|[IVXLC]{1,6})\b\s*[.:—–-]?\s*(.*)$")
+_PART_NOTE = re.compile(r"^\s*\((?:PART|Part)\s+\S+\s.*\)\s*$")
+_SMALL = {"of", "and", "the", "to", "for", "in", "on", "by", "or", "a", "an", "with", "without", "under", "from", "into"}
+
+
+def _title_like(s: str) -> bool:
+    """大标题：全大写，或每个实词首字母大写；句号、分号结尾的是正文。"""
+    s = s.strip()
+    if not s or len(s) > 160 or s.endswith((".", ";", ",", ":")):
+        return False
+    if not re.search(r"[a-z]", s):
+        return True
+    return all(w[0].isupper() or w in _SMALL or not w[0].isalpha() for w in s.split())
+
+
+def _drop_parts(lines: list[str]) -> list[str]:
+    """PART 大标题（新加坡写成一行“PART 6A NOTIFICATION …”，香港分两行“Part 6A”+ 标题，再跟“(Part 6A added …)”）是边界不是正文，去掉。"""
+    out: list[str] = []
+    skip_title = False
+    for ln in lines:
+        if skip_title:
+            skip_title = False
+            # 单独一行的“Part 7”后面紧跟的是本 Part 标题（不是条文、不以标点结尾）
+            if not _FOREIGN.match(ln) and len(ln.strip()) <= 160 and not ln.rstrip().endswith((".", ";", ",", ":")):
+                continue
+        if _PART_NOTE.match(ln):
+            continue
+        m = _PART.match(ln)
+        if m and (not m.group(3) or _title_like(m.group(3))):
+            skip_title = not m.group(3)
+            continue
+        out.append(ln)
+    return out
+
+
 def _foreign_id(m: re.Match[str]) -> tuple[int, str]:
     """条号和字母后缀：新加坡等修正插入的条文写作“15A.”“26B.”，排在 15、26 之后。"""
     raw = m.group(2) or m.group(4) or ""
@@ -332,7 +367,7 @@ def split_articles(lines: list[str]) -> list[Piece]:
         if i > len(lines) // 2 and _FOREIGN_END.match(ln):
             cut = i
             break
-    lines = lines[:cut]
+    lines = _drop_parts(lines[:cut])
     word = "Article"
     joined = " ".join(lines[:2000])
     if len(re.findall(r"\bsection\b", joined, re.I)) > len(re.findall(r"\barticle\b", joined, re.I)):

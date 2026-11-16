@@ -279,6 +279,25 @@ def test_article_split_hk_chinese_bare():
     text = "第1部\n導言\n1.簡稱及生效日期\n(1)本條例可引稱為某條例。\n2.釋義\n(1)在本條例中——\n2A.豁免\n本條不適用。\n3.《某條例》的過渡條文\n本條訂定過渡安排。\n"
     assert [p.clause for p in _art(text)] == ["Article 1", "Article 2", "Article 2A", "Article 3"]
 
+
+def test_article_split_drops_part_headings():
+    """PART 大标题是边界：新加坡一行“PART 6A NOTIFICATION …”、香港“Part 6A”+ 标题 +“(Part 6A added …)”都不进上一条正文。"""
+    sg = ("1. Short title\nThis Act is the Demo Act.\n2. Interpretation\nIn this Act, demo means demo.\n"
+          "PART 6A NOTIFICATION OF DATA BREACHES\n3. Notifiable breach\nA breach is notifiable.\n"
+          "Part 7\nEnforcement of this Act\n4. Directions\nThe Commission may give directions.\n")
+    ps = _art(sg)
+    assert [p.clause for p in ps] == ["Article 1", "Article 2", "Article 3", "Article 4"]
+    assert all("PART" not in p.text and "Part 7" not in p.text and "Enforcement" not in p.text for p in ps)
+    hk = ("Part 1\nPreliminary\n1.Short title\nThis Ordinance is the Demo Ordinance.\n2.Interpretation\n"
+          "In this Ordinance demo means demo.\nPart 6A\nUse of Personal Data in Direct Marketing\n"
+          "(Part 6A added 18 of 2012 s. 21)\n3.Application\nThis Part applies to demo users.\n")
+    ps = _art(hk)
+    assert [p.clause for p in ps] == ["Article 1", "Article 2", "Article 3"]
+    assert ps[1].text == "Interpretation In this Ordinance demo means demo." and "Part 6A" not in ps[2].text
+    body = "1. Scope\nThis Act applies.\n2. Application\nPart 2 of this Act applies to demo users.\n"
+    assert "Part 2 of this Act" in _art(body)[1].text
+
+
 FRAMEWORK = """1. Introduction
 This framework is a demo.
 2. Demo Core
