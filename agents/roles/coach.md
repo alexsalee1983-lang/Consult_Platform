@@ -7,7 +7,7 @@ primary_users: 入职 0～2 年的顾问
 knowledge_access:
   read: [L1, L2, L3, L4, L5 已发布区]
   write: []
-tools: [RAG 检索]
+tools: [知识检索]
 depends_on: [01_公共规范.md]
 handoff_to: [专家负责人（推荐带教人）]
 ---

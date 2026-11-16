@@ -7,7 +7,7 @@ primary_users: 知识库专人
 knowledge_access:
   read: [待入库区]
   write: [待入库区（仅写审查结果）]
-tools: [文件解析]
+tools: [写待入库区]
 depends_on: [01_公共规范.md]
 handoff_to: [kb-builder, 专家负责人]
 ---

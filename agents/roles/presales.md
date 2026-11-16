@@ -7,7 +7,7 @@ primary_users: 售前
 knowledge_access:
   read: [可见角色包含"售前"的条目：L2 服务说明、L5 案例摘要]
   write: []
-tools: [RAG 检索]
+tools: [知识检索]
 depends_on: [01_公共规范.md]
 handoff_to: [delivery-pm（中标后移交范围信息）]
 ---

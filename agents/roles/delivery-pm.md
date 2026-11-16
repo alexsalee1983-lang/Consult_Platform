@@ -7,7 +7,7 @@ primary_users: 项目经理、交付顾问
 knowledge_access:
   read: [L1 客户管理工具与质量门禁, L2 工作分解与排期模板]
   write: []
-tools: [RAG 检索, 文件解析]
+tools: [知识检索, 读项目区, 文档生成]
 depends_on: [01_公共规范.md]
 handoff_to: [consultant-lead, qa-reviewer]
 ---

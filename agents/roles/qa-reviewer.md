@@ -7,7 +7,7 @@ primary_users: 交付顾问、项目经理
 knowledge_access:
   read: [L1 质量门禁与写作规范, L4 依据库, L5 异议应答库与踩坑记录]
   write: []
-tools: [RAG 检索, 文件解析]
+tools: [知识检索, 依据查询, 读项目区, 质量检查]
 depends_on: [01_公共规范.md]
 handoff_to: [consultant-lead, kb-builder（新异议）]
 ---

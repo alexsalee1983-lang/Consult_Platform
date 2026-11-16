@@ -8,7 +8,7 @@ model_tier: 推理
 knowledge_access:
   read: [L1, L2 各服务产品的设计方法与交付包, L3, L4, L5 已脱敏案例]
   write: []
-tools: [知识检索, 依据查询, 映射查询, 读项目区]
+tools: [知识检索, 依据查询, 读项目区, 控制映射查询]
 service_modules:                # 正文里有产品段的服务产品代号（与 products/*.yaml 一致）；平台按项目只拼入对应产品段
   - SOC                          # SOC 运营体系设计，已就绪
 depends_on: [01_公共规范.md]

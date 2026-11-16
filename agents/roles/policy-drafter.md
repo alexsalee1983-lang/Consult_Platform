@@ -7,7 +7,7 @@ primary_users: 交付顾问
 knowledge_access:
   read: [L2 制度母版与裁剪指引, L3, L4]
   write: []
-tools: [RAG 检索, 文件解析, 映射查询]
+tools: [知识检索, 依据查询, 读项目区, 文档生成, 控制映射查询]
 depends_on: [01_公共规范.md]
 handoff_to: [qa-reviewer]
 ---

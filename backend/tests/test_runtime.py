@@ -74,12 +74,17 @@ def test_readiness_rules():
     assert not infos["coach"].ready and "预留" in infos["coach"].reason
 
 
-def test_md_tools_mismatch_is_reported_not_enforced():
+def test_md_tools_match_grants():
+    """md 的 tools 只写平台工具名、与迁移写入的授权一致（决策记录 2026-11-16）；改授权要同步 md，否则这里失败。
+    运行时仍只提示不阻断。"""
     with SessionLocal() as db:
-        infos = {i.code: i for i in runtime.list_agents(db)}
-    # md 与授权表一致；映射查询（二期 B3，迁移 0035）待负责人同意后补进 md 的 tools，补之前只提示这一项
-    assert infos["solution-designer"].notes in ([], ["已授权但 md 未写：kb.mapping"])
-    assert any("RAG 检索" in n for n in infos["consultant-lead"].notes)  # 旧 md 写法，只提示
+        infos = runtime.list_agents(db)
+    assert {i.code: i.notes for i in infos if i.notes} == {}
+    roles = sorted((registry.agents_dir() / "roles").glob("*.md"))
+    assert roles
+    for p in roles:                                     # 未登记的（预留）Agent 也只写平台工具名
+        doc = registry.load(p.stem)
+        assert doc is not None and set(doc.md_tools) <= set(registry.TOOL_NAMES), p.name
 
 
 # ---- 系统提示与项目卡 ----

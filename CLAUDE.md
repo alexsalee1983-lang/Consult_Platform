@@ -124,6 +124,7 @@ Agent × 工具授权由迁移写入，改授权要新迁移、同步 `tests/tes
 
 运行时约定：Agent 的系统提示 = `agents/01_公共规范.md` + 角色 md 正文 + 平台生成的项目卡（`app/agents/runtime.py`）；项目卡经工具层 `project.read` 读取。
 md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier`、`tools`（仅作说明）、`service_modules`。
+md 的 `tools` 只写平台工具名（`registry.TOOL_NAMES`），与迁移写入的授权一致（“读项目区”已含查证据、发确认卡），由 `tests/test_runtime.py` 校验；改授权要同步改 md（负责人同意，2026-11-16）。
 每条对话和回复记下提示词版本（md 内容哈希）。
 平台调 Agent（交付链、质量评审、知识审核、脱敏审查、起草）只经 `app/agents/call.py` 的 `call()`：取 md（停用、缺失拒绝）、按 md 的 `model_tier` 定等级、经网关、记用量，传 `parse` 时格式不对带纠正说明重试一次；新增调用点不要直接写 `gateway.complete`。
 后端镜像以仓库根目录为构建范围，`agents/` 打进镜像（`backend/Dockerfile`、根目录 `.dockerignore`）；测试机可只读挂载 `./agents:/srv/agents:ro`，md 改了自动重新加载。
