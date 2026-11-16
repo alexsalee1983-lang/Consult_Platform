@@ -179,3 +179,23 @@ def test_normalized_variants_blocked(text, kind, hit):
                                   "ＧＢ／Ｔ 22239-2019 第 8.1.4.1 条"])
 def test_normalized_variants_not_overblocked(text):
     assert not check(text).blocked
+
+
+@pytest.mark.parametrize("text", [
+    "Les données de santé sont soumis au secret professionnel.",
+    "les personnes astreintes au secret professionnel, conformément à la loi",
+    "tenus au SECRET PROFESSIONNELLE.",
+])
+def test_french_professional_secrecy_not_blocked(text):
+    # 法文“职业保密义务”是法律术语，不是口令（塞内加尔个人数据保护法第 43 条误拦）
+    assert not check(text).blocked
+
+
+@pytest.mark.parametrize("text", [
+    "secret Profess1onnel.",
+    "secret professionnel1",
+    "client secret Abc@12345",
+    "password professionnel.",
+])
+def test_secret_term_exception_is_narrow(text):
+    assert check(text).blocked
