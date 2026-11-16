@@ -47,13 +47,13 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..agents import knowledge, runtime, tools
+from ..agents import call, knowledge, runtime, tools
 from ..core import audit
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
 from ..models import Deliverable, KbItem, KbVersion, Project, QualityReview, ReviewWaiver, SignOff, User
 from ..products import config
-from ..services import gateway, guard, jobs, usage
+from ..services import gateway, guard, jobs
 from . import cards, configs, deliverables
 from . import evidence as evidence_svc
 
@@ -451,6 +451,13 @@ def parse_review(text: str) -> tuple[list[dict], dict[str, int]] | None:
     return issues[:MAX_ISSUES], counts
 
 
+def _parse_review_strict(text: str) -> tuple[list[dict], dict[str, int]]:
+    parsed = parse_review(text)
+    if parsed is None:
+        raise ValueError("评审输出格式不对")
+    return parsed
+
+
 def conclude(blocking: int, major: int) -> str:
     if blocking:
         return "fail"
@@ -547,28 +554,26 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
         kb_block, _ = knowledge.retrieve(db, user, AGENT, project, f"{d.title} 质量评审 依据 {text[:200]}")
         message = f"{INSTRUCTIONS}\n\n# 交付件 {d.code} {d.title}（修订 v{r.revision}）\n\n{text}"
         try:
-            c = gateway.complete(message, tier=project.tier, project_code=project.code, level=doc.level,
-                                 system=runtime.system_prompt(doc, card, kb_block))
+            res = call.call(db, AGENT, message, actor=user.username, doc=doc, project=project,
+                            system=runtime.system_prompt(doc, card, kb_block), level=doc.level,
+                            parse=_parse_review_strict)
         except gateway.BlockedError as e:
             raise ReviewFailed("输入命中机密级内容，未发往模型") from e
         except gateway.ExternalModelForbidden as e:
             raise ReviewFailed("当前配置不允许把本项目发往外部模型") from e
         except gateway.GatewayError as e:
-            usage.record(db, username=user.username, project_code=project.code, level=doc.level, model="",
-                         status="error", stream=False, agent_code=AGENT)
             db.commit()
             raise ReviewRetry("模型暂不可用") from e
+        except call.OutputInvalid as e:
+            db.commit()
+            raise ReviewRetry("评审输出格式不对") from e
+        db.commit()
+        c = res.completion
         if c.demo:
             raise ReviewFailed("未配置大模型，不能做质量评审")
-        usage.record(db, username=user.username, project_code=project.code, level=doc.level, model=c.model,
-                     status="ok", stream=False, completion=c, agent_code=AGENT)
-        db.commit()
         if guard.check(c.text).blocked:
             raise ReviewFailed("模型输出命中机密级内容，未保存")
-        parsed = parse_review(c.text)
-        if parsed is None:
-            raise ReviewRetry("评审输出格式不对")
-        agent_issues, counts = parsed
+        agent_issues, counts = res.data
         issues += agent_issues
         report = c.text[:INPUT_CHARS]
         r.prompt_version, r.model = doc.version, c.model[:64]

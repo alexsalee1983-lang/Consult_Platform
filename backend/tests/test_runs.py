@@ -360,3 +360,22 @@ def test_design_tradeoff_card_pauses_before_policy(proj, model):
     assert _run(c, code, rid)["status"] == "done"
     assert all("顾问已确认事项" in model.prompt(k) and "夜间值守采用哪种模式" in model.prompt(k)
                for k in ("交付链第 6 步", "起草 D5"))
+
+
+def test_long_evidence_is_condensed_not_dropped(proj, model):
+    """证据超过一步的输入上限时先分批提炼要点再起草，运行记录写证据覆盖数（决策记录 2026-11-16）。"""
+    code, c = proj
+    model.replies = {runs.CONDENSE_MARK: "- 夜间无人值守 [O-01]", **model.replies}
+    for i in range(6):
+        r = c.post(f"/api/projects/{code}/notes", json={"kind": "observation", "title": f"巡查 {i}",
+                                                        "content": f"第{i}次巡查：值班台交接记录为纸质。" * 400})
+        assert r.status_code == 201
+    rid = c.post(f"/api/projects/{code}/runs").json()["id"]
+    _work()
+    facts = _run(c, code, rid)["steps"][0]
+    assert facts["status"] == "done"
+    assert facts["refs"]["evidence"] == {"total": 6, "included": 6, "condensed": True}
+    condense = [r for r in model.requests if runs.CONDENSE_MARK in r["messages"][-1]["content"]]
+    assert len(condense) >= 2
+    prompt = model.prompt("交付链第 3 步")
+    assert "夜间无人值守 [O-01]" in prompt and "按编号索取" not in prompt
