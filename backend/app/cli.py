@@ -650,7 +650,7 @@ def kb_source_publish(args: argparse.Namespace) -> int:
         print(f"自动发布已暂停（{r.suspended}），本批全部转人工审核")
     for d in r.docs:
         print(f"{d.title}：自动发布 {d.published}，转人工 {d.manual}，无变化 {d.unchanged}"
-              + (f"；{d.message}" if d.message else ""))
+              + (f"，退回 {d.rejected}（不入库）" if d.rejected else "") + (f"；{d.message}" if d.message else ""))
         if d.failed:
             print("  核验未通过：" + "；".join(sources.VERIFY_RULES[k] for k in d.failed))
         for s in d.skipped:

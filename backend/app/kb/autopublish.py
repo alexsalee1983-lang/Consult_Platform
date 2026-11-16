@@ -43,6 +43,7 @@ class DocOutcome:
     title: str
     published: int = 0
     manual: int = 0          # 转人工审核
+    rejected: int = 0        # 机密级检测退回、不入库的条款数
     unchanged: int = 0
     skipped: list[str] = field(default_factory=list)
     failed: list[str] = field(default_factory=list)
@@ -126,6 +127,7 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
     docs, skipped = sources.read_manifest(manifest.read_bytes())
     report = PublishReport(skipped=skipped, suspended=suspended(db))
     published: list[KbVersion] = []
+    partial: list[KbVersion] = []          # 有条款被退回的那几份里自动发布的，抽检比例更高
     for d in docs:
         out = DocOutcome(file=d.file, title=d.title)
         report.docs.append(out)
@@ -140,6 +142,7 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
             out.message, out.failed = str(e), ["complete"]
             continue
         out.failed = sources.verify(d, data, entries, rejected)
+        out.rejected = len(rejected)
         auto = not out.failed and not report.suspended
         for e in entries:
             v, why = _target(db, user, e)
@@ -151,19 +154,24 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
                 continue
             if auto:
                 _auto_publish(db, user, v)
-                published.append(v)
+                (partial if rejected else published).append(v)
                 out.published += 1
             else:
                 if v.status == "draft":
                     rv.submit(db, user, v)
                 out.manual += 1
-    if published:
-        n = max(1, math.ceil(len(published) * get_settings().kb_sample_rate_src))
-        pick = secrets.SystemRandom().sample(published, min(n, len(published)))
+    pick: list[KbVersion] = []
+    for group, rate in ((published, get_settings().kb_sample_rate_src),
+                        (partial, get_settings().kb_sample_rate_src_partial)):
+        if group:
+            n = max(1, math.ceil(len(group) * rate))
+            pick += secrets.SystemRandom().sample(group, min(n, len(group)))
+    if pick:
         for v in pick:
             v.sample_state = "pending"
         db.commit()
         report.sampled = [v.item.doc_id for v in pick]
+    published += partial
     audit.record(db, actor=user.username, action="kb.source_publish", result="allowed", docs=len(report.docs),
                  published=len(published), manual=sum(d.manual for d in report.docs), sampled=len(report.sampled),
                  suspended=bool(report.suspended))

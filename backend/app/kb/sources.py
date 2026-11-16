@@ -19,8 +19,9 @@
   同一文件重新下载新版后再切，key 不变，kb-import 建新版本、历史版本保留。
 - 每条先过机密级检测，命中的写进 _rejected/ 并注明类别（不写原文）。
 - 只生成文件，不入库、不调模型：核对后用 kb-import --submit 导入，审核时抽检即可（机械切分）。
-- 核验（二期 B10，verify）：原网址在官方网站白名单里、清单写了原件 sha256 且一致、写了文号或标准号、切出条款且没有
-  退回、法规条号连续没有漏切。结果写进 _report.json 的 failed；kb-source-publish 据此决定自动发布还是转人工
+- 核验（二期 B10，verify）：原网址在官方网站白名单里、清单写了原件 sha256 且一致、写了文号或标准号、切出了条款、法规条号连续
+  没有漏切。被机密级检测退回的条款不入库、单列在 _rejected/，不影响同一份其余条款自动发布，这一份按
+  KB_SAMPLE_RATE_SRC_PARTIAL 抽检（负责人 2026-11-16 定）。结果写进 _report.json 的 failed；kb-source-publish 据此决定自动发布还是转人工
   （app/kb/autopublish.py）。
 """
 from __future__ import annotations
@@ -531,10 +532,10 @@ VERIFY_RULES = {
     "official_source": "原网址在官方网站白名单里",
     "sha256": "清单写了原件 sha256，与文件一致",
     "code": "清单写了文号或标准号",
-    "complete": "切出了条款，没有退回的条款",
+    "complete": "切出了条款（机密级检测退回的条款不入库，单列）",
     "continuous": "法规条号从第一条起连续、附件项号从一起连续，没有漏切",
 }
-OFFICIAL_HOSTS = ("gov.cn", "nist.gov")
+OFFICIAL_HOSTS = ("gov.cn", "nist.gov", "gov.za", "gov.ng", "gov.my", "vie-publique.sn")   # 境外：决策记录 2026-11-16
 
 
 def official_hosts() -> tuple[str, ...]:
@@ -564,10 +565,10 @@ def verify(d: Doc, data: bytes, entries: list[Entry], rejected: list[tuple[str, 
         failed.append("sha256")
     if not d.code.strip():
         failed.append("code")
-    if not entries or rejected:
+    if not entries:
         failed.append("complete")
     if d.mode == "law":
-        got = {e.key for e in entries}
+        got = {e.key for e in entries} | {k for k, _ in rejected}      # 退回的条款也算切出来了
         for ln in _body(_lines(parse.parse(d.file, data))):
             m = _ARTICLE.match(ln)
             if m and cn_int(m.group(1)):
@@ -576,7 +577,7 @@ def verify(d: Doc, data: bytes, entries: list[Entry], rejected: list[tuple[str, 
                     failed.append("continuous")
                     break
     elif d.mode == "item":
-        got = {e.key for e in entries}
+        got = {e.key for e in entries} | {k for k, _ in rejected}      # 退回的条款也算切出来了
         for ln in _lines(parse.parse(d.file, data)):
             m = _ITEM.match(ln)
             if m and cn_int(m.group(1)) and _key(d, str(cn_int(m.group(1)))) not in got:
