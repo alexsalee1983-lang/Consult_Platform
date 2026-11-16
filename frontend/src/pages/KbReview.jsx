@@ -6,8 +6,59 @@ import { TopBar } from "../components/common.jsx";
 import { Chip, EMPTY_META, fmtDate, MetaForm, useKbMeta, VERSION_STATUS } from "../components/kb.jsx";
 
 const TABS = [
-  ["queue", "待审"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"],
+  ["queue", "待审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"],
 ];
+const ROLE_LABEL = { content: "内容", compliance: "合规", platform: "平台核验", sample: "抽检", agent: "知识审核 Agent" };
+const DECISION = { approve: ["c-g", "采纳"], reject: ["c-r", "退回"], flag: ["c-a", "存疑"] };
+const AUTO_LABEL = { platform: "平台核验发布", agent: "Agent 审核发布" };
+const CHECK_LABEL = { faithful: "忠于原文", no_addition: "不添加要求", citation_fit: "引用对得上", boundary: "资质边界",
+  confidential: "无客户与机密信息", no_conflict: "不重复、不冲突", applicability: "适用条件清楚" };
+
+function Findings({ f }) {
+  const failed = Object.entries(f.checks || {}).filter(([, c]) => !c.pass);
+  if (!failed.length && !(f.issues || []).length) return null;
+  return (
+    <ul className="lst" aria-label="Agent 标出的问题">
+      {failed.map(([k, c]) => <li key={k} className="sub">未过：{CHECK_LABEL[k] || k} · {c.reason}</li>)}
+      {(f.issues || []).map((x, i) => (
+        <li key={`i${i}`} className="sub"><span className={`chip ${x.severity === "建议" ? "c-c" : "c-r"}`}>{x.severity}</span> {x.location}：{x.problem}{x.suggestion ? ` → ${x.suggestion}` : ""}</li>
+      ))}
+    </ul>
+  );
+}
+const RECHECK_STATE = { pending: ["c-a", "待复查（使用反馈）"], passed: ["c-g", "复查通过"], failed: ["c-r", "复查不通过"] };
+const SAMPLE_STATE = { pending: ["c-a", "待抽检"], passed: ["c-g", "抽检通过"], failed: ["c-r", "抽检不通过"] };
+
+function SampleActions({ v, onDone }) {
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function act(decision) {
+    setBusy(true);
+    setError("");
+    try {
+      await api.kbSample(v.id, decision, comment);
+      setComment("");
+      await onDone();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="sub">对照原件核对条号、条文是否逐字一致，以及文号、现行状态是否与原件相符。</div>
+      <textarea rows={2} placeholder="不通过时写明问题：哪一条、哪里与原件不一致" value={comment}
+        onChange={(e) => setComment(e.target.value)} />
+      <div className="row">
+        <button type="button" className="btnp" disabled={busy} onClick={() => act("pass")}>抽检通过</button>
+        <button type="button" className="btn" disabled={busy} onClick={() => act("fail")}>不通过</button>
+      </div>
+      {error && <div className="err" role="alert">{error}</div>}
+    </div>
+  );
+}
 
 function Diff({ lines }) {
   const body = lines.filter((l) => !l.startsWith("---") && !l.startsWith("+++"));
@@ -210,11 +261,13 @@ export default function KbReview() {
   const [v, setV] = useState(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [stats, setStats] = useState(null);
 
   const loadList = useCallback(async () => {
     setError("");
     try {
       if (tab === "queue") setList(await api.kbQueue());
+      else if (tab === "sample") { const s = await api.kbSamples(); setStats(s); setList(s.items); }
       else if (tab === "published") setList(await api.kbVersions({ status: "published" }));
       else setList(await api.kbVersions({ status: tab, mine: true }));
     } catch (e) {
@@ -250,6 +303,20 @@ export default function KbReview() {
             ))}
           </div>
           {error && <div className="err">{error}</div>}
+          {tab === "sample" && stats && (
+            <div className={stats.suspended || !stats.enabled ? "err" : "sub"}>
+              平台核验自动发布的依据原文按比例抽检 · 最近 {stats.checked} 次不通过 {stats.failed} 次
+              {stats.suspended ? `，超过 ${Math.round(stats.fail_max * 100)}%：自动发布已暂停，新入库的转人工审核` : ""}
+              {!stats.enabled ? " · 自动发布已关闭" : ""}
+            </div>
+          )}
+          {tab === "sample" && stats?.agent && (
+            <div className={stats.agent.suspended || !stats.agent.enabled ? "err" : "sub"}>
+              知识审核 Agent 自动发布的解读、映射等按比例抽检 · 最近 {stats.agent.checked} 次不通过 {stats.agent.failed} 次
+              {stats.agent.suspended ? `，超过 ${Math.round(stats.agent.fail_max * 100)}%：自动发布已暂停，转人工审核` : ""}
+              {!stats.agent.enabled ? " · 自动发布已关闭" : ""}
+            </div>
+          )}
           <ul className="pick">
             {list.map((x) => (
               <li key={x.id}>
@@ -271,7 +338,7 @@ export default function KbReview() {
             <section className="pnl" aria-label="版本详情">
               <div className="vhead">
                 <div className="row"><span className="mono sub">{v.doc_id} · v{v.version}</span><Chip map={VERSION_STATUS} value={v.status} /></div>
-                <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>{v.title}</h2>
+                <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{v.title}</h2>
                 <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                   <span className="chip c-c">来源：{{ public: "公开资料", expert: "专家萃取", project: "项目沉淀", internal: "内部制度改造" }[v.source_type] || v.source_type}</span>
                   <span className="chip c-n">去标识：{{ passed: "已通过", not_needed: "无需", pending: "未完成" }[v.deid_status] || v.deid_status}</span>
@@ -279,7 +346,11 @@ export default function KbReview() {
                   {v.ref_document && <span className="chip c-v">依据：{v.ref_document} {v.ref_version}</span>}
                   {v.review_date && <span className="chip c-n">复审 {v.review_date}</span>}
                   {v.single_review && <span className="chip c-a">单人发布 · 待补复审</span>}
+                  {AUTO_LABEL[v.auto_review] && <span className="chip c-c">{AUTO_LABEL[v.auto_review]}</span>}
+                  {SAMPLE_STATE[v.sample_state] && <span className={`chip ${SAMPLE_STATE[v.sample_state][0]}`}>{SAMPLE_STATE[v.sample_state][1]}</span>}
+                  {RECHECK_STATE[v.recheck_state] && <span className={`chip ${RECHECK_STATE[v.recheck_state][0]}`}>{RECHECK_STATE[v.recheck_state][1]}</span>}
                 </div>
+                {v.recheck_reason && <div className="sub">{v.recheck_reason}。请按七项清单复查：通过清除标记；不通过写明问题，改出新版本或下线后移出队列。</div>}
               </div>
               <div className="pad" style={{ gap: 14 }}>
                 {v.summary && <p style={{ margin: 0, color: "var(--tx2)", lineHeight: 1.75 }}>{v.summary}</p>}
@@ -303,17 +374,40 @@ export default function KbReview() {
                 <ul className="lst">
                   {v.reviews.map((r, i) => (
                     <li key={i} className="sb">
-                      <span>{r.reviewer}<span className="sub">（{r.review_role === "content" ? "内容" : "合规"}）</span>
-                        {r.comment && <div className="sub">{r.comment}</div>}</span>
-                      <span className={`chip ${r.decision === "approve" ? "c-g" : "c-r"}`}>{r.decision === "approve" ? "采纳" : "退回"}</span>
+                      <span>{r.reviewer}<span className="sub">（{ROLE_LABEL[r.review_role] || r.review_role}）</span>
+                        {r.comment && <div className="sub">{r.comment}</div>}
+                        {r.review_role === "agent" && r.findings && <Findings f={r.findings} />}</span>
+                      <span className={`chip ${(DECISION[r.decision] || DECISION.reject)[0]}`}>{(DECISION[r.decision] || DECISION.reject)[1]}</span>
                     </li>
                   ))}
                   {v.reviews.length === 0 && <li className="sub">还没有审核记录</li>}
                 </ul>
-                <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>
+                {v.auto_review === "platform" ? <div className="sub">依据原文：平台核验官方来源、原件哈希、文号和切分后自动发布，按比例抽检</div> : v.auto_review === "agent" ? <div className="sub">程序规则和知识审核 Agent 逐项检查通过后自动发布，按比例抽检</div> : <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>}
+                {v.status === "published" && ((AUTO_LABEL[v.auto_review] && !["passed", "failed"].includes(v.sample_state)) || v.recheck_state === "pending") && hasRole(user, "knowledge_expert") && <SampleActions v={v} onDone={refresh} />}
                 {v.status === "in_review" && <ReviewActions v={v} onDone={refresh} />}
                 {v.status === "published" && <PublishedActions v={v} onDone={refresh} />}
               </section>
+              {(v.citations || []).length > 0 && (
+                <section className="pnl pad" aria-label="引用核对">
+                  <div className="sb"><span className="cap">引用核对（对照依据原文）</span>
+                    <span className="sub">待核 {v.citations.filter((c) => !c.found).length} / {v.citations.length}</span></div>
+                  <ul className="lst">
+                    {v.citations.map((c, i) => (
+                      <li key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div className="sb">
+                          <span>{c.document} <span className="mono">{c.clause}</span></span>
+                          {!c.found ? <span className="chip c-r">待核</span>
+                            : c.ref_status === "current" ? <span className="chip c-g">原文已核对</span>
+                              : <span className="chip c-a">{{ upcoming: "即将实施", repealed: "已废止", superseded: "已被替代" }[c.ref_status] || c.ref_status}</span>}
+                        </div>
+                        {c.found && !c.catalog && <div className="preview" style={{ maxHeight: 140 }}>{c.excerpt}</div>}
+                        {c.found && c.catalog && <div className="sub">条款目录（标准原文不入库，请查阅原件）· {c.src_doc_id}</div>}
+                        {!c.found && <div className="sub">库里没有对应的依据原文或条款目录：先切条入库原文，或改正引用</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               <section className="pnl pad" aria-label="相似条目">
                 <div className="cap">相似的已发布条目（可能重复或冲突）</div>
                 <ul className="lst">

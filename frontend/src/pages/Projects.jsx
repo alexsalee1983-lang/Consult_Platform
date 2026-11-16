@@ -13,7 +13,7 @@ function ProjectCard({ p }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
         <div className="row" style={{ flexWrap: "wrap" }}>
           <span className="mono" style={{ fontWeight: 700, color: "var(--amber)" }}>{p.code}</span>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>{p.service}</span>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>{p.service}</span>
           <span className={`chip ${tier.cls}`}>{tier.label}</span>
         </div>
         <div className="row sub" style={{ flexWrap: "wrap" }}>
@@ -25,7 +25,7 @@ function ProjectCard({ p }) {
         <div className="sb sub"><span>{p.phase_name}阶段</span><span>验收</span></div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-        <span className="mono" style={{ fontSize: 20, fontWeight: 700, color: scoreColor }}>{p.posture_score ?? "—"}</span>
+        <span className="mono" style={{ fontSize: 22, fontWeight: 700, color: scoreColor }}>{p.posture_score ?? "—"}</span>
         {p.open_confirmations > 0 && <span className="chip c-a">待你确认 {p.open_confirmations}</span>}
         {["due_soon", "due"].includes(p.retention_state) && (
           <span className={`chip ${RETENTION[p.retention_state].cls}`} title={`到期日 ${p.deletion_due_on}`}>

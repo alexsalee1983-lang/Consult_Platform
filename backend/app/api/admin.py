@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit, sessions
-from ..services import gateway, jobs, usage
+from ..services import gateway, jobs, ops, usage
 from ..core.auth import current_user, password_expired
 from ..core.config import get_settings
 from ..core.db import get_db, utcnow
@@ -78,7 +78,7 @@ def _aware(dt: datetime | None) -> datetime | None:
 def _out(db: Session, u: User) -> UserOut:
     lu = _aware(u.locked_until)
     locked = bool(lu and lu > utcnow())
-    seen = _aware(u.last_login_at or u.created_at)
+    seen = ops.last_seen(u)
     days = get_settings().inactive_account_days
     inactive = bool(u.is_active and days > 0 and seen and utcnow() - seen > timedelta(days=days))
     return UserOut(username=u.username, display_name=u.display_name or u.username, is_active=u.is_active,
@@ -287,6 +287,8 @@ def _set_active(db: Session, admin: User, username: str, active: bool) -> UserOu
     action = "user.enable" if active else "user.disable"
     target = _target(db, admin, username, action)
     target.is_active = active
+    if active:
+        target.enabled_at = utcnow()          # 长期未登录自动停用从启用时重新计时（二期 C5 O7）
     db.commit()
     if not active:
         sessions.destroy_all_for_user(target.id)

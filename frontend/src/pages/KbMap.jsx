@@ -4,6 +4,8 @@ import { api } from "../api.js";
 import { Loading, TopBar } from "../components/common.jsx";
 import { useKbMeta } from "../components/kb.jsx";
 
+const ROW_STATUS = { draft: "配置草稿", unconfigured: "未配置" };
+const KIND_LABEL = { product: "服务产品", general: "通用知识", module: "模块（按标签）" };
 const SOURCE_LABEL = { public: "公开资料", expert: "专家萃取", project: "项目沉淀", internal: "内部制度改造" };
 
 function Kpi({ cap, value, sub, color }) {
@@ -35,13 +37,13 @@ export default function KbMap() {
   }, []);
 
   if (!s || !meta) return <Loading error={error} />;
-  const stages = meta.stages;
-  const products = Object.keys(meta.products);
+  const stages = s.stages || meta.stages;
+  const matrix = s.matrix || [];
   const sources = Object.entries(s.by_source).map(([k, n]) => `${SOURCE_LABEL[k] || k} ${n}`).join(" · ") || "暂无";
 
   return (
     <>
-      <TopBar cap="知识 · 一期产品" title="知识地图与健康" />
+      <TopBar cap="知识 · 按服务产品" title="知识地图与健康" />
       <div className="kpis">
         <Kpi cap="已发布条目" value={s.published} sub={sources} />
         <Kpi cap="待审 / 草稿" value={`${s.in_review} / ${s.drafts}`} sub="在审批队列处理" color="var(--amber)" />
@@ -57,11 +59,15 @@ export default function KbMap() {
             <table className="tbl cov">
               <thead><tr><th>服务产品</th>{stages.map((st) => <th key={st}>{st}</th>)}</tr></thead>
               <tbody>
-                {products.map((p) => (
-                  <tr key={p}>
-                    <td>{meta.products[p]}</td>
+                {matrix.map((r, i) => (
+                  <tr key={`${r.kind}-${r.code}`}>
+                    <td>
+                      {(i === 0 || matrix[i - 1].kind !== r.kind) && r.kind !== "product" && <div className="cap">{KIND_LABEL[r.kind]}</div>}
+                      {r.name} <span className="mono sub">{r.code}</span>
+                      {ROW_STATUS[r.status] && <span className="chip c-a" style={{ marginLeft: 6 }}>{ROW_STATUS[r.status]}</span>}
+                    </td>
                     {stages.map((st) => {
-                      const n = s.coverage[p]?.[st] || 0;
+                      const n = r.cells[st] || 0;
                       return <td key={st} className={`mono ${level(n)}`}>{n}</td>;
                     })}
                   </tr>
@@ -69,9 +75,42 @@ export default function KbMap() {
               </tbody>
             </table>
           </div>
-          <div className="sub">按已发布、未下线的现行版本统计。“通用”阶段和通用知识（GEN）检索时会自动带上。</div>
+          <div className="sub">按已发布、未下线的现行版本统计。“通用”阶段和通用知识（GEN）检索时会自动带上。服务产品按产品配置列出，新产品加了配置就出现；模块行统计带模块检索标签的条目，不分产品。</div>
+          <h2 className="h2" style={{ marginTop: 14 }}>贡献统计</h2>
+          <table className="tbl">
+            <thead><tr><th>作者 / 审核人</th><th>现行条目</th><th>30 天新发布</th><th>30 天审核</th><th>来源构成</th></tr></thead>
+            <tbody>
+              {(s.contributors || []).map((c) => (
+                <tr key={c.username}>
+                  <td>{c.display_name}</td>
+                  <td className="mono">{c.published}</td>
+                  <td className="mono">{c.published_30d}</td>
+                  <td className="mono">{c.reviews_30d}</td>
+                  <td className="sub">{Object.entries(c.by_source).map(([k, n]) => `${SOURCE_LABEL[k] || k} ${n}`).join(" · ") || "—"}</td>
+                </tr>
+              ))}
+              {(s.contributors || []).length === 0 && <tr><td colSpan={5} className="sub">还没有发布或审核记录</td></tr>}
+            </tbody>
+          </table>
         </section>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+          <section className="pnl pad" aria-label="缺口 TOP">
+            <div className="sb"><h2 className="h2">缺口 TOP {(s.gaps || []).length}</h2>
+              <span className="sub">反复零命中的问题 <span className="mono" style={{ color: "var(--amber)" }}>{s.repeated_zero_hit_questions_30d || 0}</span></span></div>
+            <ul className="lst">
+              {(s.gaps || []).map((g) => (
+                <li key={`${g.product}-${g.stage}`} className="sb">
+                  <span>{g.product_name} · {g.stage}</span>
+                  <span className="row" style={{ gap: 6 }}>
+                    <span className={`mono ${level(g.items)} legend`}>{g.items} 条</span>
+                    <span className="mono sub">零命中 {g.zero_hits_30d}</span>
+                  </span>
+                </li>
+              ))}
+              {(s.gaps || []).length === 0 && <li className="sub">各产品、各阶段都已充足</li>}
+            </ul>
+            <div className="sub">按近 30 天检索时所选产品、阶段的零命中次数和条目数排序。检索词原文按数据保护要求不记录，看不到具体问题。</div>
+          </section>
           <section className="pnl pad" aria-label="待复审">
             <div className="sb"><h2 className="h2">待复审</h2><span className="mono" style={{ color: "var(--amber)" }}>{due.length}</span></div>
             <ul className="lst">

@@ -7,13 +7,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..core.db import utcnow
-from ..models import KbItem, KbVersion
-from . import meta
+from ..models import KbItem, KbMapping, KbVersion
+from . import mapping, meta
 
 
 @dataclass
@@ -28,11 +28,24 @@ class ItemMeta:
     classification: str = "internal"
     visible_roles: list[str] = field(default_factory=lambda: ["consultant", "admin"])
     owner: str = ""
+    tags: list[str] = field(default_factory=list)   # 检索加权标签（二期 B2），对应模块配置的 kb_tags
 
     def check(self) -> None:
         meta.check_classification(self.layer, self.domain, self.product, self.doc_type)
         meta.check_tags(self.stage, self.capabilities, self.industries)
         meta.check_visibility(self.classification, self.visible_roles)
+        self.tags = check_search_tags(self.tags)
+
+
+SEARCH_TAGS_MAX, SEARCH_TAG_LEN = 10, 20
+
+
+def check_search_tags(tags: list[str]) -> list[str]:
+    """检索加权标签：去空白、去重，至多 10 个、每个至多 20 字。返回规整后的列表。"""
+    out = list(dict.fromkeys(str(t).strip() for t in tags or [] if str(t).strip()))
+    if len(out) > SEARCH_TAGS_MAX or any(len(t) > SEARCH_TAG_LEN for t in out):
+        raise meta.MetaError(f"检索标签至多 {SEARCH_TAGS_MAX} 个、每个至多 {SEARCH_TAG_LEN} 字")
+    return out
 
 
 @dataclass
@@ -47,6 +60,8 @@ class VersionContent:
     ref_document: str = ""
     ref_version: str = ""
     ref_status: str = ""
+    ref_code: str = ""
+    ref_replaced_by: str = ""
     effective_date: date | None = None
     review_date: date | None = None
 
@@ -68,15 +83,20 @@ def next_doc_id(db: Session, m: ItemMeta) -> str:
 
 def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) -> KbVersion:
     c.check(item.layer)
+    rows = mapping.parse_rows(c.body) if item.doc_type == "MAP" else []   # 映射矩阵：正文表格必须能解析（B3）
     n = (db.scalar(select(func.max(KbVersion.version)).where(KbVersion.item_id == item.id)) or 0) + 1
     effective = c.effective_date
     review = c.review_date or (meta.default_review_date(item.layer, effective) if effective else None)
     v = KbVersion(item_id=item.id, version=n, status="draft", title=c.title.strip(), summary=c.summary,
                   body=c.body, applicability=c.applicability, change_note=c.change_note,
                   source_type=c.source_type, source_detail=c.source_detail, ref_document=c.ref_document,
-                  ref_version=c.ref_version, ref_status=c.ref_status, effective_date=effective,
+                  ref_version=c.ref_version, ref_status=c.ref_status, ref_code=c.ref_code,
+                  ref_replaced_by=c.ref_replaced_by, effective_date=effective,
                   review_date=review, created_by=created_by)
     db.add(v)
+    if rows:
+        db.flush()
+        db.add_all(KbMapping(version_id=v.id, seq=i, **r.as_dict()) for i, r in enumerate(rows, 1))
     item.updated_at = utcnow()
     return v
 
@@ -89,7 +109,8 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
         item = KbItem(doc_id=next_doc_id(db, m), layer=m.layer, domain=m.domain, product=m.product,
                       doc_type=m.doc_type, stage=m.stage, capabilities=list(m.capabilities),
                       industries=list(m.industries), classification=m.classification,
-                      visible_roles=list(m.visible_roles), owner=m.owner, created_by=created_by)
+                      visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags),
+                      created_by=created_by)
         db.add(item)
         try:
             db.flush()
@@ -111,6 +132,15 @@ def create_draft(db: Session, item: KbItem, c: VersionContent, created_by: str) 
     v = _new_version(db, item, c, created_by)
     db.commit()
     return v
+
+
+def replace_mapping_rows(db: Session, v: KbVersion) -> None:
+    """草稿正文改了以后重新解析映射行（只用于草稿；已提交、已发布的版本不再改）。格式不对抛 MetaError。"""
+    if v.item.doc_type != "MAP":
+        return
+    rows = mapping.parse_rows(v.body)
+    db.execute(delete(KbMapping).where(KbMapping.version_id == v.id))
+    db.add_all(KbMapping(version_id=v.id, seq=i, **r.as_dict()) for i, r in enumerate(rows, 1))
 
 
 def current_version(db: Session, item: KbItem) -> KbVersion | None:

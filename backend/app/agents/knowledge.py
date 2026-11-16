@@ -29,7 +29,8 @@ log = logging.getLogger(__name__)
 
 
 def product_code(service: str) -> str:
-    """项目的服务产品名称 → 知识库服务产品缩写（如“SOC 运营体系设计”→ SOC）；对不上时不按产品过滤。"""
+    """项目的服务产品名称 → 知识库服务产品缩写（如“SOC 运营体系设计”→ SOC）；对不上时不按产品过滤。
+    二期 B2 起对话前检索不再用它（工具层按项目配置快照取产品），只留给没有快照的场合。"""
     for code, name in meta.PRODUCTS.items():
         if code != "GEN" and (service == name or name in service or service in name):
             return code
@@ -46,7 +47,7 @@ def retrieve(db: Session, user: User, agent_code: str, project: Project, message
     try:
         if "kb.search" in granted:
             r = tools.invoke(db, user, agent_code, "kb.search",
-                             {"query": query, "product": product_code(project.service), "limit": MAX_ITEMS},
+                             {"query": query, "limit": MAX_ITEMS},   # 产品、模块标签由工具层按项目配置快照填（B2）
                              project.code)
             hits += [{**h, "kind": "knowledge"} for h in r.get("items", [])]
         if "basis.lookup" in granted:
