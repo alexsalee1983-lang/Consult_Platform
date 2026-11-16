@@ -259,3 +259,65 @@ def test_article_mode_manifest():
     assert d.mode == "article"
     entries, rejected, _ = sources.split_doc(d, FOREIGN_EN.encode())
     assert [e.content.title for e in entries][0] == "Demo Data Protection Act Section 1" and not rejected
+
+
+def test_article_split_suffix_and_repealed():
+    """新加坡式：修正插入的“15A.”“26B.”接在 15、26 后面，“[Repealed …]”的条文照样切出，不中断。"""
+    text = ("Short title\n1.  This Act is the Example Act.\n2.  In this Act, organisation means any person.\n"
+            "2A.—(1)  This section applies to deemed consent.\n2B.  Notification required.\n"
+            "3.  [Repealed by Act 40 of 2020]\n4.—(1)  An organisation must protect personal data.\n"
+            "5.  See section 2A.\n")
+    got = [(p.clause, p.key_part) for p in _art(text)]
+    assert got == [("Section 1", "1"), ("Section 2", "2"), ("Section 2A", "2a"), ("Section 2B", "2b"),
+                   ("Section 3", "3"), ("Section 4", "4"), ("Section 5", "5")]
+    assert "Schedule paragraph" not in _art(text)[-1].text
+    assert not sources._follows((3, "A"), (2, "B")) and not sources._follows((2, "A"), (2, "B"))
+
+
+def test_article_split_hk_chinese_bare():
+    """香港中文本：行首“1.簡稱及生效日期”“11A.豁免”，條號後直接接中文標題。"""
+    text = "第1部\n導言\n1.簡稱及生效日期\n(1)本條例可引稱為某條例。\n2.釋義\n(1)在本條例中——\n2A.豁免\n本條不適用。\n3.《某條例》的過渡條文\n本條訂定過渡安排。\n"
+    assert [p.clause for p in _art(text)] == ["Article 1", "Article 2", "Article 2A", "Article 3"]
+
+
+def test_article_split_drops_part_headings():
+    """PART 大标题是边界：新加坡一行“PART 6A NOTIFICATION …”、香港“Part 6A”+ 标题 +“(Part 6A added …)”都不进上一条正文。"""
+    sg = ("1. Short title\nThis Act is the Demo Act.\n2. Interpretation\nIn this Act, demo means demo.\n"
+          "PART 6A NOTIFICATION OF DATA BREACHES\n3. Notifiable breach\nA breach is notifiable.\n"
+          "Part 7\nEnforcement of this Act\n4. Directions\nThe Commission may give directions.\n")
+    ps = _art(sg)
+    assert [p.clause for p in ps] == ["Article 1", "Article 2", "Article 3", "Article 4"]
+    assert all("PART" not in p.text and "Part 7" not in p.text and "Enforcement" not in p.text for p in ps)
+    hk = ("Part 1\nPreliminary\n1.Short title\nThis Ordinance is the Demo Ordinance.\n2.Interpretation\n"
+          "In this Ordinance demo means demo.\nPart 6A\nUse of Personal Data in Direct Marketing\n"
+          "(Part 6A added 18 of 2012 s. 21)\n3.Application\nThis Part applies to demo users.\n")
+    ps = _art(hk)
+    assert [p.clause for p in ps] == ["Article 1", "Article 2", "Article 3"]
+    assert ps[1].text == "Interpretation In this Ordinance demo means demo." and "Part 6A" not in ps[2].text
+    body = "1. Scope\nThis Act applies.\n2. Application\nPart 2 of this Act applies to demo users.\n"
+    assert "Part 2 of this Act" in _art(body)[1].text
+
+
+FRAMEWORK = """1. Introduction
+This framework is a demo.
+2. Demo Core
+o GV.OC-01: The demo mission is understood
+o GV.OC-02: Demo stakeholders are understood, and their needs and
+expectations are considered
+ID.IM-P1: Demo systems are inventoried
+PO.1.1: Identify and document all demo requirements
+GOVERN 1.1: Demo legal requirements are managed
+GV.OC-01 The demo mission is (table reference without colon, not a heading)
+3.1. Demo Profiles
+A demo profile.
+"""
+
+
+def test_section_split_framework_ids_and_dotted_numbers():
+    ps = sources.split_sections([ln for ln in FRAMEWORK.splitlines() if ln.strip()], with_text=True)
+    assert [p.clause for p in ps] == ["1", "2", "GV.OC-01", "GV.OC-02", "ID.IM-P1", "PO.1.1", "GOVERN 1.1", "3.1"]
+    by = {p.clause: p for p in ps}
+    assert by["GV.OC-01"].text == "The demo mission is understood"        # 整句在标题行里：正文为空时取标题行
+    assert "without colon" in by["GOVERN 1.1"].text  # 没有冒号的引用留在上一条正文
+    assert by["GV.OC-02"].text == "expectations are considered"
+    assert by["1"].heading == "Introduction" and by["3.1"].text == "A demo profile."
