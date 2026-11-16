@@ -9,8 +9,8 @@
   - item 按项：附件、指引（如事件分级指南、合规审计指引）按“一、二、三”切，项号必须从一起逐项递增，
     “（一）”“1.”这类下一级编号留在本项正文里；
   - section 按章节：NIST 等允许收原文的资料，按“AC-2 ……”这类控制号或“3.1 ……”这类编号标题切；
-  - article 外文按条：境外法律（英、法、葡、阿拉伯文）按“Article 3”“Article (3):”“Artigo 3.º”“Art. 3”
-    “Section 3”“المادة (3)”或行首“3.”“3.—(1)”切，条号必须从 1 起逐条递增；从每个“第 1 条”起各切一遍，取正文最多的
+  - article 外文按条：境外法律（英、法、葡、阿拉伯、印尼、越南、泰文）按“Article 3”“Article (3):”“Artigo 3.º”
+    “Art. 3”“Section 3”“Pasal 3”“Điều 3.”“มาตรา ๓”“المادة (3)”或行首“3.”“3.—(1)”切，条号必须从 1 起逐条递增；从每个“第 1 条”起各切一遍，取正文最多的
     一遍（跳过目录、颁布条款），SCHEDULE / ANNEX / ANEXO 起为附件、不并进最后一条；
   - catalog 条款目录：国家标准、行业标准（GB / GB/T / GB/Z / JR/T / GM/T / DL/T / YD/T 开头的不填也按目录）
     只收条款号和条款标题，**不收正文**（二期开发计划第六节：标准原文版权），原件只留在下载目录供审改对照。
@@ -72,8 +72,8 @@ MAX_CLAUSE_CHARS = 6000
 _CN = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 _CN_UNIT = {"十": 10, "百": 100, "千": 1000}
 _NUM = "零〇一二三四五六七八九十百千两"
-_ARTICLE = re.compile(rf"^\s*第([{_NUM}\d]+)条(?:之([{_NUM}\d]+))?[\s　]*(.*)$")
-_CHAPTER = re.compile(rf"^\s*第([{_NUM}\d]+)(章|节)[\s　]*(.*)$")
+_ARTICLE = re.compile(rf"^\s*第([{_NUM}\d]+)[条條](?:之([{_NUM}\d]+))?[\s　]*(.*)$")
+_CHAPTER = re.compile(rf"^\s*第([{_NUM}\d]+)(章|节|節)[\s　]*(.*)$")
 _APPENDIX = re.compile(r"^\s*附\s*件[一二三四五六七八九十\d]*[:：]?\s*[^。；，]{0,40}$")
 _PAGE_NO = re.compile(r"\s*(?:[—－]\s*\d{1,3}\s*[—－]|-\s\d{1,3}\s-)\s*")
 _ITEM = re.compile(rf"^\s*([{_NUM}]+)、[\s　]*(.*)$")
@@ -241,7 +241,8 @@ def split_law(lines: list[str]) -> list[Piece]:
             last, last_sub = (cur[0], cur[1]) if cur else (0, 0)
             if n and ((n == last + 1 and not sub) or (n == last and sub == last_sub + 1)):
                 flush()
-                cur = (n, sub, f"第{m.group(1)}条" + (f"之{m.group(2)}" if m.group(2) else ""))
+                ch = ln.lstrip()[1 + len(m.group(1))]      # 条 或繁体 條
+                cur = (n, sub, f"第{m.group(1)}{ch}" + (f"之{m.group(2)}" if m.group(2) else ""))
                 buf = [m.group(3)] if m.group(3) else []
                 continue
         c = _CHAPTER.match(ln)
@@ -249,7 +250,7 @@ def split_law(lines: list[str]) -> list[Piece]:
             if c.group(2) == "章":
                 context = {"章": f"第{c.group(1)}章 {c.group(3)}".strip(), "节": ""}
             else:
-                context["节"] = f"第{c.group(1)}节 {c.group(3)}".strip()
+                context["节"] = f"第{c.group(1)}{c.group(2)} {c.group(3)}".strip()
             continue
         if cur is not None:
             buf.append(ln)
@@ -285,9 +286,9 @@ def split_items(lines: list[str]) -> list[Piece]:
     return pieces
 
 
-_AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
-_FOREIGN = re.compile(r"^\s*(?:(Article|ARTICLE|Artigo|ARTIGO|Art\.|Section|SECTION|Sec\.|المادة|مادة)\s*"
-                      r"\(?\s*([Pp]remier|PREMIER|1er|[0-9٠-٩]{1,3})\s*\)?(?:\.?\s*º|\.?\s*°|\.?ª)?\s*[.:\-–—]*\s*(.*)$"
+_AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩๐๑๒๓๔๕๖๗๘๙", "01234567890123456789")   # 阿拉伯、泰文数字
+_FOREIGN = re.compile(r"^\s*(?:(Article|ARTICLE|Artigo|ARTIGO|Art\.|Section|SECTION|Sec\.|Pasal|PASAL|Điều|ĐIỀU|มาตรา|المادة|مادة)\s*"
+                      r"\(?\s*([Pp]remier|PREMIER|1er|[0-9٠-٩๐-๙]{1,3})\s*\)?(?:\.?\s*º|\.?\s*°|\.?ª)?\s*[.:\-–—]*\s*(.*)$"
                       r"|([0-9]{1,3})\s*\.\s*(?:[—–-]\s*)?(\(1\)\s*.*|[A-Z(“\"‘].*)$)")
 _FOREIGN_END = re.compile(r"^\s*(SCHEDULES?|Schedules?|ANNEX(?:E|ES)?|Annex(?:e|es)?|ANEXOS?|Anexos?)\b[\s:—–-]*\S{0,60}$")
 
@@ -334,7 +335,8 @@ def split_articles(lines: list[str]) -> list[Piece]:
                 cur = _foreign_no(m)
                 if m.group(1):
                     w = {"ARTICLE": "Article", "ARTIGO": "Artigo", "Art.": "Article", "SECTION": "Section",
-                         "Sec.": "Section", "مادة": "المادة"}.get(m.group(1), m.group(1))
+                         "Sec.": "Section", "PASAL": "Pasal", "ĐIỀU": "Điều",
+                         "مادة": "المادة"}.get(m.group(1), m.group(1))
                     label = f"{w} {cur}" + (".º" if w == "Artigo" else "")
                     rest = m.group(3)
                 else:

@@ -221,6 +221,37 @@ def test_article_split_french_portuguese_arabic():
     assert [p.clause for p in ar] == ["المادة 1", "المادة 2", "المادة 3"] and "بموافقة" in ar[1].text
 
 
+FOREIGN_ASIA = """Pasal 1
+Dalam Undang-Undang ini yang dimaksud dengan Data Pribadi adalah data tentang orang perseorangan.
+Pasal 2
+Undang-Undang ini berlaku untuk setiap Orang yang melakukan pemrosesan Data Pribadi.
+"""
+
+FOREIGN_VI = """Điều 1. Phạm vi điều chỉnh
+Luật này quy định về dữ liệu cá nhân và bảo vệ dữ liệu cá nhân.
+Điều 2. Giải thích từ ngữ
+"""
+
+FOREIGN_TH = """มาตรา ๑ พระราชบัญญัตินี้เรียกว่า พระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล
+มาตรา ๒ พระราชบัญญัตินี้ให้ใช้บังคับตั้งแต่วันถัดจากวันประกาศในราชกิจจานุเบกษา
+"""
+
+
+def test_article_split_indonesian_vietnamese_thai():
+    assert [p.clause for p in _art(FOREIGN_ASIA)] == ["Pasal 1", "Pasal 2"]
+    vi = _art(FOREIGN_VI)
+    assert [p.clause for p in vi] == ["Điều 1", "Điều 2"] and vi[0].text.startswith("Phạm vi")
+    assert [p.clause for p in _art(FOREIGN_TH)] == ["มาตรา 1", "มาตรา 2"]
+
+
+def test_law_split_traditional_chinese():
+    lines = ["第一章 一般規定", "第一條 標的", "本法律訂定個人資料處理的一般制度。", "第二節 處理原則",
+             "第二條 一般原則", "個人資料的處理應以透明的方式進行。"]
+    ps = sources.split_law(lines)
+    assert [p.clause for p in ps] == ["第一條", "第二條"]
+    assert ps[1].context == "第一章 一般規定 第二節 處理原則" and "透明" in ps[1].text
+
+
 def test_article_mode_manifest():
     m = ("文件名,名称,文号/标准号,原网址,切分方式\n"
          "a.txt,Demo Data Protection Act,Act No. 99 of 2030,https://www.example.gov.za/a,外文按条\n")
