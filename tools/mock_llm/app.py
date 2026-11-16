@@ -7,6 +7,8 @@
 - 交付链各步（问题含“交付链第”）：返回带章节标题、占位符和来源标注的固定草稿，来源取问题里出现的证据编号
   （严格档优先 S-xx），用于跑通严格档“起草 → 导出 → 回填”
 - 质量评审（问题含“做质量评审”）：返回符合平台解析格式的固定评审意见（无阻断）
+- 工具调用（二期 A7）：请求带 tools、tool_choice 不是 none、最后一条是用户提问时，先发起一次 kb_search
+  （没有则 project_read）；收到工具结果后给固定回复，说明参考了几次工具结果
 
 不记录、不回显请求内容；回复只说明收到了多少字。不要部署到生产环境。
 """
@@ -47,6 +49,29 @@ def _draft(question: str) -> str:
             f"## 主要差距\n【系统A】特权账号未定期复核，由【人员1】跟踪整改 [{b}]。\n")
 
 
+def _tool_call(body: dict, model: str, key: str, name: str, args: dict):
+    """模拟模型发起一次工具调用（OpenAI 格式；流式时参数拆成两段下发）。"""
+    raw = json.dumps(args, ensure_ascii=False)
+    cid, created = "call_" + key[:8], int(time.time())
+    usage = {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+    if not body.get("stream"):
+        msg = {"role": "assistant", "content": None, "tool_calls": [
+            {"id": cid, "type": "function", "function": {"name": name, "arguments": raw}}]}
+        return {"id": "mock-" + key[:12], "object": "chat.completion", "created": created, "model": model,
+                "choices": [{"index": 0, "message": msg, "finish_reason": "tool_calls"}], "usage": usage}
+
+    def events():
+        head = {"index": 0, "id": cid, "type": "function", "function": {"name": name, "arguments": raw[:4]}}
+        for delta in ({"tool_calls": [head]}, {"tool_calls": [{"index": 0, "function": {"arguments": raw[4:]}}]}):
+            chunk = {"model": model, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]}
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'model': model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'tool_calls'}]})}\n\n"
+        if (body.get("stream_options") or {}).get("include_usage"):
+            yield f"data: {json.dumps({'model': model, 'choices': [], 'usage': usage})}\n\n"
+        yield "data: [DONE]\n\n"
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
 @app.post("/v1/chat/completions")
 async def completions(request: Request):
     body = await request.json()
@@ -60,6 +85,11 @@ async def completions(request: Request):
         return JSONResponse({"error": {"message": "temporarily unavailable"}}, status_code=503)
 
     system = next((m.get("content", "") for m in body.get("messages", []) if m.get("role") == "system"), "")
+    msgs = body.get("messages", [])
+    offered = {(t.get("function") or {}).get("name") for t in body.get("tools") or []}
+    call = next((n for n in ("kb_search", "project_read") if n in offered), None)
+    if call and body.get("tool_choice") != "none" and msgs and msgs[-1].get("role") == "user":
+        return _tool_call(body, model, key, call, {"query": question[:40]} if call == "kb_search" else {})
     # 脱敏审查 Agent 要求只输出 JSON：返回固定的审查结果（不识别任何名称），验证平台解析和报告流程
     if "residual_terms" in system:
         text = json.dumps({"conclusion": "有条件通过", "risk_level": "低", "residual_terms": [],
@@ -71,7 +101,10 @@ async def completions(request: Request):
         text = _draft(question)
     else:
         text = _reply(question)
-    usage = {"prompt_tokens": sum(len(m.get("content", "")) for m in body.get("messages", [])),
+        used = sum(1 for m in msgs if m.get("role") == "tool")
+        if used:
+            text += f"（模拟：参考了 {used} 次工具结果）"
+    usage = {"prompt_tokens": sum(len(m.get("content") or "") for m in msgs),
              "completion_tokens": len(text)}
     usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
     created = int(time.time())

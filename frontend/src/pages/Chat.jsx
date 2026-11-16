@@ -52,6 +52,7 @@ export default function Chat({ code }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [toolNote, setToolNote] = useState(""); // Agent 正在调用的工具（二期 A7）
   const [error, setError] = useState("");
   const [external, setExternal] = useState(false);   // 当前接的是外部测试模型
   // 只滚动对话区内部，不滚动整页；用户往上翻看时不把他拽回底部
@@ -137,6 +138,7 @@ export default function Chat({ code }) {
       setMessages((m) => [...m, { role: "user", content }]);
       let full = "";
       const done = await sendMessage(current.id, content, (delta) => {
+        setToolNote("");
         full += delta;
         if (!started) {
           started = true;
@@ -144,8 +146,9 @@ export default function Chat({ code }) {
         } else {
           patchLast((last) => ({ ...last, content: last.content + delta }));
         }
-      });
-      if (started) patchLast((last) => ({ ...last, streaming: false, model: done.model, demo: done.demo, references: done.references || [] }));
+      }, (t) => setToolNote(t.name));
+      setToolNote("");
+      if (started) patchLast((last) => ({ ...last, streaming: false, model: done.model, demo: done.demo, references: done.references || [], toolCalls: done.tool_calls || 0 }));
       if (full.includes("【交接】")) {
         // 回复里有交接信息时重新取一次，拿到消息编号和可转交的目标
         const d = await api.conversation(current.id);
@@ -154,6 +157,7 @@ export default function Chat({ code }) {
       // 后端用第一条提问作标题，这里同步显示
       setConv((c) => (c && !c.title ? { ...c, title: content.split("\n")[0].slice(0, 40) } : c));
     } catch (e) {
+      setToolNote("");
       if (started) patchLast((last) => ({ ...last, streaming: false, interrupted: true }));
       if (e.status === 422 && e.detail?.findings) {
         // 被拦截的提问不保存：从界面上撤下，换成拦截说明
@@ -240,6 +244,7 @@ export default function Chat({ code }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
                     <div className="sub">
                       {m.agentName || agentName} Agent{m.model ? ` · ${m.model}` : ""}{m.demo ? " · 演示模式" : ""}
+                      {m.toolCalls ? ` · 调用工具 ${m.toolCalls} 次` : ""}
                       {m.streaming ? " · 输出中……" : ""}{m.interrupted ? " · 输出中断，内容不完整" : ""}
                     </div>
                     <div className="body">{m.content}</div>
@@ -256,7 +261,8 @@ export default function Chat({ code }) {
                 </div>
               );
             })}
-            {sending && messages[messages.length - 1]?.role === "user" && <div className="sub">Agent 正在思考……</div>}
+            {sending && toolNote && <div className="sub">正在调用工具：{toolNote}……</div>}
+            {sending && !toolNote && messages[messages.length - 1]?.role === "user" && <div className="sub">Agent 正在思考……</div>}
             {error && <div className="err" role="alert">{error}</div>}
           </div>
           <form style={{ padding: "12px 20px 14px", borderTop: "1px solid var(--ln)", display: "flex", flexDirection: "column", gap: 8 }}

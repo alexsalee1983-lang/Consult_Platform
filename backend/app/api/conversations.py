@@ -17,15 +17,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..agents import handoff, knowledge, runtime, tools
+from ..agents import chat_tools, handoff, knowledge, runtime, tools
 from ..core import audit
 from ..core.auth import current_user
+from ..core.config import get_settings
 from ..core.db import SessionLocal, get_db, utcnow
 from ..core.permissions import membership, project_for_member, require_business
 from ..models import Agent, Conversation, Message, Project, User
 from ..schemas import ChatIn
 from ..services import gateway
-from ..services.gateway import BlockedError, Completion, ExternalModelForbidden, GatewayError
+from ..services.gateway import BlockedError, Completion, ExternalModelForbidden, GatewayError, ToolUse
 from .chat import UNAVAILABLE, _blocked, _external_forbidden, _failed, _sse, _succeeded
 
 router = APIRouter(prefix="/api", tags=["conversations"], dependencies=[Depends(require_business)])
@@ -172,11 +173,21 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
 
     chat_in = ChatIn(project_code=project.code, message=body.message, level=doc.level)
     username, agent_code, conv_id, version = user.username, c.agent_code, c.id, doc.version
-    # 提问前先检索知识库，命中的条目附进系统提示（检索经工具层，按授权和可见范围，写审计）
-    kb_block, refs = knowledge.retrieve(db, user, agent_code, project, body.message)
+    refs: list[dict] = []
+    used: list[str] = []
+    offered = chat_tools.available(db, agent_code) if get_settings().llm_tool_calling else []
+    if offered:
+        # 二期 A7：Agent 自己决定调用哪个工具（function calling），每次调用经工具层（授权、硬规则、审计）
+        system = runtime.system_prompt(doc, card, tool_mode=True)
+        tool_args = {"tools": chat_tools.schemas(offered),
+                     "run_tool": chat_tools.runner(user.id, agent_code, project.code, refs, used)}
+    else:
+        # 提问前先检索知识库，命中的条目附进系统提示（检索经工具层，按授权和可见范围，写审计）
+        kb_block, refs = knowledge.retrieve(db, user, agent_code, project, body.message)
+        system, tool_args = runtime.system_prompt(doc, card, kb_block), {}
     extra = {"conversation_id": conv_id, "prompt_version": version, "kb_refs": len(refs)}
     gen = gateway.stream(body.message, tier=project.tier, project_code=project.code, level=doc.level,
-                         system=runtime.system_prompt(doc, card, kb_block), history=runtime.history(list(c.messages)))
+                         system=system, history=runtime.history(list(c.messages)), **tool_args)
     try:
         first = next(gen)  # 拦截（422）和开始输出前的失败（502）以普通 HTTP 错误返回，被拦截的内容不存
     except ExternalModelForbidden as e:
@@ -199,7 +210,13 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
         item = first
         try:
             while True:
+                if isinstance(item, ToolUse):
+                    tcode = chat_tools.BY_FUNC.get(item.name, "")
+                    yield _sse("tool", {"tool": tcode, "name": chat_tools.DISPLAY.get(tcode, item.name)})
+                    item = next(gen)
+                    continue
                 if isinstance(item, Completion):
+                    extra["kb_refs"], extra["tool_calls"] = len(refs), item.tool_calls
                     with SessionLocal() as s:
                         s.add(Message(conversation_id=conv_id, role="assistant", content=item.text, model=item.model,
                                       prompt_version=version, prompt_tokens=item.prompt_tokens,
@@ -209,7 +226,8 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
                         _succeeded(s, username, code, chat_in, item, stream=True, agent=agent_code, extra=extra)
                     yield _sse("done", {"model": item.model, "demo": item.demo, "prompt_version": version,
                                         "prompt_tokens": item.prompt_tokens,
-                                        "completion_tokens": item.completion_tokens, "references": refs})
+                                        "completion_tokens": item.completion_tokens, "references": refs,
+                                        "tool_calls": item.tool_calls})
                     return
                 parts.append(item)
                 yield _sse("delta", {"text": item})

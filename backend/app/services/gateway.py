@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 import httpx
@@ -70,6 +70,13 @@ class Completion:
     attempts: int = 1
     pseudonymized: bool = False
     external: bool = False      # 是否发给了公司外部的模型服务
+    tool_calls: int = 0         # 本次答复中模型发起的工具调用次数（A7）
+
+
+@dataclass
+class ToolUse:
+    """stream() 在执行一次工具调用前产出，name 为函数名（调用方据此提示“正在调用…”）。"""
+    name: str
 
 
 @dataclass
@@ -242,12 +249,21 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
 
 def stream(message: str, *, tier: str, project_code: str, level: str = "standard",
            terms: dict[str, str] | None = None, system: str | None = None,
-           history: list[dict] | None = None) -> Iterator[str | Completion]:
+           history: list[dict] | None = None, tools: list[dict] | None = None,
+           run_tool: Callable[[str, str], dict] | None = None) -> Iterator[str | ToolUse | Completion]:
     """逐段产出回复文本（str），最后产出一个 Completion（text 为完整回复，带用量）。
 
     机密级拦截在第一次迭代时就会抛出 BlockedError；开始输出前的连接问题抛出 GatewayError。
+    传 tools（function calling 的函数定义）和 run_tool(函数名, 参数 JSON) → 结果时（二期 A7）：模型返回
+    tool_calls 就先产出 ToolUse、执行、把结果作为 tool 消息交回模型，再请求下一轮；最多 LLM_TOOL_MAX_ROUNDS 轮，
+    之后 tool_choice=none 要求直接答复。工具结果先过机密级检测（命中的只回错误说明）、截断、假名化；
+    参数先把占位符换回真名再交给 run_tool。各轮文本连成一条答复，用量相加。
     """
     p = _prepare(message, tier, project_code, level, terms, stream=True, system=system, history=history)
+    use_tools = bool(tools and run_tool)
+    if use_tools:
+        p.payload["tools"] = tools
+        p.payload["tool_choice"] = "auto"
     if not get_settings().llm_base_url:
         for i in range(0, len(DEMO_TEXT), 12):
             yield DEMO_TEXT[i:i + 12]
@@ -257,41 +273,86 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
     restorer = p.pseudo.stream_restorer() if p.pseudo else None
     parts: list[str] = []
     model, prompt_tokens, completion_tokens = p.model, 0, 0
+    calls, rounds = 0, 0
     with _client() as client:
-        resp, attempts = _send(client, p.payload, stream=True)
-        try:
-            for line in resp.iter_lines():
-                if not line.startswith("data:"):
-                    continue
-                body = line[5:].strip()
-                if body == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(body)
-                except ValueError:
-                    continue
-                model = chunk.get("model") or model
-                if chunk.get("usage"):
-                    prompt_tokens, completion_tokens = _usage(chunk)
-                for choice in chunk.get("choices") or []:
-                    delta = (choice.get("delta") or {}).get("content") or ""
-                    if delta:
-                        out = restorer.feed(delta) if restorer else delta
-                        if out:
-                            parts.append(out)
-                            yield out
-        except httpx.HTTPError as e:
-            raise GatewayError(f"模型输出中断：{type(e).__name__}", attempts) from e
-        finally:
-            resp.close()
-    if restorer:
-        tail = restorer.flush()
-        if tail:
-            parts.append(tail)
-            yield tail
+        while True:
+            resp, attempts = _send(client, p.payload, stream=True)
+            raw: list[str] = []                  # 本轮模型原样输出（假名化状态），交回模型时用
+            pending: dict[int, dict] = {}        # 流式下发的工具调用，按 index 拼接
+            try:
+                for line in resp.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    body = line[5:].strip()
+                    if body == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(body)
+                    except ValueError:
+                        continue
+                    model = chunk.get("model") or model
+                    if chunk.get("usage"):
+                        pt, ct = _usage(chunk)
+                        prompt_tokens, completion_tokens = prompt_tokens + pt, completion_tokens + ct
+                    for choice in chunk.get("choices") or []:
+                        d = choice.get("delta") or {}
+                        delta = d.get("content") or ""
+                        if delta:
+                            raw.append(delta)
+                            out = restorer.feed(delta) if restorer else delta
+                            if out:
+                                parts.append(out)
+                                yield out
+                        for tc in d.get("tool_calls") or []:
+                            slot = pending.setdefault(tc.get("index", 0), {"id": "", "name": "", "arguments": ""})
+                            fn = tc.get("function") or {}
+                            slot["id"] = tc.get("id") or slot["id"]
+                            slot["name"] += fn.get("name") or ""
+                            slot["arguments"] += fn.get("arguments") or ""
+            except httpx.HTTPError as e:
+                raise GatewayError(f"模型输出中断：{type(e).__name__}", attempts) from e
+            finally:
+                resp.close()
+            if restorer:
+                tail = restorer.flush()
+                if tail:
+                    parts.append(tail)
+                    yield tail
+            if not (use_tools and pending) or p.payload.get("tool_choice") == "none":
+                break
+            rounds += 1
+            todo = [pending[k] for k in sorted(pending)]
+            for i, c in enumerate(todo):
+                c["id"] = c["id"] or f"call_{rounds}_{i}"
+            p.payload["messages"].append({"role": "assistant", "content": "".join(raw), "tool_calls": [
+                {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}}
+                for c in todo]})
+            for c in todo:
+                calls += 1
+                yield ToolUse(c["name"])
+                args = p.pseudo.restore(c["arguments"]) if p.pseudo else c["arguments"]
+                p.payload["messages"].append({"role": "tool", "tool_call_id": c["id"],
+                                              "content": _tool_content(run_tool(c["name"], args), p.pseudo)})
+            if rounds >= get_settings().llm_tool_max_rounds:
+                p.payload["tool_choice"] = "none"
     yield Completion(text="".join(parts), model=model, demo=False, prompt_tokens=prompt_tokens,
                      completion_tokens=completion_tokens, latency_ms=_elapsed_ms(p), attempts=attempts,
-                     pseudonymized=p.pseudo is not None, external=uses_external_model())
+                     pseudonymized=p.pseudo is not None, external=uses_external_model(), tool_calls=calls)
+
+
+TOOL_RESULT_CHARS = 8000
+
+
+def _tool_content(result: object, pseudo: Pseudonymizer | None) -> str:
+    """工具结果 → 交回模型的 tool 消息正文：命中机密级的只回错误说明（类别），过长的截断，再假名化。"""
+    text = json.dumps(result, ensure_ascii=False, default=str)
+    hit = check(text)
+    if hit.blocked:
+        cats = "、".join(sorted({f.label for f in hit.findings}))
+        return json.dumps({"error": f"工具结果含机密级内容（{cats}），未发给模型"}, ensure_ascii=False)
+    if len(text) > TOOL_RESULT_CHARS:
+        text = text[:TOOL_RESULT_CHARS] + "…（结果过长已截断，请缩小范围或用 limit、offset 分次读取）"
+    return pseudo.apply(text) if pseudo else text
 
 
 # ---- 可用性检查 ----

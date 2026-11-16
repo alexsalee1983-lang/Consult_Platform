@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # 只处理虚拟客户数据时使用。开启后：严格档项目一律拒绝调用；自动假名化强制开启；审计标记 external；
     # 界面提示“勿输入真实客户信息”；生产环境（APP_ENV=prod）开启则拒绝启动。
     llm_external: bool = False
+    # 对话里 Agent 自主调用工具（二期 A7，function calling；负责人 11-16：公司模型支持工具调用）。
+    # 关掉时退回提问前检索注入；每次提问最多 llm_tool_max_rounds 轮工具调用，之后要求模型直接答复。
+    llm_tool_calling: bool = True
+    llm_tool_max_rounds: int = 4
 
     # 向量服务（OpenAI 兼容 /embeddings），同样只经网关调用。决策记录 2026-11-08：公司模型平台的 embedding
     # 接口就绪前，用 CPU 上的小型中文向量模型（docker compose 的 embed 服务）；就绪后只改这里并重新向量化。
