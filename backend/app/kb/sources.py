@@ -401,12 +401,13 @@ VERIFY_RULES = {
 }
 # 境外（决策记录 2026-11-16）：南非、尼日利亚、马来西亚政府域名，塞内加尔 vie-publique.sn；
 # 原法规库拒绝脚本下载的替代来源：新加坡公报和监管机构、印尼部委法规库、越南法规库和政府公报、
-# 香港私隐专员公署和宪报、澳门个人资料保护局、科特迪瓦电信监管局；只收发布机关或其官方法规库的网站
+# 香港私隐专员公署和宪报、澳门个人资料保护局、科特迪瓦电信监管局；只收发布机关或其官方法规库的网站；
+# 另加新加坡总检察署法规库 SSO、香港律政司电子版香港法例（负责人在浏览器下载或复制的原件）
 OFFICIAL_HOSTS = ("gov.cn", "nist.gov", "gov.za", "gov.ng", "gov.my", "vie-publique.sn",
-                  "egazette.gov.sg", "pdpc.gov.sg", "csa.gov.sg",
+                  "egazette.gov.sg", "pdpc.gov.sg", "csa.gov.sg", "sso.agc.gov.sg",
                   "jdih.komdigi.go.id", "jdih.setneg.go.id",
                   "vbpl.vn", "chinhphu.vn",
-                  "pcpd.org.hk", "gld.gov.hk",
+                  "pcpd.org.hk", "gld.gov.hk", "elegislation.gov.hk",
                   "dspdp.gov.mo",
                   "artci.ci")
 

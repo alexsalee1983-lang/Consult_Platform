@@ -62,6 +62,8 @@ def test_verify_rules():
     assert sources.verify(bad, LAW.encode(), entries, rejected) == ["official_source", "sha256", "code"]
     assert not sources.is_official("ftp://www.gov.cn/x") and sources.is_official("http://csrc.nist.gov/pubs")
     assert sources.is_official("https://www.gov.za/a") and sources.is_official("https://lom.agc.gov.my/x")
+    assert sources.is_official("https://sso.agc.gov.sg/Act/CA2018")
+    assert sources.is_official("https://www.elegislation.gov.hk/hk/cap486")
     assert not sources.is_official("https://gov.za.evil.com/a") and not sources.is_official("https://196.188.1.2/x")
     gap = sources.Doc(file="b.txt", title="示范条例", code="示范令第1号", url="https://www.gov.cn/1",
                       sha256=hashlib.sha256(SKIP.encode()).hexdigest())
