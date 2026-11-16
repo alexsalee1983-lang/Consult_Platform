@@ -3,7 +3,8 @@
 - 系统提示 = 01_公共规范.md + 角色 md 正文 + 平台生成的项目卡（公共规范第 6 节格式）。
 - 项目卡经工具层读取（tools.invoke 'project.read'），所以同样受 Agent × 工具授权、硬规则和项目成员检查约束，
   并写审计；知识侧 Agent 没有读项目区的授权，不能在项目里对话（知识区对话在 M2 知识服务提供）。
-- 方案设计 Agent 等按项目卡的“服务产品”选模块，运行时不需要特殊处理。
+- 二期 C1：md 正文按项目裁剪（registry.select_body），只拼入本项目产品的“## 产品：”段和所选模块的“### 模块：”段；
+  拼了哪几段由 md 版本和项目配置快照唯一确定。
 - 模型能力档取 md 的 model_tier（推理 / 标准 / 轻量），没有写时用标准档。
 """
 from __future__ import annotations
@@ -67,7 +68,13 @@ def ready_doc(db: Session, agent_code: str) -> registry.AgentDoc:
     return registry.load(agent_code)
 
 
-def project_card(db: Session, user: User, agent_code: str, project_code: str) -> str:
+class Card(str):
+    """项目卡正文，另带项目的产品和所选模块代号（system_prompt 用来裁剪 md）。"""
+    product: str | None = None
+    modules: tuple[str, ...] = ()
+
+
+def project_card(db: Session, user: User, agent_code: str, project_code: str) -> Card:
     """经工具层读项目区，渲染成公共规范第 6 节的项目卡。"""
     data = tools.invoke(db, user, agent_code, "project.read", {}, project_code)
     p = data["project"]
@@ -79,6 +86,8 @@ def project_card(db: Session, user: User, agent_code: str, project_code: str) ->
         f"- 服务产品*：{p['service']}",
         f"- 当前阶段*：{p['phase']}（第 {p['week']} / {p['total_weeks']} 周）",
     ]
+    if p.get("modules"):
+        lines.append(f"- 所选模块：{'、'.join(p['modules'])}")
     if "deliverables" in data:
         lines.append("- 交付件进度：" + "；".join(f"{d['code']} {d['title']}（{d['status']}）"
                                               for d in data["deliverables"]))
@@ -88,16 +97,19 @@ def project_card(db: Session, user: User, agent_code: str, project_code: str) ->
     if data.get("note"):
         lines.append(f"- 平台说明：{data['note']}")
     lines.append("- 合同范围、适用监管要求、已确认事项、关键干系人、已知敏感点：平台暂未录入，需要时向顾问索取")
-    return "\n".join(lines)
+    card = Card("\n".join(lines))
+    card.product, card.modules = str(p.get("product") or ""), tuple(p.get("modules") or ())
+    return card
 
 
 def system_prompt(doc: registry.AgentDoc, card: str, knowledge: str = "") -> str:
-    """公共规范 + 角色 md + 项目卡 + 本轮知识库检索结果（app/agents/knowledge.py）。"""
+    """公共规范 + 角色 md（按项目卡的产品和模块裁剪，二期 C1）+ 项目卡 + 本轮知识库检索结果（app/agents/knowledge.py）。"""
     note = ("（平台说明：以上项目卡由平台根据项目区数据生成。平台在每次提问前按问题检索知识库，命中的条目附在下面；"
             "使用其中内容时注明 [doc_id]；法规标准条款只能按 L4 条目给出的引用格式引用。"
             "检索结果里没有的依据，按公共规范第 3 节标注【依据待核实】，不得凭记忆补写条款号或原文。）")
     tail = f"\n\n---\n\n{knowledge}" if knowledge else "\n\n（本轮没有检索到相关知识库条目。）"
-    return f"{doc.common.strip()}\n\n---\n\n{doc.body.strip()}\n\n---\n\n{card}\n\n{note}{tail}"
+    body, _ = registry.select_body(doc.body, getattr(card, "product", None), getattr(card, "modules", ()))
+    return f"{doc.common.strip()}\n\n---\n\n{body.strip()}\n\n---\n\n{card}\n\n{note}{tail}"
 
 
 def history(messages: list[Message]) -> list[dict]:

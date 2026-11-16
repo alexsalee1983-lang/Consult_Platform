@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -106,6 +107,44 @@ def _read(code: str, common_path: Path, role_path: Path) -> AgentDoc | None:
         service_modules=[str(m) for m in (meta.get("service_modules") or [])],
         level_set=str(meta.get("model_tier") or "").strip() in TIER_LEVEL,
     )
+
+
+_PRODUCT = re.compile(r"^## 产品：\s*(\S+)")
+_MODULE = re.compile(r"^### 模块：\s*(\S+)")
+NOT_READY = "未就绪"
+
+
+def select_body(body: str, product: str | None, modules: list[str] | tuple[str, ...] = ()) -> tuple[str, list[str]]:
+    """二期 C1：按项目裁剪 md 正文，返回 (正文, 拼入的段)。
+
+    “## 产品：代号”段只保留本项目的产品；本项目的产品没有产品段时保留“## 产品：未就绪”；
+    保留下来的产品段里“### 模块：代号”只保留所选模块。其余内容（通用骨架）原样保留。
+    product 为 None（不在项目里）或 md 没有产品段时不裁剪。"""
+    lines = body.split("\n")
+    codes = {m.group(1) for line in lines if (m := _PRODUCT.match(line))}
+    if product is None or not codes:
+        return body, []
+    want = product if product in codes and product != NOT_READY else NOT_READY
+    picked, out, keep_product, keep_module, fenced = [], [], True, True, False
+    for line in lines:
+        if line.startswith("```"):
+            fenced = not fenced
+        elif fenced:
+            pass
+        elif line.startswith("# ") or line.startswith("## "):
+            m = _PRODUCT.match(line)
+            keep_product = (m is None) or m.group(1) == want
+            keep_module = True
+            if m and keep_product:
+                picked.append(f"产品：{want}")
+        elif line.startswith("### ") and keep_product:
+            m = _MODULE.match(line)
+            keep_module = (m is None) or m.group(1) in modules
+            if m and keep_module:
+                picked.append(f"模块：{m.group(1)}")
+        if keep_product and keep_module:
+            out.append(line)
+    return "\n".join(out), picked
 
 
 def tools_mismatch(doc: AgentDoc, granted: list[str]) -> list[str]:
