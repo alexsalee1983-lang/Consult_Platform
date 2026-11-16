@@ -8,8 +8,8 @@ import { Chip, EMPTY_META, fmtDate, MetaForm, useKbMeta, VERSION_STATUS } from "
 const TABS = [
   ["queue", "待审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"],
 ];
-const ROLE_LABEL = { content: "内容", compliance: "合规", platform: "平台核验", sample: "抽检", agent: "知识审核 Agent", reconfirm: "Agent 复查" };
-const DECISION = { approve: ["c-g", "采纳"], reject: ["c-r", "退回"], flag: ["c-a", "存疑"], queued: ["c-c", "复查中"] };
+const ROLE_LABEL = { content: "内容", compliance: "合规", platform: "平台核验", sample: "抽检", agent: "知识审核 Agent" };
+const DECISION = { approve: ["c-g", "采纳"], reject: ["c-r", "退回"], flag: ["c-a", "存疑"] };
 const AUTO_LABEL = { platform: "平台核验发布", agent: "Agent 审核发布" };
 const CHECK_LABEL = { faithful: "忠于原文", no_addition: "不添加要求", citation_fit: "引用对得上", boundary: "资质边界",
   confidential: "无客户与机密信息", no_conflict: "不重复、不冲突", applicability: "适用条件清楚" };
@@ -123,8 +123,9 @@ function ReviewActions({ v, onDone }) {
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const roles = [["content", "knowledge_expert", "内容审核"], ["compliance", "knowledge_admin", "合规审核"]]
-    .filter(([, r]) => hasRole(user, r));
+  const need = v.required_roles?.length ? v.required_roles : ["content", "compliance"];
+  const roles = [["content", "knowledge_expert", need.length === 1 ? "拍板（内容审核）" : "内容审核"], ["compliance", "knowledge_admin", "合规审核"]]
+    .filter(([role, r]) => need.includes(role) && hasRole(user, r));
   const mine = [v.created_by, v.submitted_by].includes(user?.username) && !v.self_review_allowed;
   const done = new Set(v.reviews.filter((r) => r.decision === "approve").map((r) => r.review_role));
 
@@ -376,13 +377,13 @@ export default function KbReview() {
                     <li key={i} className="sb">
                       <span>{r.reviewer}<span className="sub">（{ROLE_LABEL[r.review_role] || r.review_role}）</span>
                         {r.comment && <div className="sub">{r.comment}</div>}
-                        {(r.review_role === "agent" || r.review_role === "reconfirm") && r.findings?.checks && <Findings f={r.findings} />}</span>
+                        {r.review_role === "agent" && r.findings && <Findings f={r.findings} />}</span>
                       <span className={`chip ${(DECISION[r.decision] || DECISION.reject)[0]}`}>{(DECISION[r.decision] || DECISION.reject)[1]}</span>
                     </li>
                   ))}
                   {v.reviews.length === 0 && <li className="sub">还没有审核记录</li>}
                 </ul>
-                {v.auto_review === "platform" ? <div className="sub">依据原文：平台核验官方来源、原件哈希、文号和切分后自动发布，按比例抽检</div> : v.auto_review === "agent" ? <div className="sub">程序规则和知识审核 Agent 逐项检查通过后自动发布，按比例抽检</div> : <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve" && ["content", "compliance"].includes(r.review_role)).map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>}
+                {v.auto_review === "platform" ? <div className="sub">依据原文：平台核验官方来源、原件哈希、文号和切分后自动发布，按比例抽检</div> : v.auto_review === "agent" ? <div className="sub">程序规则和知识审核 Agent 逐项检查通过后自动发布，按比例抽检</div> : v.required_roles?.length === 1 ? <div className="sub">项目沉淀、专家经验、内部制度改造：合规已在去标识确认时完成；知识审核 Agent 先审、只出意见，一位知识专家（不能是作者）拍板发布</div> : <div className="sub">内容、合规两项审核 · 已通过 {new Set(v.reviews.filter((r) => r.decision === "approve" && ["content", "compliance"].includes(r.review_role)).map((r) => r.review_role)).size} / 2 项{v.self_review_allowed && v.status === "in_review" ? " · 公开资料可单人发布（发布后待补复审）" : ""}</div>}
                 {v.status === "published" && ((AUTO_LABEL[v.auto_review] && !["passed", "failed"].includes(v.sample_state)) || v.recheck_state === "pending") && hasRole(user, "knowledge_expert") && <SampleActions v={v} onDone={refresh} />}
                 {v.status === "in_review" && <ReviewActions v={v} onDone={refresh} />}
                 {v.status === "published" && <PublishedActions v={v} onDone={refresh} />}

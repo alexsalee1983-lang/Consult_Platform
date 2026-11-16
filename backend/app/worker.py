@@ -22,7 +22,7 @@ from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .kb import agent_review, deid_flow, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review 等任务处理器
-from .project import deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
+from .project import autoflow, deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs, ops
 
 POLL_SECONDS = 5
@@ -108,6 +108,18 @@ def _scan_reconfirm() -> None:
         log.warning("复审到期扫描出错：%s", type(e).__name__)
 
 
+def _auto_flow() -> None:
+    """平台规则（C5）：证据齐了自动发起交付链、写好的交付件自动评审（app/project/autoflow.py；可重复执行）。"""
+    try:
+        with SessionLocal() as db:
+            started = autoflow.scan_runs(db)
+            reviewed = autoflow.scan_reviews(db)
+        if started or reviewed:
+            log.info("自动发起交付链 %d 个、质量评审 %d 个", len(started), len(reviewed))
+    except Exception as e:  # noqa: BLE001
+        log.warning("交付流程自动推进出错：%s", type(e).__name__)
+
+
 def _scan_recheck() -> None:
     """平台规则：顾问常删掉 Agent 引用的知识条目标为待复查，进抽检队列（可重复执行）。"""
     from .kb import recheck
@@ -169,6 +181,7 @@ def main() -> None:
             last_scan = time.monotonic()
             _scan_due()
             _scan_reconfirm()
+            _auto_flow()
             _verify_audit()
         if last_daily is None or time.monotonic() - last_daily >= DAILY_SECONDS:
             last_daily = time.monotonic()
