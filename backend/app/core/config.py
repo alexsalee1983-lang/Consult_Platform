@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     # 最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX 时暂停；超过一半时抽检比例加倍。
     kb_agent_auto_publish: bool = True
     kb_sample_rate_agent: float = 0.2
+    # 有无知识库对比评测（二期 B1 补充）：kb-eval --compare 用知识库的准确率达标线；开启门禁时最近一次对比评测
+    # 未达标就暂停自动发布（B10、B11 两级），直到再跑一次达标
+    kb_eval_min_accuracy: float = 0.9
+    kb_eval_gate: bool = True
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
 

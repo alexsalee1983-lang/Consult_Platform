@@ -89,7 +89,9 @@ def suspended(db: Session, kind: str = PLATFORM) -> str:
     s = sample_stats(db, kind)
     if s["suspended"]:
         return f"最近 {s['checked']} 次抽检不通过 {s['failed']} 次，超过 {s['fail_max']:.0%}"
-    return ""
+    from . import compare                   # 每批入库后的对比评测未达标，也暂停（二期 B1 补充）
+
+    return compare.gate_reason(db)
 
 
 def _target(db: Session, user: User, e) -> tuple[KbVersion | None, str]:
