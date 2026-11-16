@@ -10,6 +10,9 @@
   上限一半时比例加倍），抽检与 B10 共用队列（autopublish.sample_check）。
 - 否则留在人工队列（两项人工审核照常），审核记录 decision=flag，findings 里是没过的规则、逐项检查和问题清单，
   审核页只看标出的问题。没接模型、模型出错、返回无法解析时同样转人工。
+- 第三级（二期 B12）：项目沉淀、专家萃取、内部制度改造且去标识已通过的版本（review.level3），同样先过程序规则、
+  再交 Agent 审，但只把意见记在审核页（decision approve = 未见问题 / flag = 有问题），不自动发布、不抽检，
+  由一位知识专家（不能是作者）拍板；不受 KB_AGENT_AUTO_PUBLISH 影响。
 - 暂停：KB_AGENT_AUTO_PUBLISH=false，或 Agent 自动发布的最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX。
 - 审计 kb.agent_review 只记编号、版本、没过的规则、Agent、提示词版本、模型、结论和计数，不记正文和意见。
 """
@@ -75,9 +78,14 @@ def eligible(v: KbVersion) -> bool:
     return (v.item.doc_type in TYPES and v.source_type == "public" and v.deid_status == "not_needed")
 
 
+def advisory(v: KbVersion) -> bool:
+    """第三级（二期 B12）：项目沉淀、专家经验、内部制度改造，Agent 只出意见，由一位知识专家拍板。"""
+    return rv.level3(v)
+
+
 def enqueue(db: Session, v: KbVersion, created_by: str) -> int | None:
     """提交审核后调用：适用的版本排队交知识审核 Agent。"""
-    if not eligible(v):
+    if not eligible(v) and not advisory(v):
         return None
     return jobs.enqueue(db, "kb.agent_review", {"version_id": v.id}, created_by=created_by, max_attempts=3)
 
@@ -200,13 +208,15 @@ def sample_rate(db: Session) -> float:
 
 
 def run(db: Session, v: KbVersion) -> Outcome:
-    if v.status != "in_review" or not eligible(v):
+    if v.status != "in_review" or not (eligible(v) or advisory(v)):
         return Outcome("skipped", note="不在待审状态或不适用")
     if any(r.review_role == ROLE for r in v.reviews):
         return Outcome("skipped", note="已审过")
     failed, cites = rule_failures(db, v)
     status, note, findings, prompt_version, model = _agent(db, v, cites)
     findings = {**findings, "rules_failed": failed, "agent": status, "note": note}
+    if advisory(v):
+        return _advise(db, v, failed, status, findings, prompt_version, model)
     suspended = autopublish.suspended(db, KIND)
     ok = not failed and status == "ok" and agent_passed(findings) and not suspended
     if suspended and not failed and status == "ok" and agent_passed(findings):
@@ -233,6 +243,25 @@ def run(db: Session, v: KbVersion) -> Outcome:
                  prompt_version=prompt_version, model=model, issues=len(findings.get("issues", [])),
                  sampled=out.sampled, suspended=bool(suspended))
     return out
+
+
+def _advise(db: Session, v: KbVersion, failed: list[str], status: str, findings: dict, prompt_version: str,
+            model: str) -> Outcome:
+    """第三级：只把程序规则和 Agent 的意见记在审核页，不发布、不抽检；由一位知识专家（不能是作者）拍板。"""
+    clean = not failed and status == "ok" and agent_passed(findings)
+    findings["level"] = 3
+    summary = ("知识审核 Agent（第三级，只出意见）：" + ("七项检查未见问题" if clean else "有问题，见下方清单")
+               + (f"；程序规则未过：{'、'.join(RULES[k] for k in failed)}" if failed else "")
+               + (f"；{findings['note']}" if findings["note"] else "") + "。由一位知识专家拍板发布")
+    db.add(KbReview(version_id=v.id, reviewer=REVIEWER, review_role=ROLE, decision="approve" if clean else "flag",
+                    comment=summary[:1000], findings=findings))
+    db.commit()
+    db.refresh(v)
+    audit.record(db, actor=AGENT, action="kb.agent_review", result="allowed", doc_id=v.item.doc_id,
+                 version=v.version, outcome="advice", level=3, rules_failed=failed, agent=AGENT,
+                 agent_status=status, prompt_version=prompt_version, model=model,
+                 issues=len(findings.get("issues", [])))
+    return Outcome("manual", rules_failed=failed, agent=status, note=findings.get("note", ""))
 
 
 @jobs.handler("kb.agent_review")
