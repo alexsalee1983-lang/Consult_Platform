@@ -158,3 +158,166 @@ def test_law_stops_at_appendix_and_strips_pdf_page_numbers():
     assert sources.verify(d, text.encode(), entries, rejected) == ["official_source", "sha256", "code"]
     pdf = sources.parse.ParsedDoc(kind="pdf", sections=[sources.parse.Section(heading="", text=text)])
     assert sources._lines(pdf)[0] == "第一条 运营者应当开展定级、等级测评。"
+
+
+FOREIGN_EN = """ARRANGEMENT OF SECTIONS
+1. Objectives
+2. Application
+3. Exemption
+1.—(1) The objectives of this Act are to safeguard the rights of data subjects.
+(2) This subsection continues section one.
+2.—(1) This Act shall apply to the processing of personal data.
+4. A numbered line that skips three is not a new section.
+3. This Act shall not apply to processing for household purposes.
+SCHEDULE
+Fees payable under the regulations.
+"""
+
+FOREIGN_FR = """Article Premier.
+La présente loi a pour objet de protéger les données.
+Article 2.
+1) Toute collecte est soumise à la présente loi.
+Article 3 : Les traitements temporaires sont exclus.
+"""
+
+FOREIGN_PT = """Artigo 1.º (Objecto)
+A presente lei estabelece as regras.
+Artigo 2.º
+Âmbito de aplicação.
+"""
+
+FOREIGN_AR = """مادة (1)
+مواد الإصدار.
+مادة (2)
+يعمل بهذا القانون.
+المادة (١)
+يقصد بالبيانات الشخصية أي بيانات تتعلق بشخص طبيعي محدد أو يمكن تحديده بشكل مباشر أو غير مباشر.
+المادة (٢)
+لا يجوز جمع البيانات الشخصية أو معالجتها إلا بموافقة صريحة من الشخص المعني بالبيانات.
+المادة (٣)
+يلتزم المتحكم بتعيين مسؤول لحماية البيانات الشخصية داخل الجهة.
+"""
+
+
+def _art(text: str) -> list[sources.Piece]:
+    return sources.split_articles([ln for ln in text.splitlines() if ln.strip()])
+
+
+def test_article_split_skips_contents_and_stops_at_schedule():
+    ps = _art(FOREIGN_EN)
+    assert [p.clause for p in ps] == ["Section 1", "Section 2", "Section 3"]
+    assert "continues section one" in ps[0].text                  # 目录那一遍不取，正文逐条切
+    assert "skips three" in ps[1].text                              # 跳号的“4.”不切
+    assert "Fees" not in ps[2].text                                 # SCHEDULE 起为附件
+    assert [p.key_part for p in ps] == ["1", "2", "3"]
+
+
+def test_article_split_french_portuguese_arabic():
+    assert [p.clause for p in _art(FOREIGN_FR)] == ["Article 1", "Article 2", "Article 3"]
+    assert _art(FOREIGN_FR)[2].text == "Les traitements temporaires sont exclus."
+    pt = _art(FOREIGN_PT)
+    assert [p.clause for p in pt] == ["Artigo 1.º", "Artigo 2.º"] and pt[0].text.startswith("(Objecto)")
+    ar = _art(FOREIGN_AR)                                           # 颁布条款 (1)(2) 之后正文重新从 1 起，取正文那一遍
+    assert [p.clause for p in ar] == ["المادة 1", "المادة 2", "المادة 3"] and "بموافقة" in ar[1].text
+
+
+FOREIGN_ASIA = """Pasal 1
+Dalam Undang-Undang ini yang dimaksud dengan Data Pribadi adalah data tentang orang perseorangan.
+Pasal 2
+Undang-Undang ini berlaku untuk setiap Orang yang melakukan pemrosesan Data Pribadi.
+"""
+
+FOREIGN_VI = """Điều 1. Phạm vi điều chỉnh
+Luật này quy định về dữ liệu cá nhân và bảo vệ dữ liệu cá nhân.
+Điều 2. Giải thích từ ngữ
+"""
+
+FOREIGN_TH = """มาตรา ๑ พระราชบัญญัตินี้เรียกว่า พระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล
+มาตรา ๒ พระราชบัญญัตินี้ให้ใช้บังคับตั้งแต่วันถัดจากวันประกาศในราชกิจจานุเบกษา
+"""
+
+
+def test_article_split_indonesian_vietnamese_thai():
+    assert [p.clause for p in _art(FOREIGN_ASIA)] == ["Pasal 1", "Pasal 2"]
+    vi = _art(FOREIGN_VI)
+    assert [p.clause for p in vi] == ["Điều 1", "Điều 2"] and vi[0].text.startswith("Phạm vi")
+    assert [p.clause for p in _art(FOREIGN_TH)] == ["มาตรา 1", "มาตรา 2"]
+
+
+def test_law_split_traditional_chinese():
+    lines = ["第一章 一般規定", "第一條 標的", "本法律訂定個人資料處理的一般制度。", "第二節 處理原則",
+             "第二條 一般原則", "個人資料的處理應以透明的方式進行。"]
+    ps = sources.split_law(lines)
+    assert [p.clause for p in ps] == ["第一條", "第二條"]
+    assert ps[1].context == "第一章 一般規定 第二節 處理原則" and "透明" in ps[1].text
+
+
+def test_article_mode_manifest():
+    m = ("文件名,名称,文号/标准号,原网址,切分方式\n"
+         "a.txt,Demo Data Protection Act,Act No. 99 of 2030,https://www.example.gov.za/a,外文按条\n")
+    (d,), _ = sources.read_manifest(m.encode())
+    assert d.mode == "article"
+    entries, rejected, _ = sources.split_doc(d, FOREIGN_EN.encode())
+    assert [e.content.title for e in entries][0] == "Demo Data Protection Act Section 1" and not rejected
+
+
+def test_article_split_suffix_and_repealed():
+    """新加坡式：修正插入的“15A.”“26B.”接在 15、26 后面，“[Repealed …]”的条文照样切出，不中断。"""
+    text = ("Short title\n1.  This Act is the Example Act.\n2.  In this Act, organisation means any person.\n"
+            "2A.—(1)  This section applies to deemed consent.\n2B.  Notification required.\n"
+            "3.  [Repealed by Act 40 of 2020]\n4.—(1)  An organisation must protect personal data.\n"
+            "5.  See section 2A.\n")
+    got = [(p.clause, p.key_part) for p in _art(text)]
+    assert got == [("Section 1", "1"), ("Section 2", "2"), ("Section 2A", "2a"), ("Section 2B", "2b"),
+                   ("Section 3", "3"), ("Section 4", "4"), ("Section 5", "5")]
+    assert "Schedule paragraph" not in _art(text)[-1].text
+    assert not sources._follows((3, "A"), (2, "B")) and not sources._follows((2, "A"), (2, "B"))
+
+
+def test_article_split_hk_chinese_bare():
+    """香港中文本：行首“1.簡稱及生效日期”“11A.豁免”，條號後直接接中文標題。"""
+    text = "第1部\n導言\n1.簡稱及生效日期\n(1)本條例可引稱為某條例。\n2.釋義\n(1)在本條例中——\n2A.豁免\n本條不適用。\n3.《某條例》的過渡條文\n本條訂定過渡安排。\n"
+    assert [p.clause for p in _art(text)] == ["Article 1", "Article 2", "Article 2A", "Article 3"]
+
+
+def test_article_split_drops_part_headings():
+    """PART 大标题是边界：新加坡一行“PART 6A NOTIFICATION …”、香港“Part 6A”+ 标题 +“(Part 6A added …)”都不进上一条正文。"""
+    sg = ("1. Short title\nThis Act is the Demo Act.\n2. Interpretation\nIn this Act, demo means demo.\n"
+          "PART 6A NOTIFICATION OF DATA BREACHES\n3. Notifiable breach\nA breach is notifiable.\n"
+          "Part 7\nEnforcement of this Act\n4. Directions\nThe Commission may give directions.\n")
+    ps = _art(sg)
+    assert [p.clause for p in ps] == ["Article 1", "Article 2", "Article 3", "Article 4"]
+    assert all("PART" not in p.text and "Part 7" not in p.text and "Enforcement" not in p.text for p in ps)
+    hk = ("Part 1\nPreliminary\n1.Short title\nThis Ordinance is the Demo Ordinance.\n2.Interpretation\n"
+          "In this Ordinance demo means demo.\nPart 6A\nUse of Personal Data in Direct Marketing\n"
+          "(Part 6A added 18 of 2012 s. 21)\n3.Application\nThis Part applies to demo users.\n")
+    ps = _art(hk)
+    assert [p.clause for p in ps] == ["Article 1", "Article 2", "Article 3"]
+    assert ps[1].text == "Interpretation In this Ordinance demo means demo." and "Part 6A" not in ps[2].text
+    body = "1. Scope\nThis Act applies.\n2. Application\nPart 2 of this Act applies to demo users.\n"
+    assert "Part 2 of this Act" in _art(body)[1].text
+
+
+FRAMEWORK = """1. Introduction
+This framework is a demo.
+2. Demo Core
+o GV.OC-01: The demo mission is understood
+o GV.OC-02: Demo stakeholders are understood, and their needs and
+expectations are considered
+ID.IM-P1: Demo systems are inventoried
+PO.1.1: Identify and document all demo requirements
+GOVERN 1.1: Demo legal requirements are managed
+GV.OC-01 The demo mission is (table reference without colon, not a heading)
+3.1. Demo Profiles
+A demo profile.
+"""
+
+
+def test_section_split_framework_ids_and_dotted_numbers():
+    ps = sources.split_sections([ln for ln in FRAMEWORK.splitlines() if ln.strip()], with_text=True)
+    assert [p.clause for p in ps] == ["1", "2", "GV.OC-01", "GV.OC-02", "ID.IM-P1", "PO.1.1", "GOVERN 1.1", "3.1"]
+    by = {p.clause: p for p in ps}
+    assert by["GV.OC-01"].text == "The demo mission is understood"        # 整句在标题行里：正文为空时取标题行
+    assert "without colon" in by["GOVERN 1.1"].text  # 没有冒号的引用留在上一条正文
+    assert by["GV.OC-02"].text == "expectations are considered"
+    assert by["1"].heading == "Introduction" and by["3.1"].text == "A demo profile."

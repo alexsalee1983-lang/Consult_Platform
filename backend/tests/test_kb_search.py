@@ -416,7 +416,8 @@ def test_exact_standard_and_article_match(people, corpus, reranker):
         assert search.basis(db, member, "GB/T 99999 8.1.5")["items"] == []   # 库里没有的标准：照常走门槛
 
 
-def test_exact_clause_in_plain_search_does_not_hide_other_layers(people, corpus, reranker):
+def test_exact_clause_in_plain_search_does_not_hide_other_layers(people, corpus, reranker, monkeypatch):
+    monkeypatch.setattr(get_settings(), "kb_rerank_candidates", 10)   # 候选多了 L4 条款会占满结果，场景按 10 个写
     reranker(good=("集中",))
     out = _search(people, "consultant", "GB/T 22239 8.1.5 集中管控 告警")
     assert "精确" in out["items"][0]["matched"]

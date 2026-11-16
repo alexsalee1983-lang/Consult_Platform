@@ -29,7 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
-from ..models import KbItem, User
+from ..models import KbChunk, KbItem, User
 from . import search
 
 TOP_K = 5
@@ -54,6 +54,7 @@ class QuestionResult:
     top_wrong_rerank: float | None = None
     expected_rank_before: int | None = None   # 期望条目重排前在 RRF 候选里的名次
     product: str = ""
+    recall: dict | None = None      # 答错时的召回诊断：期望条目在全文、向量、融合候选里的名次（1 起，没进为空）
 
 
 @dataclass
@@ -115,6 +116,36 @@ def _overall_rerank(states: list[str]) -> str:
     return bad[0] if bad else (states[-1] if states else "")
 
 
+def _recall(db: Session, user: User, q: dict, mode: str, expect: list[str], product: str) -> dict:
+    """答错的题再查一次、带上 trace，看期望条目卡在哪一层：未发布、全文 / 向量没召回、融合后没进重排候选、重排排低。"""
+    ids = set(db.scalars(select(KbChunk.id).join(KbItem, KbItem.current_version_id == KbChunk.version_id)
+                         .where(KbItem.import_key.in_(expect), KbItem.retired.is_(False))))
+    if not ids:
+        return {"published": False}
+    trace: dict = {}
+    if mode == "basis":
+        search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0, product=product, trace=trace)
+    else:
+        search.search(db, user, q["question"], product=product, limit=TOP_K, trace=trace)
+
+    def pos(seq: list[int]) -> int | None:
+        return next((i for i, cid in enumerate(seq, 1) if cid in ids), None)
+
+    return {"published": True, "fulltext": pos(trace.get("fulltext", [])), "vector": pos(trace.get("vector", [])),
+            "vector_kept": pos(trace.get("vector_kept", [])), "fused": pos(trace.get("fused", []))}
+
+
+def _recall_text(d: dict | None) -> str:
+    if not d:
+        return ""
+    if not d["published"]:
+        return "；期望条目没有已发布的现行版本"
+    def f(v: int | None) -> str:
+        return f"第 {v}" if v else "没进"
+    lost = "（向量命中但被相似度下限挡掉）" if d["vector"] and not d["vector_kept"] else ""
+    return f"；全文 {f(d['fulltext'])}、向量 {f(d['vector'])}{lost}、融合 {f(d['fused'])}"
+
+
 def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
     keys = dict(db.execute(select(KbItem.doc_id, KbItem.import_key)).all())
     report = EvalReport(total=len(questions))
@@ -147,6 +178,8 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         wrong_rr = [h["rerank_score"] for h, k in zip(scored, scored_keys, strict=True)
                     if k not in expect and h.get("rerank_score") is not None]
         r.top_wrong_rerank = max(wrong_rr) if wrong_rr else None
+        if expect and not correct:
+            r.recall = _recall(db, user, q, mode, expect, product)
         report.results.append(r)
 
     for mode in ("basis", "search"):
@@ -220,5 +253,6 @@ def format_report(r: EvalReport) -> str:
     wrong = [x for x in r.results if not x.correct]
     if wrong:
         lines += ["", f"答错的题（{len(wrong)}）："]
-        lines += [f"  {x.id}（{x.mode}）期望 {x.expect or '查不到'}，实际 {x.got[:3] or '空'}" for x in wrong]
+        lines += [f"  {x.id}（{x.mode}）期望 {x.expect or '查不到'}，实际 {x.got[:3] or '空'}{_recall_text(x.recall)}"
+                  for x in wrong]
     return "\n".join(lines)

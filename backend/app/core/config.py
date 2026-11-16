@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # 每批按比例随机抽检；最近 20 次抽检不通过率超过上限时暂停自动发布、全部转人工审核，直到抽检恢复。
     kb_src_auto_publish: bool = True
     kb_sample_rate_src: float = 0.05
+    kb_sample_rate_src_partial: float = 0.4   # 有条款被机密级检测退回的那几份（负责人 2026-11-16）
     kb_sample_fail_max: float = 0.1
     # 知识审核 Agent（二期 B11，二期开发计划第十二节第二级）：公开资料的解读、映射、方法和只含公开资料的案例、异议应答，
     # 提交后由程序规则 + 知识审核 Agent（经网关）逐项检查，全部通过的自动发布并按比例抽检，存疑的进人工队列。
@@ -89,7 +90,7 @@ class Settings(BaseSettings):
     # 虚拟客户数据；查询和知识片段原样发出（片段已去标识，查询先过机密级检测），不做假名化。生产环境开启即拒绝启动。
     rerank_external: bool = False
     # 送去重排的候选片段数（RRF 融合后的前 N 个）和每个片段的字数上限。CPU 上重排耗时大致与“个数 × 字数”成正比。
-    kb_rerank_candidates: int = 10   # 决策记录 2026-11-13：压测 CPU 重排为瓶颈，20×400 → 10×300
+    kb_rerank_candidates: int = 20   # 决策记录 2026-11-16：评测 85% 未达标，回调到 20（11-13 曾为 10）
     kb_rerank_max_chars: int = 300
     # 依据查询门槛（重排分数，0～1，sigmoid 后）：启用重排时取代 KB_BASIS_MIN_SIMILARITY。初值按开发电脑上的
     # 示范评测：正例最低 0.14（B004），该查不到的题最高 0.001，取 0.05。正式评测题编好后重新校准（交接文档 S2 第 5 步）。
