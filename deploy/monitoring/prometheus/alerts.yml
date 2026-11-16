@@ -61,6 +61,25 @@ groups:
         for: 10m
         labels: {severity: warning}
         annotations: {summary: "超过 2 小时没有完成审计链校验（worker 未运行或校验出错）"}
+      - alert: 每日自检未通过
+        expr: (cp_selfcheck_ok{job="worker"} == 0) and on(instance) (cp_selfcheck_timestamp_seconds{job="worker"} > 0)
+        labels: {severity: critical}
+        annotations: {summary: "worker 每日自检未通过（数据库或对象存储读写失败），运行 python -m app.cli selfcheck 复查"}
+      - alert: 每日自检停了
+        expr: time() - max(cp_selfcheck_timestamp_seconds{job="worker"}) > 93600
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "超过 26 小时没有完成每日自检（worker 未运行或任务积压）"}
+      - alert: 删除申请逾期
+        expr: max(cp_deletions_overdue{job="backend"}) > 0
+        for: 1h
+        labels: {severity: critical}
+        annotations: {summary: "有项目删除申请过了应完成日期还没完成，运行 python -m app.cli deletion-report 查看，提醒项目负责人确认（对客户的承诺）"}
+      - alert: 备份超过26小时
+        expr: time() - max(cp_backup_last_success_timestamp_seconds{job="backend"}) > 93600
+        for: 30m
+        labels: {severity: critical}
+        annotations: {summary: "超过 26 小时没有成功备份（从没备份过也会报），检查 scripts/backup.sh 的定时任务，见 docs/备份与恢复.md"}
       - alert: 机密级拦截激增
         expr: sum(increase(cp_guard_blocks_total[1h])) > 30
         labels: {severity: warning}

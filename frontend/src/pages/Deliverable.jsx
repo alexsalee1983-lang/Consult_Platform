@@ -465,6 +465,15 @@ export default function Deliverable({ code, dcode }) {
       </TopBar>
       {notice && <div className={notice.startsWith("导出失败") ? "err" : "sub"} role="status">{notice}</div>}
       {error && <div className="err">{error.message}</div>}
+      {d.totals.knowledge_updates > 0 && (
+        <div className="note-amber" role="status">
+          本交付件引用的知识条目有变化，请复核相关章节：
+          {d.sections.filter((x) => x.knowledge_updates?.length).map((x) => (
+            <span key={x.seq}> 第 {x.seq} 章（{x.knowledge_updates.map((u) => `${u.doc_id} ${u.change === "retired" ? "已下线" : `已更新到 v${u.current_version}`}`).join("，")}）</span>
+          ))}
+          。改写该章后提醒自动消失。
+        </div>
+      )}
       {strict && <div className="note-amber">严格档项目：这里只写占位符版本（【客户】【系统A】【人员1】），来源标 [S-xx]，不写真名、IP、产品名和原话，平台写入时检查。导出的 Word 带回现场，用现场工具按对照表回填成正式稿。</div>}
       <div className="kb3">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
