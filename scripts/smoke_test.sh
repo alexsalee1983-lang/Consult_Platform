@@ -83,7 +83,7 @@ done
 if [ "$worker" = "ok" ]; then echo "  通过  后台任务 worker 在线"; pass=$((pass+1)); else
   echo "  失败  后台任务 worker 状态：$worker"; fail=$((fail+1)); fi
 check "未登录访问项目列表被拒绝"       401 "$BASE/api/projects"
-check "未登录提问被拒绝"              401 -X POST "$BASE/api/chat" -H "$J" -d '{"project_code":"BANK-A","message":"x"}'
+check "未登录提问被拒绝"              401 -X POST "$BASE/api/conversations/1/messages" -H "$J" -d '{"message":"x"}'
 
 # 同一个动态码不能用两次：30 秒内重复运行时等到下一个时间步再登录
 code=$(curl -s -o "$BODY" -w '%{http_code}' -c "$JAR" -X POST "$BASE/api/auth/login" -H "$J" -d "$(login_body)")
@@ -105,18 +105,20 @@ check "非项目成员访问 GRID-B 返回 404" 404 "$BASE/api/projects/GRID-B"
 check "顾问不能查看审计日志"          403 "$BASE/api/audit"
 check "顾问不能校验审计链"            403 "$BASE/api/audit/verify"
 check "顾问不能管理账号"              403 "$BASE/api/admin/users"
-check "缺少 CSRF 令牌的提问被拒绝"    403 -X POST "$BASE/api/chat" -H "$J" \
-      -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'
-check "正常提问可以通过"              200 -X POST "$BASE/api/chat" -H "$J" -H "$C" \
-      -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'
-check "含口令和 IP 的内容被拦截"      422 -X POST "$BASE/api/chat" -H "$J" -H "$C" \
-      -d '{"project_code":"BANK-A","message":"核心交换机 10.1.20.1 密码：Abc@12345"}'
+# 顾问提问只经 Agent 对话（/api/chat 已删除）
+check "新建咨询师 Agent 对话"          201 -X POST "$BASE/api/projects/BANK-A/conversations" -H "$J" -H "$C" \
+      -d '{"agent_code":"consultant-lead"}'
+CONV="$(json_field id)"
+check "缺少 CSRF 令牌的提问被拒绝"    403 -X POST "$BASE/api/conversations/$CONV/messages" -H "$J" \
+      -d '{"message":"一期人力模型怎么选？"}'
+check "含口令和 IP 的内容被拦截"      422 -X POST "$BASE/api/conversations/$CONV/messages" -H "$J" -H "$C" \
+      -d '{"message":"核心交换机 10.1.20.1 密码：Abc@12345"}'
 check "咨询师 Agent 能读项目区"       200 -X POST "$BASE/api/agents/consultant-lead/tools/project.read" -H "$J" -H "$C" \
       -d '{"project_code":"BANK-A"}'
 check "知识侧 Agent 读不到项目区"     403 -X POST "$BASE/api/agents/kb-builder/tools/project.read" -H "$J" -H "$C" \
       -d '{"project_code":"BANK-A"}'
-check "流式提问可以通过"              200 -X POST "$BASE/api/chat/stream" -H "$J" -H "$C" \
-      -d '{"project_code":"BANK-A","message":"一期人力模型怎么选？"}'
+check "流式提问可以通过"              200 -X POST "$BASE/api/conversations/$CONV/messages" -H "$J" -H "$C" \
+      -d '{"message":"一期人力模型怎么选？"}'
 if grep -q "^event: done" "$BODY"; then echo "  通过  流式输出正常结束"; pass=$((pass+1)); else
   echo "  失败  流式输出没有正常结束"; head -c 300 "$BODY"; echo; fail=$((fail+1)); fi
 # 接了模型（含 CI 的模拟模型）时设 SMOKE_EXPECT_LLM=ok，要求模型可用、回复不是演示模式

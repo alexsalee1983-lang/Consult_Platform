@@ -95,12 +95,6 @@ class ChatIn(BaseModel):
     level: str = Field(default="standard", pattern="^(reasoning|standard|light)$")
 
 
-class ChatOut(BaseModel):
-    reply: str
-    model: str
-    demo: bool
-
-
 class AuditOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
