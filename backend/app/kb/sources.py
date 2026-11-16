@@ -6,6 +6,8 @@
 - 切分方式（清单“切分方式”列，不填按文号判断）：
   - law 按条：法律法规按“第 X 条”切，条号必须从第一条起逐条递增（防止正文里换行开头的“第 X 条”被误切），
     章、节名写进摘要；
+  - item 按项：附件、指引（如事件分级指南、合规审计指引）按“一、二、三”切，项号必须从一起逐项递增，
+    “（一）”“1.”这类下一级编号留在本项正文里；
   - section 按章节：NIST 等允许收原文的资料，按“AC-2 ……”这类控制号或“3.1 ……”这类编号标题切；
   - catalog 条款目录：国家标准、行业标准（GB / GB/T / GB/Z / JR/T / GM/T / DL/T / YD/T 开头的不填也按目录）
     只收条款号和条款标题，**不收正文**（二期开发计划第六节：标准原文版权），原件只留在下载目录供审改对照。
@@ -56,7 +58,8 @@ STATUS = {"现行": "current", "现行有效": "current", "有效": "current", "
           "已废止": "repealed", "废止": "repealed", "失效": "repealed", "已被替代": "superseded", "被替代": "superseded",
           "已修订": "superseded", "current": "current", "upcoming": "upcoming", "repealed": "repealed",
           "superseded": "superseded"}
-MODES = {"law": "law", "按条": "law", "条": "law", "section": "section", "按章节": "section", "章节": "section",
+MODES = {"law": "law", "按条": "law", "条": "law", "item": "item", "按项": "item", "项": "item",
+         "section": "section", "按章节": "section", "章节": "section",
          "catalog": "catalog", "条款目录": "catalog", "目录": "catalog"}
 STANDARD_CODE = re.compile(r"^\s*(GB/T|GB/Z|GB|JR/T|GM/T|DL/T|YD/T|GA/T|GA)\s*\d", re.I)
 CATALOG_NOTE = "（条款目录：标准原文受版权保护，知识库不收全文，请查阅原件。）"
@@ -67,6 +70,9 @@ _CN_UNIT = {"十": 10, "百": 100, "千": 1000}
 _NUM = "零〇一二三四五六七八九十百千两"
 _ARTICLE = re.compile(rf"^\s*第([{_NUM}\d]+)条(?:之([{_NUM}\d]+))?[\s　]*(.*)$")
 _CHAPTER = re.compile(rf"^\s*第([{_NUM}\d]+)(章|节)[\s　]*(.*)$")
+_APPENDIX = re.compile(r"^\s*附\s*件[一二三四五六七八九十\d]*[:：]?\s*[^。；，]{0,40}$")
+_PAGE_NO = re.compile(r"\s*(?:[—－]\s*\d{1,3}\s*[—－]|-\s\d{1,3}\s-)\s*")
+_ITEM = re.compile(rf"^\s*([{_NUM}]+)、[\s　]*(.*)$")
 _CONTROL = re.compile(r"^\s*([A-Z]{2,3}-\d{1,2}(?:\(\d{1,2}\))?)\s+(\S.{0,80})$")
 _NUMBERED = re.compile(r"^\s*((?:[A-Z]\.)?\d{1,2}(?:\.\d{1,2}){0,3})[\s　]+([^\s　].{0,60})$")
 
@@ -181,12 +187,25 @@ def read_manifest(data: bytes) -> tuple[list[Doc], list[str]]:
 # ---- 切分 ----
 
 def _lines(doc: parse.ParsedDoc) -> list[str]:
+    """正文行。PDF 去掉“— 5 —”“- 31 -”这类页码（公文版式页码常夹在行中间）。"""
     out: list[str] = []
     for s in doc.sections:
         if doc.kind in ("docx", "markdown") and s.heading:
             out.append(s.heading.split(" / ")[-1])
         out += [ln.strip() for ln in s.text.splitlines()]
+    if doc.kind == "pdf":
+        out = [_PAGE_NO.sub("", ln) for ln in out]
     return [ln.lstrip("#").strip() for ln in out if ln.strip()]
+
+
+def _body(lines: list[str]) -> list[str]:
+    """法规正文到“附件：××表”这类附件行为止：附件（审核表、指南）不并进最后一条，另按 item 切或不收。"""
+    seen = False
+    for i, ln in enumerate(lines):
+        seen = seen or bool(_ARTICLE.match(ln))
+        if seen and _APPENDIX.match(ln):
+            return lines[:i]
+    return lines
 
 
 def _join(lines: list[str]) -> str:
@@ -232,6 +251,49 @@ def split_law(lines: list[str]) -> list[Piece]:
             buf.append(ln)
     flush()
     return pieces
+
+
+def split_items(lines: list[str]) -> list[Piece]:
+    """附件、指引按“一、二、三”切（item）：项号从一起逐项递增，正文里的“（一）”“1.”不切。
+    项的第一行是短标题（不以标点结尾，“一、特别重大事件”或“一、”下一行）的，作为本项标题。"""
+    pieces: list[Piece] = []
+    buf: list[str] = []
+    cur = 0
+
+    def flush() -> None:
+        if not cur:
+            return
+        body, heading = list(buf), ""
+        if len(body) > 1 and len(body[0]) <= 30 and not body[0].endswith(_END):
+            heading = body.pop(0)                   # “一、特别重大事件”或“一、”下一行的短标题
+        pieces.append(Piece(clause=_cn_label(cur), key_part=str(cur), heading=heading, text=_join(body)))
+
+    for ln in lines:
+        m = _ITEM.match(ln)
+        if m and cn_int(m.group(1)) == cur + 1:
+            flush()
+            cur = cn_int(m.group(1))
+            buf = [m.group(2)] if m.group(2) else []
+            continue
+        if cur:
+            buf.append(ln)
+    flush()
+    return pieces
+
+
+_END = ("。", "；", "，", "：", ":", ";", ",", ".")
+
+
+def _cn_label(n: int) -> str:
+    """1 → 一、，13 → 十三、（条目里显示原文项号）。"""
+    digits = "零一二三四五六七八九"
+    if n < 10:
+        s = digits[n]
+    elif n < 20:
+        s = "十" + (digits[n % 10] if n % 10 else "")
+    else:
+        s = digits[n // 10] + "十" + (digits[n % 10] if n % 10 else "")
+    return s + "、"
 
 
 def _heading(ln: str) -> tuple[str, str] | None:
@@ -281,7 +343,7 @@ def _key(d: Doc, part: str) -> str:
 def to_entry(d: Doc, p: Piece) -> Entry:
     head = f"{p.clause} {p.heading}".strip()
     # 标准条款号前带标准号：条款号 8.1.4.1 形似 IP，机密级检测据“GB/T ××× 8.1.4.1”认作条款号
-    shown = f"{d.code} {head}" if d.mode != "law" and d.code else head
+    shown = f"{d.code} {head}" if d.mode not in ("law", "item") and d.code else head
     body = f"## {shown}\n\n{CATALOG_NOTE if d.mode == 'catalog' else p.text[:MAX_CLAUSE_CHARS]}"
     detail = " ".join(x for x in ("公开资料：", d.publisher, d.code, d.url) if x).replace("： ", "：")
     summary = " ".join(x for x in (d.title, d.code, p.context, head) if x)
@@ -299,7 +361,9 @@ def split_doc(d: Doc, data: bytes) -> tuple[list[Entry], list[tuple[str, str]], 
     """返回 (条目, [(key, 退回原因)], 说明)。"""
     lines = _lines(parse.parse(d.file, data))
     if d.mode == "law":
-        pieces = split_law(lines)
+        pieces = split_law(_body(lines))
+    elif d.mode == "item":
+        pieces = split_items(lines)
     else:
         pieces = split_sections(lines, with_text=d.mode == "section")
     entries: list[Entry] = []
@@ -332,7 +396,7 @@ VERIFY_RULES = {
     "sha256": "清单写了原件 sha256，与文件一致",
     "code": "清单写了文号或标准号",
     "complete": "切出了条款，没有退回的条款",
-    "continuous": "法规条号从第一条起连续，没有漏切",
+    "continuous": "法规条号从第一条起连续、附件项号从一起连续，没有漏切",
 }
 OFFICIAL_HOSTS = ("gov.cn", "nist.gov")
 
@@ -368,13 +432,20 @@ def verify(d: Doc, data: bytes, entries: list[Entry], rejected: list[tuple[str, 
         failed.append("complete")
     if d.mode == "law":
         got = {e.key for e in entries}
-        for ln in _lines(parse.parse(d.file, data)):
+        for ln in _body(_lines(parse.parse(d.file, data))):
             m = _ARTICLE.match(ln)
             if m and cn_int(m.group(1)):
                 part = f"{cn_int(m.group(1))}" + (f"-{cn_int(m.group(2))}" if m.group(2) else "")
                 if _key(d, part) not in got:        # 行首像条号却没切出来：前面有漏切、条号跳号
                     failed.append("continuous")
                     break
+    elif d.mode == "item":
+        got = {e.key for e in entries}
+        for ln in _lines(parse.parse(d.file, data)):
+            m = _ITEM.match(ln)
+            if m and cn_int(m.group(1)) and _key(d, str(cn_int(m.group(1)))) not in got:
+                failed.append("continuous")
+                break
     return failed
 
 
