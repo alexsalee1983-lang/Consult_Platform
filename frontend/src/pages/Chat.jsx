@@ -177,17 +177,21 @@ export default function Chat({ code }) {
       </TopBar>
       <div className="chat-layout">
         <aside className="pnl pad chat-side" aria-label="Agent 与对话">
-          <label className="field">
-            <span>新对话使用的 Agent</span>
-            <select value={agentCode} onChange={(e) => startNew(e.target.value)} disabled={sending}>
-              {agents.map((a) => (
-                <option key={a.code} value={a.code} disabled={!a.ready}>
-                  {a.name}{a.ready ? `（${LEVEL[a.level] || a.level}）` : `（不可用：${a.reason}）`}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="btn" onClick={() => startNew()} disabled={sending}>＋ 新对话</button>
+          {/* 咨询师 Agent 是统一入口：直接提问，需要专业 Agent 时由它建议转交（二期 C2 补充）；手选收进“直接找专业 Agent” */}
+          <button type="button" className="btn" onClick={() => startNew(DEFAULT_AGENT)} disabled={sending}>＋ 新对话</button>
+          <details open={agentCode !== DEFAULT_AGENT}>
+            <summary className="sub">直接找专业 Agent</summary>
+            <label className="field">
+              <span>新对话使用的 Agent</span>
+              <select value={agentCode} onChange={(e) => startNew(e.target.value)} disabled={sending}>
+                {agents.map((a) => (
+                  <option key={a.code} value={a.code} disabled={!a.ready}>
+                    {a.name}{a.ready ? `（${LEVEL[a.level] || a.level}）` : `（不可用：${a.reason}）`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </details>
           <div className="cap" style={{ marginTop: 4 }}>我在本项目的对话</div>
           <ul className="conv-list">
             {convs.map((c) => (
