@@ -42,31 +42,46 @@ function statusColor(v) {
   return "var(--tx3)";
 }
 
-// 驾驶舱和对话页沿用当前项目；在“我的项目”页时默认第一个虚拟客户
+// 驾驶舱和对话页沿用当前项目；不在项目页时用“我的项目”里的第一个（没有项目时不显示这三项）
 function currentCode(pathname) {
   const m = pathname.match(/^\/(?:project|chat)\/([^/]+)/);
-  return m ? decodeURIComponent(m[1]) : "BANK-A";
+  return m ? decodeURIComponent(m[1]) : "";
 }
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
-  const code = encodeURIComponent(currentCode(pathname));
+  const [firstCode, setFirstCode] = useState("");
+  const code = encodeURIComponent(currentCode(pathname) || firstCode);
   const [health, setHealth] = useState(null);
+  const business = hasBusinessRole(user);
+  const [todo, setTodo] = useState(0);
+  useEffect(() => {      // 工作台角标：本人能处理的待办数，换页时刷新
+    if (!business) return;
+    api.workbench().then((w) => setTodo(w.todos.filter((t) => !t.blocked).length)).catch(() => setTodo(0));
+  }, [business, pathname]);
+  useEffect(() => {
+    if (!business) return;
+    api.projects().then((ps) => setFirstCode(ps[0]?.code || "")).catch(() => setFirstCode(""));
+  }, [business]);
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth({ status: "down", checks: {} }));
   }, []);
 
   // 导航按角色显示：业务角色看交付页面，安全审计员只看审计日志
+  const lead = hasRole(user, "project_lead");
   const items = [
-    ...(hasBusinessRole(user) ? [
+    ...(business ? [
+      { to: "/workbench", icon: "inbox", label: "工作台", badge: todo },
+      { group: "项目交付" },
       { to: "/projects", icon: "proj", label: "我的项目" },
-      { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
-      { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
-      { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
-      ...(hasRole(user, "project_lead") ? [{ to: "/deletions", icon: "trash", label: "资料删除" }] : []),
-    ] : []),
-    ...(hasBusinessRole(user) ? [
+      ...(code ? [
+        { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
+        { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
+        { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
+      ] : []),
+      ...(lead ? [{ group: "项目负责人" }, { to: "/portfolio", icon: "map", label: "项目总览" },
+        { to: "/deletions", icon: "trash", label: "资料删除" }] : []),
       { group: "知识" },
       { to: "/kb/search", icon: "search", label: "知识检索" },
       { to: "/kb/intake", icon: "inbox", label: "投料箱" },
@@ -105,6 +120,7 @@ export default function Sidebar() {
           <NavLink key={it.label} to={it.to} end={it.end} className={({ isActive }) => (isActive ? "on" : undefined)}>
             <Icon name={it.icon} />
             {it.label}
+            {it.badge > 0 && <span className="chip c-a" style={{ marginLeft: "auto" }}>{it.badge}</span>}
           </NavLink>
         ))}
       </nav>

@@ -165,7 +165,7 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
             {editable && isCurrent && !edit && <button className="btn sm" onClick={() => setEdit({ body: s.body, note: "" })}>{s.version ? "修改本章" : "写正文"}</button>}
           </div>
         </div>
-        <h2 className="h1" style={{ fontSize: 22 }}>{s.title}</h2>
+        <h2 className="h1" style={{ fontSize: 24 }}>{s.title}</h2>
         {s.version > 0 && <div className="sub">{s.author}{s.agent_code ? `（${s.agent_code}）` : ""} · {fmt(s.created_at)}{s.note ? ` · ${s.note}` : ""}</div>}
       </div>
       <div className="doc-wrap">
@@ -323,7 +323,7 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
   const steps = [
     { name: "Agent / 顾问起草", done: d.sections.length > 0 && d.sections.every((s) => s.current_version > 0), info: d.updated_by },
     { name: "质量评审 Agent", done: reviewed || so.status === "signed", info: r?.status === "done" ? `阻断 ${r.open_blocking}${r.waived ? `（已驳回 ${r.waived}）` : ""}` : "" },
-    { name: "顾问审核，提交签署", done: so.status === "review" || so.status === "signed", info: lastSubmit?.actor || "" },
+    { name: "顾问审核，提交签署", done: so.status === "review" || so.status === "signed", info: actorName(lastSubmit?.actor) },
     { name: "项目经理签署", done: so.status === "signed", info: lastSign?.actor || "" },
   ];
   const current = steps.findIndex((s) => !s.done);
@@ -380,7 +380,7 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
         <ul className="lst">
           {[...hist].reverse().map((h) => (
             <li key={h.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <div className="sb"><span>{ACTION_NAMES[h.action] || h.action} · {h.actor}</span><span className="sub mono">r{h.revision}</span></div>
+              <div className="sb"><span>{ACTION_NAMES[h.action] || h.action} · {actorName(h.actor)}</span><span className="sub mono">r{h.revision}</span></div>
               <div className="sub">{fmt(h.created_at)}{h.waived ? ` · 项目经理驳回阻断 ${h.waived} 项` : ""}{h.comment ? ` · ${h.comment}` : ""}</div>
             </li>
           ))}
@@ -390,6 +390,8 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
   );
 }
 
+
+const actorName = (a) => (a === "platform" ? "平台自动（门禁通过）" : a || "");
 export default function Deliverable({ code, dcode }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -465,6 +467,15 @@ export default function Deliverable({ code, dcode }) {
       </TopBar>
       {notice && <div className={notice.startsWith("导出失败") ? "err" : "sub"} role="status">{notice}</div>}
       {error && <div className="err">{error.message}</div>}
+      {d.totals.knowledge_updates > 0 && (
+        <div className="note-amber" role="status">
+          本交付件引用的知识条目有变化，请复核相关章节：
+          {d.sections.filter((x) => x.knowledge_updates?.length).map((x) => (
+            <span key={x.seq}> 第 {x.seq} 章（{x.knowledge_updates.map((u) => `${u.doc_id} ${u.change === "retired" ? "已下线" : `已更新到 v${u.current_version}`}`).join("，")}）</span>
+          ))}
+          。改写该章后提醒自动消失。
+        </div>
+      )}
       {strict && <div className="note-amber">严格档项目：这里只写占位符版本（【客户】【系统A】【人员1】），来源标 [S-xx]，不写真名、IP、产品名和原话，平台写入时检查。导出的 Word 带回现场，用现场工具按对照表回填成正式稿。</div>}
       <div className="kb3">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>

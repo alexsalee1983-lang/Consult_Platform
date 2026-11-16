@@ -34,6 +34,10 @@ MATRIX = [
     (("GET", "/api/projects", None),                    (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A", None),             (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
+    # 项目总览（方案 A）：只给项目负责人；顾问 403（负责人 200 在 test_portfolio 里测）
+    (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
+    # 工作台：业务角色可用，只汇总本人能看到的待办
+    (("GET", "/api/workbench", None),                   (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
@@ -58,6 +62,9 @@ MATRIX = [
     (("POST", "/api/projects/BANK-A/notes", NOTE),      (201, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/evidences/O-01", None), (200, 404, 403, 403, 403)),   # 上一行建的第一条观察
     (("POST", "/api/projects/GRID-B/notes", NOTE),      (404, 404, 403, 403, 403)),
+    # 纪要文件提取正文：member 不带文件 → 422（不保存任何东西）；非成员 404
+    (("POST", "/api/projects/BANK-A/notes/extract", None), (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/notes/extract", None), (404, 404, 403, 403, 403)),
     # 仅现场使用（M4 ③）：member 是 BANK-A 项目经理，对观察 O-01 标注 → 422（只有资料能标，不改数据）；非成员 404
     (("POST", "/api/projects/BANK-A/evidences/O-01/local-only", {"request_ref": "函-1"}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/evidences/D-01/local-only", {"request_ref": "函-1"}), (404, 404, 403, 403, 403)),
@@ -129,10 +136,15 @@ MATRIX = [
     (("POST", "/api/admin/users/matrix_target/reset-totp", None),     (403, 403, 200, 403, 403)),
     (("GET", "/api/kb/intake", None),                   (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/items", None),                    (200, 200, 403, 403, 403)),
+    (("GET", "/api/kb/items/L4-NOPE/usage", None),      (403, 403, 403, 403, 403)),   # 引用计数只限知识专家、知识管理员（B4）
+    (("GET", "/api/projects/BANK-A/knowledge-updates", None), (200, 404, 403, 403, 403)),   # B4：只给项目成员
+    (("GET", "/api/projects/GRID-B/knowledge-updates", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/kb/search?q=值班", None),            (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
+    (("GET", "/api/kb/samples", None),                  (403, 403, 403, 403, 403)),   # 抽检队列（二期 B10），同上
+    (("POST", "/api/kb/versions/999999/sample", {"decision": "pass"}), (404, 404, 403, 403, 403)),
     (("GET", "/api/admin/jobs", None),                  (403, 403, 200, 403, 403)),
     (("POST", "/api/admin/jobs/selfcheck", None),       (403, 403, 202, 403, 403)),
     (("GET", "/api/users/lookup?q=u_", None),           (200, 200, 403, 403, 403)),
@@ -142,6 +154,9 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/conversations", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/conversations", {"agent_code": "consultant-lead"}),
                                                         (201, 404, 403, 403, 403)),
+    # 对话转交（二期 C2）：对话只有发起人能用，别人的或不存在的一律 404；正常转交在 test_handoff 里测
+    (("POST", "/api/conversations/999999/handoff", {"message_id": 1, "agent_code": "research-interview"}),
+                                                        (404, 404, 403, 403, 403)),
     (("POST", "/api/agents/consultant-lead/tools/project.read", {"project_code": "BANK-A"}),
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),

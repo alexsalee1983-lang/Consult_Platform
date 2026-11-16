@@ -4,6 +4,7 @@ GET  /api/kb/items                       条目列表（筛选：layer、product
 POST /api/kb/items                       新建条目和第 1 版草稿（从去标识通过的投料，或公开资料直接填写）
 GET  /api/kb/items/{doc_id}              条目详情：元数据、现行版本、版本历史
 POST /api/kb/items/{doc_id}/versions     基于现行版本建新草稿（修订）
+GET  /api/kb/items/{doc_id}/usage        被引用情况：引用它的项目数、交付件数、章节数（知识侧角色；不返回项目代号，二期 B4）
 POST /api/kb/items/{doc_id}/retire       下线（知识管理员）
 POST /api/kb/items/{doc_id}/reconfirm    复审确认仍有效，复审日期顺延一个周期（知识专家）
 GET  /api/kb/versions/{id}               版本详情：正文、审核记录、与现行版本的差异、相似条目
@@ -12,9 +13,12 @@ POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
+GET  /api/kb/samples                     抽检队列：自动发布（平台核验的依据原文、知识审核 Agent 审过的）中待抽检、
+                                         抽检不通过的，附两类各自的问题率（同上；B11）；另含使用反馈待复查的条目（B13）
+POST /api/kb/versions/{id}/sample        抽检：decision=pass|fail（知识专家，不能是导入人；二期 B10）
 GET  /api/kb/meta                        元数据取值表（层级、目录、产品、阶段、类型……），界面下拉框用
 GET  /api/kb/versions?status=&mine=      版本列表（知识专家、知识管理员）：草稿、待审、退回等
-GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵、待复审、本月运营（知识专家、知识管理员）
+GET  /api/kb/stats                       知识地图与健康：来源构成、覆盖矩阵（按产品、模块，B6）、缺口 TOP、贡献统计、待复审、本月运营（知识专家、知识管理员）
 GET  /api/kb/search?q=                   知识检索（全文 + 向量，RRF 融合），只返回已发布、看得到的条目
 GET  /api/kb/basis?q=                    依据查询（只查 L4 依据库），附引用格式
 
@@ -30,10 +34,12 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
+from ..kb import autopublish, citations
 from ..kb import meta as kb_meta
 from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
+from ..project import kb_impact
 from ..models import KbItem, KbVersion, User
 
 router = APIRouter(prefix="/api/kb", tags=["kb"], dependencies=[Depends(require_business)])
@@ -52,6 +58,7 @@ class ItemMetaIn(BaseModel):
     classification: str = "internal"
     visible_roles: list[str] = Field(default_factory=lambda: ["consultant", "admin"])
     owner: str = ""
+    tags: list[str] = Field(default_factory=list)
 
 
 class ContentIn(BaseModel):
@@ -65,6 +72,8 @@ class ContentIn(BaseModel):
     ref_document: str = Field(default="", max_length=200)
     ref_version: str = Field(default="", max_length=64)
     ref_status: str = Field(default="", max_length=16)
+    ref_code: str = Field(default="", max_length=100)
+    ref_replaced_by: str = Field(default="", max_length=200)
     effective_date: date | None = None
     review_date: date | None = None
 
@@ -90,6 +99,8 @@ class EditIn(BaseModel):
     ref_document: str | None = Field(default=None, max_length=200)
     ref_version: str | None = Field(default=None, max_length=64)
     ref_status: str | None = Field(default=None, max_length=16)
+    ref_code: str | None = Field(default=None, max_length=100)
+    ref_replaced_by: str | None = Field(default=None, max_length=200)
     effective_date: date | None = None
     review_date: date | None = None
 
@@ -97,6 +108,11 @@ class EditIn(BaseModel):
 class ReviewIn(BaseModel):
     role: str = Field(pattern="^(content|compliance)$")
     decision: str = Field(pattern="^(approve|reject)$")
+    comment: str = Field(default="", max_length=1000)
+
+
+class SampleIn(BaseModel):
+    decision: str = Field(pattern="^(pass|fail)$")
     comment: str = Field(default="", max_length=1000)
 
 
@@ -115,6 +131,11 @@ class VersionBrief(BaseModel):
     published_at: datetime | None
     review_date: date | None
     single_review: bool = False         # 单人发布，待补复审
+    auto_review: str = ""               # platform：平台核验自动发布（二期 B10）；agent：知识审核 Agent（B11）
+    sample_state: str = ""              # 抽检：pending / passed / failed
+    required_roles: list[str] = []      # 发布需要的审核（B12：第三级只要 content）
+    recheck_state: str = ""             # 使用反馈待复查（B13）：pending / passed / failed
+    recheck_reason: str = ""
 
 
 class ReviewOut(BaseModel):
@@ -122,6 +143,7 @@ class ReviewOut(BaseModel):
     review_role: str
     decision: str
     comment: str
+    findings: dict = {}                 # 知识审核 Agent 的逐项检查和问题清单（review_role=agent，二期 B11）
     created_at: datetime
 
 
@@ -136,12 +158,15 @@ class VersionOut(VersionBrief):
     ref_document: str
     ref_version: str
     ref_status: str
+    ref_code: str = ""
+    ref_replaced_by: str = ""
     deid_status: str
     effective_date: date | None
     self_review_allowed: bool = False   # 公开资料单人发布开关允许作者本人审核这个版本
     reviews: list[ReviewOut] = []
     diff: list[str] = []
     similar: list[dict] = []
+    citations: list[dict] = []      # 二期 B8：引用核对（知识侧角色可见）
 
 
 class ItemOut(BaseModel):
@@ -156,6 +181,7 @@ class ItemOut(BaseModel):
     classification: str
     visible_roles: list[str]
     owner: str
+    tags: list[str] = []
     retired: bool
     title: str = ""
     current: VersionBrief | None = None
@@ -170,7 +196,9 @@ def _err(e: rv.ReviewError):
 
 
 def _brief(v: KbVersion) -> VersionBrief:
-    return VersionBrief.model_validate(v, from_attributes=True)
+    b = VersionBrief.model_validate(v, from_attributes=True)
+    b.required_roles = list(rv.required_roles(v))
+    return b
 
 
 def _item_out(db: Session, item: KbItem, cls=ItemOut, versions: list[KbVersion] | None = None):
@@ -201,12 +229,14 @@ def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
     out = VersionOut(**_brief(v).model_dump(), doc_id=v.item.doc_id,
                      **{k: getattr(v, k) for k in ("summary", "body", "applicability", "change_note", "source_type",
                                                    "source_detail", "ref_document", "ref_version", "ref_status",
+                                                   "ref_code", "ref_replaced_by",
                                                    "deid_status", "effective_date")})
     if rv.is_knowledge_user(db, user):          # 审核信息只给知识侧角色
         out.self_review_allowed = rv.self_review_allowed(v)
         out.reviews = [ReviewOut.model_validate(r, from_attributes=True) for r in v.reviews]
         out.diff = rv.diff_with_current(db, v)
         out.similar = rv.similar_items(db, v) if v.status in ("draft", "in_review") else []
+        out.citations = citations.as_dicts(citations.for_version(db, v))   # 二期 B8：引用核对，审核页并排看原文
     return out
 
 
@@ -246,6 +276,20 @@ def get_item(doc_id: str, db: Session = Depends(get_db), user: User = Depends(cu
     versions = item.versions if rv.is_knowledge_user(db, user) else [
         v for v in item.versions if v.id == item.current_version_id]
     return _item_out(db, item, ItemDetail, versions)
+
+
+class UsageOut(BaseModel):
+    projects: int
+    deliverables: int
+    sections: int
+
+
+@router.get("/items/{doc_id}/usage", response_model=UsageOut)
+def item_usage(doc_id: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    if not rv.is_knowledge_user(db, user):
+        raise HTTPException(403, "只有知识专家、知识管理员能查看条目的引用情况")
+    item = _item(db, doc_id, user)
+    return kb_impact.usage_counts(db, item.doc_id)
 
 
 @router.post("/items/{doc_id}/versions", response_model=VersionOut, status_code=201)
@@ -324,6 +368,21 @@ def review_due(days: int = Query(30, ge=0, le=366), db: Session = Depends(get_db
     return [_version_out(db, v, user) for v in rv.review_due(db, days)]
 
 
+@router.get("/samples")
+def samples(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _knowledge_only(db, user)
+    return {**autopublish.sample_stats(db), "agent": autopublish.sample_stats(db, autopublish.AGENT), "items": [_version_out(db, v, user) for v in autopublish.sample_queue(db)]}
+
+
+@router.post("/versions/{version_id}/sample", response_model=VersionOut)
+def sample(version_id: int, body: SampleIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    try:
+        v = autopublish.sample_check(db, user, _version(db, version_id, user), body.decision, body.comment)
+    except rv.ReviewError as e:
+        raise _err(e) from e
+    return _version_out(db, v, user)
+
+
 def _search_error(e: kb_search.SearchError):
     return HTTPException(e.status, e.detail)
 
@@ -394,7 +453,10 @@ def stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> 
     searches = db.scalars(select(AuditLog.detail).where(AuditLog.action.in_(("kb.search", "kb.basis")),
                                                        AuditLog.result == "allowed", AuditLog.at >= month_ago)).all()
     zero = sum(1 for d in searches if '"results": 0' in (d or ""))
+    from ..kb import kbmap
+
     return {
+        **kbmap.overview(db, [(item, v) for item, v in rows], month_ago),
         "published": len(rows),
         "by_source": by_source,
         "coverage": coverage,

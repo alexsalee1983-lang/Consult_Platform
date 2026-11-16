@@ -60,6 +60,25 @@ class Settings(BaseSettings):
     # 公开资料单人发布（决策记录 2026-11-13）：开启后，来源为公开资料、无需去标识的版本可由作者本人完成两项审核
     # （须同时持有知识专家、知识管理员角色），发布后标记“单人发布”，等其他知识专家补复审。项目回流等其他来源不适用。
     kb_single_reviewer_public: bool = False
+    # 起草引用校验（二期 B8）：解读、映射、案例、异议应答引用的“文件 + 条款号”在库里找不到依据原文时不能提交审核。
+    # 关掉只显示“待核”、不拦提交（例如依据原文还没切条入库的过渡期）。
+    kb_citation_gate: bool = True
+    # 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：kb-source-publish 核验通过的 SRC 由平台自动发布，
+    # 每批按比例随机抽检；最近 20 次抽检不通过率超过上限时暂停自动发布、全部转人工审核，直到抽检恢复。
+    kb_src_auto_publish: bool = True
+    kb_sample_rate_src: float = 0.05
+    kb_sample_fail_max: float = 0.1
+    # 知识审核 Agent（二期 B11，二期开发计划第十二节第二级）：公开资料的解读、映射、方法和只含公开资料的案例、异议应答，
+    # 提交后由程序规则 + 知识审核 Agent（经网关）逐项检查，全部通过的自动发布并按比例抽检，存疑的进人工队列。
+    # 最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX 时暂停；超过一半时抽检比例加倍。
+    kb_agent_auto_publish: bool = True
+    kb_sample_rate_agent: float = 0.2
+    # 有无知识库对比评测（二期 B1 补充）：kb-eval --compare 用知识库的准确率达标线；开启门禁时最近一次对比评测
+    # 未达标就暂停自动发布（B10、B11 两级），直到再跑一次达标
+    kb_eval_min_accuracy: float = 0.9
+    kb_eval_gate: bool = True
+    # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
+    kb_source_hosts: str = ""
 
     # 重排服务（/rerank，交叉编码模型，决策记录 2026-11-11），同样只经网关调用。留空表示不启用：检索只用 RRF 排序，
     # 依据查询退回上面的余弦相似度门槛。docker compose 默认指向 rerank 服务（tools/rerank）。
@@ -75,6 +94,10 @@ class Settings(BaseSettings):
     # 依据查询门槛（重排分数，0～1，sigmoid 后）：启用重排时取代 KB_BASIS_MIN_SIMILARITY。初值按开发电脑上的
     # 示范评测：正例最低 0.14（B004），该查不到的题最高 0.001，取 0.05。正式评测题编好后重新校准（交接文档 S2 第 5 步）。
     kb_basis_min_rerank: float = 0.05
+    # 交付流程自动推进（二期 C5，app/project/autoflow.py）：自动发起交付链、自动评审、门禁通过自动提交签署
+    auto_flow: bool = True
+    auto_run_quiet_hours: float = 2       # 最近一条证据之后这么久没有新证据才自动发起交付链
+    auto_review_idle_hours: float = 24    # 顾问最后一次修改之后这么久没再改才自动评审
     # 普通检索的重排分数下限：只挡掉趋近 0 分的无关结果（测试 #34：该查不到的 S011 得分 0.0003～0.0008）。
     # 比依据查询宽得多，宁可多给几条弱相关的；正式评测后与 KB_BASIS_MIN_RERANK 一起校准。
     kb_search_min_rerank: float = 0.005
@@ -108,7 +131,7 @@ class Settings(BaseSettings):
     login_lock_minutes: int = 15
     password_min_length: int = 12
     password_max_age_days: int = 180        # 口令有效期（等保自查 ②d），到期登录后只能改口令；0 = 不限
-    inactive_account_days: int = 90         # 超过这么多天没登录的账号在用户页标出，供管理员停用（不自动停用）
+    inactive_account_days: int = 90         # 超过这么多天没登录的账号由 worker 每天自动停用（系统管理员只标出），0 关闭
 
     # 第一个管理员：库里还没有任何用户时，启动时按这里创建一次。也可以用命令行创建：
     #   python -m app.cli create-user --username <名字>

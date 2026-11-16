@@ -35,7 +35,8 @@ function References({ refs }) {
 
 function fromServer(m, agentName) {
   if (m.role === "user") return { role: "user", content: m.content };
-  return { role: "ai", content: m.content, model: m.model, agentName, interrupted: m.status !== "ok", references: m.references || [] };
+  return { role: "ai", id: m.id, content: m.content, model: m.model, agentName, interrupted: m.status !== "ok",
+    references: m.references || [], handoffs: m.handoffs || [] };
 }
 
 function shortTime(at) {
@@ -95,6 +96,21 @@ export default function Chat({ code }) {
     }
   }
 
+  // 转交（二期 C2）：平台为专业 Agent 新建对话，交接说明作为草稿放进输入框，顾问确认后发送
+  async function handOff(m, h) {
+    if (sending || !conv) return;
+    setError("");
+    try {
+      const r = await api.handoff(conv.id, m.id, h.agent_code);
+      setConv({ ...r.conversation, messages: [] });
+      setMessages([]);
+      setText(r.draft);
+      loadConvs();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   function startNew(code_) {
     if (sending) return;
     setAgentCode(code_ ?? agentCode);
@@ -119,7 +135,9 @@ export default function Chat({ code }) {
         setConv(current);
       }
       setMessages((m) => [...m, { role: "user", content }]);
+      let full = "";
       const done = await sendMessage(current.id, content, (delta) => {
+        full += delta;
         if (!started) {
           started = true;
           setMessages((m) => [...m, { role: "ai", content: delta, streaming: true, agentName: current.agent_name }]);
@@ -128,6 +146,11 @@ export default function Chat({ code }) {
         }
       });
       if (started) patchLast((last) => ({ ...last, streaming: false, model: done.model, demo: done.demo, references: done.references || [] }));
+      if (full.includes("【交接】")) {
+        // 回复里有交接信息时重新取一次，拿到消息编号和可转交的目标
+        const d = await api.conversation(current.id);
+        setMessages(d.messages.map((x) => fromServer(x, d.agent_name)));
+      }
       // 后端用第一条提问作标题，这里同步显示
       setConv((c) => (c && !c.title ? { ...c, title: content.split("\n")[0].slice(0, 40) } : c));
     } catch (e) {
@@ -194,6 +217,9 @@ export default function Chat({ code }) {
           )}
           <div ref={scrollerRef} onScroll={onScroll}
             style={{ flex: 1, minHeight: 0, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", overscrollBehavior: "contain" }}>
+            {conv?.handoff_from && messages.length === 0 && (
+              <div className="sub" role="note">由咨询师对话转交。交接说明已放进输入框，核对、修改后发送。</div>
+            )}
             {messages.length === 0 && (
               <div className="sub">
                 发送前平台会先检查机密级内容（口令、密钥、IP、身份证号、银行卡号、手机号、邮箱），命中即拦截，不会发给大模型，也不保存。
@@ -214,6 +240,14 @@ export default function Chat({ code }) {
                     </div>
                     <div className="body">{m.content}</div>
                     <References refs={m.references} />
+                    {m.handoffs?.length > 0 && m.id && (
+                      <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+                        {m.handoffs.map((h) => (
+                          <button type="button" key={h.agent_code} className="btn" disabled={sending}
+                            onClick={() => handOff(m, h)}>转交给{h.agent_name} Agent</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
