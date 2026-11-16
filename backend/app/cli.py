@@ -463,6 +463,42 @@ def kb_source_split(args: argparse.Namespace) -> int:
     return 0 if total else 1
 
 
+def kb_basis_check(args: argparse.Namespace) -> int:
+    """依据变更登记（二期 B5）：季度官网核对清单与库内依据比对；--apply 自动登记时效变更。"""
+    import json
+    from pathlib import Path
+
+    from .kb import basis_change as bc
+
+    path = Path(args.manifest)
+    if not path.is_file():
+        print(f"清单不存在：{path}", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        user = _knowledge_user(db, args.as_user)
+        if user is None:
+            return 1
+        try:
+            r = bc.check(db, user, path.read_bytes(), apply=args.apply)
+        except bc.BasisChangeError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+    for f in r.findings:
+        if f.kind == bc.UNCHANGED:
+            continue
+        ids = "、".join(f.applied or f.doc_ids)
+        print(f"  {bc.KIND_NAMES[f.kind]}  第 {f.line} 行 {f.code or f.title}" + (f"  [{ids}]" if ids else "")
+              + (f"  —— {f.detail}" if f.detail else ""))
+    for s in r.skipped:
+        print(f"跳过：{s}", file=sys.stderr)
+    c = r.counts()
+    print("合计：" + "，".join(f"{bc.KIND_NAMES[k]} {n}" for k, n in c.items() if n)
+          + ("；时效变更已登记并发布" if args.apply else "；未登记，确认后加 --apply"))
+    if args.out:
+        Path(args.out).write_text(json.dumps(r.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
+    return 0
+
+
 def catalog_check(args: argparse.Namespace) -> int:
     """校验 products/、modules/ 下的服务产品与模块配置（二期 A1，docs/接口约定.md）。"""
     from .products import config
@@ -775,6 +811,12 @@ def main(argv: list[str] | None = None) -> int:
     kss.add_argument("--dir", required=True, help="下载文件所在目录（清单里的文件名相对它）")
     kss.add_argument("--out", required=True, help="条目文件写到哪个目录")
     kss.set_defaults(func=kb_source_split)
+    kbc = sub.add_parser("kb-basis-check", help="依据变更登记：季度官网核对清单与库内依据比对，--apply 自动登记时效变更")
+    kbc.add_argument("manifest", help="核对清单 CSV（表头同下载清单：名称、文号/标准号、版本、现行状态、替代文件、施行日期）")
+    kbc.add_argument("--as", dest="as_user", required=True, help="以哪个知识管理员的身份登记（只比对时知识专家也可）")
+    kbc.add_argument("--apply", action="store_true", help="自动登记时效变更：建新版本、平台核对后发布")
+    kbc.add_argument("--out", default="", help="把比对结果写成 JSON 文件")
+    kbc.set_defaults(func=kb_basis_check)
     ksp = sub.add_parser("kb-source-publish", help="依据原文自动核验发布：从原件切条、核验，通过的平台自动发布并抽检，没通过的转人工")
     ksp.add_argument("manifest", help="下载清单 CSV（要有原网址和原件 sha256 列）")
     ksp.add_argument("--dir", required=True, help="下载文件所在目录")
