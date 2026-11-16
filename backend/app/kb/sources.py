@@ -399,7 +399,16 @@ VERIFY_RULES = {
     "complete": "切出了条款（机密级检测退回的条款不入库，单列）",
     "continuous": "法规条号从第一条起连续、附件项号从一起连续，没有漏切",
 }
-OFFICIAL_HOSTS = ("gov.cn", "nist.gov", "gov.za", "gov.ng", "gov.my", "vie-publique.sn")   # 境外：决策记录 2026-11-16
+# 境外（决策记录 2026-11-16）：南非、尼日利亚、马来西亚政府域名，塞内加尔 vie-publique.sn；
+# 原法规库拒绝脚本下载的替代来源：新加坡公报和监管机构、印尼部委法规库、越南法规库和政府公报、
+# 香港私隐专员公署和宪报、澳门个人资料保护局、科特迪瓦电信监管局；只收发布机关或其官方法规库的网站
+OFFICIAL_HOSTS = ("gov.cn", "nist.gov", "gov.za", "gov.ng", "gov.my", "vie-publique.sn",
+                  "egazette.gov.sg", "pdpc.gov.sg", "csa.gov.sg",
+                  "jdih.komdigi.go.id", "jdih.setneg.go.id",
+                  "vbpl.vn", "congbao.chinhphu.vn",
+                  "pcpd.org.hk", "gld.gov.hk",
+                  "dspdp.gov.mo",
+                  "artci.ci")
 
 
 def official_hosts() -> tuple[str, ...]:

@@ -152,3 +152,9 @@ def test_samples_api(tmp_path):
     assert res.status_code == 200 and res.json()["sample_state"] == "passed"
     consultant = logged_in_client(app, create_user(("consultant",)))
     assert consultant.get("/api/kb/samples").status_code == 403
+
+
+def test_overseas_official_hosts():
+    assert sources.is_official("https://jdih.komdigi.go.id/produk_hukum/view/id/832")
+    assert sources.is_official("https://www.pcpd.org.hk/x.pdf") and sources.is_official("https://egazette.gov.sg/a")
+    assert not sources.is_official("https://legis-palop.org/x") and not sources.is_official("https://evilvbpl.vn/x")
