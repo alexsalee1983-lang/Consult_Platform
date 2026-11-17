@@ -44,7 +44,7 @@ def test_catalog_lists_draft_products_disabled(lead) -> None:
     ps = lead.get("/api/catalog/products").json()
     drafts = [p for p in ps if not p["ready"]]
     assert drafts and all(p["modules"] == [] for p in drafts)
-    r = lead.post("/api/projects", json={"code": _code(), "tier": "standard", "product": drafts[0]["code"]})
+    r = lead.post("/api/projects", json={"code": _code(), "tier": "standard", "product": drafts[0]["code"], "industry": "其他"})
     assert r.status_code == 422
 
 
@@ -57,7 +57,7 @@ def test_lead_creates_project_via_web(lead) -> None:
     body = r.json()
     assert body["code"] == code and body["tier"] == "strict" and body["product"] == "SOC"
     assert body["service"] == "SOC 运营体系设计" and body["modules"] == [] and len(body["product_version"]) == 12
-    assert lead.post("/api/projects", json={"code": code, "tier": "standard", "product": "SOC"}).status_code == 409
+    assert lead.post("/api/projects", json={"code": code, "tier": "standard", "product": "SOC", "industry": "其他"}).status_code == 409
     assert lead.get(f"/api/projects/{code}").status_code == 404          # 立项人不是成员：看不到
     c = logged_in_client(app, (mgr, *_))
     try:
@@ -76,12 +76,14 @@ def test_lead_creates_project_via_web(lead) -> None:
 
 
 @pytest.mark.parametrize(("body", "status"), [
-    ({"code": "某银行", "tier": "standard", "product": "SOC"}, 422),
-    ({"code": "QA-BAD1", "tier": "both", "product": "SOC"}, 422),
-    ({"code": "QA-BAD2", "tier": "standard", "product": "ISO"}, 422),
-    ({"code": "QA-BAD3", "tier": "standard", "product": "SOC", "modules": ["DJBH"]}, 422),
-    ({"code": "QA-BAD4", "tier": "standard", "product": "SOC", "manager": "no-such-user"}, 422),
-    ({"code": "QA-BAD5", "tier": "standard", "product": "SOC", "weeks": 0}, 422),
+    ({"code": "某银行", "tier": "standard", "product": "SOC", "industry": "其他"}, 422),
+    ({"code": "QA-BAD1", "tier": "both", "product": "SOC", "industry": "其他"}, 422),
+    ({"code": "QA-BAD2", "tier": "standard", "product": "ISO", "industry": "其他"}, 422),
+    ({"code": "QA-BAD3", "tier": "standard", "product": "SOC", "modules": ["DJBH"], "industry": "其他"}, 422),
+    ({"code": "QA-BAD4", "tier": "standard", "product": "SOC", "manager": "no-such-user", "industry": "其他"}, 422),
+    ({"code": "QA-BAD5", "tier": "standard", "product": "SOC", "weeks": 0, "industry": "其他"}, 422),
+    ({"code": "QA-BAD6", "tier": "standard", "product": "SOC"}, 422),                       # 行业必填（网页立项）
+    ({"code": "QA-BAD7", "tier": "standard", "product": "SOC", "industry": "  "}, 422),
 ])
 def test_create_rejects(lead, body: dict, status: int) -> None:
     assert lead.post("/api/projects", json=body).status_code == status
@@ -91,7 +93,7 @@ def test_create_rejects(lead, body: dict, status: int) -> None:
 
 def test_admin_cannot_be_manager(lead) -> None:
     admin, *_ = create_user(("sys_admin",))
-    r = lead.post("/api/projects", json={"code": _code(), "tier": "standard", "product": "SOC", "manager": admin})
+    r = lead.post("/api/projects", json={"code": _code(), "tier": "standard", "product": "SOC", "manager": admin, "industry": "其他"})
     assert r.status_code == 422
 
 

@@ -99,7 +99,7 @@ class ProjectIn(BaseModel):
     product: str = Field(max_length=8)
     modules: list[str] = Field(default=[], max_length=10)
     manager: str = Field(default="", max_length=64)     # 空 = 立项人本人
-    industry: str = Field(default="", max_length=32)
+    industry: str = Field(min_length=1, max_length=32, pattern=r"\S")   # 网页立项必填（命令行 create-project 仍可选）
     weeks: int = 12
 
 
