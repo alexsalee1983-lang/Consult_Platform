@@ -433,11 +433,11 @@ export default function Deliverable({ code, dcode }) {
     return () => clearInterval(t);
   }, [active, load]);
 
-  async function exportWord() {
+  async function exportFile(fn) {
     setExporting(true);
     setNotice("");
     try {
-      const r = await api.exportWord(code, dcode);
+      const r = await fn(code, dcode);
       setNotice(`已导出 ${r.name}${r.exportId ? `（导出编号 ${r.exportId}）` : ""}`);
     } catch (e) {
       setNotice(`导出失败：${e.message}`);
@@ -463,7 +463,8 @@ export default function Deliverable({ code, dcode }) {
         <select className="sm" aria-label="切换交付件" value={d.code} onChange={(e) => navigate(`/project/${encodeURIComponent(code)}/deliverables/${e.target.value}`)}>
           {p.deliverables.map((x) => <option key={x.code} value={x.code}>{x.code} {x.title}</option>)}
         </select>
-        <button className="btn" disabled={exporting || !d.sections.length} onClick={exportWord}>{exporting ? "导出中…" : "导出 Word"}</button>
+        <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportWord)}>{exporting ? "导出中…" : "导出 Word"}</button>
+        <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportPpt)}>导出 PPT</button>
       </TopBar>
       {notice && <div className={notice.startsWith("导出失败") ? "err" : "sub"} role="status">{notice}</div>}
       {error && <div className="err">{error.message}</div>}

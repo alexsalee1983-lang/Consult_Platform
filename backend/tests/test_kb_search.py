@@ -417,8 +417,10 @@ def test_exact_standard_and_article_match(people, corpus, reranker):
 
 
 def test_exact_clause_in_plain_search_does_not_hide_other_layers(people, corpus, reranker, monkeypatch):
-    monkeypatch.setattr(get_settings(), "kb_rerank_candidates", 10)   # 候选多了 L4 条款会占满结果，场景按 10 个写
-    reranker(good=("集中",))
-    out = _search(people, "consultant", "GB/T 22239 8.1.5 集中管控 告警")
+    # 用独有的词造一条非 L4 条目，只有它得高分：不受全量测试里其他文件发布的 L4 条目多少影响（#177 测试）
+    own = _publish(people, "集中管控巡检复盘做法", "## 复盘\n\n集中管控平台每周做巡检复盘，汇总误报。")
+    monkeypatch.setattr(get_settings(), "kb_rerank_candidates", 1000)
+    reranker(good=("巡检复盘",))
+    out = _search(people, "consultant", "GB/T 22239 8.1.5 集中管控 巡检复盘")
     assert "精确" in out["items"][0]["matched"]
-    assert any(h["layer"] != "L4" for h in out["items"])                  # 普通检索不只限定在该标准内
+    assert own.doc_id in _ids(out)                                                # 普通检索不只限定在该标准内

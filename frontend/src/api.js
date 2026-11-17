@@ -266,6 +266,7 @@ export const api = {
   signoffAction: (code, dcode, action, comment = "") =>   // submit / sign / return
     request(`${dpath(code, dcode)}/signoff/${action}`, { method: "POST", body: JSON.stringify({ comment }) }),
   exportWord: (code, dcode) => download(`${dpath(code, dcode)}/export`),
+  exportPpt: (code, dcode) => download(`${dpath(code, dcode)}/export?format=pptx`),   // 二期 A9
   verifyAudit: (expectHead) =>
     request(`/api/audit/verify${expectHead ? `?expect_head=${encodeURIComponent(expectHead)}` : ""}`),
 };
