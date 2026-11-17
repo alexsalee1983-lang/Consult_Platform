@@ -5,6 +5,7 @@ PUT  /api/projects/{code}/deliverables/{dcode}/outline                  设置�
 GET  /api/projects/{code}/deliverables/{dcode}/sections/{seq}           某章正文（默认当前版本，?version= 看历史）和版本列表
 PUT  /api/projects/{code}/deliverables/{dcode}/sections/{seq}           顾问修改某章：新建一个版本（可带 base_version 防覆盖）
 GET  /api/projects/{code}/deliverables/{dcode}/sections/{seq}/diff      两个版本的差异（?a=1&b=2，统一 diff 格式）
+GET  /api/projects/{code}/assessment                                    成熟度初判、符合性条、风险矩阵（二期 A10，规则见 app/project/assessment.py）
 GET  /api/projects/{code}/knowledge-updates                             引用的知识条目已更新或下线、需要复核的章节（二期 B4）
 GET  /api/projects/{code}/deliverables/{dcode}/export                   导出 Word（各章当前版本，套模板；规则见 app/project/export.py）
      ?format=pptx 导出 PowerPoint（二期 A9，规则见 app/project/export_pptx.py）
@@ -23,6 +24,7 @@ from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import project_for_member, require_business
 from ..models import Deliverable, User
+from ..project import assessment
 from ..project import deliverables as svc
 from ..project import export as export_svc
 from ..project import export_pptx
@@ -133,6 +135,42 @@ class KnowledgeUpdate(BaseModel):
     doc_id: str
     change: str                  # updated 条目发布了新版本 / retired 条目已下线
     current_version: int | None
+
+
+class Score(BaseModel):
+    domain: str
+    current: float
+    target: float
+    basis: str
+
+
+class DomainCounts(BaseModel):
+    domain: str
+    counts: dict[str, int]       # met 符合 / partial 部分符合 / unmet 不符合 / insufficient 证据不足 / na 不适用
+
+
+class Finding(BaseModel):
+    code: str
+    domain: str
+    item: str
+    conclusion: str
+    impact: str                  # 高 / 中 / 低
+    likelihood: str
+
+
+class Assessment(BaseModel):
+    scores_enabled: bool         # 产品配置 maturity_scores；数据安全为 false
+    scores_label: str            # 成熟度初判；ISO 27001 为符合性初判
+    source: str                  # gap：最近一次差距分析；空：还没有
+    scores_source: str           # D4：已签署 D4 的成熟度初判表；gap；空
+    scores: list[Score]
+    domains: list[DomainCounts]
+    findings: list[Finding]      # 风险矩阵：不符合、部分符合、证据不足且写了影响和可能性
+
+
+@router.get("/{code}/assessment", response_model=Assessment)
+def project_assessment(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return assessment.view(db, project_for_member(db, code, user))
 
 
 @router.get("/{code}/knowledge-updates", response_model=list[KnowledgeUpdate])

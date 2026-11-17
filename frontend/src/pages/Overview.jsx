@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api, DELIV_STATUS, TIER } from "../api.js";
+import Assessment from "../components/Assessment.jsx";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Evidence from "../components/Evidence.jsx";
@@ -61,6 +62,7 @@ export default function Overview({ code }) {
             <PhaseBar phase={p.phase} />
             <div className="sb sub">{["启动", "调研", "分析", "设计", "汇报", "验收"].map((n) => <span key={n}>{n}</span>)}</div>
           </section>
+          <Assessment code={p.code} />
           {strict ? <StrictCards code={p.code} onChange={load} /> : <Evidence code={p.code} strict={strict} items={evs} onChange={load} />}
           <section className="pnl pad" aria-label="交付件">
             <h2 className="h2">交付件</h2>

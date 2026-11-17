@@ -91,6 +91,8 @@ class Product:
     raw: dict[str, Any]
     # 行业依据（二期 B2 补充）：项目行业 → 依据查询要加权的标准号或法规名，例如 银行: [JR/T 0071-2020]
     industry_basis: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # 成熟度初判（二期 A10）：false 时驾驶舱只给符合性条和风险矩阵，不给能力域分数（数据安全产品）
+    maturity_scores: bool = True
 
     def deliverable(self, code: str) -> Deliverable | None:
         return next((d for d in self.deliverables if d.code == code), None)
@@ -348,6 +350,10 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
     domains = bp.texts(base_raw, "domains", required=status == "ready")
     frameworks = bp.texts(base_raw, "frameworks")
     basis = bp.texts(base_raw, "basis")
+    maturity_scores = base_raw.get("maturity_scores", True)
+    if not isinstance(maturity_scores, bool):
+        bp.add("maturity_scores 应为 true 或 false")
+        maturity_scores = True
     industry_basis: dict[str, tuple[str, ...]] = {}
     ib_raw = base_raw.get("industry_basis") or {}
     if not isinstance(ib_raw, dict):
@@ -423,7 +429,7 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
         strict = {}
     card_items = _P(f"{path.name} strict", out).texts(strict, "card_items")
     return Product(code, name, domain, status, modules, tuple(deliverables), domains, frameworks, basis,
-                   tuple(chain), gates, card_items, content_version(data), data, industry_basis)
+                   tuple(chain), gates, card_items, content_version(data), data, industry_basis, maturity_scores)
 
 
 def parse_module(path: Path, out: list[str]) -> Module | None:
@@ -654,6 +660,7 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
         "deliverables": deliverables,
         "domains": list(prod.domains), "frameworks": list(merged.frameworks), "basis": list(merged.basis),
         "industry_basis": {k: list(v) for k, v in prod.industry_basis.items()},
+        "maturity_scores": prod.maturity_scores,
         "chain": chain,
         "gates": [_gate_dict(g, prod.code) for g in prod.gates]
                  + [_gate_dict(g, m.code) for m in mods for g in m.gates],
