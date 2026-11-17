@@ -256,8 +256,9 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
 
     机密级拦截在第一次迭代时就会抛出 BlockedError；开始输出前的连接问题抛出 GatewayError。
     传 tools（function calling 的函数定义）和 run_tool(函数名, 参数 JSON) → 结果时（二期 A7）：模型返回
-    tool_calls 就先产出 ToolUse、执行、把结果作为 tool 消息交回模型，再请求下一轮；最多 LLM_TOOL_MAX_ROUNDS 轮，
-    之后 tool_choice=none 要求直接答复。工具结果先过机密级检测（命中的只回错误说明）、截断、假名化；
+    tool_calls 就先产出 ToolUse、执行、把结果作为 tool 消息交回模型，再请求下一轮；用满 LLM_TOOL_MAX_ROUNDS 轮或
+    LLM_TOOL_MAX_CALLS 次后，最后一轮不带工具定义，把工具结果整理成一段文字要求直接答复（外部 deepseek-flash 在
+    tool_choice=none 时仍只输出调用标记，#179 测试）；最后仍没有答复时给一句提示，不留空回复。工具结果先过机密级检测（命中的只回错误说明）、截断、假名化；
     参数先把占位符换回真名再交给 run_tool。各轮文本连成一条答复，用量相加。
     """
     p = _prepare(message, tier, project_code, level, terms, stream=True, system=system, history=history)
@@ -277,7 +278,7 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
     restorer = p.pseudo.stream_restorer() if p.pseudo else None
     parts: list[str] = []
     model, prompt_tokens, completion_tokens = p.model, 0, 0
-    calls, rounds, nudged = 0, 0, False
+    calls, rounds, final = 0, 0, False
 
     def emit(text: str) -> Iterator[str]:
         out = restorer.feed(text) if restorer else text
@@ -335,14 +336,14 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
                 if tail:
                     parts.append(tail)
                     yield tail
-            forced = p.payload.get("tool_choice") == "none"
-            if garbled and not pending and not forced and not nudged and not "".join(raw).strip():
-                # 只有解析不出来的调用标记、没有答复：提醒一次，要求直接答复
-                nudged = True
-                p.payload["tool_choice"] = "none"
-                p.payload["messages"].append({"role": "user", "content": TOOL_MARKUP_NUDGE})
+            if final:
+                break
+            if garbled and not pending and not "".join(raw).strip():
+                # 只有解析不出来的调用标记、没有答复：最后一轮，要求直接答复
+                final = True
+                p.payload = _final_payload(p.payload)
                 continue
-            if not (use_tools and pending) or forced:
+            if not (use_tools and pending):
                 break
             rounds += 1
             todo = [pending[k] for k in sorted(pending)]
@@ -362,14 +363,41 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
                 p.payload["messages"].append({"role": "tool", "tool_call_id": c["id"],
                                               "content": _tool_content(result, p.pseudo)})
             if rounds >= s.llm_tool_max_rounds or calls >= s.llm_tool_max_calls:
-                p.payload["tool_choice"] = "none"
+                final = True
+                p.payload = _final_payload(p.payload)
+    if use_tools and not "".join(parts).strip():
+        parts.append(NO_ANSWER)
+        yield NO_ANSWER
     yield Completion(text="".join(parts), model=model, demo=False, prompt_tokens=prompt_tokens,
                      completion_tokens=completion_tokens, latency_ms=_elapsed_ms(p), attempts=attempts,
                      pseudonymized=p.pseudo is not None, external=uses_external_model(), tool_calls=calls)
 
 
 TOOL_RESULT_CHARS = 8000
-TOOL_MARKUP_NUDGE = "（平台提示：上一条输出的工具调用格式无法识别，请不要输出调用标记，直接根据已有信息用中文答复。）"
+FINAL_PROMPT = ("（平台提示：本次提问的工具调用已结束。以下是你调用工具得到的结果，请据此直接用中文答复上面的问题；"
+                "不要再调用工具，也不要输出任何调用标记。结果里没有的依据按公共规范标注【依据待核实】。）")
+NO_ANSWER = "（模型没有给出答复，请重试或换个问法。）"
+FINAL_RESULTS_CHARS = 24000
+
+
+def _final_payload(payload: dict) -> dict:
+    """最后一轮：去掉工具定义和工具消息，把各次工具结果（已过检测、假名化）整理成一条用户消息。"""
+    names = {c["id"]: c["function"]["name"] for m in payload["messages"] for c in m.get("tool_calls") or []}
+    labels = {"kb_search": "知识检索", "basis_lookup": "依据查询", "kb_mapping": "控制映射查询",
+              "project_read": "读项目区", "project_evidence": "查证据", "quality_check": "质量检查"}
+    msgs, notes = [], []
+    for m in payload["messages"]:
+        if m["role"] == "tool":
+            name = names.get(m.get("tool_call_id"), "")
+            notes.append(f"【{labels.get(name, name or '工具')}】{m['content']}")
+        elif m["role"] == "assistant" and m.get("tool_calls"):
+            if (m.get("content") or "").strip():
+                msgs.append({"role": "assistant", "content": m["content"]})
+        else:
+            msgs.append(m)
+    results = "\n\n".join(notes)[:FINAL_RESULTS_CHARS] or "（没有可用的工具结果）"
+    msgs.append({"role": "user", "content": f"{FINAL_PROMPT}\n\n{results}"})
+    return {k: v for k, v in payload.items() if k not in ("tools", "tool_choice")} | {"messages": msgs}
 _MARK = "<\uff5c"                                    # “<｜”：DeepSeek 内部调用标记的开头，正常答复里几乎不会出现
 _INVOKE = re.compile(r'invoke\s+name="([\w.]+)"\s*>(.*?)(?=<[^>]*invoke|$)', re.S)
 _PARAM = re.compile(r'parameter\s+name="(\w+)"([^>]*)>(.*?)</', re.S)

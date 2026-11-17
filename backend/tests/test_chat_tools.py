@@ -3,7 +3,7 @@
 - 只给 Agent 已授权的读取类工具（写入类 doc.generate、confirm.create、agent.handoff 不进对话）；
 - 每次调用经 tools.invoke（授权、硬规则、项目成员检查、审计）；工具出错把错误说明交回模型，不中断对话；
 - 工具结果过机密级检测，命中的不发给模型；
-- 最多 LLM_TOOL_MAX_ROUNDS 轮，最后一轮 tool_choice=none 逼出答复；
+- 最多 LLM_TOOL_MAX_ROUNDS 轮、LLM_TOOL_MAX_CALLS 次，之后最后一轮不带工具定义、把工具结果整理成文字要求直接答复；
 - 检索类工具的命中记为回复的引用（只有 doc_id、标题、章节、层级、引用格式）；
 - LLM_TOOL_CALLING=false 时退回提问前检索注入（test_chat_kb.py）。
 """
@@ -166,7 +166,10 @@ def test_rounds_capped_then_tool_choice_none(tool_mode, client, monkeypatch):
                    [_text("最终答复。"), _finish("stop")]])
     _, r = _ask(client, "consultant-lead", "夜间值守？")
     assert r.status_code == 200 and len(m.requests) == 3
-    assert m.requests[2]["tool_choice"] == "none" and m.requests[0]["tool_choice"] == "auto"
+    assert m.requests[0]["tool_choice"] == "auto" and "tools" not in m.requests[2] and "tool_choice" not in m.requests[2]
+    final = m.requests[2]["messages"]
+    assert not [x for x in final if x["role"] == "tool" or x.get("tool_calls")]   # 不带工具消息，免得模型接着调
+    assert final[-1]["role"] == "user" and "知识检索" in final[-1]["content"]
     assert _done(r)["prompt_tokens"] == 30                                      # 三轮用量相加
 
 
@@ -241,7 +244,7 @@ def test_broken_dsml_dropped_and_model_asked_again(tool_mode, client):
                    [_text("正常答复。"), _finish("stop")]])
     _, r = _ask(client, "consultant-lead", "夜间值守？")
     assert "DSML" not in r.text and _deltas(r) == "正常答复。"
-    assert len(m.requests) == 2 and m.requests[1]["tool_choice"] == "none"
+    assert len(m.requests) == 2 and "tools" not in m.requests[1]
     assert "DSML" not in json.dumps(m.requests[1]["messages"], ensure_ascii=False)
 
 
@@ -258,10 +261,10 @@ def test_calls_capped_per_question(tool_mode, client, monkeypatch):
                    [_text("答复。"), _finish("stop")]])
     before = _last_audit()
     _, r = _ask(client, "consultant-lead", "夜间值守？")
-    results = [json.loads(x["content"]) for x in m.requests[1]["messages"] if x["role"] == "tool"]
-    assert len(results) == 3 and "error" in results[2] and "上限" in results[2]["error"]
+    final = m.requests[1]["messages"][-1]["content"]
+    assert final.count("【知识检索】") == 3 and "上限" in final           # 第三次没执行，只回上限说明
     assert [c["tool"] for c in _tool_audits(before)].count("kb.search") == 2
-    assert m.requests[1]["tool_choice"] == "none"
+    assert "tools" not in m.requests[1]
 
 
 def test_tool_model_override(tool_mode, client, monkeypatch):
@@ -269,3 +272,14 @@ def test_tool_model_override(tool_mode, client, monkeypatch):
     m = tool_mode([[_text("答复。"), _finish("stop")]])
     _ask(client, "consultant-lead", "夜间值守？")
     assert m.requests[0]["model"] == "deepseek-v4-pro"
+
+
+def test_final_round_only_markup_gives_notice(tool_mode, client, monkeypatch):
+    """用满次数后最后一轮仍只输出调用标记（外部 deepseek-flash，#179 复测 5 次）：不留空回复，给提示。"""
+    monkeypatch.setattr(get_settings(), "llm_tool_max_calls", 1)
+    m = tool_mode([[*_call("kb_search", {"query": "a"}), _finish("tool_calls")],
+                   [_text(DSML), _finish("stop")]])
+    _, r = _ask(client, "consultant-lead", "夜间值守？")
+    assert len(m.requests) == 2 and "tools" not in m.requests[1]
+    text = _deltas(r)
+    assert "DSML" not in text and "没有给出答复" in text
