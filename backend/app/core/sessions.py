@@ -18,6 +18,8 @@ from functools import lru_cache
 from typing import Protocol
 
 import redis
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
 
 from .config import get_settings
 
@@ -47,7 +49,13 @@ def _key(token: str) -> str:
 
 class RedisSessionStore:
     def __init__(self, url: str) -> None:
-        self.r = redis.Redis.from_url(url, socket_connect_timeout=2, socket_timeout=2)
+        # Redis 偶尔停顿（AOF 刷盘、磁盘忙）会让单次读写超时，每个请求都要读会话，直接 500；
+        # 超时和连接错误退避重试 3 次（最长约 1 秒），仍失败才报错
+        self.r = redis.Redis.from_url(
+            url, socket_connect_timeout=2, socket_timeout=2,
+            retry=Retry(ExponentialBackoff(cap=0.5, base=0.05), 3),
+            retry_on_error=[redis.exceptions.ConnectionError, redis.exceptions.TimeoutError],
+            lib_name=None, lib_version=None)   # 不发 CLIENT SETINFO：建连握手超时不在重试范围内（CI 压测见过）
 
     def put(self, key: str, data: SessionData, ttl: int) -> None:
         pipe = self.r.pipeline()
