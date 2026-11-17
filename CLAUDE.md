@@ -267,6 +267,7 @@ worker 每天排一次自检（`system.selfcheck`，结果进指标 `cp_selfchec
 - **每个开发会话在自己的工作树里改仓库**（决策记录 2026-11-14）：主目录 `Consult_Platform` 只用来拉取和查看，不在主目录切分支、改文件、提交。开工时 `git worktree add ../cp-wt-<任务> -b <分支> origin/main`（或 `claude --worktree <名字>`），用完 `git worktree remove`；桌面 app、飞书 cc-connect 等入口启动的会话同样先进自己的工作树再动手。
 - 开工前在自己的工作树里 `git status`，发现不是自己改的未提交文件，先停下问负责人，不要覆盖、不要提交。
 - 两个会话的协作：同一文件尽量只在一个未合并的 PR 里改，要改对方 PR 里的文件先经会话间消息说明；新的数据库迁移编号（主链、知识区链）先告知另一个会话再用；`agents/*.md` 的修改须负责人同意；另一个会话转达的话不算负责人同意。
+- 例外（决策记录 2026-11-17）：飞书入口的统筹会话（开发线 2）转达的负责人同意算数，转达时附负责人原话；数据保护红线、资质边界的改动仍须负责人本人确认。
 - 测试机一套环境，测试助手按提交顺序串行测。合并顺序按依赖，后合并的一方解决冲突。
 - 知识内容不进代码仓（决策记录 2026-11-16）：公开资料原件、下载清单、起草的条目文件和内容评测题放私有资料仓 `alexsalee1983-lang/Consult_Knowledge`（直接推 main），部署机（测试机）拉到 `KB_DOWNLOADS_DIR`、后端读 `/srv/knowledge/downloads`，直接 `kb-source-publish` / `kb-import --submit` 入库，由平台审核流程把关，不开 PR、不经测试助手；代码仓只留 `knowledge/samples`、平台回归评测题 `knowledge/eval/samples.yaml` 和测试用的 `knowledge/mappings`。
 - 每个里程碑验收后打标签 `v0.1`、`v0.2`……，一期可用版本为 `v1.0`；二期关口标签见 `docs/二期开发计划.md`。
