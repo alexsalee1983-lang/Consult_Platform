@@ -207,3 +207,65 @@ def test_pseudonym_in_tool_args_and_results(tool_mode, monkeypatch):
     tool_msg = next(x for x in m.requests[1]["messages"] if x["role"] == "tool")
     assert "示范银行股份" not in tool_msg["content"] and "【客户1】" in tool_msg["content"]
     assert isinstance(out[0], gateway.ToolUse) and out[-1].tool_calls == 1
+
+
+DSML = ('<｜DSML｜function_calls>\n<｜DSML｜invoke name="kb_search">\n'
+        '<｜DSML｜parameter name="query" string="true">夜间值守</｜DSML｜parameter>\n'
+        '<｜DSML｜parameter name="limit" string="false">3</｜DSML｜parameter>\n'
+        '</｜DSML｜invoke>\n</｜DSML｜function_calls>')
+
+
+def _deltas(r) -> str:
+    return "".join(d["text"] for e, d in _events(r) if e == "delta")
+
+
+def test_dsml_markup_in_content_becomes_tool_call(tool_mode, client):
+    """外部 DeepSeek 多轮后把工具调用写成 DSML 标记放进正文：不外发，还原成工具调用照常执行（#179 测试）。"""
+    pieces = [DSML[i:i + 7] for i in range(0, len(DSML), 7)]
+    m = tool_mode([[_text("我查一下。"), *[_text(p) for p in pieces], _finish("stop")],
+                   [_text("答复。"), _finish("stop")]])
+    conv, r = _ask(client, "consultant-lead", "夜间值守？")
+    assert "DSML" not in r.text and _deltas(r) == "我查一下。答复。"
+    assert ("tool", {"tool": "kb.search", "name": "知识检索"}) in _events(r) and _done(r)["tool_calls"] == 1
+    call = m.requests[1]["messages"][-2]["tool_calls"][0]["function"]
+    assert call["name"] == "kb_search" and json.loads(call["arguments"]) == {"query": "夜间值守", "limit": 3}
+    assert "DSML" not in m.requests[1]["messages"][-2]["content"]
+    with SessionLocal() as db:
+        msg = db.scalars(select(Message).where(Message.conversation_id == conv["id"], Message.role == "assistant")).one()
+    assert msg.content == "我查一下。答复。"
+
+
+def test_broken_dsml_dropped_and_model_asked_again(tool_mode, client):
+    """残缺的标记解析不出调用：丢掉，提醒模型直接答复（不再给工具）。"""
+    m = tool_mode([[_text('<｜｜DSML｜｜ query"夜间"｜｜DSML｜｜>'), _finish("stop")],
+                   [_text("正常答复。"), _finish("stop")]])
+    _, r = _ask(client, "consultant-lead", "夜间值守？")
+    assert "DSML" not in r.text and _deltas(r) == "正常答复。"
+    assert len(m.requests) == 2 and m.requests[1]["tool_choice"] == "none"
+    assert "DSML" not in json.dumps(m.requests[1]["messages"], ensure_ascii=False)
+
+
+def test_less_than_sign_in_text_kept(tool_mode, client):
+    tool_mode([[_text("响应时间 <"), _text("15 分钟，a<b。"), _finish("stop")]])
+    _, r = _ask(client, "consultant-lead", "夜间值守？")
+    assert _deltas(r) == "响应时间 <15 分钟，a<b。"
+
+
+def test_calls_capped_per_question(tool_mode, client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "llm_tool_max_calls", 2)
+    m = tool_mode([[*_call("kb_search", {"query": "a"}), *_call("kb_search", {"query": "b"}, 1, "c2"),
+                    *_call("kb_search", {"query": "c"}, 2, "c3"), _finish("tool_calls")],
+                   [_text("答复。"), _finish("stop")]])
+    before = _last_audit()
+    _, r = _ask(client, "consultant-lead", "夜间值守？")
+    results = [json.loads(x["content"]) for x in m.requests[1]["messages"] if x["role"] == "tool"]
+    assert len(results) == 3 and "error" in results[2] and "上限" in results[2]["error"]
+    assert [c["tool"] for c in _tool_audits(before)].count("kb.search") == 2
+    assert m.requests[1]["tool_choice"] == "none"
+
+
+def test_tool_model_override(tool_mode, client, monkeypatch):
+    monkeypatch.setattr(get_settings(), "llm_model_tools", "deepseek-v4-pro")
+    m = tool_mode([[_text("答复。"), _finish("stop")]])
+    _ask(client, "consultant-lead", "夜间值守？")
+    assert m.requests[0]["model"] == "deepseek-v4-pro"

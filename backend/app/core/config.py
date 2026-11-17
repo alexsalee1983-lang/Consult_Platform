@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     # 关掉时退回提问前检索注入；每次提问最多 llm_tool_max_rounds 轮工具调用，之后要求模型直接答复。
     llm_tool_calling: bool = True
     llm_tool_max_rounds: int = 4
+    llm_tool_max_calls: int = 8       # 每次提问最多执行几次工具调用，超过的回错误说明并要求直接答复
+    llm_model_tools: str = ""         # 对话带工具时用的模型；空为按 Agent 等级选（工具调用不稳的轻量模型可换掉）
 
     # 向量服务（OpenAI 兼容 /embeddings），同样只经网关调用。决策记录 2026-11-08：公司模型平台的 embedding
     # 接口就绪前，用 CPU 上的小型中文向量模型（docker compose 的 embed 服务）；就绪后只改这里并重新向量化。

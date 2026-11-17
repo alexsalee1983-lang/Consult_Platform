@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -261,9 +262,12 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
     """
     p = _prepare(message, tier, project_code, level, terms, stream=True, system=system, history=history)
     use_tools = bool(tools and run_tool)
+    s = get_settings()
     if use_tools:
         p.payload["tools"] = tools
         p.payload["tool_choice"] = "auto"
+        if s.llm_model_tools:
+            p.model = p.payload["model"] = s.llm_model_tools
     if not get_settings().llm_base_url:
         for i in range(0, len(DEMO_TEXT), 12):
             yield DEMO_TEXT[i:i + 12]
@@ -273,12 +277,20 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
     restorer = p.pseudo.stream_restorer() if p.pseudo else None
     parts: list[str] = []
     model, prompt_tokens, completion_tokens = p.model, 0, 0
-    calls, rounds = 0, 0
+    calls, rounds, nudged = 0, 0, False
+
+    def emit(text: str) -> Iterator[str]:
+        out = restorer.feed(text) if restorer else text
+        if out:
+            parts.append(out)
+            yield out
+
     with _client() as client:
         while True:
             resp, attempts = _send(client, p.payload, stream=True)
             raw: list[str] = []                  # 本轮模型原样输出（假名化状态），交回模型时用
             pending: dict[int, dict] = {}        # 流式下发的工具调用，按 index 拼接
+            markup = _MarkupFilter() if use_tools else None
             try:
                 for line in resp.iter_lines():
                     if not line.startswith("data:"):
@@ -298,11 +310,9 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
                         d = choice.get("delta") or {}
                         delta = d.get("content") or ""
                         if delta:
-                            raw.append(delta)
-                            out = restorer.feed(delta) if restorer else delta
-                            if out:
-                                parts.append(out)
-                                yield out
+                            text = markup.feed(delta) if markup else delta
+                            raw.append(text)
+                            yield from emit(text)
                         for tc in d.get("tool_calls") or []:
                             slot = pending.setdefault(tc.get("index", 0), {"id": "", "name": "", "arguments": ""})
                             fn = tc.get("function") or {}
@@ -313,12 +323,26 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
                 raise GatewayError(f"模型输出中断：{type(e).__name__}", attempts) from e
             finally:
                 resp.close()
+            garbled = False
+            if markup:
+                text, found, garbled = markup.finish()
+                raw.append(text)
+                yield from emit(text)
+                for c in found:            # 写在正文里的调用标记还原成工具调用（外部 DeepSeek 多轮后会这样）
+                    pending[len(pending) + 1000] = c
             if restorer:
                 tail = restorer.flush()
                 if tail:
                     parts.append(tail)
                     yield tail
-            if not (use_tools and pending) or p.payload.get("tool_choice") == "none":
+            forced = p.payload.get("tool_choice") == "none"
+            if garbled and not pending and not forced and not nudged and not "".join(raw).strip():
+                # 只有解析不出来的调用标记、没有答复：提醒一次，要求直接答复
+                nudged = True
+                p.payload["tool_choice"] = "none"
+                p.payload["messages"].append({"role": "user", "content": TOOL_MARKUP_NUDGE})
+                continue
+            if not (use_tools and pending) or forced:
                 break
             rounds += 1
             todo = [pending[k] for k in sorted(pending)]
@@ -329,11 +353,15 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
                 for c in todo]})
             for c in todo:
                 calls += 1
-                yield ToolUse(c["name"])
-                args = p.pseudo.restore(c["arguments"]) if p.pseudo else c["arguments"]
+                if calls > s.llm_tool_max_calls:
+                    result: object = {"error": f"本次提问的工具调用已达上限（{s.llm_tool_max_calls} 次），请根据已有结果直接答复"}
+                else:
+                    yield ToolUse(c["name"])
+                    args = p.pseudo.restore(c["arguments"]) if p.pseudo else c["arguments"]
+                    result = run_tool(c["name"], args)
                 p.payload["messages"].append({"role": "tool", "tool_call_id": c["id"],
-                                              "content": _tool_content(run_tool(c["name"], args), p.pseudo)})
-            if rounds >= get_settings().llm_tool_max_rounds:
+                                              "content": _tool_content(result, p.pseudo)})
+            if rounds >= s.llm_tool_max_rounds or calls >= s.llm_tool_max_calls:
                 p.payload["tool_choice"] = "none"
     yield Completion(text="".join(parts), model=model, demo=False, prompt_tokens=prompt_tokens,
                      completion_tokens=completion_tokens, latency_ms=_elapsed_ms(p), attempts=attempts,
@@ -341,6 +369,53 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
 
 
 TOOL_RESULT_CHARS = 8000
+TOOL_MARKUP_NUDGE = "（平台提示：上一条输出的工具调用格式无法识别，请不要输出调用标记，直接根据已有信息用中文答复。）"
+_MARK = "<\uff5c"                                    # “<｜”：DeepSeek 内部调用标记的开头，正常答复里几乎不会出现
+_INVOKE = re.compile(r'invoke\s+name="([\w.]+)"\s*>(.*?)(?=<[^>]*invoke|$)', re.S)
+_PARAM = re.compile(r'parameter\s+name="(\w+)"([^>]*)>(.*?)</', re.S)
+
+
+class _MarkupFilter:
+    """从流式正文里截下模型写成文本的工具调用标记（DeepSeek 的 DSML），不外发、不存。
+
+    看到“<｜”起截留到本轮结束；本轮结束时，含 DSML 的解析成工具调用，解析不出来的整段丢弃（garbled），
+    不含 DSML 的原样补发。末尾单独的“<”先留着，看下一段再定。"""
+
+    def __init__(self) -> None:
+        self.held, self.capturing = "", False
+
+    def feed(self, delta: str) -> str:
+        if self.capturing:
+            self.held += delta
+            return ""
+        s, self.held = self.held + delta, ""
+        i = s.find(_MARK)
+        if i >= 0:
+            self.capturing, self.held = True, s[i:]
+            return s[:i]
+        if s.endswith("<"):
+            self.held = "<"
+            return s[:-1]
+        return s
+
+    def finish(self) -> tuple[str, list[dict], bool]:
+        """返回 (要补发的正文, 解析出的调用 [{id, name, arguments}], 是否丢弃了解析不出的标记)。"""
+        held, self.held, self.capturing = self.held, "", False
+        if "DSML" not in held:
+            return held, [], False
+        calls = []
+        for name, body in _INVOKE.findall(held):
+            args: dict = {}
+            for key, attrs, value in _PARAM.findall(body):
+                value = value.strip()
+                if 'string="false"' in attrs:
+                    try:
+                        value = json.loads(value)
+                    except ValueError:
+                        pass
+                args[key] = value
+            calls.append({"id": "", "name": name, "arguments": json.dumps(args, ensure_ascii=False)})
+        return "", calls, not calls
 
 
 def _tool_content(result: object, pseudo: Pseudonymizer | None) -> str:
