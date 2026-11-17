@@ -40,7 +40,7 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
-    (("POST", "/api/projects", {"code": "QA-MTX", "tier": "standard", "product": "SOC"}),
+    (("POST", "/api/projects", {"code": "QA-MTX", "tier": "standard", "product": "SOC", "industry": "其他"}),
                                                         (403, 403, 403, 403, 403)),
     # 验收与保留期（M4 ①）：member 是 BANK-A 项目经理，验收日写在将来 → 422（不改 BANK-A）；非成员 404
     (("POST", "/api/projects/BANK-A/acceptance", {"accepted_on": "2999-01-01"}), (422, 404, 403, 403, 403)),
@@ -96,6 +96,7 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B/deliverables/D2/export", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7/export?format=pptx", None), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/GRID-B/deliverables/D2/outline", OUTLINE), (404, 404, 403, 403, 403)),
     # 质量门禁与签署（M3 ⑤）：成员可看；发起评审在 test_quality 里测（这里发起会留下排队的评审）。
     # member 是 BANK-A 项目经理：D7 没有评审，提交签署门禁不过 409；不在待签署状态，退回 409

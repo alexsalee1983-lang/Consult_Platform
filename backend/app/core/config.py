@@ -122,6 +122,8 @@ class Settings(BaseSettings):
     # 部署机上（如 /srv/templates/deliverable.docx，只读挂载进容器）并在 .env 里配置，不需要改代码。
     # 配置了但文件不存在时拒绝导出，不退回默认模板。
     export_template: str = ""
+    # PPT 导出模板（二期 A9，app/project/export_pptx.py）：同上，不配用内置 16:9 空白模板，配了打不开拒绝导出
+    export_template_pptx: str = ""
 
     # 运行指标端口（core/metrics.py，docs/监控.md）：容器里设 9100，只在 docker 内部网络；0 = 不开
     metrics_port: int = 0

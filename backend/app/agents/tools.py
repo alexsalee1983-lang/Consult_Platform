@@ -143,7 +143,9 @@ def _project_kb_prefs(ctx: ToolContext) -> dict:
     except config.CatalogError:
         return {}
     industry = (ctx.project.industry or "").strip()
-    by_industry = list((snap.get("industry_basis") or {}).get(industry) or []) if industry else []
+    ib = snap.get("industry_basis") or {}
+    keys = dict.fromkeys([industry, *industry.split("/")]) if industry else {}   # 立项下拉的“银行/金融”任一部分对上
+    by_industry = [b for k in keys if k for b in (ib.get(k) or [])]
     basis = list(dict.fromkeys(by_industry + list(snap.get("basis") or [])))   # 行业依据在前（二期 B2 补充）
     return {"product": str(snap.get("product") or ""), "tags": list(snap.get("kb_tags") or []), "basis": basis}
 

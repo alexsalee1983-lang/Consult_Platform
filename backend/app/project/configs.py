@@ -89,16 +89,17 @@ def info(db: Session, project: Project) -> dict[str, Any]:
 
 
 def options() -> list[dict[str, Any]]:
-    """立项可选的产品和模块（只列 ready 的；配置有问题时不能立项，返回空）。"""
+    """立项可选的产品和模块（配置有问题时不能立项，返回空）。
+
+    草稿产品也列出、ready=false，界面灰显“筹备中”，不带模块，立项仍只收 ready 的。"""
     cat = config.catalog()
     if cat.problems:
         return []
     out = []
-    for p in sorted(cat.products.values(), key=lambda x: x.code):
-        if p.status != "ready":
-            continue
-        mods = [cat.modules[c] for c in p.modules if c in cat.modules and cat.modules[c].status == "ready"]
-        out.append({"code": p.code, "name": p.name, "version": p.version,
+    for p in sorted(cat.products.values(), key=lambda x: (x.status != "ready", x.code)):
+        ready = p.status == "ready"
+        mods = [cat.modules[c] for c in p.modules if ready and c in cat.modules and cat.modules[c].status == "ready"]
+        out.append({"code": p.code, "name": p.name, "version": p.version, "ready": ready,
                     "deliverables": [{"code": d.code, "title": d.title} for d in p.deliverables],
                     "modules": [{"code": m.code, "name": m.name} for m in mods]})
     return out
