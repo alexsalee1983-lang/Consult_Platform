@@ -39,13 +39,14 @@ async function request(path, options = {}) {
   return data;
 }
 
-// Agent 对话：发一条消息，流式返回 Server-Sent Events（event: delta / done / error）。
-// onDelta(text) 每收到一段调用一次；返回 done 事件的数据。拦截（422）、无权限等在开始输出前以 ApiError 抛出。
-export function sendMessage(conversationId, message, onDelta) {
-  return streamPost(`/api/conversations/${conversationId}/messages`, { message }, onDelta);
+// Agent 对话：发一条消息，流式返回 Server-Sent Events（event: delta / tool / done / error）。
+// onDelta(text) 每收到一段调用一次；onTool({tool, name}) 在 Agent 调用工具时调用（二期 A7）；
+// 返回 done 事件的数据。拦截（422）、无权限等在开始输出前以 ApiError 抛出。
+export function sendMessage(conversationId, message, onDelta, onTool) {
+  return streamPost(`/api/conversations/${conversationId}/messages`, { message }, onDelta, onTool);
 }
 
-async function streamPost(url, body, onDelta) {
+async function streamPost(url, body, onDelta, onTool) {
   const res = await fetch(url, {
     method: "POST",
     credentials: "same-origin",
@@ -73,6 +74,7 @@ async function streamPost(url, body, onDelta) {
       if (!event || raw == null) continue;
       const data = JSON.parse(raw);
       if (event === "delta") onDelta(data.text);
+      else if (event === "tool") onTool?.(data);
       else if (event === "done") return data;
       else if (event === "error") throw new ApiError(502, data.detail);
     }

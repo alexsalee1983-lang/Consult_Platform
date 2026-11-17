@@ -102,8 +102,16 @@ def project_card(db: Session, user: User, agent_code: str, project_code: str) ->
     return card
 
 
-def system_prompt(doc: registry.AgentDoc, card: str, knowledge: str = "") -> str:
-    """公共规范 + 角色 md（按项目卡的产品和模块裁剪，二期 C1）+ 项目卡 + 本轮知识库检索结果（app/agents/knowledge.py）。"""
+def system_prompt(doc: registry.AgentDoc, card: str, knowledge: str = "", tool_mode: bool = False) -> str:
+    """公共规范 + 角色 md（按项目卡的产品和模块裁剪，二期 C1）+ 项目卡 + 本轮知识库检索结果（app/agents/knowledge.py）。
+    tool_mode（二期 A7）：对话里由 Agent 自己调用工具，不附检索结果，改为说明怎么用工具。"""
+    if tool_mode:
+        body, _ = registry.select_body(doc.body, getattr(card, "product", None), getattr(card, "modules", ()))
+        note = ("（平台说明：以上项目卡由平台根据项目区数据生成。本次对话你可以调用平台提供的工具"
+                "（知识检索、依据查询、读项目证据等，以实际提供的为准）：回答涉及公司做法、法规标准、项目事实时先调用工具查，"
+                "不要凭记忆。使用知识库内容注明 [doc_id]，项目事实注明证据编号；法规标准条款只能按依据查询返回的引用格式引用，"
+                "查不到的按公共规范第 3 节标注【依据待核实】，不得补写条款号或原文。工具返回错误时换参数重试或说明查不到。）")
+        return f"{doc.common.strip()}\n\n---\n\n{body.strip()}\n\n---\n\n{card}\n\n{note}"
     note = ("（平台说明：以上项目卡由平台根据项目区数据生成。平台在每次提问前按问题检索知识库，命中的条目附在下面；"
             "使用其中内容时注明 [doc_id]；法规标准条款只能按 L4 条目给出的引用格式引用。"
             "检索结果里没有的依据，按公共规范第 3 节标注【依据待核实】，不得凭记忆补写条款号或原文。）")

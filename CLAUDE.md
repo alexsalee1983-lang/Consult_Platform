@@ -245,6 +245,7 @@ worker 每天排一次自检（`system.selfcheck`，结果进指标 `cp_selfchec
 对话转交约定（二期 C2）：咨询师 Agent 不自己做专业任务，在回复末尾写公共规范第 9 节的【交接】行（每个目标一行），解析和建对话只在 `app/agents/handoff.py`；顾问经 `POST /api/conversations/{id}/handoff`（`message_id`、`agent_code`）转交，平台经工具 `agent.handoff`（项目区写，迁移 0033 只授权咨询师 Agent，调试接口不能调）为目标交付侧 Agent 新建对话、记 `handoff_from`，交接说明先过机密级检测，作为草稿返回、由顾问确认后发送，不自动发给模型。
 对话详情的每条回复带 `handoffs`（只有有转交授权的 Agent 才有）。
 审计只记来源和新对话编号、目标 Agent 和说明长度。
+对话工具调用约定（二期 A7）：对话里 Agent 经 function calling 自己调用工具，规格和执行只在 `app/agents/chat_tools.py`（只给已授权的读取类工具，函数名为代号点换下划线，每次经 `tools.invoke`），多轮循环在 `gateway.stream(tools=, run_tool=)`（工具结果过机密级检测、截断、假名化，最多 `LLM_TOOL_MAX_ROUNDS` 轮后 tool_choice=none）；SSE 多一个 `tool` 事件，done 带 `tool_calls`；`LLM_TOOL_CALLING=false`（测试默认）退回提问前检索注入（`knowledge.retrieve`）。
 
 审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
 

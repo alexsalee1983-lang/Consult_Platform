@@ -14,8 +14,9 @@
 from __future__ import annotations
 
 import json
+import re
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 import httpx
@@ -70,6 +71,13 @@ class Completion:
     attempts: int = 1
     pseudonymized: bool = False
     external: bool = False      # 是否发给了公司外部的模型服务
+    tool_calls: int = 0         # 本次答复中模型发起的工具调用次数（A7）
+
+
+@dataclass
+class ToolUse:
+    """stream() 在执行一次工具调用前产出，name 为函数名（调用方据此提示“正在调用…”）。"""
+    name: str
 
 
 @dataclass
@@ -242,12 +250,25 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
 
 def stream(message: str, *, tier: str, project_code: str, level: str = "standard",
            terms: dict[str, str] | None = None, system: str | None = None,
-           history: list[dict] | None = None) -> Iterator[str | Completion]:
+           history: list[dict] | None = None, tools: list[dict] | None = None,
+           run_tool: Callable[[str, str], dict] | None = None) -> Iterator[str | ToolUse | Completion]:
     """逐段产出回复文本（str），最后产出一个 Completion（text 为完整回复，带用量）。
 
     机密级拦截在第一次迭代时就会抛出 BlockedError；开始输出前的连接问题抛出 GatewayError。
+    传 tools（function calling 的函数定义）和 run_tool(函数名, 参数 JSON) → 结果时（二期 A7）：模型返回
+    tool_calls 就先产出 ToolUse、执行、把结果作为 tool 消息交回模型，再请求下一轮；用满 LLM_TOOL_MAX_ROUNDS 轮或
+    LLM_TOOL_MAX_CALLS 次后，最后一轮不带工具定义，把工具结果整理成一段文字要求直接答复（外部 deepseek-flash 在
+    tool_choice=none 时仍只输出调用标记，#179 测试）；最后仍没有答复时给一句提示，不留空回复。工具结果先过机密级检测（命中的只回错误说明）、截断、假名化；
+    参数先把占位符换回真名再交给 run_tool。各轮文本连成一条答复，用量相加。
     """
     p = _prepare(message, tier, project_code, level, terms, stream=True, system=system, history=history)
+    use_tools = bool(tools and run_tool)
+    s = get_settings()
+    if use_tools:
+        p.payload["tools"] = tools
+        p.payload["tool_choice"] = "auto"
+        if s.llm_model_tools:
+            p.model = p.payload["model"] = s.llm_model_tools
     if not get_settings().llm_base_url:
         for i in range(0, len(DEMO_TEXT), 12):
             yield DEMO_TEXT[i:i + 12]
@@ -257,41 +278,184 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
     restorer = p.pseudo.stream_restorer() if p.pseudo else None
     parts: list[str] = []
     model, prompt_tokens, completion_tokens = p.model, 0, 0
+    calls, rounds, final = 0, 0, False
+
+    def emit(text: str) -> Iterator[str]:
+        out = restorer.feed(text) if restorer else text
+        if out:
+            parts.append(out)
+            yield out
+
     with _client() as client:
-        resp, attempts = _send(client, p.payload, stream=True)
-        try:
-            for line in resp.iter_lines():
-                if not line.startswith("data:"):
-                    continue
-                body = line[5:].strip()
-                if body == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(body)
-                except ValueError:
-                    continue
-                model = chunk.get("model") or model
-                if chunk.get("usage"):
-                    prompt_tokens, completion_tokens = _usage(chunk)
-                for choice in chunk.get("choices") or []:
-                    delta = (choice.get("delta") or {}).get("content") or ""
-                    if delta:
-                        out = restorer.feed(delta) if restorer else delta
-                        if out:
-                            parts.append(out)
-                            yield out
-        except httpx.HTTPError as e:
-            raise GatewayError(f"模型输出中断：{type(e).__name__}", attempts) from e
-        finally:
-            resp.close()
-    if restorer:
-        tail = restorer.flush()
-        if tail:
-            parts.append(tail)
-            yield tail
+        while True:
+            resp, attempts = _send(client, p.payload, stream=True)
+            raw: list[str] = []                  # 本轮模型原样输出（假名化状态），交回模型时用
+            pending: dict[int, dict] = {}        # 流式下发的工具调用，按 index 拼接
+            markup = _MarkupFilter() if use_tools else None
+            try:
+                for line in resp.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    body = line[5:].strip()
+                    if body == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(body)
+                    except ValueError:
+                        continue
+                    model = chunk.get("model") or model
+                    if chunk.get("usage"):
+                        pt, ct = _usage(chunk)
+                        prompt_tokens, completion_tokens = prompt_tokens + pt, completion_tokens + ct
+                    for choice in chunk.get("choices") or []:
+                        d = choice.get("delta") or {}
+                        delta = d.get("content") or ""
+                        if delta:
+                            text = markup.feed(delta) if markup else delta
+                            raw.append(text)
+                            yield from emit(text)
+                        for tc in d.get("tool_calls") or []:
+                            slot = pending.setdefault(tc.get("index", 0), {"id": "", "name": "", "arguments": ""})
+                            fn = tc.get("function") or {}
+                            slot["id"] = tc.get("id") or slot["id"]
+                            slot["name"] += fn.get("name") or ""
+                            slot["arguments"] += fn.get("arguments") or ""
+            except httpx.HTTPError as e:
+                raise GatewayError(f"模型输出中断：{type(e).__name__}", attempts) from e
+            finally:
+                resp.close()
+            garbled = False
+            if markup:
+                text, found, garbled = markup.finish()
+                raw.append(text)
+                yield from emit(text)
+                for c in found:            # 写在正文里的调用标记还原成工具调用（外部 DeepSeek 多轮后会这样）
+                    pending[len(pending) + 1000] = c
+            if restorer:
+                tail = restorer.flush()
+                if tail:
+                    parts.append(tail)
+                    yield tail
+            if final:
+                break
+            if garbled and not pending and not "".join(raw).strip():
+                # 只有解析不出来的调用标记、没有答复：最后一轮，要求直接答复
+                final = True
+                p.payload = _final_payload(p.payload)
+                continue
+            if not (use_tools and pending):
+                break
+            rounds += 1
+            todo = [pending[k] for k in sorted(pending)]
+            for i, c in enumerate(todo):
+                c["id"] = c["id"] or f"call_{rounds}_{i}"
+            p.payload["messages"].append({"role": "assistant", "content": "".join(raw), "tool_calls": [
+                {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}}
+                for c in todo]})
+            for c in todo:
+                calls += 1
+                if calls > s.llm_tool_max_calls:
+                    result: object = {"error": f"本次提问的工具调用已达上限（{s.llm_tool_max_calls} 次），请根据已有结果直接答复"}
+                else:
+                    yield ToolUse(c["name"])
+                    args = p.pseudo.restore(c["arguments"]) if p.pseudo else c["arguments"]
+                    result = run_tool(c["name"], args)
+                p.payload["messages"].append({"role": "tool", "tool_call_id": c["id"],
+                                              "content": _tool_content(result, p.pseudo)})
+            if rounds >= s.llm_tool_max_rounds or calls >= s.llm_tool_max_calls:
+                final = True
+                p.payload = _final_payload(p.payload)
+    if use_tools and not "".join(parts).strip():
+        parts.append(NO_ANSWER)
+        yield NO_ANSWER
     yield Completion(text="".join(parts), model=model, demo=False, prompt_tokens=prompt_tokens,
                      completion_tokens=completion_tokens, latency_ms=_elapsed_ms(p), attempts=attempts,
-                     pseudonymized=p.pseudo is not None, external=uses_external_model())
+                     pseudonymized=p.pseudo is not None, external=uses_external_model(), tool_calls=calls)
+
+
+TOOL_RESULT_CHARS = 8000
+FINAL_PROMPT = ("（平台提示：本次提问的工具调用已结束。以下是你调用工具得到的结果，请据此直接用中文答复上面的问题；"
+                "不要再调用工具，也不要输出任何调用标记。结果里没有的依据按公共规范标注【依据待核实】。）")
+NO_ANSWER = "（模型没有给出答复，请重试或换个问法。）"
+FINAL_RESULTS_CHARS = 24000
+
+
+def _final_payload(payload: dict) -> dict:
+    """最后一轮：去掉工具定义和工具消息，把各次工具结果（已过检测、假名化）整理成一条用户消息。"""
+    names = {c["id"]: c["function"]["name"] for m in payload["messages"] for c in m.get("tool_calls") or []}
+    labels = {"kb_search": "知识检索", "basis_lookup": "依据查询", "kb_mapping": "控制映射查询",
+              "project_read": "读项目区", "project_evidence": "查证据", "quality_check": "质量检查"}
+    msgs, notes = [], []
+    for m in payload["messages"]:
+        if m["role"] == "tool":
+            name = names.get(m.get("tool_call_id"), "")
+            notes.append(f"【{labels.get(name, name or '工具')}】{m['content']}")
+        elif m["role"] == "assistant" and m.get("tool_calls"):
+            if (m.get("content") or "").strip():
+                msgs.append({"role": "assistant", "content": m["content"]})
+        else:
+            msgs.append(m)
+    results = "\n\n".join(notes)[:FINAL_RESULTS_CHARS] or "（没有可用的工具结果）"
+    msgs.append({"role": "user", "content": f"{FINAL_PROMPT}\n\n{results}"})
+    return {k: v for k, v in payload.items() if k not in ("tools", "tool_choice")} | {"messages": msgs}
+_MARK = "<\uff5c"                                    # “<｜”：DeepSeek 内部调用标记的开头，正常答复里几乎不会出现
+_INVOKE = re.compile(r'invoke\s+name="([\w.]+)"\s*>(.*?)(?=<[^>]*invoke|$)', re.S)
+_PARAM = re.compile(r'parameter\s+name="(\w+)"([^>]*)>(.*?)</', re.S)
+
+
+class _MarkupFilter:
+    """从流式正文里截下模型写成文本的工具调用标记（DeepSeek 的 DSML），不外发、不存。
+
+    看到“<｜”起截留到本轮结束；本轮结束时，含 DSML 的解析成工具调用，解析不出来的整段丢弃（garbled），
+    不含 DSML 的原样补发。末尾单独的“<”先留着，看下一段再定。"""
+
+    def __init__(self) -> None:
+        self.held, self.capturing = "", False
+
+    def feed(self, delta: str) -> str:
+        if self.capturing:
+            self.held += delta
+            return ""
+        s, self.held = self.held + delta, ""
+        i = s.find(_MARK)
+        if i >= 0:
+            self.capturing, self.held = True, s[i:]
+            return s[:i]
+        if s.endswith("<"):
+            self.held = "<"
+            return s[:-1]
+        return s
+
+    def finish(self) -> tuple[str, list[dict], bool]:
+        """返回 (要补发的正文, 解析出的调用 [{id, name, arguments}], 是否丢弃了解析不出的标记)。"""
+        held, self.held, self.capturing = self.held, "", False
+        if "DSML" not in held:
+            return held, [], False
+        calls = []
+        for name, body in _INVOKE.findall(held):
+            args: dict = {}
+            for key, attrs, value in _PARAM.findall(body):
+                value = value.strip()
+                if 'string="false"' in attrs:
+                    try:
+                        value = json.loads(value)
+                    except ValueError:
+                        pass
+                args[key] = value
+            calls.append({"id": "", "name": name, "arguments": json.dumps(args, ensure_ascii=False)})
+        return "", calls, not calls
+
+
+def _tool_content(result: object, pseudo: Pseudonymizer | None) -> str:
+    """工具结果 → 交回模型的 tool 消息正文：命中机密级的只回错误说明（类别），过长的截断，再假名化。"""
+    text = json.dumps(result, ensure_ascii=False, default=str)
+    hit = check(text)
+    if hit.blocked:
+        cats = "、".join(sorted({f.label for f in hit.findings}))
+        return json.dumps({"error": f"工具结果含机密级内容（{cats}），未发给模型"}, ensure_ascii=False)
+    if len(text) > TOOL_RESULT_CHARS:
+        text = text[:TOOL_RESULT_CHARS] + "…（结果过长已截断，请缩小范围或用 limit、offset 分次读取）"
+    return pseudo.apply(text) if pseudo else text
 
 
 # ---- 可用性检查 ----
