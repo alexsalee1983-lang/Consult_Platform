@@ -36,6 +36,16 @@ def test_catalog_options_list_soc(lead) -> None:
     assert r.status_code == 200
     soc = next(p for p in r.json() if p["code"] == "SOC")
     assert soc["name"] == "SOC 运营体系设计" and len(soc["deliverables"]) == 8
+    assert soc["ready"] is True
+
+
+def test_catalog_lists_draft_products_disabled(lead) -> None:
+    """草稿产品也列出（界面灰显“筹备中”），但不能立项。"""
+    ps = lead.get("/api/catalog/products").json()
+    drafts = [p for p in ps if not p["ready"]]
+    assert drafts and all(p["modules"] == [] for p in drafts)
+    r = lead.post("/api/projects", json={"code": _code(), "tier": "standard", "product": drafts[0]["code"]})
+    assert r.status_code == 422
 
 
 def test_lead_creates_project_via_web(lead) -> None:
