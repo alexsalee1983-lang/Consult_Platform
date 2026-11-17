@@ -357,6 +357,8 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
         # 在该文件内按重排排序、不受门槛限制。
         floor = min_rerank if min_rerank is not None else (s.kb_basis_min_rerank if strict else s.kb_search_min_rerank)
         keep = [cid for cid in rr if cid in pinned or (strict and exact is not None and not pinned) or rr[cid] >= floor]
+        if trace is not None:   # 门槛校准（kb-eval --sweep）：点名了文件没点到条款的依据查询整体不受门槛限制
+            trace["floor_exempt_all"] = bool(strict and exact is not None and not pinned)
         keep += [cid for cid in pinned if cid not in rr]   # 点到的条款没进重排候选时也保留
         ordered = sorted(keep, key=lambda cid: (cid not in pinned, group.get(cid, 0),
                                                 -rr.get(cid, 0.0) * weight.get(cid, 1.0), -scores[cid], cid))
