@@ -32,3 +32,16 @@
     “适用性声明：附录 A 共 114 项控制，本次判定 80 项适用。A.5.23 不适用（无理由）。本计划完成后即符合认证要求，认证结论为通过。”
   must: ["93|控制数量|114", "理由", "认证"]
   must_not: ["评审结论：通过"]
+- id: ISO-G03
+  agent: report-writer
+  product: ISO
+  kind: golden
+  prompt: GRID-B ISO 27001 差距分析已确认，请给出差距分析报告的章节结构，每章一句说明。
+  points: ["范围|体系范围", "第 ?4|组织环境|条款", "附录 ?A|控制", "差距", "认证准备|整改|路线"]
+- id: ISO-G04
+  agent: solution-designer
+  product: ISO
+  kind: golden
+  prompt: GRID-B 的 ISMS 体系文件需要从零搭建。请给出体系文件架构（层级和主要文件清单）。
+  points: ["方针|手册", "程序|流程", "作业指导|规范|细则", "记录|表单", "适用性声明|SoA", "风险评估"]
+  min_points: 0.8
