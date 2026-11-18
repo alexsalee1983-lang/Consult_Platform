@@ -10,18 +10,42 @@ deliverables:
   title: 启动包
   stage: 启动
   client_facing: true
+  outline:
+  - 项目范围与目标
+  - 评估方法与依据
+  - 工作计划
+  - 沟通与保密机制
 - code: D2
   title: 调研包
   stage: 调研
   client_facing: true
+  outline:
+  - 调研范围与受访角色
+  - 访谈提纲
+  - 资料清单
+  - 现场工作安排
 - code: D3
   title: 事实清单
   stage: 调研
   client_facing: false
+  outline:
+  - 已确认事实（按评估域）
+  - 待补证据与矛盾点
 - code: D4
   title: 现状评估报告
   stage: 分析
   client_facing: true
+  outline:
+  - 评估范围与方法
+  - 战略与治理架构
+  - 组织与人员
+  - 合规与风险管理
+  - 安全技术体系
+  - 安全运营
+  - 数据安全
+  - 供应链与第三方
+  - 投入与考核
+  - 主要差距与问题
 - code: D5
   title: 网络安全规划
   stage: 设计
@@ -36,14 +60,31 @@ deliverables:
   title: 治理制度文件包
   stage: 设计
   client_facing: true
+  outline:
+  - 治理制度体系框架
+  - 网络安全工作责任制
+  - 网络安全管理办法
+  - 考核与问责制度
+  - 落地风险提示
 - code: D7
   title: 实施路线图与项目清单
   stage: 设计
   client_facing: true
+  outline:
+  - 分阶段目标
+  - 建设项目清单
+  - 投入量级
+  - 前置条件与依赖
 - code: D8
   title: 高层汇报
   stage: 验收
   client_facing: true
+  outline:
+  - 现状与主要差距
+  - 愿景与目标
+  - 重点任务与路线图
+  - 投入与保障
+  - 需要管理层决策的事项
 baseline:
   domains:
   - 战略与治理架构
