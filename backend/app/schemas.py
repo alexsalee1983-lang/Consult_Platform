@@ -41,6 +41,8 @@ class ProjectOut(BaseModel):
     service: str
     industry: str
     tier: str
+    org_type: str = ""
+    org_type_name: str = ""
     phase: int
     phase_name: str = ""
     week: int

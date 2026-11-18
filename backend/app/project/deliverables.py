@@ -34,6 +34,7 @@ from ..models import Deliverable, DeliverableSection, Evidence, KbItem, Project,
 from ..services import guard
 from . import cards
 from . import evidence as evidence_svc
+from . import judgment
 
 MAX_SECTIONS = 50
 MAX_TITLE = 200
@@ -242,6 +243,7 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
     except IntegrityError as e:                    # 两个人同时写同一章：后到的冲突
         db.rollback()
         raise DeliverableError(409, f"第 {seq} 章正在被同时修改，请刷新后重试") from e
+    judgment.capture_edit(db, project, d, seq, current, v)
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, section=seq, version=v.version, length=len(body), body_sha=sha[:16],
                  sources=sources["counts"], unresolved=len(sources["unresolved"]), agent=agent_code or None)

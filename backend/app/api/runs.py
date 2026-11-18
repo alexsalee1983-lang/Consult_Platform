@@ -52,6 +52,7 @@ class RunOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     finished_at: datetime | None
+    config_sha: str = ""         # 发起时的配置哈希（快照、md 版本、模型）
 
 
 class RunDetail(RunOut):
@@ -62,7 +63,7 @@ def _out(db: Session, project: Project, run: AgentRun) -> dict:
     return {"id": run.id, "chain": run.chain, "status": run.status, "next_step": svc._step_key(db, project, run),
             "waiting_cards": run.waiting_cards or [], "card_ids": run.card_ids or [], "error": run.error,
             "created_by": run.created_by, "created_at": run.created_at, "updated_at": run.updated_at,
-            "finished_at": run.finished_at}
+            "finished_at": run.finished_at, "config_sha": run.config_sha or ""}
 
 
 def _detail(db: Session, project: Project, run: AgentRun) -> RunDetail:

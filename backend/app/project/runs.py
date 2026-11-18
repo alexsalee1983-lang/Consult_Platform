@@ -32,6 +32,7 @@ SOC 的步骤（《Agent组开发项目方案》第五节，配置在 products/s
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -41,6 +42,7 @@ from sqlalchemy.orm import Session
 
 from ..agents import call, knowledge, registry, runtime, tools
 from ..core import audit
+from ..core.config import get_settings
 from ..core.db import SessionLocal, utcnow
 from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMember, User
 from ..products import config
@@ -158,6 +160,26 @@ def preflight(db: Session, project: Project) -> tuple[int, str, str] | None:
     return None
 
 
+def config_sha(db: Session, project: Project) -> str:
+    """本项目交付链的配置哈希（4A v4.0 §7.2 埋点）：配置快照、各步 Agent 的提示词版本和模型档、各档模型名。
+
+    同一哈希的运行可以放在一起比较效果；任何一项变了哈希就变。只含配置，不含项目内容。"""
+    try:
+        snap = configs.snapshot(db, project)
+    except config.CatalogError:
+        snap = {}
+    agents = {}
+    for s in (snap.get("chain") or []):
+        doc = registry.load(s.get("agent", ""))
+        agents[s.get("agent", "")] = [doc.version, doc.level] if doc is not None else []
+    st = get_settings()
+    models = [st.llm_model_reasoning, st.llm_model_standard, st.llm_model_light, st.llm_model_tools, st.embed_model,
+              st.rerank_model]
+    raw = json.dumps({"snapshot": snap, "agents": agents, "models": models}, ensure_ascii=False, sort_keys=True,
+                     default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def start(db: Session, user: User, project: Project, trigger: str = "") -> AgentRun:
     """发起交付链。trigger：平台规则自动发起时写规则名（app/project/autoflow.py），进审计。"""
     action = "run.start"
@@ -167,7 +189,7 @@ def start(db: Session, user: User, project: Project, trigger: str = "") -> Agent
         _deny(db, user, project, action, reason)
         raise RunError(status, message)
     run = AgentRun(project_id=project.id, chain=project.tier, status="queued", step_index=0, waiting_cards=[], card_ids=[],
-                   created_by=user.username)
+                   created_by=user.username, config_sha=config_sha(db, project))
     db.add(run)
     db.flush()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code, run_id=run.id,

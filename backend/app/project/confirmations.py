@@ -21,7 +21,7 @@ from ..core import audit
 from ..core.db import utcnow
 from ..models import Agent, Confirmation, Project, User
 from ..services import guard
-from . import deliverables
+from . import deliverables, judgment
 
 KINDS = ("方案取舍", "来源冲突", "证据不足", "范围确认", "入库确认")
 MAX_OPTIONS = 6
@@ -144,6 +144,7 @@ def resolve(db: Session, user: User, c: Confirmation, choice: str = "", resoluti
     c.resolved_by, c.resolved_at = user.username, utcnow()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=c.project.code,
                  confirmation_id=c.id, choice=choice or None, with_comment=commented)
+    judgment.capture_card(db, c, commented)
     db.commit()
     db.refresh(c)
     return c

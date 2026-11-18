@@ -224,7 +224,7 @@ def create_project(args: argparse.Namespace) -> int:
         user = db.scalar(select(User).where(User.username == args.manager))
         try:
             p = configs.create(db, actor="cli", code=args.code, tier=args.tier, manager=user, product=args.product,
-                               modules=args.module or [], industry=args.industry, weeks=args.weeks,
+                               modules=args.module or [], industry=args.industry, weeks=args.weeks, org_type=args.org_type,
                                service=args.service)
         except configs.CreateError as e:
             print(str(e) if user is not None else f"没有用户 {args.manager}", file=sys.stderr)
@@ -826,6 +826,8 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("--service", default="", help="显示名（默认用产品名称）")
     cp.add_argument("--industry", default="", help="行业，如 银行")
     cp.add_argument("--weeks", type=int, default=12, help="计划周数（默认 12）")
+    cp.add_argument("--org-type", default="", help="组织类型（可空）：central_soe 央企、local_soe 地方国企、private 民营企业、foreign 外资企业、"
+                    "government 政府机关、institution 事业单位、other 其他")
     cp.set_defaults(func=create_project)
     rr = sub.add_parser("retention-report", help="已验收项目的保留期与到期状态（--all 含未验收）")
     rr.add_argument("--all", action="store_true")
