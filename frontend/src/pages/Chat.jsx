@@ -2,7 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, sendMessage, TIER } from "../api.js";
 import { TopBar } from "../components/common.jsx";
 
-const SUGGESTIONS = ["一期人力模型怎么选？给出推荐和理由", "列出事件响应能力的主要差距，并给整改建议", "把整改建议写成四要素表格"];
+// 首次使用的 6 张示例卡（4A 架构设计 v4.0 §3.6、§7.2 埋点）：对话定位为副驾驶，点卡片把示例放进输入框，改好再发
+const EXAMPLES = [
+  { title: "查条款依据", text: "等保 2.0 三级对安全管理中心的集中管控有哪些要求？请列出条款号和原文要点" },
+  { title: "局部改稿", text: "把 D4 第 2 章的整改建议改写成“问题、建议、优先级、依据”四要素表格" },
+  { title: "访谈准备", text: "下周访谈 SOC 值班负责人，帮我列 10 个问题，重点问夜间值守和事件升级" },
+  { title: "异议应答", text: "客户认为日志留存 6 个月就够了，我们建议 1 年，帮我准备有依据的回应" },
+  { title: "临时任务", text: "一期人力模型怎么选？给出两到三个选项、推荐和理由" },
+  { title: "转交专业 Agent", text: "根据目前的访谈纪要整理差距分析，需要的话转交给专业 Agent" },
+];
 const DEFAULT_AGENT = "consultant-lead"; // 咨询师 Agent 是主入口
 const LEVEL = { reasoning: "推理", standard: "标准", light: "轻量" };
 
@@ -268,14 +276,21 @@ export default function Chat({ code }) {
           <form style={{ padding: "12px 20px 14px", borderTop: "1px solid var(--ln)", display: "flex", flexDirection: "column", gap: 8 }}
             onSubmit={(e) => { e.preventDefault(); send(); }}>
             {messages.length === 0 && (
-              <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
-                {SUGGESTIONS.map((s) => <button type="button" key={s} className="chip c-n" style={{ border: "1px solid var(--ln2)" }} onClick={() => send(s)}>{s}</button>)}
+              <div role="list" aria-label="示例" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
+                {EXAMPLES.map((x) => (
+                  <button type="button" role="listitem" key={x.title} disabled={sending}
+                    style={{ textAlign: "left", padding: "8px 10px", border: "1px solid var(--ln2)", borderRadius: 6, background: "var(--s2)", color: "var(--tx)", font: "inherit", cursor: "pointer" }}
+                    onClick={() => setText(x.text)}>
+                    <div style={{ fontWeight: 700 }}>{x.title}</div>
+                    <div className="sub" style={{ marginTop: 2 }}>{x.text}</div>
+                  </button>
+                ))}
               </div>
             )}
             <div className="composer">
               <label style={{ flex: 1, display: "flex", minWidth: 0 }}>
                 <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>给 Agent 的指令</span>
-                <textarea rows={2} value={text} placeholder="继续追问，或让 Agent 把结论写进交付件……（Enter 发送，Shift+Enter 换行）"
+                <textarea rows={2} value={text} placeholder="问条款、查依据、改某一节、准备访谈或应对客户质疑……（Enter 发送，Shift+Enter 换行）"
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }} />
               </label>
