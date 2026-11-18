@@ -34,6 +34,7 @@ DELIVERABLE_CODE = re.compile(r"^D([1-9][0-9]?)$")
 STEP_KEY = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 GATE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 STATUSES = ("ready", "draft")
+EXPERT_REVIEWS = ("pending", "done")   # 专家复核：pending 公开方法版待专家复核（缺省），done 已复核（决策记录 2026-11-18）
 STAGES = tuple(s for s in meta.STAGES if s != "通用")
 LEVELS = ("blocking", "major")
 TEMPLATE_VARS = frozenset({"product_name", "domains", "frameworks", "basis", "number", "modules",
@@ -93,6 +94,7 @@ class Product:
     industry_basis: dict[str, tuple[str, ...]] = field(default_factory=dict)
     # 成熟度初判（二期 A10）：false 时驾驶舱只给符合性条和风险矩阵，不给能力域分数（数据安全产品）
     maturity_scores: bool = True
+    expert_review: str = "pending"
 
     def deliverable(self, code: str) -> Deliverable | None:
         return next((d for d in self.deliverables if d.code == code), None)
@@ -113,6 +115,7 @@ class Module:
     kb_tags: tuple[str, ...]
     version: str
     raw: dict[str, Any]
+    expert_review: str = "pending"
 
 
 @dataclass
@@ -310,6 +313,7 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
     status = p.text(data, "status")
     if status and status not in STATUSES:
         p.add(f"status {status!r} 应为 ready 或 draft")
+    expert_review = _expert_review(p, data)
     if status == "ready" and code and code not in meta.PRODUCTS:
         p.add(f"产品 {code} 还没登记到知识元数据（app/kb/meta.py PRODUCTS，同步公共规范第 7 节），不能设为 ready")
     modules = p.texts(data, "modules")
@@ -429,7 +433,16 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
         strict = {}
     card_items = _P(f"{path.name} strict", out).texts(strict, "card_items")
     return Product(code, name, domain, status, modules, tuple(deliverables), domains, frameworks, basis,
-                   tuple(chain), gates, card_items, content_version(data), data, industry_basis, maturity_scores)
+                   tuple(chain), gates, card_items, content_version(data), data, industry_basis, maturity_scores,
+                   expert_review)
+
+
+def _expert_review(p: _P, data: dict[str, Any]) -> str:
+    value = data.get("expert_review", "pending")
+    if value not in EXPERT_REVIEWS:
+        p.add(f"expert_review {value!r} 应为 pending 或 done")
+        return "pending"
+    return str(value)
 
 
 def parse_module(path: Path, out: list[str]) -> Module | None:
@@ -447,6 +460,7 @@ def parse_module(path: Path, out: list[str]) -> Module | None:
     status = p.text(data, "status")
     if status and status not in STATUSES:
         p.add(f"status {status!r} 应为 ready 或 draft")
+    expert_review = _expert_review(p, data)
     products = p.texts(data, "products", required=True)
     adds = data.get("adds") or {}
     if not isinstance(adds, dict):
@@ -474,7 +488,7 @@ def parse_module(path: Path, out: list[str]) -> Module | None:
     gates = _gates(ap, adds.get("gates"), path.parent.parent / "products")
     return Module(code, name, status, products, sections, ap.texts(adds, "frameworks"), ap.texts(adds, "basis"),
                   instructions, gates, ap.texts(adds, "card_items"), ap.texts(adds, "kb_tags"),
-                  content_version(data), data)
+                  content_version(data), data, expert_review)
 
 
 def _known_agents() -> set[str] | None:
@@ -666,6 +680,7 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
                  + [_gate_dict(g, m.code) for m in mods for g in m.gates],
         "card_items": _merged(prod.card_items, *(m.card_items for m in mods)),
         "kb_tags": _merged(*(m.kb_tags for m in mods)),
+        "expert_pending": [x.code for x in (prod, *mods) if x.expert_review != "done"],
     }
 
 

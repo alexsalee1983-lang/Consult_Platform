@@ -15,6 +15,9 @@ function ProjectCard({ p }) {
           <span className="mono" style={{ fontWeight: 700, color: "var(--amber)" }}>{p.code}</span>
           <span style={{ fontSize: 16, fontWeight: 700 }}>{p.service}</span>
           <span className={`chip ${tier.cls}`}>{tier.label}</span>
+          {p.expert_pending?.length > 0 && (
+            <span className="chip c-c" title={`公开方法版，待专家复核：${p.expert_pending.join("、")}`}>待专家复核</span>
+          )}
         </div>
         <div className="row sub" style={{ flexWrap: "wrap" }}>
           <span>{p.industry}</span>·<span>第 {p.week} / {p.total_weeks} 周</span>·<span>下一步：{p.next_milestone}</span>

@@ -55,14 +55,14 @@ export default function NewProject({ onClose }) {
       <label className="sub">服务产品
         <select className="inp" value={f.product} onChange={(e) => setF({ ...f, product: e.target.value, modules: [] })}>
           {(products || []).map((p) => <option key={p.code} value={p.code} disabled={!p.ready}>
-            {p.code} · {p.name}{p.ready ? "" : "（筹备中）"}</option>)}
+            {p.code} · {p.name}{p.ready ? (p.expert_review === "done" ? "" : "（公开方法版，待专家复核）") : "（筹备中）"}</option>)}
         </select>
       </label>
       {prod && prod.modules.length > 0 && (
         <div className="sub" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span>附加模块（可不选）</span>
           {prod.modules.map((m) => (
-            <label key={m.code} className="row"><input type="checkbox" checked={f.modules.includes(m.code)} onChange={() => toggle(m.code)} />{m.name}</label>
+            <label key={m.code} className="row"><input type="checkbox" checked={f.modules.includes(m.code)} onChange={() => toggle(m.code)} />{m.name}{m.expert_review === "done" ? "" : "（待专家复核）"}</label>
           ))}
         </div>
       )}
