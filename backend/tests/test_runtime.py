@@ -307,3 +307,16 @@ def test_conversation_records_prompt_version_at_creation(model, client, agents_c
         c = db.get(Conversation, conv["id"])
         msg_versions = {m.prompt_version for m in c.messages}
     assert len(msg_versions) == 1 and msg_versions != {c.prompt_version}   # 消息记的是发送时的新版本
+
+
+@pytest.mark.parametrize("product", ["SOC", "IRE", "DSM", "ISO", "NSG"])
+def test_c3_product_sections_cover_all_products(product: str):
+    """二期 C3：5 个核心产品在方案设计、调研访谈、报告 Agent 里都有产品段，拼入后不含机密级内容。"""
+    from app.services import guard
+
+    assert product in registry.load("solution-designer").service_modules
+    for code in ("solution-designer", "research-interview", "report-writer"):
+        doc = registry.load(code)
+        body, picked = registry.select_body(doc.body, product)
+        assert picked[:1] == [f"产品：{product}"], (code, picked)
+        assert not guard.check(body).blocked, (code, product)

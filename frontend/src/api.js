@@ -219,9 +219,10 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
-  kbUpload: (file) => {
+  kbUpload: (file, project = "") => {
     const fd = new FormData();
     fd.append("file", file);
+    if (project) fd.append("project", project);
     return request("/api/kb/intake", { method: "POST", body: fd });
   },
   kbUploads: () => request("/api/kb/intake"),

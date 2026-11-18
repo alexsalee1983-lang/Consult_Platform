@@ -1,6 +1,7 @@
 """知识投料接口（投料箱）。要求业务角色。
 
-POST /api/kb/intake          上传一个文件（multipart，字段名 file），返回投料记录；机密级命中 422、重复 409
+POST /api/kb/intake          上传一个文件（multipart，字段名 file；可选 project 来源项目，须是成员，否则 404），
+                             返回投料记录（不含来源项目）；机密级命中 422、重复 409
 GET  /api/kb/intake          投料列表：知识专家、知识管理员看全部，其他人只看自己上传的
 GET  /api/kb/intake/{id}     投料详情，附前 20 个片段预览（去标识通过后为去标识后的内容）；看不到的一律 404
 GET  /api/kb/intake/{id}/deid           去标识报告（不含原文）+ 去标识后预览
@@ -11,7 +12,7 @@ POST /api/kb/intake/{id}/deid/decision  确认去标识结果：pass / reject（
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -57,12 +58,13 @@ def _out(up: KbUpload) -> UploadOut:
 
 
 @router.post("/intake", response_model=UploadOut, status_code=201)
-def submit(file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(current_user)):
+def submit(file: UploadFile = File(...), project: str = Form("", max_length=32), db: Session = Depends(get_db),
+           user: User = Depends(current_user)):
     data = file.file.read(parse.MAX_BYTES + 1)   # 同步端点在线程池执行，不阻塞事件循环
     if len(data) > parse.MAX_BYTES:
         raise HTTPException(413, f"文件超过 {parse.MAX_BYTES // 1024 // 1024}MB")
     try:
-        r = intake.submit(db, user, file.filename or "", data, file.content_type or "")
+        r = intake.submit(db, user, file.filename or "", data, file.content_type or "", project)
     except intake.IntakeError as e:
         raise HTTPException(e.status, e.detail) from e
     return _out(r.upload)

@@ -59,6 +59,7 @@ class ItemMetaIn(BaseModel):
     visible_roles: list[str] = Field(default_factory=lambda: ["consultant", "admin"])
     owner: str = ""
     tags: list[str] = Field(default_factory=list)
+    control_ids: list[str] = Field(default_factory=list)
 
 
 class ContentIn(BaseModel):
@@ -182,6 +183,7 @@ class ItemOut(BaseModel):
     visible_roles: list[str]
     owner: str
     tags: list[str] = []
+    control_ids: list[str] = []
     retired: bool
     title: str = ""
     current: VersionBrief | None = None

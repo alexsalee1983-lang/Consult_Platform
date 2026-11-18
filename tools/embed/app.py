@@ -6,15 +6,16 @@ import os
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from fastembed import TextEmbedding
 from pydantic import BaseModel
+
+from loader import load
 
 MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-small-zh-v1.5")
 MAX_INPUTS = 256
 MAX_CHARS = 2000            # 单条输入上限（模型最长 512 个 token，超出部分截断）
 
 app = FastAPI(title="embed", docs_url=None, redoc_url=None, openapi_url=None)
-_model = TextEmbedding(MODEL, cache_dir="/models")
+_model = load(MODEL)
 DIM = len(next(iter(_model.embed(["维度检查"]))))
 
 

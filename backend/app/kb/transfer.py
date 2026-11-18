@@ -86,7 +86,8 @@ def _entry(item: KbItem, v: KbVersion) -> Entry:
     m = ItemMeta(layer=item.layer, domain=item.domain, product=item.product, doc_type=item.doc_type,
                  stage=item.stage, capabilities=list(item.capabilities or []), industries=list(item.industries or []),
                  classification=item.classification, visible_roles=list(item.visible_roles or []),
-                 owner=item.owner, tags=list(item.tags or []))
+                 owner=item.owner, tags=list(item.tags or []),
+                 control_ids=list(item.control_ids or []))
     c = VersionContent(title=v.title, body=v.body, source_type=v.source_type, source_detail=v.source_detail,
                        summary=v.summary, applicability=v.applicability, change_note=v.change_note,
                        ref_document=v.ref_document, ref_version=v.ref_version, ref_status=v.ref_status,

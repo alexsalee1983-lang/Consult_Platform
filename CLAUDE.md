@@ -151,6 +151,7 @@ md 的 `tools` 只写平台工具名（`registry.TOOL_NAMES`），与迁移写�
 审计只记编号、规则、计数和结论。
 知识审核 Agent（二期 B11）：公开资料、无需去标识的 REF / MAP / MTD / CAS / OBJ 提交审核后排后台任务 `kb.agent_review`，只经 `app/kb/agent_review.py`：程序规则（引用已核对、无结论用语、无机密级、摘要和适用条件齐全）+ 知识审核 Agent `kb-reviewer`（经网关，不授权工具，平台直接交条目、引用到的依据原文和相近条目）按七项清单逐项判断；全部通过的自动发布（`auto_review=agent`，审核记录 reviewer `agent:kb-reviewer`、review_role agent），按 `KB_SAMPLE_RATE_AGENT`（20%，问题率超上限一半时加倍）抽检，与 B10 共用抽检队列和暂停规则（`KB_AGENT_AUTO_PUBLISH=false` 也暂停）；存疑的审核记录 decision=flag，问题清单在 `kb_reviews.findings`（只在知识区库，不进审计），照常两项人工审核。
 扩展分类（决策记录 2026-11-16）：交付物类型加 ENF 执法案例 / RAR 参考架构 / BMK 基准数据 / GLS 术语对照；ENF、RAR、GLS 的公开资料同样走 `kb.agent_review`（ENF 须写依据文件、按 B8 核对引用），BMK 走第三级；复审周期由 `meta.review_months(layer, doc_type)` 按层级和类型取，L4、ENF、BMK 6 个月。
+条目挂公司控制项（4A v4.0 §7.2 埋点，知识区迁移 k0008）：条目文件可选字段 `control_ids`（规则在 `items.check_control_ids`：转大写、去重，至多 20 个，字母数字和 . _ -），同 tags 是条目级字段、不进版本内容、不走审核，重复导入直接更新、搬迁带上；控制项中枢 v1（五期）之前只记不用。
 审计 `kb.agent_review` 记规则、Agent、提示词版本和模型，不记正文和意见。
 复审到期（人工环节复查 K7）：同一范围的现行版本复审日期到了，worker 每小时排 `kb.agent_reconfirm`，只经 `app/kb/reconfirm_agent.py`，用同一套程序规则和七项清单复查，通过的顺延复审日期（Agent 审核发布、未抽检过的按比例抽检），存疑的留在“复审到期”由知识专家处理；复查记录 review_role=reconfirm，每版本一条、每周期覆盖；SRC、项目沉淀、专家经验、待补复审的照旧人工复审；应急 `python -m app.cli kb-reconfirm-scan`。
 知识迁移（决策记录 2026-11-16）：测试环境已发布的公开知识搬到生产只经 `app/kb/transfer.py`：`python -m app.cli kb-export <目录> --as <知识专家>` 导出条目文件和 manifest.json（文件 sha256、原 doc_id、作者、审核记录，不带意见原文），打印清单哈希；生产 `kb-import-export <目录> --sha256 <清单哈希> --as <知识专家>` 哈希全对才导入，平台重新自动核验（审核记录完整、机密级、资质边界、引用、元数据），通过的保留原作者和原审核人发布、另记审核 `platform:kb-transfer` / transfer，没通过的提交审核；审计只记编号、计数和规则。
@@ -162,6 +163,7 @@ md 的 `tools` 只写平台工具名（`registry.TOOL_NAMES`），与迁移写�
 `KB_EVAL_GATE` 开启时最近一次未达标即暂停 B10、B11 自动发布（`autopublish.suspended` → `compare.gate_reason`），再跑一次达标恢复；演示模式不判达标、不记审计。
 门槛校准（v0.2 关口）只经 `app/kb/sweep.py`（`kb-eval <题目.yaml> --as <用户> --sweep`）：每题以门槛 0 经网关重排检索一次，本地按各候选门槛筛选，算依据查询（`KB_BASIS_MIN_RERANK`）和知识检索（`KB_SEARCH_MIN_RERANK`）的准确率、负例误命中、正例漏掉，给推荐值（最优区间含现值则保持）；只出报告、不改配置，由负责人定；审计 `kb.eval_sweep` 只记题数、计数、准确率和推荐值。
 Agent 评测（二期 C4）只经 `app/agents/evalset.py`（`python -m app.cli agent-eval knowledge/eval/agents --as <用户> [--product SOC]`）：评测集每个产品一份 YAML，题型 redline / golden / mine（埋雷，评审 Agent 要挑出来），每题按产品裁剪 md、经 `call.call()` 作答，自动查资质边界用语和编造条款号为 0，再按 must / must_not / points 核对；演示模式不判达标；审计 `agent.eval` 只记计数和模型，不记题目和答案；换模型、改 md 前后各跑一次，不退化才发布。
+向量模型对比（决策记录 2026-11-18）只经 `app/kb/embed_compare.py`（`kb-eval <题目.yaml> --as <用户> --embed-compare --b-url … --b-model … --b-dim …`，候选模型用 compose profile `embed-compare` 的 `embed-m3` 服务）：现用和候选模型各自经 `gateway.embed`（候选地址、模型、维度只在这里覆盖）向量化调用人看得到的已发布现行切片和题目，只比向量召回（命中@1/3/5/10、MRR、耗时）；不写库、不改配置，生产拒绝；审计 `kb.eval_embed` 只记题数、切片数、模型名和指标。
 
 分库约定（M5 ③）：知识区表（`kb_` 开头）在单独的库 `KB_DATABASE_URL`（compose 为 `consult_kb`，账号 `consult_kb` 非超级用户、连不上主库；不配则同库，生产不分库拒绝启动）。
 会话按 `KbBase` 自动把知识区读写发往知识区库；原生 SQL 查知识区表要带 `bind_arguments=KB_BIND`，知识区和主库的表不能 JOIN、不能建跨库外键，一次提交跨两库不是原子的。
@@ -237,6 +239,7 @@ Agent 经 `project.evidence` 读摘要卡（严格档返回 S-xx，不新增工�
 删除约定（M4 ②）：项目资料删除只经 `app/project/deletion.py`（决策记录 2026-11-13）。
 到期由 worker 每小时扫描自动发起（`requested_by=platform`，也可 `python -m app.cli deletion-scan`）；客户书面要求提前删除由项目经理发起（`POST /api/projects/{code}/deletions`，写文号不写客户名，10 个工作日内完成，周一至周五计，不含节假日）；都由项目负责人确认（`/api/deletions`，不必是成员，不能是发起人），提前删除可由负责人写理由撤销，到期申请不能撤销。
 确认时必选经验回流情况（已回流填投料编号 / 无可回流 / 客户不同意回流），项目经理可标记“客户不同意回流”（`PUT /api/projects/{code}/flowback`），标记后只能选客户不同意；回流不阻断删除。
+经验回流预填（二期 P16）：投料时项目成员可选填来源项目（`POST /api/kb/intake` 的 `project`，非成员 404，存 `kb_uploads.source_project`，知识区迁移 k0009，投料接口不返回），待确认的删除申请带 `flowback_suggested`（该项目去标识已通过的投料编号，标了客户不同意回流的为空），确认页据此预填，负责人核对后确认。
 确认后后台任务 `project.delete` 删对象存储 `{code}/` 下全部文件和证据、资料、交付件（含已签署）及章节版本、评审、签署、确认卡、对话、运行和成员关系，项目行保留（代号不复用、所有项目接口 404）；完成后的申请就是可交给客户的删除记录（只有编号、日期、计数、确认人和回流情况）。
 审计只记编号、日期和计数，不记文号和内容。
 运维 `python -m app.cli deletion-report [--all]`。
