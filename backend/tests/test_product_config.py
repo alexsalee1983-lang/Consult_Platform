@@ -181,3 +181,23 @@ def test_cli_catalog_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caps
 
     (tmp_path / "products" / "bad.yaml").write_text("- 1\n", encoding="utf-8")
     assert cli.main(["catalog-check"]) == 1
+
+
+def test_new_products_ready_as_public_v0_pending_expert_review() -> None:
+    """负责人 2026-11-18：四个新产品以公开方法版 v0 定稿为 ready，配置注明待专家复核。"""
+    cat = config.load(REPO)
+    for code in ("IRE", "DSM", "ISO", "NSG"):
+        assert cat.products[code].status == "ready", code
+        raw = yaml.safe_load((REPO / "products" / f"{code.lower()}.yaml").read_text(encoding="utf-8"))
+        assert raw.get("expert_review") == "pending", code
+
+
+def test_dsm_excludes_personal_information_protection() -> None:
+    """4A v4.0：个人信息保护专项放到五期，DSM 只把个人信息当数据类别。"""
+    dsm = config.load(REPO).products["DSM"]
+    assert "个人信息保护法" not in dsm.frameworks
+    assert not any("个人信息" in d for d in dsm.domains)
+    for d in dsm.deliverables:
+        assert not any("个人信息" in t for t in d.outline), d.code
+    for s in dsm.chain:
+        assert "个人信息保护" not in s.query, s.key

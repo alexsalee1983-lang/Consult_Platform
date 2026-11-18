@@ -1,9 +1,10 @@
-# ISO/IEC 27001 信息安全管理体系建设与认证准备（二期 D1，草稿：交付件结构、提示词待产品专家核对，负责人同意后改 ready）
+# ISO/IEC 27001 信息安全管理体系建设与认证准备（二期 D1，公开方法版 v0，负责人 2026-11-18 同意定稿为 ready，待专家复核）
 # 格式见 docs/接口约定.md 第二节。资质边界：只做差距分析、认证准备、整改建议，不出具或暗示认证结论。
 code: ISO
 name: ISO 27001 信息安全管理体系建设
 domain: GOV
-status: draft
+status: ready
+expert_review: pending   # 公开方法版 v0，待专家复核
 modules: [DJBH, HYJG]
 deliverables:
 - code: D1

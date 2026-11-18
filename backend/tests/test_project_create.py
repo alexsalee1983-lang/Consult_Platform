@@ -39,13 +39,27 @@ def test_catalog_options_list_soc(lead) -> None:
     assert soc["ready"] is True
 
 
-def test_catalog_lists_draft_products_disabled(lead) -> None:
-    """草稿产品也列出（界面灰显“筹备中”），但不能立项。"""
+@pytest.fixture
+def draft_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """临时目录：SOC ready、ISO 草稿、DJBH 草稿（仓库里的产品和模块 2026-11-18 起都已 ready）。"""
+    _write(tmp_path, PRODUCT, dict(MODULE, status="draft"))
+    _write(tmp_path, dict(PRODUCT, code="ISO", name="ISO 体系", status="draft", modules=[], chain=[]))
+    monkeypatch.setattr(get_settings(), "catalog_dir", str(tmp_path))
+    monkeypatch.setattr(config, "_known_agents", lambda: AGENTS)
+    return tmp_path
+
+
+def test_catalog_lists_draft_products_disabled(lead, draft_catalog) -> None:
+    """草稿产品也列出（界面灰显“筹备中”），但不能立项；草稿模块不能勾选。"""
     ps = lead.get("/api/catalog/products").json()
     drafts = [p for p in ps if not p["ready"]]
-    assert drafts and all(p["modules"] == [] for p in drafts)
-    r = lead.post("/api/projects", json={"code": _code(), "tier": "standard", "product": drafts[0]["code"], "industry": "其他"})
-    assert r.status_code == 422
+    assert [p["code"] for p in drafts] == ["ISO"] and all(p["modules"] == [] for p in drafts)
+    for body in ({"product": "ISO"}, {"product": "SOC", "modules": ["DJBH"]}):
+        code = _code()
+        r = lead.post("/api/projects", json={"code": code, "tier": "standard", "industry": "其他", **body})
+        assert r.status_code == 422, body
+        with SessionLocal() as db:
+            assert db.scalar(select(Project.id).where(Project.code == code)) is None
 
 
 def test_lead_creates_project_via_web(lead) -> None:
@@ -78,8 +92,6 @@ def test_lead_creates_project_via_web(lead) -> None:
 @pytest.mark.parametrize(("body", "status"), [
     ({"code": "某银行", "tier": "standard", "product": "SOC", "industry": "其他"}, 422),
     ({"code": "QA-BAD1", "tier": "both", "product": "SOC", "industry": "其他"}, 422),
-    ({"code": "QA-BAD2", "tier": "standard", "product": "ISO", "industry": "其他"}, 422),
-    ({"code": "QA-BAD3", "tier": "standard", "product": "SOC", "modules": ["DJBH"], "industry": "其他"}, 422),
     ({"code": "QA-BAD4", "tier": "standard", "product": "SOC", "manager": "no-such-user", "industry": "其他"}, 422),
     ({"code": "QA-BAD5", "tier": "standard", "product": "SOC", "weeks": 0, "industry": "其他"}, 422),
     ({"code": "QA-BAD6", "tier": "standard", "product": "SOC"}, 422),                       # 行业必填（网页立项）
