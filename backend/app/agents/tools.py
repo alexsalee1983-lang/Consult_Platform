@@ -86,7 +86,13 @@ def _product_of(ctx: ToolContext) -> dict:
         snap = configs.snapshot(ctx.db, ctx.project)
     except config.CatalogError:
         return {"product": "", "modules": []}
-    return {"product": str(snap.get("product") or ""), "modules": [m["code"] for m in snap.get("modules") or []]}
+    out = {"product": str(snap.get("product") or ""), "modules": [m["code"] for m in snap.get("modules") or []]}
+    ind = snap.get("industry")
+    if isinstance(ind, dict):   # 三期行业包：术语、受访角色、威胁画像、立项提示进项目卡
+        out["industry_pack"] = {**{k: ind.get(k) for k in ("code", "name", "level", "terms", "roles", "threats",
+                                                            "tier_hint")},
+                                "expert_pending": ind.get("code") in (snap.get("expert_pending") or [])}
+    return out
 
 
 def _project_read(ctx: ToolContext, args: dict) -> dict:
@@ -145,7 +151,8 @@ def _project_kb_prefs(ctx: ToolContext) -> dict:
     industry = (ctx.project.industry or "").strip()
     ib = snap.get("industry_basis") or {}
     keys = dict.fromkeys([industry, *industry.split("/")]) if industry else {}   # 立项下拉的“银行/金融”任一部分对上
-    by_industry = [b for k in keys if k for b in (ib.get(k) or [])]
+    pack = snap.get("industry") if isinstance(snap.get("industry"), dict) else {}
+    by_industry = [*(pack.get("basis") or []), *(b for k in keys if k for b in (ib.get(k) or []))]   # 三期行业包在前
     basis = list(dict.fromkeys(by_industry + list(snap.get("basis") or [])))   # 行业依据在前（二期 B2 补充）
     return {"product": str(snap.get("product") or ""), "tags": list(snap.get("kb_tags") or []), "basis": basis}
 

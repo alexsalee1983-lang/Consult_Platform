@@ -129,7 +129,7 @@ def create(db: Session, *, actor: str, code: str, tier: str, manager: User | Non
     if manager is None or not manager.is_active or not roles_of(db, manager.id) & BUSINESS_ROLES:
         raise CreateError(422, "项目经理必须是启用状态、持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户")
     try:
-        snap = config.compose_codes(product.strip().upper(), [m.strip().upper() for m in modules])
+        snap = config.compose_codes(product.strip().upper(), [m.strip().upper() for m in modules], industry)
     except config.CatalogError as e:
         raise CreateError(422, f"不能按这个产品立项：{e}") from e
     p = Project(code=code, service=(service.strip() or snap["product_name"])[:64], industry=industry.strip()[:32],
@@ -143,5 +143,6 @@ def create(db: Session, *, actor: str, code: str, tier: str, manager: User | Non
     db.commit()
     audit.record(db, actor=actor, action="project.create", result="allowed", project_code=code, tier=tier,
                  manager=manager.username, product=snap["product"], modules=[m["code"] for m in snap["modules"]],
-                 version=snap["product_version"], org_type=org_type or None)
+                 version=snap["product_version"], org_type=org_type or None,
+                 industry_pack=(snap.get("industry") or {}).get("code"))
     return p
