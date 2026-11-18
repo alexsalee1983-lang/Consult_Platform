@@ -82,10 +82,11 @@ def info(db: Session, project: Project) -> dict[str, Any]:
     try:
         snap = snapshot(db, project)
     except config.CatalogError:
-        return {"product": "", "product_name": "", "modules": [], "product_version": ""}
+        return {"product": "", "product_name": "", "modules": [], "product_version": "", "expert_pending": []}
     return {"product": snap["product"], "product_name": snap["product_name"],
             "modules": [{"code": m["code"], "name": m["name"]} for m in snap["modules"]],
-            "product_version": snap["product_version"]}
+            "product_version": snap["product_version"],
+            "expert_pending": list(snap.get("expert_pending", []))}     # 公开方法版待专家复核的产品、模块代号
 
 
 def options() -> list[dict[str, Any]]:
@@ -100,8 +101,9 @@ def options() -> list[dict[str, Any]]:
         ready = p.status == "ready"
         mods = [cat.modules[c] for c in p.modules if ready and c in cat.modules and cat.modules[c].status == "ready"]
         out.append({"code": p.code, "name": p.name, "version": p.version, "ready": ready,
+                    "expert_review": p.expert_review,
                     "deliverables": [{"code": d.code, "title": d.title} for d in p.deliverables],
-                    "modules": [{"code": m.code, "name": m.name} for m in mods]})
+                    "modules": [{"code": m.code, "name": m.name, "expert_review": m.expert_review} for m in mods]})
     return out
 
 

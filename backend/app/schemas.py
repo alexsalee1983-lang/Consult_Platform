@@ -60,6 +60,7 @@ class ProjectOut(BaseModel):
     product_name: str = ""
     modules: list[dict] = []
     product_version: str = ""
+    expert_pending: list[str] = []          # 待专家复核的产品、模块代号（公开方法版 v0，决策记录 2026-11-18）
 
 
 class ProjectDetail(ProjectOut):
