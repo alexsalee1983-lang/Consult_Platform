@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     auto_flow: bool = True
     auto_run_quiet_hours: float = 2       # 最近一条证据之后这么久没有新证据才自动发起交付链
     auto_review_idle_hours: float = 24    # 顾问最后一次修改之后这么久没再改才自动评审
+    # 门禁通过后自动提交签署的交付件（自主度 L3）；不在其中的为 L2，由顾问看过标出的问题后提交（决策记录 2026-11-18）
+    auto_submit_deliverables: str = "D1,D2,D6,D8"
     # 普通检索的重排分数下限：只挡掉趋近 0 分的无关结果（测试 #34：该查不到的 S011 得分 0.0003～0.0008）。
     # 比依据查询宽得多，宁可多给几条弱相关的；正式评测后与 KB_BASIS_MIN_RERANK 一起校准。
     kb_search_min_rerank: float = 0.005

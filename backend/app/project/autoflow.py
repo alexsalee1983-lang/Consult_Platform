@@ -14,6 +14,8 @@
   发起人记为最后写入的人（交付链写入时是运行发起人）；不再是成员的不发起。
 - P10 门禁通过自动提交签署（after_review，评审完成时）：交付件在起草中、评审针对当前修订、门禁通过时，
   平台转为“待签署”，提交记录的提交人写 platform。签署、退回仍由项目经理做。
+  只对自主度 L3 的交付件（AUTO_SUBMIT_DELIVERABLES，默认 D1、D2、D6、D8）自动提交；D3、D4、D5、D7 为 L2，
+  门禁通过后停在起草中，由顾问看过标出的问题后提交（决策记录 2026-11-18）。
 
 审计照旧由 runs.start / quality.request_review / quality.submit 写，另记 trigger（哪条规则判的），不记原文。
 """
@@ -177,6 +179,11 @@ def scan_reviews(db: Session, project: Project | None = None, now: datetime | No
     return made
 
 
+def auto_submit_codes() -> list[str]:
+    """自主度 L3、门禁通过后自动提交签署的交付件编号。"""
+    return [c.strip() for c in get_settings().auto_submit_deliverables.split(",") if c.strip()]
+
+
 def after_run(db: Session, run: AgentRun) -> None:
     """交付链结束（done）：立即给本项目写好的交付件排评审，不等每小时的扫描。"""
     if run.status == "done":
@@ -192,7 +199,9 @@ def after_review(db: Session, review: QualityReview) -> bool:
     if not enabled() or review.status != "done":
         return False
     d = db.get(Deliverable, review.deliverable_id)
-    if d is None or d.status != "drafting" or review.revision != d.revision or not quality.gate(db, d).ok:
+    if d is None or d.code not in auto_submit_codes():
+        return False
+    if d.status != "drafting" or review.revision != d.revision or not quality.gate(db, d).ok:
         return False
     project = db.get(Project, review.project_id)
     user = _member(db, project, review.created_by) or _manager(db, project)

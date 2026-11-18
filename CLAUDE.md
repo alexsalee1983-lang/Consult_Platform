@@ -218,6 +218,7 @@ Agent 经工具 `project.evidence` 读证据。
 自动推进约定（二期 C5，决策记录 2026-11-15）：交付链自动发起、自动质量评审、门禁通过自动提交签署只经 `app/project/autoflow.py`（`AUTO_FLOW`，默认开；测试默认关，`tests/test_autoflow.py` 里打开）。
 worker 每小时 `scan_runs`：没跑过交付链、交付件还没有正文、证据齐（标准档有可用证据且文件都已解析，严格档有有效同意和摘要卡）且 `AUTO_RUN_QUIET_HOURS` 内没有新证据的项目，以最近一条证据的录入人（不是成员时用项目经理）发起，发起前用 `runs.preflight` 检查、不写拒绝审计；`scan_reviews`：起草中、每章有正文、没有未结束的运行、当前修订没评审过，最后写入是 Agent（交付链结束时也立即查）或顾问修改后闲置 `AUTO_REVIEW_IDLE_HOURS`，以最后写入的人发起；评审完成门禁通过时自动提交，提交人记 `platform`。
 签署、退回、驳回阻断仍由人做。
+自动提交只限自主度 L3 的交付件（`AUTO_SUBMIT_DELIVERABLES`，默认 D1、D2、D6、D8）；D3、D4、D5、D7 为 L2，门禁通过后由顾问看过标出的问题再提交（决策记录 2026-11-18）。
 审计照旧，另记 `trigger`（规则名）。
 
 保留期约定（M4 ①）：项目验收与保留期只经 `app/project/retention.py`（接口 `POST /api/projects/{code}/acceptance`，项目经理）：登记验收日（不晚于今天）和保留月数（0～24，默认 6，按合同约定或客户制度调整），平台算到期日（月末顺延到当月最后一天），项目列表和详情带 `retention_state`（active / retained / due_soon 到期前 30 天 / due）；可更正，每次进审计（只记日期和月数）。
