@@ -1,9 +1,10 @@
-# 事件后 E2E 评估与整改（二期 D3，草稿：交付件结构、提示词待产品专家核对，负责人同意后改 ready）
+# 事件后 E2E 评估与整改（二期 D3，公开方法版 v0，负责人 2026-11-18 同意定稿为 ready，待专家复核）
 # 格式见 docs/接口约定.md 第二节。边界：复盘与整改咨询，不是司法鉴定、电子数据取证或责任认定；不写可利用的漏洞细节（机密级，平台不收）。
 code: IRE
 name: 事件后 E2E 评估与整改
 domain: RES
-status: draft
+status: ready
+expert_review: pending   # 公开方法版 v0，待专家复核
 modules: [GFYL, HYJG]
 deliverables:
 - code: D1
