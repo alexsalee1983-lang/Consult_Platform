@@ -14,13 +14,16 @@ function Uploader({ onDone }) {
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [project, setProject] = useState("");
+  useEffect(() => { api.projects().then(setProjects).catch(() => setProjects([])); }, []);
 
   async function upload(file) {
     if (!file) return;
     setBusy(true);
     setError(null);
     try {
-      onDone(await api.kbUpload(file));
+      onDone(await api.kbUpload(file, project));
     } catch (e) {
       setError(e.status === 422 && e.detail?.findings ? { blocked: e.detail } : { message: e.message });
     } finally {
@@ -32,6 +35,13 @@ function Uploader({ onDone }) {
   return (
     <section className="pnl pad" aria-label="上传资料">
       <h2 className="h2">投料</h2>
+      {projects.length > 0 && (
+        <label className="sub">来源项目（项目沉淀选填，删除项目时自动预填经验回流）
+          <select className="inp" value={project} disabled={busy} onChange={(e) => setProject(e.target.value)}>
+            <option value="">不属于某个项目</option>
+            {projects.map((p) => <option key={p.code} value={p.code}>{p.code}</option>)}
+          </select>
+        </label>)}
       <label className={`drop${busy ? " busy" : ""}`}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => { e.preventDefault(); upload(e.dataTransfer.files?.[0]); }}>
