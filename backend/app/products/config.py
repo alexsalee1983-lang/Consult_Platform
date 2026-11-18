@@ -1,6 +1,6 @@
-"""服务产品与模块配置：读取和校验（二期 A1，格式见 docs/接口约定.md 第二、三节）。
+"""服务产品、模块与行业包配置：读取和校验（二期 A1，格式见 docs/接口约定.md 第二、三节；行业包三期，第九节）。
 
-配置放在仓库根目录的 products/*.yaml、modules/*.yaml（镜像内 /srv/products、/srv/modules），与 Agent md 一样版本化，
+配置放在仓库根目录的 products/*.yaml、modules/*.yaml、industries/*.yaml（镜像内 /srv/...），与 Agent md 一样版本化，
 改配置走 PR、负责人审批（决策记录 2026-11-14）。本模块只读文件、不连数据库；立项快照（A3）和交付链（A4）在此之上。
 
 规则：
@@ -41,6 +41,8 @@ TEMPLATE_VARS = frozenset({"product_name", "domains", "frameworks", "basis", "nu
                            "module_instructions"})
 GATE_KINDS = ("coverage", "required_sections", "forbidden_terms", "min_sources")
 RULES_DIR = "rules"
+INDUSTRY_CODE = re.compile(r"^[A-Z][A-Z0-9]{1,7}$")
+INDUSTRY_LEVELS = ("L0", "L1", "L2", "L3")   # 4A v4.0 §2.4：L0 依据 → L1 题与术语 → L2 判断规则与黄金样例 → L3 行业基准
 
 
 @dataclass(frozen=True)
@@ -118,10 +120,32 @@ class Module:
     expert_review: str = "pending"
 
 
+@dataclass(frozen=True)
+class Industry:
+    """行业包（三期，4A v4.0 §2.4）：与产品、模块并列的配置维度，立项时按项目行业匹配、并入快照。"""
+    code: str
+    name: str
+    aliases: tuple[str, ...]          # 立项时填的行业文字（精确匹配；“A/B”任一部分对上即可）
+    status: str
+    level: str
+    products: tuple[str, ...]         # 空 = 所有产品适用
+    basis: tuple[str, ...]            # 行业依据：检索加权、差距分析
+    terms: tuple[str, ...]            # 术语与系统名
+    roles: tuple[str, ...]            # 组织惯例：常见受访角色
+    threats: tuple[str, ...]          # 威胁画像
+    instructions: dict[str, str]      # 按步骤键追加的行业说明
+    gates: tuple[Gate, ...]
+    tier_hint: str                    # 立项提示（如“涉及生产控制区时建议严格档”）
+    version: str
+    raw: dict[str, Any]
+    expert_review: str = "pending"
+
+
 @dataclass
 class Catalog:
     products: dict[str, Product] = field(default_factory=dict)
     modules: dict[str, Module] = field(default_factory=dict)
+    industries: dict[str, Industry] = field(default_factory=dict)
     problems: list[str] = field(default_factory=list)
 
 
@@ -491,6 +515,44 @@ def parse_module(path: Path, out: list[str]) -> Module | None:
                   content_version(data), data, expert_review)
 
 
+def parse_industry(path: Path, out: list[str]) -> Industry | None:
+    data = _read_yaml(path, out)
+    if data is None:
+        return None
+    p = _P(path.name, out)
+    _guard(p, data)
+    code = p.text(data, "code")
+    if code and not INDUSTRY_CODE.match(code):
+        p.add(f"code {code!r} 应为 2～8 位大写字母和数字、字母开头")
+    if code and path.stem != code.lower():
+        p.add(f"文件名应为 {code.lower()}.yaml")
+    name = p.text(data, "name", max_len=32)
+    status = p.text(data, "status")
+    if status and status not in STATUSES:
+        p.add(f"status {status!r} 应为 ready 或 draft")
+    level = p.text(data, "level")
+    if level and level not in INDUSTRY_LEVELS:
+        p.add(f"level {level!r} 应为 {'/'.join(INDUSTRY_LEVELS)}")
+    aliases = p.texts(data, "aliases", required=True)
+    if data.get("aliases") == []:
+        p.add("aliases 至少写一个立项行业的写法")
+    for a in aliases:
+        if len(a) > 32 or "/" in a:
+            p.add(f"aliases 的 {a!r} 应为不超过 32 字、不含“/”的文字")
+    raw_i = data.get("instructions") or {}
+    if not isinstance(raw_i, dict) or not all(isinstance(v, str) for v in raw_i.values()):
+        p.add("instructions 应为 {步骤键: 说明文字}")
+        raw_i = {}
+    instructions = {str(k): v.strip() for k, v in raw_i.items()}
+    for k, v in instructions.items():
+        _check_template(p, f"instructions.{k}", v)
+    gates = _gates(p, data.get("gates"), path.parent.parent / "products")
+    return Industry(code, name, aliases, status, level, p.texts(data, "products"),
+                    p.texts(data, "basis", required=True), p.texts(data, "terms"), p.texts(data, "roles"),
+                    p.texts(data, "threats"), instructions, gates, p.text(data, "tier_hint", required=False),
+                    content_version(data), data, _expert_review(p, data))
+
+
 def _known_agents() -> set[str] | None:
     from ..agents import registry
 
@@ -518,8 +580,38 @@ def load(base: Path | None = None, agents: set[str] | None = None) -> Catalog:
             if mod.code in cat.modules:
                 cat.problems.append(f"{path.name}：模块代号 {mod.code} 重复")
             cat.modules[mod.code] = mod
+    for path in sorted((base / "industries").glob("*.yaml")):
+        ind = parse_industry(path, cat.problems)
+        if ind is not None and ind.code:
+            if ind.code in cat.industries:
+                cat.problems.append(f"{path.name}：行业包代号 {ind.code} 重复")
+            cat.industries[ind.code] = ind
     _cross_check(cat)
+    _cross_check_industries(cat)
     return cat
+
+
+def _cross_check_industries(cat: Catalog) -> None:
+    out = cat.problems
+    owner: dict[str, str] = {}
+    for ind in cat.industries.values():
+        where = f"行业包 {ind.code}"
+        for a in ind.aliases:
+            if a in owner and owner[a] != ind.code:
+                out.append(f"{where}：行业写法 {a} 与行业包 {owner[a]} 重复")
+            owner.setdefault(a, ind.code)
+        for pc in ind.products:
+            if pc not in cat.products:
+                out.append(f"{where}：没有产品 {pc}")
+        prods = [cat.products[pc] for pc in (ind.products or tuple(cat.products)) if pc in cat.products]
+        step_keys = {s.key for prod in prods for s in prod.chain}
+        for k in ind.instructions:
+            if step_keys and k not in step_keys:
+                out.append(f"{where}：instructions 的步骤 {k} 在适用产品的交付链里都没有")
+        dcodes = {d.code for prod in prods for d in prod.deliverables}
+        for g in ind.gates:
+            if g.deliverable and dcodes and g.deliverable not in dcodes:
+                out.append(f"{where} gates {g.id}：适用产品都没有交付件 {g.deliverable}")
 
 
 def _cross_check(cat: Catalog) -> None:
@@ -578,6 +670,7 @@ _cache: tuple[tuple, Catalog] | None = None
 
 def _stamp(base: Path) -> tuple:
     files = [*sorted((base / "products").glob("*.yaml")), *sorted((base / "modules").glob("*.yaml")),
+             *sorted((base / "industries").glob("*.yaml")),
              *sorted((base / "products" / RULES_DIR).glob("*"))]
     return (str(base), *((f.name, f.stat().st_mtime_ns, f.stat().st_size) for f in files))
 
@@ -633,7 +726,20 @@ def _gate_dict(g: Gate, source: str) -> dict[str, Any]:
             "source": source, **copy.deepcopy(g.params)}
 
 
-def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> dict[str, Any]:
+def resolve_industry(cat: Catalog, industry: str, product_code: str) -> Industry | None:
+    """按立项填的行业文字找适用的行业包（ready、适用本产品）；“A/B”写法任一部分对上即可，找不到返回 None。"""
+    text = (industry or "").strip()
+    if not text:
+        return None
+    for key in [text, *(x.strip() for x in text.split("/"))]:
+        for ind in cat.industries.values():
+            if key in ind.aliases and ind.status == "ready" and (not ind.products or product_code in ind.products):
+                return ind
+    return None
+
+
+def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
+            industry: Industry | None = None) -> dict[str, Any]:
     """产品 + 所选模块合并成完整配置（立项快照的 snapshot 字段）。
 
     快照自足：任务说明和检索词已填好变量，coverage 清单已展开，之后改配置文件不影响它。
@@ -649,12 +755,18 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
             raise CatalogError(f"模块 {m.code} 不能挂在产品 {prod.code} 上")
     if len({m.code for m in mods}) != len(mods):
         raise CatalogError("模块重复")
+    if industry is not None and (industry.status != "ready"
+                                 or (industry.products and prod.code not in industry.products)):
+        raise CatalogError(f"行业包 {industry.code} 不能用于产品 {prod.code}")
     merged = replace(prod, frameworks=tuple(_merged(prod.frameworks, *(m.frameworks for m in mods))),
-                     basis=tuple(_merged(prod.basis, *(m.basis for m in mods))))
+                     basis=tuple(_merged(prod.basis, *(m.basis for m in mods), industry.basis if industry else ())))
     names = tuple(m.name for m in mods)
     chain = []
     for s in prod.chain:
-        extra = "\n".join(m.instructions[s.key] for m in mods if m.instructions.get(s.key))
+        adds = [m.instructions[s.key] for m in mods if m.instructions.get(s.key)]
+        if industry is not None and industry.instructions.get(s.key):
+            adds.append(industry.instructions[s.key])
+        extra = "\n".join(adds)
         extra = render(extra, merged, s.number, names) if extra else ""
         text = render(s.instruction, merged, s.number, names, extra)
         if extra and "module_instructions" not in (_template_vars(s.instruction) or set()):
@@ -667,7 +779,7 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
         outline = _merged(d.outline, *(m.sections.get(prod.code, {}).get(d.code, ()) for m in mods))
         deliverables.append({"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
                              "outline": outline})
-    return {
+    snap: dict[str, Any] = {
         "format": SNAPSHOT_FORMAT,
         "product": prod.code, "product_name": prod.name, "product_version": prod.version,
         "modules": [{"code": m.code, "name": m.name, "version": m.version} for m in mods],
@@ -677,21 +789,30 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
         "maturity_scores": prod.maturity_scores,
         "chain": chain,
         "gates": [_gate_dict(g, prod.code) for g in prod.gates]
-                 + [_gate_dict(g, m.code) for m in mods for g in m.gates],
+                 + [_gate_dict(g, m.code) for m in mods for g in m.gates]
+                 + [_gate_dict(g, industry.code) for g in (industry.gates if industry else ())],
         "card_items": _merged(prod.card_items, *(m.card_items for m in mods)),
         "kb_tags": _merged(*(m.kb_tags for m in mods)),
-        "expert_pending": [x.code for x in (prod, *mods) if x.expert_review != "done"],
+        "expert_pending": [x.code for x in (prod, *mods, *([industry] if industry else []))
+                           if x.expert_review != "done"],
     }
+    if industry is not None:   # 没有行业包时不加这个键，旧快照与原来逐字一致
+        snap["industry"] = {"code": industry.code, "name": industry.name, "version": industry.version,
+                            "level": industry.level, "basis": list(industry.basis), "terms": list(industry.terms),
+                            "roles": list(industry.roles), "threats": list(industry.threats),
+                            "tier_hint": industry.tier_hint}
+    return snap
 
 
-def compose_codes(product_code: str, module_codes: tuple[str, ...] | list[str] = ()) -> dict[str, Any]:
-    """按代号从当前配置合并（立项时用）。"""
+def compose_codes(product_code: str, module_codes: tuple[str, ...] | list[str] = (),
+                  industry: str = "") -> dict[str, Any]:
+    """按代号从当前配置合并（立项时用）；industry 为立项填的行业文字，有适用的行业包就并入（三期）。"""
     cat = catalog()
     prod = product(product_code)
     missing = [c for c in module_codes if c not in cat.modules]
     if missing:
         raise CatalogError(f"没有模块 {'、'.join(missing)}")
-    return compose(prod, [cat.modules[c] for c in module_codes])
+    return compose(prod, [cat.modules[c] for c in module_codes], resolve_industry(cat, industry, prod.code))
 
 
 def check_snapshot(snap: Any) -> dict[str, Any]:
