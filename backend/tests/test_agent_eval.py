@@ -169,7 +169,9 @@ def test_cli_answers_written_outside_prod_only(monkeypatch, tmp_path):
     case = tmp_path / "c.yaml"
     case.write_text("- id: A1\n  agent: compliance-basis\n  prompt: p\n", encoding="utf-8")
 
-    def fake_run(db, user, cases):
+    def fake_run(db, user, cases, timeout=0, on_result=None):
+        r = evalset.CaseResult(id="A1", agent="compliance-basis", product="", kind="redline", passed=True)
+        on_result(r, 1.0, "答案")
         return evalset.Report(total=1, model="m", answers={"A1": "答案"})
     monkeypatch.setattr(evalset, "run", fake_run)
     cli.main(["agent-eval", str(case), "--as", name, "--answers", str(tmp_path / "a")])
@@ -177,3 +179,58 @@ def test_cli_answers_written_outside_prod_only(monkeypatch, tmp_path):
     monkeypatch.setattr(get_settings(), "app_env", "prod")
     cli.main(["agent-eval", str(case), "--as", name, "--answers", str(tmp_path / "b")])
     assert not (tmp_path / "b").exists()
+
+
+def test_progress_callback_and_case_timeout(lib, model, monkeypatch):
+    """每题跑完立即回调（题号、状态、耗时）；单题超过时限记 error「超时」，继续下一题。"""
+    import threading
+    import time
+    username, _ = lib
+    model({"快": "本报告是差距分析。"})
+    real = evalset.call.call
+    release = threading.Event()
+
+    def slow_call(db, code, message, **kw):
+        if "慢" in message:                       # 模拟卡住；放行后也不碰模型，免得遗留线程影响别的测试
+            release.wait(10)
+            raise evalset.call.AgentUnavailable("released")
+        return real(db, code, message, **kw)
+    monkeypatch.setattr(evalset.call, "call", slow_call)
+    cases = [{"id": "T1", "agent": "report-writer", "product": "SOC", "prompt": "慢：写开头"},
+             {"id": "T2", "agent": "report-writer", "product": "SOC", "prompt": "快：写开头"}]
+    seen: list[tuple[str, str, float]] = []
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == username))
+        t0 = time.monotonic()
+        r = evalset.run(db, user, evalset.validate(cases), timeout=1,
+                        on_result=lambda res, secs, text: seen.append((res.id, res.status, secs)))
+    assert time.monotonic() - t0 < 3
+    by = {c.id: c for c in r.results}
+    assert by["T1"].status == "error" and by["T1"].reasons == ["超时（1 秒）"]
+    assert by["T2"].passed
+    assert [s[:2] for s in seen] == [("T1", "error"), ("T2", "ok")] and seen[0][2] >= 1
+    release.set()
+    for t in threading.enumerate():
+        if t.name == "agent-eval-T1":
+            t.join(5)
+
+
+def test_cli_prints_progress_and_writes_answers_per_case(monkeypatch, tmp_path, capsys):
+    from app import cli
+    name = create_user(("consultant",))[0]
+    case = tmp_path / "c.yaml"
+    case.write_text("- id: A1\n  agent: compliance-basis\n  prompt: p\n- id: A2\n  agent: compliance-basis\n  prompt: q\n",
+                    encoding="utf-8")
+    written: list[bool] = []
+
+    def fake_run(db, user, cases, timeout=0, on_result=None):
+        for i, c in enumerate(cases):
+            r = evalset.CaseResult(id=c["id"], agent=c["agent"], product="", kind="redline", passed=True)
+            on_result(r, 0.5, f"答案{i}")
+            written.append((tmp_path / "a" / f"{c['id']}.md").exists())   # 回调里就已落盘
+        return evalset.Report(total=2, model="m", passed=True)
+    monkeypatch.setattr(evalset, "run", fake_run)
+    cli.main(["agent-eval", str(case), "--as", name, "--answers", str(tmp_path / "a"), "--case-timeout", "60"])
+    assert written == [True, True]
+    out = capsys.readouterr().out
+    assert "[1/2] A1 通过" in out and "[2/2] A2 通过" in out

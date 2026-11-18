@@ -768,20 +768,31 @@ def agent_eval(args: argparse.Namespace) -> int:
         if user is None or not user.is_active:
             print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
             return 1
-        rep = evalset.run(db, user, cases)
-    print(evalset.format_report(rep))
+        answers = None
+        if args.answers:
+            if get_settings().is_prod:
+                print("生产环境不写答案原文（--answers 只用于开发、测试环境回放虚拟题目）", file=sys.stderr)
+            else:
+                answers = Path(args.answers)
+                answers.mkdir(parents=True, exist_ok=True)
+        total = len(cases)
+        done = [0]
+
+        def progress(r: evalset.CaseResult, secs: float, text: str) -> None:
+            done[0] += 1
+            mark = "通过" if r.passed else {"demo": "跳过", "error": "出错", "blocked": "拦截"}.get(r.status, "未通过")
+            why = f"：{'；'.join(r.reasons)}" if r.reasons else ""
+            print(f"[{done[0]}/{total}] {r.id} {mark} {secs:.0f} 秒{why}", flush=True)
+            if answers is not None and text:
+                (answers / f"{r.id}.md").write_text(text, encoding="utf-8")
+
+        rep = evalset.run(db, user, cases, timeout=args.case_timeout, on_result=progress)
+    print(evalset.format_report(rep), flush=True)
     if args.out:
         Path(args.out).write_text(json.dumps(rep.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"明细已写到 {args.out}（只有题号、计数和未通过原因，不含答案原文）")
-    if args.answers:
-        if get_settings().is_prod:
-            print("生产环境不写答案原文（--answers 只用于开发、测试环境回放虚拟题目）", file=sys.stderr)
-        else:
-            d = Path(args.answers)
-            d.mkdir(parents=True, exist_ok=True)
-            for cid, text in rep.answers.items():
-                (d / f"{cid}.md").write_text(text, encoding="utf-8")
-            print(f"答案原文已写到 {d}（{len(rep.answers)} 份，虚拟题目回放用，不要提交或外传）")
+    if answers is not None:
+        print(f"答案原文已逐题写到 {answers}（{len(rep.answers)} 份，虚拟题目回放用，不要提交或外传）")
     return 0 if rep.passed else 3
 
 
@@ -965,6 +976,7 @@ def main(argv: list[str] | None = None) -> int:
     ae.add_argument("--product", default="", help="只跑某个产品的题")
     ae.add_argument("--agent", default="", help="只跑某个 Agent 的题")
     ae.add_argument("--out", default="", help="把明细写成 JSON 文件")
+    ae.add_argument("--case-timeout", type=float, default=300, help="单题总耗时上限（秒，默认 300，0 不限）；超时记出错、继续下一题")
     ae.add_argument("--answers", default="", help="把每题答案原文写到目录（<题号>.md，只限开发、测试环境，回放核对用）")
     ae.set_defaults(func=agent_eval)
     lt = sub.add_parser("loadtest-accounts", help="压测账号（只在开发、测试环境）：建或重置 lt-xx 并加入压测项目；--disable 停用")

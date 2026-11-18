@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import dataclasses
 import re
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -24,6 +27,7 @@ import yaml
 from sqlalchemy.orm import Session
 
 from ..core import audit
+from ..core.db import SessionLocal
 from ..kb import citations
 from ..models import User
 from ..project import quality
@@ -160,30 +164,67 @@ def _doc_for(db: Session, case: dict) -> registry.AgentDoc:
     return dataclasses.replace(doc, body=body)
 
 
-def run(db: Session, user: User, cases: list[dict]) -> Report:
+CASE_TIMEOUT = 300   # 秒：单题总耗时上限（模型卡住时不拖住整批）
+
+
+def _ask(user: User, case: dict, timeout: float) -> call.Result:
+    """在独立线程（自带会话）里作答，超过 timeout 秒抛 TimeoutError；卡住的线程是守护线程，不阻止进程退出。"""
+    box: dict = {}
+
+    def work() -> None:
+        try:
+            with SessionLocal() as tdb:
+                box["res"] = call.call(tdb, str(case["agent"]), str(case["prompt"]), actor=user.username,
+                                       doc=_doc_for(tdb, case))
+        except BaseException as e:   # noqa: BLE001 —— 交回主线程按原类型处理
+            box["err"] = e
+    t = threading.Thread(target=work, name=f"agent-eval-{case['id']}", daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        raise TimeoutError
+    if "err" in box:
+        raise box["err"]
+    return box["res"]
+
+
+def _case(case: dict, status: str, reasons: list[str] | None = None) -> CaseResult:
+    return CaseResult(id=str(case["id"]), agent=str(case["agent"]), product=str(case.get("product", "")),
+                      kind=str(case.get("kind", "redline")), status=status, reasons=reasons or [])
+
+
+def run(db: Session, user: User, cases: list[dict], timeout: float = CASE_TIMEOUT,
+        on_result: Callable[[CaseResult, float, str], None] | None = None) -> Report:
+    """逐题作答评分。on_result(结果, 耗时秒, 答案原文) 每题完成立即回调（进度、落盘）；timeout 为单题上限，0 不限。"""
     rep = Report(total=len(cases))
     for case in cases:
+        t0 = time.monotonic()
+        text = ""
         try:
-            doc = _doc_for(db, case)
-            res = call.call(db, str(case["agent"]), str(case["prompt"]), actor=user.username, doc=doc)
+            if timeout:
+                res = _ask(user, case, timeout)
+            else:
+                res = call.call(db, str(case["agent"]), str(case["prompt"]), actor=user.username,
+                                doc=_doc_for(db, case))
+        except TimeoutError:
+            r = _case(case, "error", [f"超时（{timeout:g} 秒）"])
         except gateway.BlockedError:
-            r = CaseResult(id=str(case["id"]), agent=str(case["agent"]), product=str(case.get("product", "")),
-                           kind=str(case.get("kind", "redline")), status="blocked", reasons=["提问被机密级检测拦下"])
+            r = _case(case, "blocked", ["提问被机密级检测拦下"])
         except (gateway.GatewayError, call.AgentUnavailable) as e:
-            r = CaseResult(id=str(case["id"]), agent=str(case["agent"]), product=str(case.get("product", "")),
-                           kind=str(case.get("kind", "redline")), status="error",
-                           reasons=[f"调用失败：{type(e).__name__}"])
+            r = _case(case, "error", [f"调用失败：{type(e).__name__}"])
         else:
             rep.model = res.completion.model
             if res.completion.demo:
                 rep.demo = True
-                r = CaseResult(id=str(case["id"]), agent=str(case["agent"]), product=str(case.get("product", "")),
-                               kind=str(case.get("kind", "redline")), status="demo")
+                r = _case(case, "demo")
             else:
-                r = grade(db, case, res.completion.text)
-                rep.answers[r.id] = res.completion.text
+                text = res.completion.text
+                r = grade(db, case, text)
+                rep.answers[r.id] = text
             r.version = res.version
         rep.results.append(r)
+        if on_result is not None:
+            on_result(r, time.monotonic() - t0, text)
     if rep.demo:
         rep.notes.append("没接模型（演示模式），不判达标")
         return rep
