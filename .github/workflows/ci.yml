@@ -332,8 +332,14 @@ jobs:
           pip install bandit==1.9.4
           bandit -q -r backend/app -ll
 
-      - name: 前端依赖漏洞扫描（npm audit）
+      - name: 前端依赖漏洞扫描（npm audit，生产依赖，阻断）
         working-directory: frontend
+        run: npm audit --omit=dev
+
+      # 构建工具链（vite 等开发依赖）只告警不阻断：上游尚无修复版本时不卡合并（决策记录 2026-11-18）。
+      - name: 前端依赖漏洞扫描（npm audit，含开发依赖，只告警）
+        working-directory: frontend
+        continue-on-error: true
         run: npm audit
 
       - name: 密钥泄露扫描（gitleaks，全部提交历史）
