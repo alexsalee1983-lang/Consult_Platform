@@ -214,6 +214,11 @@ Agent 经工具 `project.evidence` 读证据。
 严格档（M4 ④b）读摘要卡 S-xx 起草、提示加 `STRICT_RULES`（标 `[S-xx]`、只用占位符），没有摘要卡发“证据不足”卡，输出不过占位符检查的本步失败、不保存；要写的 D3 / D4 已签署 422，同一项目同时只能有一个未结束的运行（409）；取消和 worker 改运行状态都先锁行再判断，模型返回后、写入前再看一次状态，已取消就不写；最后一步的卡处理完直接结束。
 接口 `/api/projects/{code}/runs`。
 审计只记编号、步骤、字数和用量。
+运行记录带配置哈希 `agent_runs.config_sha`（`runs.config_sha`：配置快照、各步 md 版本和模型档、各档模型名），同一哈希的运行可以比较效果（4A v4.0 §7.2，迁移 0038）。
+
+判断数据埋点约定（4A v4.0 §7.2，决策记录 2026-11-18）：只经 `app/project/judgment.py` 写 `judgment_events`（迁移 0038）：顾问改了 Agent 写的章节记改稿幅度（1 − 相似度，分 light / moderate / heavy），处理确认卡记类别、选项数、是否按推荐、是否写意见；不记正文、标题、选项文字和意见。
+`JUDGMENT_CAPTURE` 默认关（客户项目内部信息等法务意见），关闭时什么也不写；项目删除时一并删除。
+立项可选组织类型 `org_type`（`configs.ORG_TYPES`：央企、地方国企、民营企业、外资企业、政府机关、事业单位、其他），网页 `org_type`、命令行 `--org-type`；差距分析解析出的每条差距由平台按顺序编 F-01…（`assessment.parse` 的 `fid`），Agent 写的编号照旧保留。
 
 自动推进约定（二期 C5，决策记录 2026-11-15）：交付链自动发起、自动质量评审、门禁通过自动提交签署只经 `app/project/autoflow.py`（`AUTO_FLOW`，默认开；测试默认关，`tests/test_autoflow.py` 里打开）。
 worker 每小时 `scan_runs`：没跑过交付链、交付件还没有正文、证据齐（标准档有可用证据且文件都已解析，严格档有有效同意和摘要卡）且 `AUTO_RUN_QUIET_HOURS` 内没有新证据的项目，以最近一条证据的录入人（不是成员时用项目经理）发起，发起前用 `runs.preflight` 检查、不写拒绝审计；`scan_reviews`：起草中、每章有正文、没有未结束的运行、当前修订没评审过，最后写入是 Agent（交付链结束时也立即查）或顾问修改后闲置 `AUTO_REVIEW_IDLE_HOURS`，以最后写入的人发起；评审完成门禁通过时自动提交，提交人记 `platform`。

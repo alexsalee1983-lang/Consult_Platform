@@ -54,7 +54,7 @@ from ..models import (
     User,
 )
 from ..services import guard, jobs, storage
-from . import retention
+from . import judgment, retention
 
 JOB_KIND = "project.delete"
 PLATFORM = "platform"
@@ -278,6 +278,7 @@ def purge(db: Session, p: Project) -> dict:
     counts["sign_offs"] = drop(SignOff, SignOff.project_id == pid)
     counts["quality_reviews"] = drop(QualityReview, QualityReview.project_id == pid)
     counts["confirmations"] = drop(Confirmation, Confirmation.project_id == pid)
+    judgment.delete_for_project(db, pid)
     dels = select(Deliverable.id).where(Deliverable.project_id == pid)
     secs = select(DeliverableSection.id).where(DeliverableSection.deliverable_id.in_(dels))
     counts["signed_deliverables"] = db.scalar(select(func.count()).select_from(Deliverable)
