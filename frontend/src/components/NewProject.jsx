@@ -5,13 +5,16 @@ import { useAuth } from "../auth.jsx";
 
 // 立项行业下拉（负责人 11-16）；产品配置 industry_basis 的键对上任一部分即加权（app/agents/tools.py），新增行业在这里加
 const INDUSTRIES = ["银行/金融", "电力", "制造", "政府", "其他"];
+// 组织类型（可不填），取值同 app/project/configs.py ORG_TYPES；经验和评测按组织类型分层
+const ORG_TYPES = [["central_soe", "央企"], ["local_soe", "地方国企"], ["private", "民营企业"], ["foreign", "外资企业"],
+  ["government", "政府机关"], ["institution", "事业单位"], ["other", "其他"]];
 
 // 网页立项（二期 A3）：项目负责人选产品、勾模块、定档、指定首位项目经理（默认本人）。规则见 app/project/configs.py
 export default function NewProject({ onClose }) {
   const { user } = useAuth();
   const nav = useNavigate();
   const [products, setProducts] = useState(null);
-  const [f, setF] = useState({ code: "", product: "", modules: [], tier: "", manager: "", industry: "", weeks: 12 });
+  const [f, setF] = useState({ code: "", product: "", modules: [], tier: "", manager: "", industry: "", org_type: "", weeks: 12 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -52,14 +55,14 @@ export default function NewProject({ onClose }) {
       <label className="sub">服务产品
         <select className="inp" value={f.product} onChange={(e) => setF({ ...f, product: e.target.value, modules: [] })}>
           {(products || []).map((p) => <option key={p.code} value={p.code} disabled={!p.ready}>
-            {p.code} · {p.name}{p.ready ? "" : "（筹备中）"}</option>)}
+            {p.code} · {p.name}{p.ready ? (p.expert_review === "done" ? "" : "（公开方法版，待专家复核）") : "（筹备中）"}</option>)}
         </select>
       </label>
       {prod && prod.modules.length > 0 && (
         <div className="sub" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span>附加模块（可不选）</span>
           {prod.modules.map((m) => (
-            <label key={m.code} className="row"><input type="checkbox" checked={f.modules.includes(m.code)} onChange={() => toggle(m.code)} />{m.name}</label>
+            <label key={m.code} className="row"><input type="checkbox" checked={f.modules.includes(m.code)} onChange={() => toggle(m.code)} />{m.name}{m.expert_review === "done" ? "" : "（待专家复核）"}</label>
           ))}
         </div>
       )}
@@ -77,6 +80,12 @@ export default function NewProject({ onClose }) {
           <select className="inp" value={f.industry} onChange={set("industry")}>
             <option value="">请选择</option>
             {INDUSTRIES.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </label>
+        <label className="sub">组织类型
+          <select className="inp" value={f.org_type} onChange={set("org_type")}>
+            <option value="">不填</option>
+            {ORG_TYPES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </label>
         <label className="sub">计划周数<input className="inp" type="number" min={1} max={104} value={f.weeks} onChange={set("weeks")} /></label>

@@ -58,6 +58,7 @@ def _dnum(code: str) -> int:
 def _out(db: Session, p: Project, cls=ProjectOut):
     data = cls.model_validate(p, from_attributes=True)
     data.phase_name = PHASES[p.phase] if 0 <= p.phase < len(PHASES) else ""
+    data.org_type_name = configs.ORG_TYPES.get(p.org_type or "", "")
     _retention(data, p)
     _product(db, data, p)
     data.open_confirmations = sum(1 for c in p.confirmations if c.status == "open")
@@ -101,6 +102,7 @@ class ProjectIn(BaseModel):
     manager: str = Field(default="", max_length=64)     # 空 = 立项人本人
     industry: str = Field(min_length=1, max_length=32, pattern=r"\S")   # 网页立项必填（命令行 create-project 仍可选）
     weeks: int = 12
+    org_type: str = Field(default="", max_length=16)   # 组织类型，可空（configs.ORG_TYPES）
 
 
 @router.get("/catalog/products")
@@ -119,7 +121,8 @@ def create_project(body: ProjectIn, db: Session = Depends(get_db), user: User = 
     manager = db.scalar(select(User).where(User.username == name))
     try:
         p = configs.create(db, actor=user.username, code=body.code, tier=body.tier, manager=manager,
-                           product=body.product, modules=body.modules, industry=body.industry, weeks=body.weeks)
+                           product=body.product, modules=body.modules, industry=body.industry, weeks=body.weeks,
+                           org_type=body.org_type)
     except configs.CreateError as e:
         audit.record(db, actor=user.username, action="project.create", result="denied", status=e.status)
         raise HTTPException(e.status, str(e)) from None

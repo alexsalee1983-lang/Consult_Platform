@@ -1,27 +1,46 @@
-# ISO/IEC 27001 信息安全管理体系建设与认证准备（二期 D1，草稿：交付件结构、提示词待产品专家核对，负责人同意后改 ready）
+# ISO/IEC 27001 信息安全管理体系建设与认证准备（二期 D1，公开方法版 v0，负责人 2026-11-18 同意定稿为 ready，待专家复核）
 # 格式见 docs/接口约定.md 第二节。资质边界：只做差距分析、认证准备、整改建议，不出具或暗示认证结论。
 code: ISO
 name: ISO 27001 信息安全管理体系建设
 domain: GOV
-status: draft
+status: ready
+expert_review: pending   # 公开方法版 v0，待专家复核
 modules: [DJBH, HYJG]
 deliverables:
 - code: D1
   title: 启动包
   stage: 启动
   client_facing: true
+  outline:
+  - 项目范围与目标
+  - 评估方法与依据
+  - 工作计划
+  - 沟通与保密机制
 - code: D2
   title: 调研包
   stage: 调研
   client_facing: true
+  outline:
+  - 调研范围与受访角色
+  - 访谈提纲
+  - 资料清单
+  - 现场工作安排
 - code: D3
   title: 事实清单
   stage: 调研
   client_facing: false
+  outline:
+  - 已确认事实（按评估域）
+  - 待补证据与矛盾点
 - code: D4
   title: 差距分析报告
   stage: 分析
   client_facing: true
+  outline:
+  - 评估范围与方法
+  - 体系条款差距
+  - 附录 A 控制差距
+  - 风险与整改建议方向
 - code: D5
   title: 风险评估与处置计划
   stage: 设计
@@ -35,14 +54,34 @@ deliverables:
   title: ISMS 文件包
   stage: 设计
   client_facing: true
+  outline:
+  - 信息安全方针
+  - 体系范围说明
+  - 风险评估与处置程序
+  - 适用性声明
+  - 文件化信息控制程序
+  - 内部审核程序
+  - 管理评审程序
+  - 纠正措施程序
 - code: D7
   title: 实施与认证准备路线图
   stage: 落地辅导
   client_facing: true
+  outline:
+  - 体系建设阶段
+  - 试运行
+  - 内部审核与管理评审
+  - 认证准备
+  - 里程碑与前置条件
 - code: D8
   title: 高层汇报
   stage: 验收
   client_facing: true
+  outline:
+  - 现状与差距
+  - 风险处置重点
+  - 认证准备路线图
+  - 需要管理层决策的事项
 baseline:
   domains:
   - 体系范围与领导作用

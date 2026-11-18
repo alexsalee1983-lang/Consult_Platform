@@ -9,6 +9,7 @@ from .conversation import Conversation, Message
 from .deliverable import DeliverableSection, SectionVersion
 from .evidence import Evidence, ProjectDocument
 from .job import Job
+from .judgment import JudgmentEvent
 from .kb import KbChunk, KbDeidReport, KbItem, KbMapping, KbReview, KbUpload, KbVersion
 from .project import Confirmation, Deliverable, Project, ProjectConfig, ProjectDeletion
 from .quality import QualityReview, ReviewWaiver, SignOff
@@ -17,6 +18,6 @@ from .run import AgentRun, AgentRunStep
 from .usage import LlmUsage
 from .user import User
 
-__all__ = ["Agent", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "Job", "KbChunk", "KbDeidReport", "KbItem", "KbMapping", "KbReview",
+__all__ = ["Agent", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "Job", "JudgmentEvent", "KbChunk", "KbDeidReport", "KbItem", "KbMapping", "KbReview",
            "KbUpload", "KbVersion", "LlmUsage",
            "Message", "Project", "ProjectConfig", "ProjectConsent", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityReview", "ReviewWaiver", "Role", "SectionVersion", "SignOff", "SummaryCard", "Tool", "User", "UserRole"]

@@ -26,6 +26,7 @@ class AgentRun(Base):
     waiting_cards: Mapped[list] = mapped_column(JSON, default=list)      # 等顾问处理的确认卡编号
     card_ids: Mapped[list] = mapped_column(JSON, default=list)           # 本次运行发过的全部确认卡
     error: Mapped[str] = mapped_column(String(200), default="")          # 失败原因（不含客户原文）
+    config_sha: Mapped[str] = mapped_column(String(64), server_default="")  # 发起时的配置哈希（迁移 0038，runs.config_sha）
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
