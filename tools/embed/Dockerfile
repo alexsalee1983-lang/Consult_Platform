@@ -19,13 +19,14 @@ ARG EMBED_MODEL=BAAI/bge-small-zh-v1.5
 COPY requirements.txt .
 RUN pip install -i ${PIP_INDEX_URL} -r requirements.txt
 ENV FASTEMBED_CACHE_PATH=/models EMBED_MODEL=${EMBED_MODEL}
+COPY loader.py .
 # 下载有超时：连不上时报错退出，不会无声地一直卡住
 RUN if [ -n "${HTTPS_PROXY}" ]; then p="已设置"; else p="未设置"; fi && \
     echo "正在下载向量模型 ${EMBED_MODEL}（来源 ${HF_ENDPOINT}，代理：${p}；不打印代理地址）" && \
     export http_proxy="${HTTP_PROXY}" https_proxy="${HTTPS_PROXY}" no_proxy="${NO_PROXY}" \
            HF_HUB_DOWNLOAD_TIMEOUT=60 HF_HUB_ETAG_TIMEOUT=30 HF_ENDPOINT="${HF_ENDPOINT}" && \
-    timeout 1200 python -c "import os; from fastembed import TextEmbedding; \
-m = TextEmbedding(os.environ['EMBED_MODEL'], cache_dir='/models'); \
+    timeout 1200 python -c "import os; from loader import load; \
+m = load(os.environ['EMBED_MODEL']); \
 v = list(m.embed(['安全运营中心值班制度']))[0]; print('model ready, dim', len(v))"
 COPY app.py .
 RUN useradd -r -u 10001 app && chmod -R a+rX /models

@@ -86,6 +86,22 @@ services:
     image: consult-platform-embed:bge-small-zh-v1.5
     restart: unless-stopped
 
+  embed-m3:
+    logging: *default-logging
+    # 候选向量模型 BAAI/bge-m3（1024 维，约 2.3 GB），只给向量模型对比评测用（决策记录 2026-11-18），后端不连它：
+    # docker compose --profile embed-compare up -d --build embed-m3
+    # docker compose exec backend python -m app.cli kb-eval <题目.yaml> --as <用户> --embed-compare \
+    #   --b-url http://embed-m3:8000/v1 --b-model BAAI/bge-m3 --b-dim 1024
+    profiles: ["embed-compare"]
+    build:
+      context: ./tools/embed
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+        HF_ENDPOINT: ${HF_ENDPOINT:-https://huggingface.co}
+        EMBED_MODEL: BAAI/bge-m3
+    image: consult-platform-embed:bge-m3
+    restart: "no"
+
   rerank:
     logging: *default-logging
     # 重排服务（决策记录 2026-11-11）：CPU 上运行交叉编码重排模型 bge-reranker-v2-m3（默认 int8 量化版，约 0.6 GB），
