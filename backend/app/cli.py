@@ -743,6 +743,38 @@ def kb_draft(args: argparse.Namespace) -> int:
     return 0
 
 
+def agent_eval(args: argparse.Namespace) -> int:
+    import json
+    from pathlib import Path
+
+    from .agents import evalset
+
+    paths = sorted(Path(args.path).glob("*.yaml")) if Path(args.path).is_dir() else [Path(args.path)]
+    try:
+        cases = evalset.validate([c for p in paths for c in evalset.load(p)])
+    except evalset.EvalError as e:
+        print(f"评测集有问题：{e}", file=sys.stderr)
+        return 1
+    if args.product:
+        cases = [c for c in cases if c.get("product", "") == args.product]
+    if args.agent:
+        cases = [c for c in cases if c["agent"] == args.agent]
+    if not cases:
+        print("没有符合条件的题目", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == args.as_user))
+        if user is None or not user.is_active:
+            print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
+            return 1
+        rep = evalset.run(db, user, cases)
+    print(evalset.format_report(rep))
+    if args.out:
+        Path(args.out).write_text(json.dumps(rep.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"明细已写到 {args.out}（只有题号、计数和未通过原因，不含答案原文）")
+    return 0 if rep.passed else 3
+
+
 def kb_eval(args: argparse.Namespace) -> int:
     import json
     from pathlib import Path
@@ -899,6 +931,13 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("--sweep", action="store_true",
                     help="门槛校准：按题目算依据查询、知识检索各个重排门槛下的准确率，给出推荐值（只出报告，不改配置）")
     ke.set_defaults(func=kb_eval)
+    ae = sub.add_parser("agent-eval", help="Agent 评测（二期 C4）：红线用例、黄金样例要点、埋雷，全部通过时退出码 0")
+    ae.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
+    ae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份调用（记用量）")
+    ae.add_argument("--product", default="", help="只跑某个产品的题")
+    ae.add_argument("--agent", default="", help="只跑某个 Agent 的题")
+    ae.add_argument("--out", default="", help="把明细写成 JSON 文件")
+    ae.set_defaults(func=agent_eval)
     lt = sub.add_parser("loadtest-accounts", help="压测账号（只在开发、测试环境）：建或重置 lt-xx 并加入压测项目；--disable 停用")
     lt.add_argument("--count", type=int, default=20)
     lt.add_argument("--project", default="LOAD-A")

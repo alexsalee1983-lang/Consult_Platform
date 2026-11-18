@@ -161,6 +161,7 @@ md 的 `tools` 只写平台工具名（`registry.TOOL_NAMES`），与迁移写�
 达标 = 用知识库准确率 ≥ `KB_EVAL_MIN_ACCURACY`（0.9）、编造 0 次、不低于不用知识库；结果写审计 `kb.eval_compare`（只记计数和是否达标）。
 `KB_EVAL_GATE` 开启时最近一次未达标即暂停 B10、B11 自动发布（`autopublish.suspended` → `compare.gate_reason`），再跑一次达标恢复；演示模式不判达标、不记审计。
 门槛校准（v0.2 关口）只经 `app/kb/sweep.py`（`kb-eval <题目.yaml> --as <用户> --sweep`）：每题以门槛 0 经网关重排检索一次，本地按各候选门槛筛选，算依据查询（`KB_BASIS_MIN_RERANK`）和知识检索（`KB_SEARCH_MIN_RERANK`）的准确率、负例误命中、正例漏掉，给推荐值（最优区间含现值则保持）；只出报告、不改配置，由负责人定；审计 `kb.eval_sweep` 只记题数、计数、准确率和推荐值。
+Agent 评测（二期 C4）只经 `app/agents/evalset.py`（`python -m app.cli agent-eval knowledge/eval/agents --as <用户> [--product SOC]`）：评测集每个产品一份 YAML，题型 redline / golden / mine（埋雷，评审 Agent 要挑出来），每题按产品裁剪 md、经 `call.call()` 作答，自动查资质边界用语和编造条款号为 0，再按 must / must_not / points 核对；演示模式不判达标；审计 `agent.eval` 只记计数和模型，不记题目和答案；换模型、改 md 前后各跑一次，不退化才发布。
 
 分库约定（M5 ③）：知识区表（`kb_` 开头）在单独的库 `KB_DATABASE_URL`（compose 为 `consult_kb`，账号 `consult_kb` 非超级用户、连不上主库；不配则同库，生产不分库拒绝启动）。
 会话按 `KbBase` 自动把知识区读写发往知识区库；原生 SQL 查知识区表要带 `bind_arguments=KB_BIND`，知识区和主库的表不能 JOIN、不能建跨库外键，一次提交跨两库不是原子的。
