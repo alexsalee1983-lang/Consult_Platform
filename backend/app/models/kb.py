@@ -179,6 +179,9 @@ class KbUpload(KbBase):
     parsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 去标识通过或退回后，原件和未去标识的解析结果从对象存储删除（迁移 0013）
     raw_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 来源项目代号（知识区迁移 k0009，二期 P16）：项目沉淀投料时由项目成员选填，删除确认页据此预填经验回流投料编号；
+    # 主库与知识区分库，不建外键；投料列表、详情不返回
+    source_project: Mapped[str] = mapped_column(String(32), default="", index=True)
 
 
 class KbDeidReport(KbBase):

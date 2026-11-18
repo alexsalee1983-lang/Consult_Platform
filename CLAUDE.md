@@ -237,6 +237,7 @@ Agent 经 `project.evidence` 读摘要卡（严格档返回 S-xx，不新增工�
 删除约定（M4 ②）：项目资料删除只经 `app/project/deletion.py`（决策记录 2026-11-13）。
 到期由 worker 每小时扫描自动发起（`requested_by=platform`，也可 `python -m app.cli deletion-scan`）；客户书面要求提前删除由项目经理发起（`POST /api/projects/{code}/deletions`，写文号不写客户名，10 个工作日内完成，周一至周五计，不含节假日）；都由项目负责人确认（`/api/deletions`，不必是成员，不能是发起人），提前删除可由负责人写理由撤销，到期申请不能撤销。
 确认时必选经验回流情况（已回流填投料编号 / 无可回流 / 客户不同意回流），项目经理可标记“客户不同意回流”（`PUT /api/projects/{code}/flowback`），标记后只能选客户不同意；回流不阻断删除。
+经验回流预填（二期 P16）：投料时项目成员可选填来源项目（`POST /api/kb/intake` 的 `project`，非成员 404，存 `kb_uploads.source_project`，知识区迁移 k0009，投料接口不返回），待确认的删除申请带 `flowback_suggested`（该项目去标识已通过的投料编号，标了客户不同意回流的为空），确认页据此预填，负责人核对后确认。
 确认后后台任务 `project.delete` 删对象存储 `{code}/` 下全部文件和证据、资料、交付件（含已签署）及章节版本、评审、签署、确认卡、对话、运行和成员关系，项目行保留（代号不复用、所有项目接口 404）；完成后的申请就是可交给客户的删除记录（只有编号、日期、计数、确认人和回流情况）。
 审计只记编号、日期和计数，不记文号和内容。
 运维 `python -m app.cli deletion-report [--all]`。

@@ -14,7 +14,7 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from ..core.auth import current_user
 from ..core.db import get_db
@@ -42,6 +42,7 @@ class DeletionOut(BaseModel):
     flowback: str
     flowback_refs: list[int]
     flowback_allowed: bool
+    flowback_suggested: list[int] = []     # 待确认时预填的投料编号（二期 P16）
     cancelled_by: str
     cancel_reason: str
     completed_at: datetime | None
@@ -78,7 +79,9 @@ def _out(d: ProjectDeletion, cls=DeletionOut):
                overdue=d.status in svc.OPEN and date.today() > d.due_by, confirmed_by=d.confirmed_by,
                confirmed_at=d.confirmed_at, flowback=d.flowback, flowback_refs=d.flowback_refs or [],
                flowback_allowed=p.flowback_allowed, cancelled_by=d.cancelled_by, cancel_reason=d.cancel_reason,
-               completed_at=d.completed_at, counts=d.counts or {})
+               completed_at=d.completed_at, counts=d.counts or {},
+               flowback_suggested=(svc.flowback_suggested(object_session(d), p)
+                                   if d.status == svc.PENDING else []))
 
 
 def _err(e: svc.DeletionError):
