@@ -7,6 +7,15 @@ from pathlib import Path
 import pyotp
 import pytest
 
+# 测试环境隔离：容器或测试机 .env 的配置不漏进测试——先清掉所有对应 Settings 字段的环境变量、不读 .env 文件，
+# 下面再只设测试需要的值（tests/test_env_isolation.py）
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app.core.config import Settings  # noqa: E402
+from tests.envguard import clean_settings_env  # noqa: E402
+
+Settings.model_config["env_file"] = None
+clean_settings_env(os.environ)
+
 # 数据库：设了 TEST_DATABASE_URL（CI 用平台数据库镜像，含 pgvector + zhparser）就用 PostgreSQL，
 # 每次运行前清空 public 模式；否则用本地 SQLite 文件快速跑（中文全文检索等 PostgreSQL 专属测试会跳过）。
 # 会话用内存，不依赖 Redis；不配置模型地址，走演示回复。
@@ -68,7 +77,6 @@ os.environ["TEST_ACCOUNT_PASSWORD"] = TEST_PASSWORD
 os.environ["TEST_ACCOUNT_TOTP_SECRET"] = TEST_TOTP_SECRET
 for k in ("BOOTSTRAP_ADMIN_USERNAME", "BOOTSTRAP_ADMIN_PASSWORD", "BOOTSTRAP_ADMIN_TOTP_SECRET"):
     os.environ.pop(k, None)
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 on_s3 = pytest.mark.skipif(not os.environ.get("TEST_S3_ENDPOINT"), reason="需要对象存储（设置 TEST_S3_ENDPOINT）")
