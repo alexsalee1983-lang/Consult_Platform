@@ -320,6 +320,18 @@ def _run(payload: dict, ctx: jobs.JobContext) -> None:
 
 # ---- 回流标记、查询与删除记录 ----
 
+def flowback_suggested(db: Session, p: Project) -> list[int]:
+    """经验回流预填（二期 P16）：来源项目是本项目、去标识已通过的投料编号，供负责人确认时预填。
+
+    项目标了“客户不同意回流”的不预填；投料在知识区库，只按代号查，不跨库 JOIN。
+    """
+    if not p.flowback_allowed:
+        return []
+    return sorted(db.scalars(select(KbUpload.id).where(KbUpload.source_project == p.code,
+                                                       KbUpload.status == "deid_passed")
+                             .limit(MAX_FLOWBACK_REFS)))
+
+
 def set_flowback_allowed(db: Session, user: User, p: Project, allowed: bool) -> Project:
     action = "project.flowback"
     m = membership(db, p.id, user.id)

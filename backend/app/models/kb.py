@@ -38,6 +38,8 @@ class KbItem(KbBase):
     industries: Mapped[list] = mapped_column(JSON, default=list)               # 通用 / 银行 / 电力……
     # 检索加权标签（二期 B2，知识区迁移 k0002）：项目勾选的模块声明 kb_tags，带同名标签的条目检索时加权
     tags: Mapped[list] = mapped_column(JSON, default=list)
+    # 公司控制项编号（4A 埋点，知识区迁移 k0008）：条目级，同 tags 不进版本、不走审核；控制项中枢 v1 之前只记不用
+    control_ids: Mapped[list] = mapped_column(JSON, default=list)
     classification: Mapped[str] = mapped_column(String(16), default="internal")  # internal / restricted
     visible_roles: Mapped[list] = mapped_column(JSON, default=_default_visible_roles)
     owner: Mapped[str] = mapped_column(String(64), default="")                 # 专家负责人（用户名）
@@ -177,6 +179,9 @@ class KbUpload(KbBase):
     parsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 去标识通过或退回后，原件和未去标识的解析结果从对象存储删除（迁移 0013）
     raw_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 来源项目代号（知识区迁移 k0009，二期 P16）：项目沉淀投料时由项目成员选填，删除确认页据此预填经验回流投料编号；
+    # 主库与知识区分库，不建外键；投料列表、详情不返回
+    source_project: Mapped[str] = mapped_column(String(32), default="", index=True)
 
 
 class KbDeidReport(KbBase):

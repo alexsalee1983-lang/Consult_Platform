@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -29,12 +30,14 @@ class ItemMeta:
     visible_roles: list[str] = field(default_factory=lambda: ["consultant", "admin"])
     owner: str = ""
     tags: list[str] = field(default_factory=list)   # 检索加权标签（二期 B2），对应模块配置的 kb_tags
+    control_ids: list[str] = field(default_factory=list)   # 公司控制项编号（4A 埋点，k0008）
 
     def check(self) -> None:
         meta.check_classification(self.layer, self.domain, self.product, self.doc_type)
         meta.check_tags(self.stage, self.capabilities, self.industries)
         meta.check_visibility(self.classification, self.visible_roles)
         self.tags = check_search_tags(self.tags)
+        self.control_ids = check_control_ids(self.control_ids)
 
 
 SEARCH_TAGS_MAX, SEARCH_TAG_LEN = 10, 20
@@ -45,6 +48,18 @@ def check_search_tags(tags: list[str]) -> list[str]:
     out = list(dict.fromkeys(str(t).strip() for t in tags or [] if str(t).strip()))
     if len(out) > SEARCH_TAGS_MAX or any(len(t) > SEARCH_TAG_LEN for t in out):
         raise meta.MetaError(f"检索标签至多 {SEARCH_TAGS_MAX} 个、每个至多 {SEARCH_TAG_LEN} 字")
+    return out
+
+
+CONTROL_IDS_MAX = 20
+CONTROL_ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{0,31}$")
+
+
+def check_control_ids(ids: list[str]) -> list[str]:
+    """公司控制项编号：去空白、转大写、去重，至多 20 个，字母数字和 . _ -、至多 32 位。返回规整后的列表。"""
+    out = list(dict.fromkeys(str(t).strip().upper() for t in ids or [] if str(t).strip()))
+    if len(out) > CONTROL_IDS_MAX or not all(CONTROL_ID_RE.match(t) for t in out):
+        raise meta.MetaError(f"控制项编号至多 {CONTROL_IDS_MAX} 个，只用字母、数字和 . _ -，每个至多 32 位")
     return out
 
 
@@ -109,7 +124,7 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
         item = KbItem(doc_id=next_doc_id(db, m), layer=m.layer, domain=m.domain, product=m.product,
                       doc_type=m.doc_type, stage=m.stage, capabilities=list(m.capabilities),
                       industries=list(m.industries), classification=m.classification,
-                      visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags),
+                      visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags), control_ids=list(m.control_ids),
                       created_by=created_by)
         db.add(item)
         try:

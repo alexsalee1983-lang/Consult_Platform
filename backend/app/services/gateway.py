@@ -490,27 +490,30 @@ def _embed_headers() -> dict:
     return {"Authorization": f"Bearer {key}"} if key else {}
 
 
-def embed(texts: list[str]) -> Embedding:
-    """把文本转成向量。每条先过机密级检测（命中抛 BlockedError，不发出）；返回维度必须是 EMBED_DIM。"""
+def embed(texts: list[str], *, base_url: str = "", model: str = "", dim: int = 0, api_key: str = "") -> Embedding:
+    """把文本转成向量。每条先过机密级检测（命中抛 BlockedError，不发出）；返回维度必须是 EMBED_DIM。
+    base_url / model / dim / api_key 只给向量模型对比评测（app/kb/embed_compare.py）换候选模型用，不传照旧按配置。"""
     s = get_settings()
-    if not s.embed_base_url:
+    url = base_url or s.embed_base_url
+    if not url:
         raise EmbeddingDisabled("向量服务未配置（EMBED_BASE_URL）")
+    model, want = model or s.embed_model, dim or EMBED_DIM
+    headers = ({"Authorization": f"Bearer {api_key}"} if api_key else {}) if base_url else _embed_headers()
     for t in texts:
         result = check(t)
         if result.blocked:
             raise BlockedError(result)
-    payload = {"model": s.embed_model, "input": texts}
+    payload = {"model": model, "input": texts}
     with _client() as client:
-        resp, attempts = _send(client, payload, stream=False, url=s.embed_base_url.rstrip("/") + "/embeddings",
-                               headers=_embed_headers())
+        resp, attempts = _send(client, payload, stream=False, url=url.rstrip("/") + "/embeddings", headers=headers)
         try:
             data = sorted(resp.json()["data"], key=lambda d: d["index"])
             vectors = [[float(x) for x in d["embedding"]] for d in data]
         except (ValueError, KeyError, TypeError) as e:
             raise GatewayError("向量服务返回的结果无法解析", attempts) from e
-    if len(vectors) != len(texts) or any(len(v) != EMBED_DIM for v in vectors):
-        raise GatewayError(f"向量维度或条数不对（期望 {EMBED_DIM} 维），需检查 EMBED_MODEL 或做迁移", attempts)
-    return Embedding(vectors=vectors, model=s.embed_model, attempts=attempts)
+    if len(vectors) != len(texts) or any(len(v) != want for v in vectors):
+        raise GatewayError(f"向量维度或条数不对（期望 {want} 维），需检查 EMBED_MODEL 或做迁移", attempts)
+    return Embedding(vectors=vectors, model=model, attempts=attempts)
 
 
 def embed_availability() -> str:

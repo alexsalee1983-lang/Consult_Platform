@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal, utcnow
 from app.main import app
 from app.models import AgentRun, AuditLog, Job, Project, QualityReview, SignOff
-from app.project import autoflow, deliverables
+from app.project import autoflow, deliverables, quality
 from app.services import gateway
 
 from . import test_quality as tq
@@ -88,8 +88,9 @@ def test_auto_start_once_after_quiet_then_reviews_chain_output(chain_model):
     assert set(_triggers(code, "quality.request")) == {autoflow.RULE_REVIEW_CHAIN}
 
 
-def test_idle_review_then_gate_passes_auto_submit(review_model):
+def test_idle_review_then_gate_passes_auto_submit(review_model, monkeypatch):
     _, code, member, manager = review_model
+    monkeypatch.setattr(get_settings(), "auto_submit_deliverables", "D4")   # 把 D4 调到 L3 才自动提交
     tq._draft(member, code)
     with SessionLocal() as db:
         p = _project(db, code)
@@ -109,6 +110,25 @@ def test_idle_review_then_gate_passes_auto_submit(review_model):
     assert _triggers(code, "deliverable.submit") == [autoflow.RULE_SUBMIT]
     r = manager.post(tq._url(code, "signoff/sign"), json={"comment": "同意"})          # 签署仍由项目经理
     assert r.status_code == 200 and r.json()["status"] == "signed", r.text
+
+
+def test_l2_deliverable_not_auto_submitted(review_model):
+    """决策记录 2026-11-18：D3、D4、D5、D7 为 L2，门禁通过也不自动提交，由顾问看过标出的问题后提交。"""
+    _, code, member, _ = review_model
+    assert set(autoflow.auto_submit_codes()) == {"D1", "D2", "D6", "D8"}
+    tq._draft(member, code)
+    with SessionLocal() as db:
+        p = _project(db, code)
+        assert autoflow.scan_reviews(db, p, now=utcnow() + timedelta(hours=25)) == [f"{code}/D4"]
+    tq._work()
+    with SessionLocal() as db:
+        p = _project(db, code)
+        d = deliverables.get_deliverable(db, p, "D4")
+        assert d.status == "drafting" and quality.gate(db, d).ok                     # 门禁通过但不提交
+        assert db.scalar(select(SignOff).where(SignOff.deliverable_id == d.id)) is None
+    assert _triggers(code, "deliverable.submit") == []
+    r = member.post(tq._url(code, "signoff/submit"), json={"comment": "看过标出的问题"})
+    assert r.status_code == 200 and r.json()["status"] == "review", r.text
 
 
 def test_blocked_review_not_submitted_and_switch_off(review_model, monkeypatch):

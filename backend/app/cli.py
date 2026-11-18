@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import os
 import re
 import sys
 
@@ -747,7 +748,8 @@ def kb_eval(args: argparse.Namespace) -> int:
     import json
     from pathlib import Path
 
-    from .kb import evaluate
+    from .kb import embed_compare, evaluate
+    from .services import gateway
 
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.username == args.as_user))
@@ -756,7 +758,10 @@ def kb_eval(args: argparse.Namespace) -> int:
             return 1
         try:
             questions = evaluate.load_questions(Path(args.questions))
-            if args.sweep:
+            if args.embed_compare:
+                emb = embed_compare.run(db, user, questions, b_url=args.b_url, b_model=args.b_model,
+                                        b_dim=args.b_dim, b_key=os.environ.get("EMBED_B_API_KEY", ""))
+            elif args.sweep:
                 from .kb import sweep
 
                 swp = sweep.run(db, user, questions)
@@ -769,6 +774,15 @@ def kb_eval(args: argparse.Namespace) -> int:
         except (evaluate.EvalError, ValueError) as e:
             print(f"题目文件有问题：{e}", file=sys.stderr)
             return 1
+        except (embed_compare.EmbedCompareError, gateway.GatewayError, gateway.BlockedError) as e:
+            print(f"向量模型对比没有完成：{e}", file=sys.stderr)
+            return 1
+    if args.embed_compare:
+        print(embed_compare.format_report(emb))
+        if args.out:
+            Path(args.out).write_text(json.dumps(emb.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"明细已写到 {args.out}（只有题号、名次和指标）")
+        return 0
     if args.sweep:
         print(sweep.format_report(swp))
         if args.out:
@@ -900,6 +914,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="有无知识库对比评测（二期 B1 补充）：同一批题分别不用、用知识库让模型作答，核对文件名和条款号，达标时退出码 0")
     ke.add_argument("--sweep", action="store_true",
                     help="门槛校准：按题目算依据查询、知识检索各个重排门槛下的准确率，给出推荐值（只出报告，不改配置）")
+    ke.add_argument("--embed-compare", action="store_true",
+                    help="向量模型对比（只在开发、测试环境）：现用 EMBED_MODEL 与候选模型各自向量化已发布切片，比向量召回命中率和 MRR")
+    ke.add_argument("--b-url", default="", help="候选向量服务地址（OpenAI 兼容，如 http://embed-m3:8000/v1）；密钥放环境变量 EMBED_B_API_KEY")
+    ke.add_argument("--b-model", default="", help="候选模型名，如 BAAI/bge-m3")
+    ke.add_argument("--b-dim", type=int, default=0, help="候选模型向量维度，如 1024")
     ke.set_defaults(func=kb_eval)
     lt = sub.add_parser("loadtest-accounts", help="压测账号（只在开发、测试环境）：建或重置 lt-xx 并加入压测项目；--disable 停用")
     lt.add_argument("--count", type=int, default=20)

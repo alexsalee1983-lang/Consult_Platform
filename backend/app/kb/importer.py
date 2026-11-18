@@ -52,15 +52,16 @@ def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> Imp
     else:
         r.doc_id = item.doc_id
         tags_changed = list(item.tags or []) != list(e.meta.tags)
-        if tags_changed:          # 检索标签是条目级的排序提示，不进版本内容、不走审核，重复导入时直接更新
-            item.tags = list(e.meta.tags)
+        controls_changed = list(item.control_ids or []) != list(e.meta.control_ids)
+        if tags_changed or controls_changed:   # 检索标签、控制项是条目级字段，不进版本内容、不走审核，重复导入时直接更新
+            item.tags, item.control_ids = list(e.meta.tags), list(e.meta.control_ids)
             db.commit()
         latest = item.versions[-1] if item.versions else None
         if latest is not None and latest.status in ("draft", "in_review"):
             r.action, r.message = "skipped", f"已有未完成的 v{latest.version}（{latest.status}），先处理它"
             return r
         if latest is not None and latest.status == "published" and same(latest, e):
-            r.action, r.message = "unchanged", "与现行版本相同" + ("，检索标签已更新" if tags_changed else "")
+            r.action, r.message = "unchanged", "与现行版本相同" + ("，检索标签已更新" if tags_changed else "")                 + ("，控制项已更新" if controls_changed else "")
             return r
         v = rv.new_version(db, user, item, e.content)
         r.action = "revised"

@@ -10,18 +10,40 @@ deliverables:
   title: 启动包
   stage: 启动
   client_facing: true
+  outline:
+  - 项目范围与目标
+  - 评估方法与依据
+  - 工作计划
+  - 沟通与保密机制
 - code: D2
   title: 调研包
   stage: 调研
   client_facing: true
+  outline:
+  - 调研范围与受访角色
+  - 访谈提纲
+  - 资料清单
+  - 现场工作安排
 - code: D3
   title: 事实清单
   stage: 调研
   client_facing: false
+  outline:
+  - 已确认事实（按评估域）
+  - 待补证据与矛盾点
 - code: D4
   title: 数据安全现状评估报告
   stage: 分析
   client_facing: true
+  outline:
+  - 评估范围与方法
+  - 数据安全组织与职责
+  - 数据资产与分类分级
+  - 数据全生命周期安全
+  - 个人信息保护
+  - 数据出境与共享
+  - 监测与事件处置
+  - 风险与整改建议方向
 - code: D5
   title: 数据分类分级与保护方案
   stage: 设计
@@ -36,14 +58,31 @@ deliverables:
   title: 数据安全制度文件包
   stage: 设计
   client_facing: true
+  outline:
+  - 制度体系框架
+  - 数据安全管理办法
+  - 数据分类分级管理细则
+  - 个人信息保护制度
+  - 数据安全事件处置流程
+  - 落地风险提示
 - code: D7
   title: 实施路线图
   stage: 落地辅导
   client_facing: true
+  outline:
+  - 分阶段目标
+  - 主要任务
+  - 前置条件与依赖
+  - 里程碑
 - code: D8
   title: 高层汇报
   stage: 验收
   client_facing: true
+  outline:
+  - 现状与主要风险
+  - 合规差距
+  - 建设重点与路线图
+  - 需要管理层决策的事项
 baseline:
   domains:
   - 数据安全组织与职责

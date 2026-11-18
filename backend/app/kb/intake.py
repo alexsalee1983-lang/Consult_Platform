@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from ..core import audit
 from ..core.db import SessionLocal, utcnow
+from ..core.permissions import project_for_member
 from ..models import KbUpload, User
 from ..services import guard, jobs, storage
 from . import parse
@@ -53,8 +54,13 @@ def clean_filename(name: str) -> str:
     return name[-200:] or "未命名"
 
 
-def submit(db: Session, user: User, filename: str, data: bytes, content_type: str = "") -> IntakeResult:
+def submit(db: Session, user: User, filename: str, data: bytes, content_type: str = "",
+           project: str = "") -> IntakeResult:
+    """project：来源项目代号（选填，二期 P16），只能是自己所在的项目，否则同项目不存在一样 404。"""
     filename = clean_filename(filename)
+    project = project.strip()
+    if project:
+        project_for_member(db, project, user)
     try:
         doc = parse.parse(filename, data)
     except parse.ParseError as e:
@@ -81,13 +87,14 @@ def submit(db: Session, user: User, filename: str, data: bytes, content_type: st
     key = f"intake/{uuid.uuid4().hex}/original.{_ext(filename)}"
     storage.put(AREA, key, data, content_type or "application/octet-stream")
     up = KbUpload(object_key=key, filename=filename, content_type=content_type[:128], size=len(data), sha256=sha,
-                  status="received", kind=doc.kind, uploaded_by=user.username)
+                  status="received", kind=doc.kind, uploaded_by=user.username, source_project=project)
     db.add(up)
     db.commit()
     job_id = jobs.enqueue(db, "kb.parse", {"upload_id": up.id}, created_by=user.username, max_attempts=3)
     up.job_id = job_id
     db.commit()
-    audit.record(db, actor=user.username, action="kb.intake", result="allowed", upload_id=up.id, ext=_ext(filename),
+    audit.record(db, actor=user.username, action="kb.intake", result="allowed", project_code=project,
+                 upload_id=up.id, ext=_ext(filename),
                  size=len(data), sha256=sha[:16], job_id=job_id)
     return IntakeResult(up, job_id)
 

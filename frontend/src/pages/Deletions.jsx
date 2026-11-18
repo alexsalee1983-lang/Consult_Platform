@@ -43,7 +43,9 @@ function Detail({ id, onChange }) {
 
   const load = useCallback(() => api.deletion(id).then((x) => {
     setD(x);
-    setFlowback(x.flowback_allowed ? "" : "client_refused");
+    const pre = x.flowback_suggested || [];
+    setFlowback(!x.flowback_allowed ? "client_refused" : pre.length ? "done" : "");
+    setRefs(pre.join(", "));
   }).catch((e) => setError(e.message)), [id]);
   useEffect(() => { load(); }, [load]);
 
@@ -78,6 +80,8 @@ function Detail({ id, onChange }) {
             </select>
           </label>
           {!d.flowback_allowed && <div className="sub">项目经理已标记客户不同意回流，只能选“客户不同意回流”。</div>}
+          {d.flowback_suggested?.length > 0 && (
+            <div className="sub">已按来源项目预填去标识通过的投料编号，请核对后确认。</div>)}
           {flowback === "done" && (
             <label className="sub">投料编号（投料箱里的编号，多个用逗号分隔）
               <input className="inp" value={refs} onChange={(e) => setRefs(e.target.value)} placeholder="如 12, 15" />
