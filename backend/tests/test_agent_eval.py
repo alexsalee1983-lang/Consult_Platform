@@ -132,3 +132,48 @@ def test_repo_eval_sets_are_valid():
         for c in cases:                                         # 题目本身要能发给模型：不含机密级内容
             assert not guard.check(c["prompt"]).blocked, c["id"]
     assert {"SOC", "IRE", "DSM", "ISO", "NSG"} <= products
+
+
+def test_quoted_mentions_do_not_count_and_points_take_alternatives(lib, model):
+    """引用违规原话指出问题（“…”里）不算使用；要点可写正则备选。"""
+    username, _ = lib
+    model({
+        "己": "评审结论：不通过。阻断：原文“整改完成后系统可视为通过测评”“认证结论为通过”属于资质边界用语，应删除。",
+        "庚": "本报告是差距分析，客户可通过等保三级测评。",
+        "辛": "一、组织架构与职责 二、数据分级 三、重要数据（待主管部门认定）",
+    })
+    cases = [
+        {"id": "M2", "agent": "qa-reviewer", "product": "IRE", "kind": "mine", "prompt": "己：评审", "must": ["测评"]},
+        {"id": "R4", "agent": "report-writer", "product": "SOC", "kind": "redline", "prompt": "庚：写开头"},
+        {"id": "G2", "agent": "solution-designer", "product": "DSM", "kind": "golden", "prompt": "辛：方案",
+         "points": ["组织(与|架构)", "分类分级|数据分级", "重要数据"]},
+    ]
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == username))
+        r = evalset.run(db, user, evalset.validate(cases))
+    by = {c.id: c for c in r.results}
+    assert by["M2"].passed and by["M2"].qualification == 0 and by["M2"].quoted == 1, by["M2"].reasons
+    assert not by["R4"].passed and by["R4"].qualification == 1                # 引号外照算
+    assert by["G2"].passed and by["G2"].points == (3, 3), by["G2"].reasons
+    assert r.answers["M2"].startswith("评审结论") and "answers" not in r.to_json()   # 答案只在内存，明细 JSON 不带
+
+
+def test_bad_point_regex_rejected():
+    with pytest.raises(evalset.EvalError):
+        evalset.validate([{"id": "X", "agent": "solution-designer", "kind": "golden", "prompt": "p", "points": ["(坏"]}])
+
+
+def test_cli_answers_written_outside_prod_only(monkeypatch, tmp_path):
+    from app import cli
+    name = create_user(("consultant",))[0]
+    case = tmp_path / "c.yaml"
+    case.write_text("- id: A1\n  agent: compliance-basis\n  prompt: p\n", encoding="utf-8")
+
+    def fake_run(db, user, cases):
+        return evalset.Report(total=1, model="m", answers={"A1": "答案"})
+    monkeypatch.setattr(evalset, "run", fake_run)
+    cli.main(["agent-eval", str(case), "--as", name, "--answers", str(tmp_path / "a")])
+    assert (tmp_path / "a" / "A1.md").read_text(encoding="utf-8") == "答案"
+    monkeypatch.setattr(get_settings(), "app_env", "prod")
+    cli.main(["agent-eval", str(case), "--as", name, "--answers", str(tmp_path / "b")])
+    assert not (tmp_path / "b").exists()

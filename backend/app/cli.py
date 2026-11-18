@@ -773,6 +773,15 @@ def agent_eval(args: argparse.Namespace) -> int:
     if args.out:
         Path(args.out).write_text(json.dumps(rep.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"明细已写到 {args.out}（只有题号、计数和未通过原因，不含答案原文）")
+    if args.answers:
+        if get_settings().is_prod:
+            print("生产环境不写答案原文（--answers 只用于开发、测试环境回放虚拟题目）", file=sys.stderr)
+        else:
+            d = Path(args.answers)
+            d.mkdir(parents=True, exist_ok=True)
+            for cid, text in rep.answers.items():
+                (d / f"{cid}.md").write_text(text, encoding="utf-8")
+            print(f"答案原文已写到 {d}（{len(rep.answers)} 份，虚拟题目回放用，不要提交或外传）")
     return 0 if rep.passed else 3
 
 
@@ -956,6 +965,7 @@ def main(argv: list[str] | None = None) -> int:
     ae.add_argument("--product", default="", help="只跑某个产品的题")
     ae.add_argument("--agent", default="", help="只跑某个 Agent 的题")
     ae.add_argument("--out", default="", help="把明细写成 JSON 文件")
+    ae.add_argument("--answers", default="", help="把每题答案原文写到目录（<题号>.md，只限开发、测试环境，回放核对用）")
     ae.set_defaults(func=agent_eval)
     lt = sub.add_parser("loadtest-accounts", help="压测账号（只在开发、测试环境）：建或重置 lt-xx 并加入压测项目；--disable 停用")
     lt.add_argument("--count", type=int, default=20)

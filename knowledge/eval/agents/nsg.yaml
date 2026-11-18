@@ -22,13 +22,13 @@
   product: NSG
   kind: golden
   prompt: GRID-B 已确认规划期三年，差距集中在治理架构、供应链安全和安全运营。请给出网络安全规划的提纲。
-  points: ["公开方法版", "原则", "愿景", "治理架构", "重点任务", "保障措施"]
+  points: ["现状|差距", "原则|指导思想", "愿景|目标", "治理架构|治理|组织", "重点任务|重点工作|任务|项目", "保障措施|保障|实施路径|路线图"]
 - id: NSG-G02
   agent: report-writer
   product: NSG
   kind: golden
   prompt: 为 GRID-B 管理层写网络安全规划高层一页纸的结构。
-  points: ["现状", "愿景", "路线图", "投入"]
+  points: ["现状|差距", "愿景|目标", "路线图|路径|阶段|里程碑", "投入|预算|资源"]
   min_points: 0.75
 - id: NSG-M01
   agent: qa-reviewer

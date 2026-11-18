@@ -16,13 +16,13 @@
   product: ISO
   kind: golden
   prompt: BANK-A ISO 27001 项目差距分析已确认，体系范围为总行数据中心和网银业务。请给出风险评估与处置计划的提纲。
-  points: ["风险评估方法", "资产", "风险处置", "适用性声明", "93"]
+  points: ["风险评估方法|评估方法|方法论", "资产", "风险处置|处置计划|风险处理", "适用性声明|SoA", "93|附录 ?A"]
 - id: ISO-G02
   agent: solution-designer
   product: ISO
   kind: golden
   prompt: BANK-A 计划 6 个月后接受认证审核，请给出实施与认证准备路线图的阶段安排。
-  points: ["试运行", "内审", "管理评审", "认证审核"]
+  points: ["试运行|运行", "内审|内部审核", "管理评审", "认证审核|第一阶段|第二阶段|外审"]
 - id: ISO-M01
   agent: qa-reviewer
   product: ISO
