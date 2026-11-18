@@ -38,6 +38,8 @@ class KbItem(KbBase):
     industries: Mapped[list] = mapped_column(JSON, default=list)               # 通用 / 银行 / 电力……
     # 检索加权标签（二期 B2，知识区迁移 k0002）：项目勾选的模块声明 kb_tags，带同名标签的条目检索时加权
     tags: Mapped[list] = mapped_column(JSON, default=list)
+    # 公司控制项编号（4A 埋点，知识区迁移 k0008）：条目级，同 tags 不进版本、不走审核；控制项中枢 v1 之前只记不用
+    control_ids: Mapped[list] = mapped_column(JSON, default=list)
     classification: Mapped[str] = mapped_column(String(16), default="internal")  # internal / restricted
     visible_roles: Mapped[list] = mapped_column(JSON, default=_default_visible_roles)
     owner: Mapped[str] = mapped_column(String(64), default="")                 # 专家负责人（用户名）
