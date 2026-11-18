@@ -28,6 +28,8 @@ class Project(Base):
     # 删除（M4 ②，迁移 0025，规则见 app/project/deletion.py）
     flowback_allowed: Mapped[bool] = mapped_column(Boolean, server_default=sql_true())   # 客户不同意回流时为 False
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 组织类型（迁移 0038，取值见 app/project/configs.ORG_TYPES，可空）：经验按组织类型分层用
+    org_type: Mapped[str] = mapped_column(String(16), server_default="")
 
     deliverables: Mapped[list["Deliverable"]] = relationship(
         back_populates="project", order_by="Deliverable.code", cascade="all, delete-orphan"

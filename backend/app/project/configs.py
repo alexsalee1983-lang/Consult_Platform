@@ -24,6 +24,9 @@ from ..products import config
 
 PROJECT_CODE = re.compile(r"^[A-Z]{2,8}-[A-Z0-9]{1,6}$")
 TIERS = {"standard": "标准档", "strict": "严格档"}
+# 组织类型（4A v4.0 §7.2 埋点）：经验和评测按组织类型分层；可不填
+ORG_TYPES = {"central_soe": "央企", "local_soe": "地方国企", "private": "民营企业", "foreign": "外资企业",
+             "government": "政府机关", "institution": "事业单位", "other": "其他"}
 
 
 class CreateError(ValueError):
@@ -82,10 +85,11 @@ def info(db: Session, project: Project) -> dict[str, Any]:
     try:
         snap = snapshot(db, project)
     except config.CatalogError:
-        return {"product": "", "product_name": "", "modules": [], "product_version": ""}
+        return {"product": "", "product_name": "", "modules": [], "product_version": "", "expert_pending": []}
     return {"product": snap["product"], "product_name": snap["product_name"],
             "modules": [{"code": m["code"], "name": m["name"]} for m in snap["modules"]],
-            "product_version": snap["product_version"]}
+            "product_version": snap["product_version"],
+            "expert_pending": list(snap.get("expert_pending", []))}     # 公开方法版待专家复核的产品、模块代号
 
 
 def options() -> list[dict[str, Any]]:
@@ -100,14 +104,15 @@ def options() -> list[dict[str, Any]]:
         ready = p.status == "ready"
         mods = [cat.modules[c] for c in p.modules if ready and c in cat.modules and cat.modules[c].status == "ready"]
         out.append({"code": p.code, "name": p.name, "version": p.version, "ready": ready,
+                    "expert_review": p.expert_review,
                     "deliverables": [{"code": d.code, "title": d.title} for d in p.deliverables],
-                    "modules": [{"code": m.code, "name": m.name} for m in mods]})
+                    "modules": [{"code": m.code, "name": m.name, "expert_review": m.expert_review} for m in mods]})
     return out
 
 
 def create(db: Session, *, actor: str, code: str, tier: str, manager: User | None, product: str,
            modules: list[str] | tuple[str, ...] = (), industry: str = "", weeks: int = 12,
-           service: str = "") -> Project:
+           service: str = "", org_type: str = "") -> Project:
     """立项。成功时已提交；失败抛 CreateError，不写库。"""
     code = code.strip().upper()
     if not PROJECT_CODE.match(code):
@@ -116,6 +121,9 @@ def create(db: Session, *, actor: str, code: str, tier: str, manager: User | Non
         raise CreateError(422, "必须定档：standard 标准档或 strict 严格档")
     if not 1 <= weeks <= 104:
         raise CreateError(422, "计划周数应在 1～104 之间")
+    org_type = (org_type or "").strip()
+    if org_type and org_type not in ORG_TYPES:
+        raise CreateError(422, "组织类型只能取：" + "、".join(f"{k}（{v}）" for k, v in ORG_TYPES.items()))
     if db.scalar(select(Project.id).where(Project.code == code)) is not None:
         raise CreateError(409, f"项目 {code} 已存在（代号不复用，已删除的项目也占用代号）")
     if manager is None or not manager.is_active or not roles_of(db, manager.id) & BUSINESS_ROLES:
@@ -125,7 +133,7 @@ def create(db: Session, *, actor: str, code: str, tier: str, manager: User | Non
     except config.CatalogError as e:
         raise CreateError(422, f"不能按这个产品立项：{e}") from e
     p = Project(code=code, service=(service.strip() or snap["product_name"])[:64], industry=industry.strip()[:32],
-                tier=tier, total_weeks=weeks)
+                tier=tier, total_weeks=weeks, org_type=org_type)
     p.deliverables = [Deliverable(code=d["code"], title=d["title"], status="not_started")
                       for d in snap["deliverables"]]
     db.add(p)
@@ -135,5 +143,5 @@ def create(db: Session, *, actor: str, code: str, tier: str, manager: User | Non
     db.commit()
     audit.record(db, actor=actor, action="project.create", result="allowed", project_code=code, tier=tier,
                  manager=manager.username, product=snap["product"], modules=[m["code"] for m in snap["modules"]],
-                 version=snap["product_version"])
+                 version=snap["product_version"], org_type=org_type or None)
     return p

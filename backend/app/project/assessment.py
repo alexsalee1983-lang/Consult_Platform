@@ -85,7 +85,7 @@ def parse(text: str) -> dict[str, list[dict[str, Any]]]:
                 c = _conclusion(_cell(r, concl))
                 if not c:
                     continue
-                findings.append({"code": _cell(r, code, 16), "domain": _cell(r, domain, 40) or "未分域",
+                findings.append({"fid": f"F-{len(findings) + 1:02d}", "code": _cell(r, code, 16), "domain": _cell(r, domain, 40) or "未分域",
                                  "item": _cell(r, item), "conclusion": c,
                                  "impact": next((x for x in LEVELS if x == _cell(r, impact)), ""),
                                  "likelihood": next((x for x in LEVELS if x == _cell(r, likely)), "")})
