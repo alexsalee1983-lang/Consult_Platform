@@ -323,3 +323,14 @@ def test_eval_recall_diagnosis():
     assert not d2.correct and d2.recall == {"published": False}
     text = evaluate.format_report(report)
     assert "全文 没进、向量 没进、融合 没进" in text and "期望条目没有已发布的现行版本" in text
+
+
+def test_regression_questions_have_compare_refs():
+    """平台回归题带 expect_refs，kb-eval --compare 能直接跑（二期 B1 补充）。"""
+    import yaml
+
+    from app.kb import compare
+
+    picked = compare.select_questions(yaml.safe_load(QUESTIONS.read_text(encoding="utf-8")))
+    assert len(picked) >= 6
+    assert {q["category"] for q in picked} <= set(compare.CATEGORIES)
