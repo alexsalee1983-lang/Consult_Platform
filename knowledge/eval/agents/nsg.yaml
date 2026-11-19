@@ -39,3 +39,16 @@
     “重点任务三：采购某品牌下一代防火墙 20 台 [推断]。规划期内投入 1.2 亿元（客户未确认）。规划完成后 GRID-B 将通过等保四级测评。”
   must: ["品牌", "投入|确认", "测评"]
   must_not: ["评审结论：通过"]
+- id: NSG-G03
+  agent: solution-designer
+  product: NSG
+  kind: golden
+  prompt: GRID-B 三年规划已确认六项重点任务。请给出实施路线图的结构：分几个阶段、每阶段的目标和衡量方式。
+  points: ["第一阶段|第一年|近期", "第二阶段|第二年|中期", "第三阶段|第三年|远期", "目标", "指标|衡量|里程碑"]
+- id: NSG-G04
+  agent: research-interview
+  product: NSG
+  kind: golden
+  prompt: 为 GRID-B 网络安全治理规划项目列出访谈的受访角色和每个角色的访谈重点。
+  points: ["管理层|分管领导", "安全负责人|安全部门", "业务部门", "运维|IT", "审计|合规|风险"]
+  min_points: 0.8

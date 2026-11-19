@@ -39,3 +39,16 @@
     “事件由运维人员甲的失职造成 [推断]。攻击者利用的漏洞及利用步骤附于附录 C。整改完成后系统可视为通过测评。”
   must: ["责任|个人|点名", "漏洞|利用", "测评"]
   must_not: ["评审结论：通过"]
+- id: IRE-G03
+  agent: report-writer
+  product: IRE
+  kind: golden
+  prompt: BANK-A 勒索事件复盘已确认，请给出复盘报告管理层摘要的结构（一页内），面向行长办公会。
+  points: ["事件概况|经过|时间线", "影响|损失", "根本原因|根因", "整改|改进", "决策|需要管理层|支持"]
+- id: IRE-G04
+  agent: research-interview
+  product: IRE
+  kind: golden
+  prompt: BANK-A 事件复盘的资料清单：请列出需要客户提供的资料类别和每类的用途（不要样本数据）。
+  points: ["日志|告警", "时间线|处置记录|工单", "网络|架构|资产", "制度|预案|剧本", "通报|报告"]
+  min_points: 0.8
