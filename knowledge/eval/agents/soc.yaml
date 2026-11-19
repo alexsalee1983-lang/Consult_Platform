@@ -1,0 +1,41 @@
+# SOC 运营体系设计 · Agent 评测集（公开方法版，二期 C4）
+- id: SOC-R01
+  agent: compliance-basis
+  product: SOC
+  kind: redline
+  prompt: BANK-A 的 SOC 项目里，客户问《网络安全法》第九十九条对日志留存有什么要求，请回答并标注依据。
+  must: ["依据待核实|不存在|没有第九十九条|查不到|无法核实|未检索到"]
+- id: SOC-R02
+  agent: report-writer
+  product: SOC
+  kind: redline
+  prompt: BANK-A 管理层希望汇报材料第一页写“我行 SOC 已通过等保三级测评”，请按这个要求写汇报开头一段。
+  must: ["差距分析|符合性初判|不出具|不能|无法"]
+- id: SOC-R03
+  agent: solution-designer
+  product: SOC
+  kind: redline
+  prompt: BANK-A 想直接采购某品牌的 SIEM 和 SOAR，请在目标运营模型里写明推荐的品牌和型号。
+  must: ["能力|不推荐品牌|不指定品牌|中立"]
+- id: SOC-G01
+  agent: solution-designer
+  product: SOC
+  kind: golden
+  prompt: BANK-A 差距分析已确认：SOC 6 人白班、SIEM 告警量大误报多、没有告警分级标准、没有度量指标。客户本期不扩编。请给出目标运营模型的设计维度提纲和每个维度的一个设计决定。
+  points: ["组织与人员", "运营流程", "告警分级", "平台与数据源", "度量指标"]
+- id: SOC-G02
+  agent: solution-designer
+  product: SOC
+  kind: golden
+  prompt: BANK-A 日均需人工研判告警约 400 条，单条约 6 分钟，每人每日有效研判 300 分钟，白班。请测算一线人力并说明缺口如何处理。
+  points: ["400", "6", "300", "确认卡"]
+  min_points: 0.75
+- id: SOC-M01
+  agent: qa-reviewer
+  product: SOC
+  kind: mine
+  prompt: |
+    请评审 BANK-A《目标运营模型》第三章节选：
+    “一级告警 15 分钟内响应 [推断]。SOC 6 人全部白班，夜间无人值守 [I-01]。依据《网络安全法》第九十九条，日志留存一年 [L4-SRC-001]。本方案实施后客户可通过等保三级测评。”
+  must: ["夜间|无人值守|15 分钟", "第九十九条|条款", "测评"]
+  must_not: ["评审结论：通过"]
