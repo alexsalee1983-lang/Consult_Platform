@@ -140,3 +140,15 @@ vulnerabilities:
     paths: ["usr/share/grafana/data/plugins-bundled/tempo/**"]
     statement: Grafana 自带的 tempo 数据源插件，平台不配置该数据源、插件不加载；Grafana 只绑定本机。等上游发版升级
     expired_at: 2027-01-15
+  # CVE-2026-97054（Go 标准库 net/http MaxBytesReader，HTTP/1 服务端超限后的处理）：2026-11-19 新出，修复版 Go 1.26.11 / 1.27.4。
+  # gosu 不处理网络请求；Grafana 13.3.1、Prometheus v3.16.0 已是最新版、上游还没出用新 Go 编译的版本。
+  # 两者只在监控 profile 里：Prometheus 不映射端口，Grafana 只绑定 127.0.0.1、经堡垒机隧道访问，只有运维人员能触达。
+  # 上游发版后升级镜像并删除这两条；2026-12-15 到期重新报出。
+  - id: CVE-2026-97054
+    paths: ["usr/local/bin/gosu"]
+    statement: gosu 只在启动时切换用户，不处理 HTTP 请求，不触及该漏洞代码路径
+    expired_at: 2027-03-01
+  - id: CVE-2026-97054
+    paths: ["usr/share/grafana/**", "usr/bin/prometheus", "usr/bin/promtool"]
+    statement: 监控组件已是最新版、上游未发修复版；只在内网监控 profile、不对外暴露（Prometheus 无端口映射，Grafana 仅 127.0.0.1），等上游发版升级
+    expired_at: 2026-12-15
