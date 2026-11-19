@@ -514,7 +514,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     except gateway.ExternalModelForbidden as e:
         raise StepFailed("当前配置不允许把本项目发往外部模型") from e
     except gateway.GatewayError as e:
-        raise StepRetry("模型暂不可用") from e
+        raise StepRetry(f"模型暂不可用（{e}）") from e
 
     confirmed = _resolved_cards(db, run)
     strict = STRICT_RULES if project.tier == "strict" else ""
@@ -528,7 +528,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     except gateway.ExternalModelForbidden as e:
         raise StepFailed("当前配置不允许把本项目发往外部模型") from e
     except gateway.GatewayError as e:
-        raise StepRetry("模型暂不可用") from e
+        raise StepRetry(f"模型暂不可用（{e}）") from e
     if c.demo:
         raise StepFailed("未配置大模型，交付链不能运行")
     if guard.check(c.text).blocked:

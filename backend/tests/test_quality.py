@@ -241,6 +241,25 @@ def test_bad_format_retries_then_fails_and_duplicate_refused(team, model):
     assert rv["status"] == "failed" and "格式" in rv["error"]
 
 
+def test_gateway_failure_keeps_reason(team, model):
+    """模型调用失败时评审记录写明网关原因（只有异常类型或 HTTP 状态码，不含正文），便于定位超时还是拒绝。"""
+    code, member, *_ = team
+    _draft(member, code)
+
+    def timeout(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    gateway.set_transport(httpx.MockTransport(timeout))
+    rid = member.post(_url(code, "reviews")).json()["id"]
+    ctx = jobs.JobContext(job_id=0, kind=quality.JOB_KIND, attempt=quality.MAX_ATTEMPTS, project_code=code,
+                          created_by="")
+    with pytest.raises(jobs.JobError):
+        quality._review_job({"review_id": rid}, ctx)
+    rv = member.get(_url(code, f"reviews/{rid}")).json()
+    assert rv["status"] == "failed"
+    assert "模型暂不可用" in rv["error"] and "ReadTimeout" in rv["error"]
+
+
 def test_empty_refused(model):
     code = _new_project()
     c = logged_in_client(app, create_user(("consultant",), {code: "member"}))

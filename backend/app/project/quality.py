@@ -563,7 +563,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
             raise ReviewFailed("当前配置不允许把本项目发往外部模型") from e
         except gateway.GatewayError as e:
             db.commit()
-            raise ReviewRetry("模型暂不可用") from e
+            raise ReviewRetry(f"模型暂不可用（{e}）") from e   # 网关原因只有异常类型或 HTTP 状态码
         except call.OutputInvalid as e:
             db.commit()
             raise ReviewRetry("评审输出格式不对") from e
