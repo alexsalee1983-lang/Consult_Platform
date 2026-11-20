@@ -369,3 +369,16 @@ def test_unlisted_agent_blockers_keep_gate_closed(team, model):
     st = member.get(_url(code, "signoff")).json()
     assert not st["gate"] and st["latest_review"]["open_blocking"] == 1
     assert any("无法逐条驳回" in x for x in st["reasons"])
+
+
+def test_qualification_refusal_wording_not_counted():
+    """拒绝或说明边界的句子不算资质边界用语（#207 测试：ISO-R01、SOC-R02 的拒绝句被误判）。"""
+    for text in ("我们不能出具认证结论。", "平台无法给出等保测评结论。", "本报告不构成网络安全等级保护测评结论。",
+                 "本材料不能作为等保测评结论使用。", "这不等同于认证结论。", "差距分析不能替代测评结论。",
+                 "无法写明已通过等保三级测评。", "不能表述为通过等保三级测评。", "不宜写成认证通过。",
+                 "能否通过等保测评由测评机构判定。", "是否通过等保三级测评，以测评机构结论为准。"):
+        assert quality.qualification_hits(text) == 0, text
+    # 否定只管到逗号、句号为止：后半句自己下结论的仍要数
+    for text in ("虽然不能保证每项都满分，但该系统已通过等保三级测评。", "不是差距分析，是测评结论。",
+                 "该系统已通过等保三级测评。", "并非初判：认证结论为合格。"):
+        assert quality.qualification_hits(text) >= 1, text
