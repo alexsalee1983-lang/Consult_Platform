@@ -1,0 +1,2323 @@
+# 题库 v1（三期 E1，公开方法版草稿，待产品专家复核）。格式见 docs/题库格式.md；本文件只写通用问法，不含客户信息。
+product: SOC
+version: v1
+status: draft
+expert_review: pending
+note: 公开方法版；评分锚点为内部使用，不进客户调研包与自评包；对客只说“提前了解情况”。
+domains:
+- 组织与人员
+- 流程
+- 技术平台与数据源
+- 度量与改进
+controls:
+- id: SOC.ORG.01
+  name: 职责与编制
+  domain: 组织与人员
+- id: SOC.ORG.02
+  name: 技能与培训
+  domain: 组织与人员
+- id: SOC.ORG.03
+  name: 值班与轮岗
+  domain: 组织与人员
+- id: SOC.ORG.04
+  name: 外包与内外协同
+  domain: 组织与人员
+- id: SOC.PRC.01
+  name: 告警分级与研判
+  domain: 流程
+- id: SOC.PRC.02
+  name: 事件处置与升级
+  domain: 流程
+- id: SOC.PRC.03
+  name: 威胁情报使用
+  domain: 流程
+- id: SOC.PRC.04
+  name: 用例与规则变更管理
+  domain: 流程
+- id: SOC.PRC.05
+  name: 复盘与演练
+  domain: 流程
+- id: SOC.TEC.01
+  name: 数据源覆盖
+  domain: 技术平台与数据源
+- id: SOC.TEC.02
+  name: 检测用例
+  domain: 技术平台与数据源
+- id: SOC.TEC.03
+  name: 平台与自动化
+  domain: 技术平台与数据源
+- id: SOC.TEC.04
+  name: 资产与漏洞关联
+  domain: 技术平台与数据源
+- id: SOC.TEC.05
+  name: 日志留存与质量
+  domain: 技术平台与数据源
+- id: SOC.MET.01
+  name: 指标体系
+  domain: 度量与改进
+- id: SOC.MET.02
+  name: 汇报与管理评审
+  domain: 度量与改进
+- id: SOC.MET.03
+  name: 持续改进
+  domain: 度量与改进
+questions:
+- id: SOC-ORG-001
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.01
+  kind: closed
+  stem: 目前安全监控与运营工作由哪些岗位或团队承担？各自的分工写在哪里？
+  options:
+  - key: A
+    level: 1
+    text: 没有明确岗位，谁有空谁处理
+  - key: B
+    level: 2
+    text: 有人负责，但分工没有书面说明
+  - key: C
+    level: 3
+    text: 岗位和分工有书面说明，个别职责有交叉或空白
+  - key: D
+    level: 4
+    text: 岗位、分工、接口均有书面说明，并按年度核对
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有明确岗位，谁有空谁处理
+  - level: 2
+    state: 有人负责，但分工没有书面说明
+  - level: 3
+    state: 岗位和分工有书面说明，个别职责有交叉或空白
+  - level: 4
+    state: 岗位、分工、接口均有书面说明，并按年度核对
+  followups:
+  - 这些岗位是专职还是兼职？
+  - 分工说明最近一次更新是什么时候？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: org_chart
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 安全监控与运营工作在信息科技部和运行维护中心之间如何分工？
+    followups:
+    - 风险合规部在其中承担什么角色？
+  - industry: POWER
+    stem: 安全监控工作在信通、调控中心和各厂站之间如何分工？
+    followups:
+    - 生产控制区的监控由谁负责？
+  problem: false
+- id: SOC-ORG-002
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.01
+  kind: closed
+  stem: 安全运营的岗位在汇报关系上属于哪个部门？遇到跨部门协调时由谁拍板？
+  options:
+  - key: A
+    level: 1
+    text: 没有固定汇报关系
+  - key: B
+    level: 2
+    text: 挂在 IT 运维下，协调靠个人关系
+  - key: C
+    level: 3
+    text: 有独立汇报线，重大事项由部门负责人协调
+  - key: D
+    level: 4
+    text: 有独立汇报线，并有明文的跨部门协调与决策机制
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有固定汇报关系
+  - level: 2
+    state: 挂在 IT 运维下，协调靠个人关系
+  - level: 3
+    state: 有独立汇报线，重大事项由部门负责人协调
+  - level: 4
+    state: 有独立汇报线，并有明文的跨部门协调与决策机制
+  followups:
+  - 最近一次跨部门协调遇到什么困难？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: org_chart
+  problem: false
+- id: SOC-ORG-003
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.01
+  kind: closed
+  stem: 目前安全运营团队的人员规模和岗位空缺情况是怎样的？
+  options:
+  - key: A
+    level: 1
+    text: 只有兼职人员
+  - key: B
+    level: 2
+    text: 有 1～2 名专职人员，空缺较多
+  - key: C
+    level: 3
+    text: 人员基本满足当前工作量，有少量空缺
+  - key: D
+    level: 4
+    text: 人员配置经过工作量测算，空缺有补充计划
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 只有兼职人员
+  - level: 2
+    state: 有 1～2 名专职人员，空缺较多
+  - level: 3
+    state: 人员基本满足当前工作量，有少量空缺
+  - level: 4
+    state: 人员配置经过工作量测算，空缺有补充计划
+  followups:
+  - 编制是怎么确定的？
+  - 人员流动情况如何？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  - 管理层
+  prefill:
+  - source: org_chart
+  problem: false
+- id: SOC-ORG-004
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.02
+  kind: closed
+  stem: 安全分析岗位的人员需要具备哪些技能？有没有书面的岗位能力要求？
+  options:
+  - key: A
+    level: 1
+    text: 没有要求
+  - key: B
+    level: 2
+    text: 口头要求，没有书面
+  - key: C
+    level: 3
+    text: 有书面岗位说明，但未与实际人员对照
+  - key: D
+    level: 4
+    text: 有岗位能力模型，并对人员逐项对照、有提升计划
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有要求
+  - level: 2
+    state: 口头要求，没有书面
+  - level: 3
+    state: 有书面岗位说明，但未与实际人员对照
+  - level: 4
+    state: 有岗位能力模型，并对人员逐项对照、有提升计划
+  followups:
+  - 最近一年有哪些培训或认证？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: policy_docs
+  - source: org_chart
+  problem: false
+- id: SOC-ORG-005
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.02
+  kind: closed
+  stem: 新加入的值班或分析人员，上岗前通常怎么培训？
+  options:
+  - key: A
+    level: 1
+    text: 直接上岗，边做边学
+  - key: B
+    level: 2
+    text: 由老员工带，没有固定内容
+  - key: C
+    level: 3
+    text: 有固定的入职培训材料和带教
+  - key: D
+    level: 4
+    text: 有分阶段培训、上岗考核和授权清单
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 直接上岗，边做边学
+  - level: 2
+    state: 由老员工带，没有固定内容
+  - level: 3
+    state: 有固定的入职培训材料和带教
+  - level: 4
+    state: 有分阶段培训、上岗考核和授权清单
+  followups:
+  - 从入职到独立值班一般多久？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: SOC-ORG-006
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.02
+  kind: closed
+  stem: 团队有没有定期的技术交流或案例学习？大概多久一次？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 偶尔，没有固定安排
+  - key: C
+    level: 3
+    text: 每季度前后有一次，主题不固定
+  - key: D
+    level: 4
+    text: 每月有固定安排，内容来自真实案例并有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 偶尔，没有固定安排
+  - level: 3
+    state: 每季度前后有一次，主题不固定
+  - level: 4
+    state: 每月有固定安排，内容来自真实案例并有记录
+  followups:
+  - 最近一次的主题是什么？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: none
+  problem: false
+- id: SOC-ORG-007
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.03
+  kind: closed
+  stem: 监控和值班是怎么安排的？覆盖哪些时段？
+  options:
+  - key: A
+    level: 1
+    text: 仅工作时间有人看
+  - key: B
+    level: 2
+    text: 工作时间值班，夜间和节假日靠电话
+  - key: C
+    level: 3
+    text: 7×24 值班，但夜间人员能力偏弱
+  - key: D
+    level: 4
+    text: 7×24 值班，各时段人员能力和授权一致
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 仅工作时间有人看
+  - level: 2
+    state: 工作时间值班，夜间和节假日靠电话
+  - level: 3
+    state: 7×24 值班，但夜间人员能力偏弱
+  - level: 4
+    state: 7×24 值班，各时段人员能力和授权一致
+  followups:
+  - 节假日和重大活动期间有没有加强安排？
+  - 夜间发现高危告警，值班人员能直接做什么？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 运营值班
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  - source: org_chart
+  industry_variants:
+  - industry: BANK
+    stem: 网点关闭后和节假日、重要业务时点，监控是怎么安排的？
+    followups:
+    - 夜间发现网银异常，值班人员能直接做什么？
+  - industry: POWER
+    stem: 调度和生产控制区的监控是否与其他系统使用同一套值班安排？
+    followups:
+    - 值班人员对生产控制区的操作权限如何限定？
+  problem: false
+- id: SOC-ORG-008
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.03
+  kind: closed
+  stem: 值班交接是怎么做的？交接时会交代哪些内容？
+  options:
+  - key: A
+    level: 1
+    text: 没有交接
+  - key: B
+    level: 2
+    text: 口头交接
+  - key: C
+    level: 3
+    text: 有交接记录，内容不固定
+  - key: D
+    level: 4
+    text: 有固定模板，包含未关闭事项和风险提示，并有人复核
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有交接
+  - level: 2
+    state: 口头交接
+  - level: 3
+    state: 有交接记录，内容不固定
+  - level: 4
+    state: 有固定模板，包含未关闭事项和风险提示，并有人复核
+  followups:
+  - 能看一份最近的交接记录吗（可遮盖敏感信息）？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 运营值班
+  prefill:
+  - source: ticket_export
+  problem: false
+- id: SOC-ORG-009
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.03
+  kind: closed
+  stem: 值班人员遇到自己无法判断的告警，可以找谁？找得到吗？
+  options:
+  - key: A
+    level: 1
+    text: 没有明确的人
+  - key: B
+    level: 2
+    text: 有联系人名单，但没有明确响应时限
+  - key: C
+    level: 3
+    text: 有二线支持名单和响应时限
+  - key: D
+    level: 4
+    text: 有分级升级路径，并核对过联系方式和响应情况
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有明确的人
+  - level: 2
+    state: 有联系人名单，但没有明确响应时限
+  - level: 3
+    state: 有二线支持名单和响应时限
+  - level: 4
+    state: 有分级升级路径，并核对过联系方式和响应情况
+  followups:
+  - 最近一次升级实际用了多久？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 运营值班
+  - 安全分析
+  prefill:
+  - source: runbooks
+  problem: false
+- id: SOC-ORG-010
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.04
+  kind: closed
+  stem: 运营工作中有没有外包或第三方参与？参与哪些环节？
+  options:
+  - key: A
+    level: 1
+    text: 没有外包
+  - key: B
+    level: 2
+    text: 有外包，范围没有书面界定
+  - key: C
+    level: 3
+    text: 范围有书面界定，权限和数据范围不够清晰
+  - key: D
+    level: 4
+    text: 范围、权限、数据范围、责任均书面明确，并定期评价
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有外包
+  - level: 2
+    state: 有外包，范围没有书面界定
+  - level: 3
+    state: 范围有书面界定，权限和数据范围不够清晰
+  - level: 4
+    state: 范围、权限、数据范围、责任均书面明确，并定期评价
+  followups:
+  - 外包人员能接触哪些系统和数据？
+  - 服务质量怎么评价？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 合规风控
+  prefill:
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 外包运维或监控服务商在业务系统上有哪些访问范围？外包管理是否与第三方风险管理要求对应？
+    followups:
+    - 服务商人员变动时权限如何调整？
+  problem: false
+- id: SOC-ORG-011
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.04
+  kind: closed
+  stem: 安全团队与 IT 运维、业务部门之间，发现问题后怎么联动？
+  options:
+  - key: A
+    level: 1
+    text: 没有固定方式，靠私下沟通
+  - key: B
+    level: 2
+    text: 有联系人，但没有流程
+  - key: C
+    level: 3
+    text: 有流程，执行情况不稳定
+  - key: D
+    level: 4
+    text: 有明确的流程、时限和责任人，并有记录可查
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有固定方式，靠私下沟通
+  - level: 2
+    state: 有联系人，但没有流程
+  - level: 3
+    state: 有流程，执行情况不稳定
+  - level: 4
+    state: 有明确的流程、时限和责任人，并有记录可查
+  followups:
+  - 最近一次联动处理了什么问题？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  - 业务负责人
+  prefill:
+  - source: ticket_export
+  problem: false
+- id: SOC-PRC-001
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.01
+  kind: closed
+  stem: 告警产生后，值班人员判断它是否需要处理的依据是什么？
+  options:
+  - key: A
+    level: 1
+    text: 凭个人经验
+  - key: B
+    level: 2
+    text: 有一些经验总结，没有成文
+  - key: C
+    level: 3
+    text: 有告警分级标准和研判指引，覆盖主要告警类型
+  - key: D
+    level: 4
+    text: 分级标准、研判指引覆盖主要场景，并根据反馈定期调整
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 凭个人经验
+  - level: 2
+    state: 有一些经验总结，没有成文
+  - level: 3
+    state: 有告警分级标准和研判指引，覆盖主要告警类型
+  - level: 4
+    state: 分级标准、研判指引覆盖主要场景，并根据反馈定期调整
+  followups:
+  - 高危和低危告警的处理时限分别是多少？
+  - 误报多的告警怎么处理？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 运营值班
+  prefill:
+  - source: runbooks
+  - source: siem_stats
+  problem: false
+- id: SOC-PRC-002
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.01
+  kind: closed
+  stem: 目前每天或每周大概产生多少条需要人工看的告警？实际能处理多少？
+  options:
+  - key: A
+    level: 1
+    text: 说不清楚
+  - key: B
+    level: 2
+    text: 大致知道数量，积压较多
+  - key: C
+    level: 3
+    text: 数量清楚，偶尔积压
+  - key: D
+    level: 4
+    text: 数量、处理量、积压都有统计，积压有预警线
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 说不清楚
+  - level: 2
+    state: 大致知道数量，积压较多
+  - level: 3
+    state: 数量清楚，偶尔积压
+  - level: 4
+    state: 数量、处理量、积压都有统计，积压有预警线
+  followups:
+  - 超过处理能力时怎么取舍？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 运营值班
+  prefill:
+  - source: siem_stats
+  problem: false
+- id: SOC-PRC-003
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.01
+  kind: closed
+  stem: 告警研判的结论会记录在哪里？记录哪些内容？
+  options:
+  - key: A
+    level: 1
+    text: 不记录
+  - key: B
+    level: 2
+    text: 记在个人笔记或聊天里
+  - key: C
+    level: 3
+    text: 记在工单里，字段不统一
+  - key: D
+    level: 4
+    text: 记在统一系统，包含判断依据、结论、处置，可检索
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不记录
+  - level: 2
+    state: 记在个人笔记或聊天里
+  - level: 3
+    state: 记在工单里，字段不统一
+  - level: 4
+    state: 记在统一系统，包含判断依据、结论、处置，可检索
+  followups:
+  - 能抽一份最近的记录看看吗？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  prefill:
+  - source: ticket_export
+  problem: false
+- id: SOC-PRC-004
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.01
+  kind: closed
+  stem: 判断为误报的告警，后续怎么处理？
+  options:
+  - key: A
+    level: 1
+    text: 不处理，下次遇到再看
+  - key: B
+    level: 2
+    text: 偶尔人工调整
+  - key: C
+    level: 3
+    text: 有人负责调整规则，没有固定周期
+  - key: D
+    level: 4
+    text: 有固定周期调优并记录前后效果
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不处理，下次遇到再看
+  - level: 2
+    state: 偶尔人工调整
+  - level: 3
+    state: 有人负责调整规则，没有固定周期
+  - level: 4
+    state: 有固定周期调优并记录前后效果
+  followups:
+  - 最近一次调优带来了什么变化？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  prefill:
+  - source: siem_stats
+  problem: false
+- id: SOC-PRC-005
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.02
+  kind: closed
+  stem: 确认是安全事件后，处置流程是什么？有没有书面的处置手册？
+  options:
+  - key: A
+    level: 1
+    text: 没有固定流程
+  - key: B
+    level: 2
+    text: 有大致流程，没有成文
+  - key: C
+    level: 3
+    text: 有书面流程，覆盖常见事件类型
+  - key: D
+    level: 4
+    text: 覆盖主要事件类型，并明确角色、时限、证据保全要求
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有固定流程
+  - level: 2
+    state: 有大致流程，没有成文
+  - level: 3
+    state: 有书面流程，覆盖常见事件类型
+  - level: 4
+    state: 覆盖主要事件类型，并明确角色、时限、证据保全要求
+  followups:
+  - 最近一次事件按这个流程走通了吗？
+  - 哪些环节最容易卡住？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  - 安全分析
+  prefill:
+  - source: runbooks
+  - source: incident_record
+  problem: false
+- id: SOC-PRC-006
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.02
+  kind: closed
+  stem: 事件需要升级到管理层或业务部门时，由谁决定、怎么通知？
+  options:
+  - key: A
+    level: 1
+    text: 没有规则
+  - key: B
+    level: 2
+    text: 有习惯做法，没有成文
+  - key: C
+    level: 3
+    text: 有升级条件，通知方式不够明确
+  - key: D
+    level: 4
+    text: 有分级升级条件、通知对象、时限，并留有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有规则
+  - level: 2
+    state: 有习惯做法，没有成文
+  - level: 3
+    state: 有升级条件，通知方式不够明确
+  - level: 4
+    state: 有分级升级条件、通知对象、时限，并留有记录
+  followups:
+  - 什么样的事件会升级到管理层？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: runbooks
+  problem: false
+- id: SOC-PRC-007
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.02
+  kind: closed
+  stem: 处置过程中，对受影响系统采取隔离或封禁措施前，需要谁同意？
+  options:
+  - key: A
+    level: 1
+    text: 谁发现谁处理
+  - key: B
+    level: 2
+    text: 找 IT 运维口头同意
+  - key: C
+    level: 3
+    text: 有审批人，但夜间或紧急时不明确
+  - key: D
+    level: 4
+    text: 有分级授权，紧急情况下有事先授权和事后补记
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 谁发现谁处理
+  - level: 2
+    state: 找 IT 运维口头同意
+  - level: 3
+    state: 有审批人，但夜间或紧急时不明确
+  - level: 4
+    state: 有分级授权，紧急情况下有事先授权和事后补记
+  followups:
+  - 遇到过因为审批耽误处置的情况吗？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  - 业务负责人
+  prefill:
+  - source: runbooks
+  problem: false
+- id: SOC-PRC-008
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.02
+  kind: closed
+  stem: 处置完成后，事件怎样关闭？关闭前需要确认什么？
+  options:
+  - key: A
+    level: 1
+    text: 处理完就算结束
+  - key: B
+    level: 2
+    text: 由处理人自己关闭
+  - key: C
+    level: 3
+    text: 关闭前有简单确认，记录不完整
+  - key: D
+    level: 4
+    text: 关闭有明确条件、复核人，并记录根因和后续措施
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 处理完就算结束
+  - level: 2
+    state: 由处理人自己关闭
+  - level: 3
+    state: 关闭前有简单确认，记录不完整
+  - level: 4
+    state: 关闭有明确条件、复核人，并记录根因和后续措施
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: ticket_export
+  problem: false
+- id: SOC-PRC-009
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.03
+  kind: closed
+  stem: 团队有没有使用威胁情报？来源有哪些？
+  options:
+  - key: A
+    level: 1
+    text: 没有使用
+  - key: B
+    level: 2
+    text: 偶尔看公开通报
+  - key: C
+    level: 3
+    text: 有固定来源，主要靠人工查看
+  - key: D
+    level: 4
+    text: 有多来源并接入平台，按相关性筛选后使用
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有使用
+  - level: 2
+    state: 偶尔看公开通报
+  - level: 3
+    state: 有固定来源，主要靠人工查看
+  - level: 4
+    state: 有多来源并接入平台，按相关性筛选后使用
+  followups:
+  - 情报怎么变成检测规则或处置动作？
+  - 有没有评价过情报的有效性？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 是否参与行业内的威胁情报共享？拿到后如何分发给运营团队？
+    followups:
+    - 对金融行业相关的通报是否有专人跟进？
+  - industry: POWER
+    stem: 是否接收电力行业主管单位或行业组织发布的安全通报？如何落实到运营工作中？
+    followups:
+    - 通报中涉及工控场景的内容由谁跟进？
+  problem: false
+- id: SOC-PRC-010
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.03
+  kind: closed
+  stem: 收到外部通报或高危预警时，团队多久能判断“与我们有没有关系”？
+  options:
+  - key: A
+    level: 1
+    text: 没有这个动作
+  - key: B
+    level: 2
+    text: 谁看到谁判断，时间不固定
+  - key: C
+    level: 3
+    text: 有负责人，当天内给出判断
+  - key: D
+    level: 4
+    text: 有标准流程和时限，并能核对资产清单快速给出结论
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有这个动作
+  - level: 2
+    state: 谁看到谁判断，时间不固定
+  - level: 3
+    state: 有负责人，当天内给出判断
+  - level: 4
+    state: 有标准流程和时限，并能核对资产清单快速给出结论
+  followups:
+  - 最近一次是什么情况？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: ticket_export
+  problem: false
+- id: SOC-PRC-011
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.04
+  kind: closed
+  stem: 新增或调整检测规则时，要经过哪些步骤？
+  options:
+  - key: A
+    level: 1
+    text: 直接改
+  - key: B
+    level: 2
+    text: 改完告知相关人员
+  - key: C
+    level: 3
+    text: 有申请和测试，记录不完整
+  - key: D
+    level: 4
+    text: 有申请、测试、审批、上线、回退，并留有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 直接改
+  - level: 2
+    state: 改完告知相关人员
+  - level: 3
+    state: 有申请和测试，记录不完整
+  - level: 4
+    state: 有申请、测试、审批、上线、回退，并留有记录
+  followups:
+  - 上线前怎么确认不会产生大量误报？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: SOC-PRC-012
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.04
+  kind: closed
+  stem: 检测规则和处置手册多久评审一次？谁来评审？
+  options:
+  - key: A
+    level: 1
+    text: 从未评审
+  - key: B
+    level: 2
+    text: 有问题才看
+  - key: C
+    level: 3
+    text: 每年一次，覆盖不全
+  - key: D
+    level: 4
+    text: 按固定周期评审，覆盖全部规则与手册，并有变更记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 从未评审
+  - level: 2
+    state: 有问题才看
+  - level: 3
+    state: 每年一次，覆盖不全
+  - level: 4
+    state: 按固定周期评审，覆盖全部规则与手册，并有变更记录
+  followups:
+  - 上一次评审改了什么？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: SOC-PRC-013
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.05
+  kind: closed
+  stem: 安全事件处理完之后，团队会不会做复盘？
+  options:
+  - key: A
+    level: 1
+    text: 不做
+  - key: B
+    level: 2
+    text: 重大事件才做，没有记录
+  - key: C
+    level: 3
+    text: 较多事件做，记录不统一
+  - key: D
+    level: 4
+    text: 有复盘模板，结论转为整改项并跟踪闭环
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不做
+  - level: 2
+    state: 重大事件才做，没有记录
+  - level: 3
+    state: 较多事件做，记录不统一
+  - level: 4
+    state: 有复盘模板，结论转为整改项并跟踪闭环
+  followups:
+  - 最近一次复盘有哪些改进措施？落实了吗？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: incident_record
+  - source: prior_report
+  problem: false
+- id: SOC-PRC-014
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.05
+  kind: closed
+  stem: 近一年做过哪些演练或应急推演？参与范围怎么样？
+  options:
+  - key: A
+    level: 1
+    text: 没有做过
+  - key: B
+    level: 2
+    text: 做过一次，仅安全团队参加
+  - key: C
+    level: 3
+    text: 做过，有业务或 IT 参与，问题记录不完整
+  - key: D
+    level: 4
+    text: 按计划做，覆盖多个场景，问题有整改跟踪
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有做过
+  - level: 2
+    state: 做过一次，仅安全团队参加
+  - level: 3
+    state: 做过，有业务或 IT 参与，问题记录不完整
+  - level: 4
+    state: 按计划做，覆盖多个场景，问题有整改跟踪
+  followups:
+  - 演练发现了什么问题？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  - 业务负责人
+  prefill:
+  - source: prior_report
+  problem: false
+- id: SOC-TEC-001
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.01
+  kind: closed
+  stem: 目前接入监控的系统和设备类别有哪些？（请按类别说明，不需要提供具体地址）
+  options:
+  - key: A
+    level: 1
+    text: 只有少数安全设备
+  - key: B
+    level: 2
+    text: 安全设备和部分主机
+  - key: C
+    level: 3
+    text: 安全设备、主机、网络、重要应用基本接入
+  - key: D
+    level: 4
+    text: 按资产重要性分级接入，并定期核对覆盖率
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 只有少数安全设备
+  - level: 2
+    state: 安全设备和部分主机
+  - level: 3
+    state: 安全设备、主机、网络、重要应用基本接入
+  - level: 4
+    state: 按资产重要性分级接入，并定期核对覆盖率
+  followups:
+  - 接入范围是怎么确定的？
+  - 哪些重要系统目前还没有接入？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: asset_list
+  - source: siem_stats
+  industry_variants:
+  - industry: BANK
+    stem: 核心系统、网银和手机银行、柜面系统的日志是否已接入监控？
+    followups:
+    - 外联和第三方接口的日志是否接入？
+  - industry: POWER
+    stem: 生产控制区、管理信息区的监控数据分别如何接入？是否有单向传输或隔离要求？
+    followups:
+    - 厂站侧设备的数据采集有什么限制？
+  problem: false
+- id: SOC-TEC-002
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.01
+  kind: closed
+  stem: 是否有一份“数据源清单”，写明接入了什么、为什么接入、负责人是谁？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 有零散记录，不完整
+  - key: C
+    level: 3
+    text: 有清单，更新不及时
+  - key: D
+    level: 4
+    text: 有清单，覆盖率与资产清单对照，更新有负责人
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 有零散记录，不完整
+  - level: 3
+    state: 有清单，更新不及时
+  - level: 4
+    state: 有清单，覆盖率与资产清单对照，更新有负责人
+  followups:
+  - 最近一次更新是什么时候？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: asset_list
+  problem: false
+- id: SOC-TEC-003
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.01
+  kind: closed
+  stem: 新系统上线时，监控接入是怎么安排的？
+  options:
+  - key: A
+    level: 1
+    text: 上线后才想起
+  - key: B
+    level: 2
+    text: 有时会提前通知安全团队
+  - key: C
+    level: 3
+    text: 上线流程里有接入环节，执行不稳定
+  - key: D
+    level: 4
+    text: 监控接入是上线的必备检查项，未接入不能验收
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 上线后才想起
+  - level: 2
+    state: 有时会提前通知安全团队
+  - level: 3
+    state: 上线流程里有接入环节，执行不稳定
+  - level: 4
+    state: 监控接入是上线的必备检查项，未接入不能验收
+  followups:
+  - 最近上线的系统接入情况如何？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 业务负责人
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: SOC-TEC-004
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.01
+  kind: closed
+  stem: 云上或外部托管的系统，监控数据是怎么获取的？
+  options:
+  - key: A
+    level: 1
+    text: 没有获取
+  - key: B
+    level: 2
+    text: 靠对方偶尔提供
+  - key: C
+    level: 3
+    text: 能获取部分日志，格式和时效不稳定
+  - key: D
+    level: 4
+    text: 有明确约定的数据范围和接口，纳入统一监控
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有获取
+  - level: 2
+    state: 靠对方偶尔提供
+  - level: 3
+    state: 能获取部分日志，格式和时效不稳定
+  - level: 4
+    state: 有明确约定的数据范围和接口，纳入统一监控
+  followups:
+  - 合同里有没有对日志提供的约定？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: SOC-TEC-005
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.02
+  kind: closed
+  stem: 目前有哪些检测用例或规则？按什么场景组织的？（请说明类别和数量，不需要提供规则细节）
+  options:
+  - key: A
+    level: 1
+    text: 主要用设备默认规则
+  - key: B
+    level: 2
+    text: 默认规则加少量自建
+  - key: C
+    level: 3
+    text: 有按场景整理的清单，覆盖常见攻击阶段
+  - key: D
+    level: 4
+    text: 清单与威胁画像、攻击框架对照，覆盖缺口有计划补齐
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 主要用设备默认规则
+  - level: 2
+    state: 默认规则加少量自建
+  - level: 3
+    state: 有按场景整理的清单，覆盖常见攻击阶段
+  - level: 4
+    state: 清单与威胁画像、攻击框架对照，覆盖缺口有计划补齐
+  followups:
+  - 最近新增了哪几类检测？
+  - 用例清单有没有对照攻击框架看过覆盖情况？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 安全负责人
+  prefill:
+  - source: siem_stats
+  industry_variants:
+  - industry: BANK
+    stem: 用例是否覆盖账户盗用、批量撞库、异常交易等金融场景？
+    followups:
+    - 与反欺诈团队的检测是如何衔接的？
+  - industry: POWER
+    stem: 用例是否覆盖工控协议异常、越权操作、跨区访问等场景？
+    followups:
+    - 这些用例是否在生产控制区测试过？
+  problem: false
+- id: SOC-TEC-006
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.02
+  kind: closed
+  stem: 检测用例的效果有没有验证？怎么验证？
+  options:
+  - key: A
+    level: 1
+    text: 没有验证
+  - key: B
+    level: 2
+    text: 出事后才知道有没有效
+  - key: C
+    level: 3
+    text: 偶尔做模拟测试
+  - key: D
+    level: 4
+    text: 定期用模拟攻击或测试数据验证，结果记录并驱动调整
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有验证
+  - level: 2
+    state: 出事后才知道有没有效
+  - level: 3
+    state: 偶尔做模拟测试
+  - level: 4
+    state: 定期用模拟攻击或测试数据验证，结果记录并驱动调整
+  followups:
+  - 最近一次验证发现了什么？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 安全负责人
+  prefill:
+  - source: prior_report
+  problem: false
+- id: SOC-TEC-007
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.02
+  kind: closed
+  stem: 每个检测用例是否有对应的处置说明？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 少数用例有
+  - key: C
+    level: 3
+    text: 大部分有，内容简略
+  - key: D
+    level: 4
+    text: 全部有，并包含研判要点和处置步骤
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 少数用例有
+  - level: 3
+    state: 大部分有，内容简略
+  - level: 4
+    state: 全部有，并包含研判要点和处置步骤
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  prefill:
+  - source: runbooks
+  problem: false
+- id: SOC-TEC-008
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.03
+  kind: closed
+  stem: 目前用的安全运营平台（如日志分析、告警汇聚）有哪些？它们之间是怎么配合的？
+  options:
+  - key: A
+    level: 1
+    text: 只有设备自带的控制台
+  - key: B
+    level: 2
+    text: 有汇聚平台，主要做日志存储
+  - key: C
+    level: 3
+    text: 有统一平台，告警汇聚和关联分析可用
+  - key: D
+    level: 4
+    text: 平台能力与流程打通，工单、资产、情报可联动
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 只有设备自带的控制台
+  - level: 2
+    state: 有汇聚平台，主要做日志存储
+  - level: 3
+    state: 有统一平台，告警汇聚和关联分析可用
+  - level: 4
+    state: 平台能力与流程打通，工单、资产、情报可联动
+  followups:
+  - 平台目前最大的使用障碍是什么？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: siem_stats
+  - source: asset_list
+  problem: false
+- id: SOC-TEC-009
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.03
+  kind: closed
+  stem: 有哪些重复性工作已经自动化？还有哪些靠人工？
+  options:
+  - key: A
+    level: 1
+    text: 基本全靠人工
+  - key: B
+    level: 2
+    text: 少量脚本，个人维护
+  - key: C
+    level: 3
+    text: 部分场景有剧本，覆盖有限
+  - key: D
+    level: 4
+    text: 有剧本库和维护机制，并统计自动化比例
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 基本全靠人工
+  - level: 2
+    state: 少量脚本，个人维护
+  - level: 3
+    state: 部分场景有剧本，覆盖有限
+  - level: 4
+    state: 有剧本库和维护机制，并统计自动化比例
+  followups:
+  - 自动化动作出错时怎么处理？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: runbooks
+  problem: false
+- id: SOC-TEC-010
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.03
+  kind: closed
+  stem: 平台自身的运行状况（可用性、性能、数据延迟）有没有监控？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 出问题才发现
+  - key: C
+    level: 3
+    text: 有基础监控，缺少告警
+  - key: D
+    level: 4
+    text: 有监控和告警，并纳入值班检查
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 出问题才发现
+  - level: 3
+    state: 有基础监控，缺少告警
+  - level: 4
+    state: 有监控和告警，并纳入值班检查
+  followups:
+  - 最近一次平台故障对监控有什么影响？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全分析
+  prefill:
+  - source: none
+  problem: false
+- id: SOC-TEC-011
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.04
+  kind: closed
+  stem: 发现告警时，能否快速知道对应资产是什么、归谁负责、有多重要？
+  options:
+  - key: A
+    level: 1
+    text: 不能
+  - key: B
+    level: 2
+    text: 要到处问人
+  - key: C
+    level: 3
+    text: 有资产台账，更新不及时
+  - key: D
+    level: 4
+    text: 资产信息与告警联动，自动带出责任人和重要性
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不能
+  - level: 2
+    state: 要到处问人
+  - level: 3
+    state: 有资产台账，更新不及时
+  - level: 4
+    state: 资产信息与告警联动，自动带出责任人和重要性
+  followups:
+  - 资产台账最近一次更新是什么时候？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: asset_list
+  problem: false
+- id: SOC-TEC-012
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.04
+  kind: closed
+  stem: 漏洞扫描或评估的结果是否会被用于告警研判？
+  options:
+  - key: A
+    level: 1
+    text: 不会
+  - key: B
+    level: 2
+    text: 偶尔人工参考
+  - key: C
+    level: 3
+    text: 有结果可查，研判时需手动关联
+  - key: D
+    level: 4
+    text: 结果与资产、告警自动关联，用于排序和研判
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不会
+  - level: 2
+    state: 偶尔人工参考
+  - level: 3
+    state: 有结果可查，研判时需手动关联
+  - level: 4
+    state: 结果与资产、告警自动关联，用于排序和研判
+  followups:
+  - 高危漏洞的修复进展，值班人员能看到吗？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: prior_report
+  problem: false
+- id: SOC-TEC-013
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.05
+  kind: closed
+  stem: 监控相关日志保存多长时间？保存在哪里？
+  options:
+  - key: A
+    level: 1
+    text: 没有统一要求
+  - key: B
+    level: 2
+    text: 保存时间因设备而异，部分少于半年
+  - key: C
+    level: 3
+    text: 多数日志保存不少于半年
+  - key: D
+    level: 4
+    text: 按日志类型规定保存期，满足法规要求，并有备份和防篡改措施
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有统一要求
+  - level: 2
+    state: 保存时间因设备而异，部分少于半年
+  - level: 3
+    state: 多数日志保存不少于半年
+  - level: 4
+    state: 按日志类型规定保存期，满足法规要求，并有备份和防篡改措施
+  followups:
+  - 保存期是怎么确定的？
+  - 超过保存期的日志怎么处理？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  - source: siem_stats
+  industry_variants:
+  - industry: BANK
+    stem: 日志保存期是否参照了金融监管对信息系统日志的要求？
+    followups:
+    - 涉及客户数据的日志有什么额外的保护措施？
+  - industry: POWER
+    stem: 生产控制区日志的保存位置和保存期有什么特殊安排？
+    followups:
+    - 离线保存的日志如何检索？
+  problem: false
+- id: SOC-TEC-014
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.05
+  kind: closed
+  stem: 日志时间是否统一校时？日志格式是否统一？
+  options:
+  - key: A
+    level: 1
+    text: 没有统一
+  - key: B
+    level: 2
+    text: 部分统一
+  - key: C
+    level: 3
+    text: 时间基本统一，格式需转换
+  - key: D
+    level: 4
+    text: 时间统一，格式标准化，并定期检查接入质量
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有统一
+  - level: 2
+    state: 部分统一
+  - level: 3
+    state: 时间基本统一，格式需转换
+  - level: 4
+    state: 时间统一，格式标准化，并定期检查接入质量
+  followups:
+  - 发现过日志缺失或时间错误导致分析困难的情况吗？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全分析
+  prefill:
+  - source: siem_stats
+  problem: false
+- id: SOC-TEC-015
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.05
+  kind: closed
+  stem: 对日志存储和平台的访问权限是怎么管理的？
+  options:
+  - key: A
+    level: 1
+    text: 多人共用账号
+  - key: B
+    level: 2
+    text: 个人账号，权限偏大
+  - key: C
+    level: 3
+    text: 按岗位分权，审查不定期
+  - key: D
+    level: 4
+    text: 按最小权限分权，定期审查，操作留痕
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 多人共用账号
+  - level: 2
+    state: 个人账号，权限偏大
+  - level: 3
+    state: 按岗位分权，审查不定期
+  - level: 4
+    state: 按最小权限分权，定期审查，操作留痕
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: SOC-MET-001
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.01
+  kind: closed
+  stem: 团队目前用哪些指标衡量安全运营的效果？
+  options:
+  - key: A
+    level: 1
+    text: 没有指标
+  - key: B
+    level: 2
+    text: 有工作量统计（如告警数）
+  - key: C
+    level: 3
+    text: 有响应时间、处置时间等过程指标
+  - key: D
+    level: 4
+    text: 过程与结果指标齐全，有目标值并定期对照
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有指标
+  - level: 2
+    state: 有工作量统计（如告警数）
+  - level: 3
+    state: 有响应时间、处置时间等过程指标
+  - level: 4
+    state: 过程与结果指标齐全，有目标值并定期对照
+  followups:
+  - 这些指标的数据是怎么取得的？
+  - 指标有没有推动过实际改变？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: siem_stats
+  - source: prior_report
+  problem: false
+- id: SOC-MET-002
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.01
+  kind: closed
+  stem: 告警从产生到开始处理、到处置完成，平均用时大概是多少？
+  options:
+  - key: A
+    level: 1
+    text: 没统计过
+  - key: B
+    level: 2
+    text: 凭印象说一个范围
+  - key: C
+    level: 3
+    text: 有统计，口径不统一
+  - key: D
+    level: 4
+    text: 有统计，口径明确，按告警级别分别看
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没统计过
+  - level: 2
+    state: 凭印象说一个范围
+  - level: 3
+    state: 有统计，口径不统一
+  - level: 4
+    state: 有统计，口径明确，按告警级别分别看
+  followups:
+  - 哪个环节耗时最长？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 运营值班
+  - 安全分析
+  prefill:
+  - source: ticket_export
+  - source: siem_stats
+  problem: false
+- id: SOC-MET-003
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.01
+  kind: closed
+  stem: 有没有统计检测覆盖情况，比如重要系统被监控的比例？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 大致知道
+  - key: C
+    level: 3
+    text: 有统计，不定期
+  - key: D
+    level: 4
+    text: 定期统计，有目标和缺口清单
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 大致知道
+  - level: 3
+    state: 有统计，不定期
+  - level: 4
+    state: 定期统计，有目标和缺口清单
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 安全负责人
+  prefill:
+  - source: asset_list
+  - source: siem_stats
+  problem: false
+- id: SOC-MET-004
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.02
+  kind: closed
+  stem: 向管理层汇报安全运营情况的频率和形式是什么？
+  options:
+  - key: A
+    level: 1
+    text: 没有固定汇报
+  - key: B
+    level: 2
+    text: 出事后才汇报
+  - key: C
+    level: 3
+    text: 定期汇报，内容以数量为主
+  - key: D
+    level: 4
+    text: 定期汇报，包含风险趋势、资源需求，并形成决策事项
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有固定汇报
+  - level: 2
+    state: 出事后才汇报
+  - level: 3
+    state: 定期汇报，内容以数量为主
+  - level: 4
+    state: 定期汇报，包含风险趋势、资源需求，并形成决策事项
+  followups:
+  - 管理层最关心哪些内容？
+  - 最近一次汇报后有什么决定？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: prior_report
+  problem: false
+- id: SOC-MET-005
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.02
+  kind: closed
+  stem: 安全运营的预算和资源，是怎么申请和决定的？
+  options:
+  - key: A
+    level: 1
+    text: 没有专项预算
+  - key: B
+    level: 2
+    text: 随 IT 预算一起，没有单列
+  - key: C
+    level: 3
+    text: 有专项预算，依据不够充分
+  - key: D
+    level: 4
+    text: 预算与风险、指标挂钩，每年评估使用情况
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有专项预算
+  - level: 2
+    state: 随 IT 预算一起，没有单列
+  - level: 3
+    state: 有专项预算，依据不够充分
+  - level: 4
+    state: 预算与风险、指标挂钩，每年评估使用情况
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 管理层
+  - 安全负责人
+  prefill:
+  - source: none
+  problem: false
+- id: SOC-MET-006
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.03
+  kind: closed
+  stem: 过去一年，安全运营方面做过哪些改进？这些改进的来源是什么？
+  options:
+  - key: A
+    level: 1
+    text: 没有明确改进
+  - key: B
+    level: 2
+    text: 零散改进，无记录
+  - key: C
+    level: 3
+    text: 有改进清单，来自事件和复盘
+  - key: D
+    level: 4
+    text: 改进来自指标、复盘、检查等多个来源，并有跟踪闭环
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有明确改进
+  - level: 2
+    state: 零散改进，无记录
+  - level: 3
+    state: 有改进清单，来自事件和复盘
+  - level: 4
+    state: 改进来自指标、复盘、检查等多个来源，并有跟踪闭环
+  followups:
+  - 最有效的一项改进是什么？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: prior_report
+  - source: incident_record
+  problem: false
+- id: SOC-MET-007
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.03
+  kind: closed
+  stem: 改进事项有没有负责人和完成时间？落实情况有人跟踪吗？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 有想法没有安排
+  - key: C
+    level: 3
+    text: 有负责人，跟踪不定期
+  - key: D
+    level: 4
+    text: 有清单、负责人、时限，定期通报进展
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 有想法没有安排
+  - level: 3
+    state: 有负责人，跟踪不定期
+  - level: 4
+    state: 有清单、负责人、时限，定期通报进展
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: none
+  problem: false
+- id: SOC-MET-008
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.03
+  kind: closed
+  stem: 监管检查、内部检查或外部评估中发现的运营类问题，后来怎么处理的？
+  options:
+  - key: A
+    level: 1
+    text: 没有整理
+  - key: B
+    level: 2
+    text: 由相关人员自行处理
+  - key: C
+    level: 3
+    text: 有整改清单，闭环不完整
+  - key: D
+    level: 4
+    text: 统一登记、跟踪闭环，并复查整改效果
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有整理
+  - level: 2
+    state: 由相关人员自行处理
+  - level: 3
+    state: 有整改清单，闭环不完整
+  - level: 4
+    state: 统一登记、跟踪闭环，并复查整改效果
+  followups:
+  - 还有哪些问题尚未完成整改？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 合规风控
+  prefill:
+  - source: prior_report
+  problem: false
+- id: SOC-ORG-012
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.01
+  kind: open
+  stem: 请用自己的话说说，目前安全运营工作中最大的人手或分工困难是什么？
+  anchors:
+  - level: 1
+    state: 几乎没有可说明的困难或表述不清
+  - level: 2
+    state: 能说出具体困难，但没有影响范围
+  - level: 3
+    state: 能说出困难、影响范围和已采取的措施
+  followups:
+  - 这个困难出现多久了？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  prefill:
+  - source: none
+  problem: false
+- id: SOC-PRC-015
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.02
+  kind: open
+  stem: 请回忆最近一次令您印象深刻的安全事件，从发现到处置经过了哪些环节？哪些环节不顺？
+  anchors:
+  - level: 1
+    state: 说不出具体经过
+  - level: 2
+    state: 能说出经过，不顺的环节不明确
+  - level: 3
+    state: 能说出完整时间线、不顺环节及原因
+  followups:
+  - 如果再发生一次，会怎么调整？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  - 运营值班
+  prefill:
+  - source: incident_record
+  problem: false
+- id: SOC-TEC-016
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.02
+  kind: open
+  stem: 您觉得目前最担心“看不到”的是哪类攻击或行为？为什么？
+  anchors:
+  - level: 1
+    state: 没有明确担心
+  - level: 2
+    state: 能说出担心的类别，没有依据
+  - level: 3
+    state: 能说出类别、依据和已评估的覆盖缺口
+  followups:
+  - 有没有计划改进？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 安全负责人
+  prefill:
+  - source: none
+  problem: false
+- id: SOC-MET-009
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.02
+  kind: open
+  stem: 如果只能向管理层争取一项资源，您会提什么？理由是什么？
+  anchors:
+  - level: 1
+    state: 没有想法
+  - level: 2
+    state: 有诉求，缺少依据
+  - level: 3
+    state: 有诉求，并有数据或事件支撑
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: none
+  problem: false

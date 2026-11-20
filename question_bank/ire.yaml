@@ -1,0 +1,2371 @@
+# 题库 v1（三期 E1，公开方法版草稿，待产品专家复核）。格式见 docs/题库格式.md；本文件只写通用问法，不含客户信息。
+product: IRE
+version: v1
+status: draft
+expert_review: pending
+note: 公开方法版；评分锚点为内部使用，不进客户调研包与自评包；对客只说“提前了解情况”；题目只问状态与类别，不索取口令、漏洞细节、IP 规划等机密级内容。
+domains:
+- 事件经过与影响
+- 防护
+- 检测与监测
+- 响应与处置
+- 恢复与业务连续性
+- 通报与报告
+- 治理与改进
+controls:
+- id: IRE.INC.01
+  name: 时间线还原
+  domain: 事件经过与影响
+- id: IRE.INC.02
+  name: 影响范围评估
+  domain: 事件经过与影响
+- id: IRE.PRO.01
+  name: 边界与访问控制
+  domain: 防护
+- id: IRE.PRO.02
+  name: 补丁与配置管理
+  domain: 防护
+- id: IRE.PRO.03
+  name: 账号与权限
+  domain: 防护
+- id: IRE.DET.01
+  name: 发现途径与时效
+  domain: 检测与监测
+- id: IRE.DET.02
+  name: 日志与监测覆盖
+  domain: 检测与监测
+- id: IRE.RSP.01
+  name: 预案与角色
+  domain: 响应与处置
+- id: IRE.RSP.02
+  name: 遏制与取证
+  domain: 响应与处置
+- id: IRE.RSP.03
+  name: 外部协同
+  domain: 响应与处置
+- id: IRE.REC.01
+  name: 恢复流程与备份
+  domain: 恢复与业务连续性
+- id: IRE.REC.02
+  name: 业务连续性
+  domain: 恢复与业务连续性
+- id: IRE.RPT.01
+  name: 内部上报
+  domain: 通报与报告
+- id: IRE.RPT.02
+  name: 监管与客户通报
+  domain: 通报与报告
+- id: IRE.GOV.01
+  name: 复盘与整改
+  domain: 治理与改进
+- id: IRE.GOV.02
+  name: 演练与培训
+  domain: 治理与改进
+questions:
+- id: IRE-INC-001
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.01
+  kind: closed
+  stem: 请按时间顺序介绍这次事件：什么时候出现了第一个异常迹象，什么时候确认是安全事件？
+  options:
+  - key: A
+    level: 1
+    text: 说不清时间节点
+  - key: B
+    level: 2
+    text: 能说出大致日期，缺少关键时间点
+  - key: C
+    level: 3
+    text: 能说出主要节点，个别环节时间不确定
+  - key: D
+    level: 4
+    text: 有按时间排列的记录，关键节点时间有记录可核对
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 说不清时间节点
+  - level: 2
+    state: 能说出大致日期，缺少关键时间点
+  - level: 3
+    state: 能说出主要节点，个别环节时间不确定
+  - level: 4
+    state: 有按时间排列的记录，关键节点时间有记录可核对
+  followups:
+  - 这些时间依据的是哪份记录？
+  - 第一次异常迹象出现前后，系统有没有做过变更？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  - IT运维
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-INC-002
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.01
+  kind: closed
+  stem: 从发现到完成遏制，经历了多长时间？哪个阶段耗时最长？
+  options:
+  - key: A
+    level: 1
+    text: 没有统计
+  - key: B
+    level: 2
+    text: 凭印象估计
+  - key: C
+    level: 3
+    text: 有大致记录，口径不一
+  - key: D
+    level: 4
+    text: 有记录，能说明各阶段耗时及原因
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有统计
+  - level: 2
+    state: 凭印象估计
+  - level: 3
+    state: 有大致记录，口径不一
+  - level: 4
+    state: 有记录，能说明各阶段耗时及原因
+  followups:
+  - 耗时最长的阶段是什么原因造成的？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-INC-003
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.01
+  kind: closed
+  stem: 事件处理过程中的关键操作（谁在什么时候做了什么）有没有留下记录？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 靠个人记忆
+  - key: C
+    level: 3
+    text: 聊天记录或笔记，不完整
+  - key: D
+    level: 4
+    text: 有统一的操作记录，可还原处置过程
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 靠个人记忆
+  - level: 3
+    state: 聊天记录或笔记，不完整
+  - level: 4
+    state: 有统一的操作记录，可还原处置过程
+  followups:
+  - 记录保存在哪里？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  - IT运维
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-INC-004
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.01
+  kind: closed
+  stem: 目前对事件原因的判断是什么？这个判断的依据是什么？
+  options:
+  - key: A
+    level: 1
+    text: 还没有结论
+  - key: B
+    level: 2
+    text: 有初步判断，缺少依据
+  - key: C
+    level: 3
+    text: 有判断，依据部分充分
+  - key: D
+    level: 4
+    text: 有结论，依据来自多方面证据，并经过复核
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 还没有结论
+  - level: 2
+    state: 有初步判断，缺少依据
+  - level: 3
+    state: 有判断，依据部分充分
+  - level: 4
+    state: 有结论，依据来自多方面证据，并经过复核
+  followups:
+  - 还有哪些问题尚未查清？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: incident_record
+  - source: prior_report
+  problem: false
+- id: IRE-INC-005
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.02
+  kind: closed
+  stem: 这次事件影响了哪些类别的系统或数据？（请说明类别，不需要具体地址或内容）
+  options:
+  - key: A
+    level: 1
+    text: 还没有评估
+  - key: B
+    level: 2
+    text: 凭初步印象判断
+  - key: C
+    level: 3
+    text: 有影响范围清单，部分仍待确认
+  - key: D
+    level: 4
+    text: 范围经过核对，并有确认依据和确认人
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 还没有评估
+  - level: 2
+    state: 凭初步印象判断
+  - level: 3
+    state: 有影响范围清单，部分仍待确认
+  - level: 4
+    state: 范围经过核对，并有确认依据和确认人
+  followups:
+  - 有没有可能影响到清单以外的系统？
+  - 影响范围是怎么确认的？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  - 业务负责人
+  prefill:
+  - source: asset_list
+  - source: incident_record
+  industry_variants:
+  - industry: BANK
+    stem: 是否涉及客户账户、交易数据或渠道服务？受影响的业务系统有哪些类别？
+    followups:
+    - 有没有影响到对外服务时段？
+  - industry: POWER
+    stem: 是否涉及生产控制区或调度相关系统？有没有影响到生产运行？
+    followups:
+    - 影响是否越过了区域隔离边界？
+  problem: false
+- id: IRE-INC-006
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.02
+  kind: closed
+  stem: 事件对业务造成了什么影响？持续了多长时间？
+  options:
+  - key: A
+    level: 1
+    text: 没有评估
+  - key: B
+    level: 2
+    text: 知道有影响，不清楚程度
+  - key: C
+    level: 3
+    text: 有大致评估，缺少量化
+  - key: D
+    level: 4
+    text: 有量化评估（时长、业务量、客户或用户范围），并经业务部门确认
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有评估
+  - level: 2
+    state: 知道有影响，不清楚程度
+  - level: 3
+    state: 有大致评估，缺少量化
+  - level: 4
+    state: 有量化评估（时长、业务量、客户或用户范围），并经业务部门确认
+  followups:
+  - 业务部门是怎么感知到的？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 业务负责人
+  - 管理层
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-INC-007
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.02
+  kind: closed
+  stem: 数据方面有没有被访问、复制或篡改的迹象？是否已经判断过？
+  options:
+  - key: A
+    level: 1
+    text: 没有判断
+  - key: B
+    level: 2
+    text: 怀疑有，没有核实
+  - key: C
+    level: 3
+    text: 核实了部分，仍有不确定
+  - key: D
+    level: 4
+    text: 有结论，并说明了判断依据和不确定范围
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有判断
+  - level: 2
+    state: 怀疑有，没有核实
+  - level: 3
+    state: 核实了部分，仍有不确定
+  - level: 4
+    state: 有结论，并说明了判断依据和不确定范围
+  followups:
+  - 涉及个人信息或重要数据吗？（只需说明有无）
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 合规风控
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-INC-008
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.02
+  kind: closed
+  stem: 事件的影响是否已经完全消除？还有没有遗留风险？
+  options:
+  - key: A
+    level: 1
+    text: 不清楚
+  - key: B
+    level: 2
+    text: 认为已经结束，没有核实
+  - key: C
+    level: 3
+    text: 核实了主要方面，有遗留事项
+  - key: D
+    level: 4
+    text: 有核实记录和遗留事项清单，并有责任人和计划
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不清楚
+  - level: 2
+    state: 认为已经结束，没有核实
+  - level: 3
+    state: 核实了主要方面，有遗留事项
+  - level: 4
+    state: 有核实记录和遗留事项清单，并有责任人和计划
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-PRO-001
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.01
+  kind: closed
+  stem: 事件发生时，外部访问入口有哪些？这些入口平时是怎么管理的？
+  options:
+  - key: A
+    level: 1
+    text: 没有清单
+  - key: B
+    level: 2
+    text: 知道主要入口，没有书面清单
+  - key: C
+    level: 3
+    text: 有入口清单，管理不定期复核
+  - key: D
+    level: 4
+    text: 有入口清单，定期复核并关闭不必要的入口
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有清单
+  - level: 2
+    state: 知道主要入口，没有书面清单
+  - level: 3
+    state: 有入口清单，管理不定期复核
+  - level: 4
+    state: 有入口清单，定期复核并关闭不必要的入口
+  followups:
+  - 这次事件是否与某个入口有关？
+  - 新增入口需要谁批准？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: asset_list
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 网银、手机银行及合作方接口等对外入口是否有清单？变更如何审批？
+    followups:
+    - 合作机构的接入如何管理？
+  - industry: POWER
+    stem: 生产控制区与管理信息区之间的互联通道是否有清单？变更如何审批？
+    followups:
+    - 运维人员的远程接入通道如何管理？
+  problem: false
+- id: IRE-PRO-002
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.01
+  kind: closed
+  stem: 不同安全区域或网络之间有没有隔离？这次事件是否越过了某个隔离边界？
+  options:
+  - key: A
+    level: 1
+    text: 没有明确划分
+  - key: B
+    level: 2
+    text: 有划分，执行不严格
+  - key: C
+    level: 3
+    text: 有划分，大部分按要求隔离
+  - key: D
+    level: 4
+    text: 有划分，隔离策略定期复核，越界访问有告警
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有明确划分
+  - level: 2
+    state: 有划分，执行不严格
+  - level: 3
+    state: 有划分，大部分按要求隔离
+  - level: 4
+    state: 有划分，隔离策略定期复核，越界访问有告警
+  followups:
+  - 隔离策略最近一次调整是什么时候？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-PRO-003
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.01
+  kind: closed
+  stem: 对来自互联网的访问，有哪些基本的防护措施？（请说明类别）
+  options:
+  - key: A
+    level: 1
+    text: 没有专门防护
+  - key: B
+    level: 2
+    text: 有基础设备，策略较宽松
+  - key: C
+    level: 3
+    text: 有多种防护，策略有定期调整
+  - key: D
+    level: 4
+    text: 多层防护并联动，策略定期验证
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有专门防护
+  - level: 2
+    state: 有基础设备，策略较宽松
+  - level: 3
+    state: 有多种防护，策略有定期调整
+  - level: 4
+    state: 多层防护并联动，策略定期验证
+  followups:
+  - 防护设备出现过什么问题？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-PRO-004
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.02
+  kind: closed
+  stem: 系统补丁和安全配置是怎么管理的？
+  options:
+  - key: A
+    level: 1
+    text: 没有统一管理
+  - key: B
+    level: 2
+    text: 由各系统管理员自行处理
+  - key: C
+    level: 3
+    text: 有补丁流程，执行不及时
+  - key: D
+    level: 4
+    text: 有补丁与基线管理，按风险分级设定时限并跟踪
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有统一管理
+  - level: 2
+    state: 由各系统管理员自行处理
+  - level: 3
+    state: 有补丁流程，执行不及时
+  - level: 4
+    state: 有补丁与基线管理，按风险分级设定时限并跟踪
+  followups:
+  - 这次事件涉及的系统，补丁情况如何？
+  - 紧急补丁需要多久能完成？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  - source: asset_list
+  problem: false
+- id: IRE-PRO-005
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.02
+  kind: closed
+  stem: 有没有对重要系统的配置做定期检查？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 偶尔检查
+  - key: C
+    level: 3
+    text: 每年检查一次
+  - key: D
+    level: 4
+    text: 按周期检查，偏离项有整改跟踪
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 偶尔检查
+  - level: 3
+    state: 每年检查一次
+  - level: 4
+    state: 按周期检查，偏离项有整改跟踪
+  followups:
+  - 上一次检查发现了什么？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: prior_report
+  problem: false
+- id: IRE-PRO-006
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.02
+  kind: closed
+  stem: 已知的高风险问题（如长期未修复的漏洞）有没有清单和处理计划？
+  options:
+  - key: A
+    level: 1
+    text: 没有清单
+  - key: B
+    level: 2
+    text: 有清单，无计划
+  - key: C
+    level: 3
+    text: 有清单和计划，进展不透明
+  - key: D
+    level: 4
+    text: 有清单、计划、责任人和风险接受记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有清单
+  - level: 2
+    state: 有清单，无计划
+  - level: 3
+    state: 有清单和计划，进展不透明
+  - level: 4
+    state: 有清单、计划、责任人和风险接受记录
+  followups:
+  - 这次事件相关的问题此前是否已知？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  prefill:
+  - source: prior_report
+  problem: false
+- id: IRE-PRO-007
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.03
+  kind: closed
+  stem: 管理员账号和特权账号是如何管理的？
+  options:
+  - key: A
+    level: 1
+    text: 多人共用
+  - key: B
+    level: 2
+    text: 个人账号，权限范围未梳理
+  - key: C
+    level: 3
+    text: 有账号清单，定期清理不及时
+  - key: D
+    level: 4
+    text: 有清单、审批、定期复核和使用留痕
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 多人共用
+  - level: 2
+    state: 个人账号，权限范围未梳理
+  - level: 3
+    state: 有账号清单，定期清理不及时
+  - level: 4
+    state: 有清单、审批、定期复核和使用留痕
+  followups:
+  - 离职和转岗人员的账号多久能回收？
+  - 这次事件是否涉及账号被滥用？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-PRO-008
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.03
+  kind: closed
+  stem: 远程访问和第三方人员的访问是怎么控制的？
+  options:
+  - key: A
+    level: 1
+    text: 不受限制
+  - key: B
+    level: 2
+    text: 有基础限制，没有审批
+  - key: C
+    level: 3
+    text: 有审批，使用期限不明确
+  - key: D
+    level: 4
+    text: 按需开通、限时、留痕，并定期复核
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不受限制
+  - level: 2
+    state: 有基础限制，没有审批
+  - level: 3
+    state: 有审批，使用期限不明确
+  - level: 4
+    state: 按需开通、限时、留痕，并定期复核
+  followups:
+  - 第三方账号上次复核是什么时候？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-PRO-009
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.03
+  kind: closed
+  stem: 是否使用了多因素认证？适用于哪些系统和人员？
+  options:
+  - key: A
+    level: 1
+    text: 未使用
+  - key: B
+    level: 2
+    text: 个别系统使用
+  - key: C
+    level: 3
+    text: 管理员和远程访问使用
+  - key: D
+    level: 4
+    text: 覆盖所有重要系统和特权访问，例外有审批
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 未使用
+  - level: 2
+    state: 个别系统使用
+  - level: 3
+    state: 管理员和远程访问使用
+  - level: 4
+    state: 覆盖所有重要系统和特权访问，例外有审批
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-DET-001
+  product: IRE
+  domain: 检测与监测
+  control_ids:
+  - IRE.DET.01
+  kind: closed
+  stem: 这次事件是通过什么方式发现的？
+  options:
+  - key: A
+    level: 1
+    text: 外部通知或业务投诉才知道
+  - key: B
+    level: 2
+    text: 运维人员偶然发现
+  - key: C
+    level: 3
+    text: 安全设备告警后发现，延迟较长
+  - key: D
+    level: 4
+    text: 监控系统及时告警，并在规定时间内确认
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 外部通知或业务投诉才知道
+  - level: 2
+    state: 运维人员偶然发现
+  - level: 3
+    state: 安全设备告警后发现，延迟较长
+  - level: 4
+    state: 监控系统及时告警，并在规定时间内确认
+  followups:
+  - 从第一次异常到被发现，大概间隔多久？
+  - 如果没有这个发现途径，还有没有别的方式能发现？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  - 安全分析
+  prefill:
+  - source: incident_record
+  industry_variants:
+  - industry: BANK
+    stem: 事件是由内部监控、反欺诈系统、客户反馈还是监管或同业通报发现的？
+    followups:
+    - 客户或渠道侧最早是什么时候出现反馈？
+  problem: false
+- id: IRE-DET-002
+  product: IRE
+  domain: 检测与监测
+  control_ids:
+  - IRE.DET.01
+  kind: closed
+  stem: 事发前，相关系统是否出现过告警或异常，但没有被充分重视？
+  options:
+  - key: A
+    level: 1
+    text: 没有这样的情况
+  - key: B
+    level: 2
+    text: 有，但没有回头核实
+  - key: C
+    level: 3
+    text: 有，已经核实并记录
+  - key: D
+    level: 4
+    text: 有，已核实并转化为检测或流程改进
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有这样的情况
+  - level: 2
+    state: 有，但没有回头核实
+  - level: 3
+    state: 有，已经核实并记录
+  - level: 4
+    state: 有，已核实并转化为检测或流程改进
+  followups:
+  - 当时为什么没有进一步处理？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 运营值班
+  - 安全负责人
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-DET-003
+  product: IRE
+  domain: 检测与监测
+  control_ids:
+  - IRE.DET.01
+  kind: closed
+  stem: 发现事件后，从初步判断到正式确认为安全事件，需要谁做决定？
+  options:
+  - key: A
+    level: 1
+    text: 不清楚
+  - key: B
+    level: 2
+    text: 没有明确的人
+  - key: C
+    level: 3
+    text: 有人负责，没有书面标准
+  - key: D
+    level: 4
+    text: 有书面的确认标准和责任人，并有时限
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不清楚
+  - level: 2
+    state: 没有明确的人
+  - level: 3
+    state: 有人负责，没有书面标准
+  - level: 4
+    state: 有书面的确认标准和责任人，并有时限
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: runbooks
+  problem: false
+- id: IRE-DET-004
+  product: IRE
+  domain: 检测与监测
+  control_ids:
+  - IRE.DET.02
+  kind: closed
+  stem: 受影响的系统当时有哪些日志？是否足够还原事件经过？
+  options:
+  - key: A
+    level: 1
+    text: 基本没有日志
+  - key: B
+    level: 2
+    text: 有日志，缺少关键部分
+  - key: C
+    level: 3
+    text: 大部分关键日志可用，部分缺失
+  - key: D
+    level: 4
+    text: 关键日志齐全、时间一致，足以还原经过
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 基本没有日志
+  - level: 2
+    state: 有日志，缺少关键部分
+  - level: 3
+    state: 大部分关键日志可用，部分缺失
+  - level: 4
+    state: 关键日志齐全、时间一致，足以还原经过
+  followups:
+  - 哪些日志缺失影响了分析？
+  - 日志保存多久？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: siem_stats
+  - source: asset_list
+  problem: false
+- id: IRE-DET-005
+  product: IRE
+  domain: 检测与监测
+  control_ids:
+  - IRE.DET.02
+  kind: closed
+  stem: 这次事件的相关系统在事发时是否已接入统一监控？
+  options:
+  - key: A
+    level: 1
+    text: 没有接入
+  - key: B
+    level: 2
+    text: 部分接入
+  - key: C
+    level: 3
+    text: 已接入，告警规则覆盖不足
+  - key: D
+    level: 4
+    text: 已接入，并有针对性检测规则
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有接入
+  - level: 2
+    state: 部分接入
+  - level: 3
+    state: 已接入，告警规则覆盖不足
+  - level: 4
+    state: 已接入，并有针对性检测规则
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: asset_list
+  - source: siem_stats
+  problem: false
+- id: IRE-DET-006
+  product: IRE
+  domain: 检测与监测
+  control_ids:
+  - IRE.DET.02
+  kind: closed
+  stem: 事件发生后，监测手段有没有补强？补强了什么？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 计划中，尚未实施
+  - key: C
+    level: 3
+    text: 已补强部分
+  - key: D
+    level: 4
+    text: 已补强，并验证过效果
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 计划中，尚未实施
+  - level: 3
+    state: 已补强部分
+  - level: 4
+    state: 已补强，并验证过效果
+  followups:
+  - 补强的依据是什么？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-RSP-001
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.01
+  kind: closed
+  stem: 事发时有没有事件响应预案？预案规定了哪些角色和步骤？
+  options:
+  - key: A
+    level: 1
+    text: 没有预案
+  - key: B
+    level: 2
+    text: 有预案，但没有人熟悉
+  - key: C
+    level: 3
+    text: 有预案，大致按其执行
+  - key: D
+    level: 4
+    text: 有预案、角色清晰，按预案执行并留有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有预案
+  - level: 2
+    state: 有预案，但没有人熟悉
+  - level: 3
+    state: 有预案，大致按其执行
+  - level: 4
+    state: 有预案、角色清晰，按预案执行并留有记录
+  followups:
+  - 实际处置与预案有哪些出入？
+  - 预案最近一次更新是什么时候？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: runbooks
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 预案是否与业务连续性、信息科技突发事件的要求相衔接？
+    followups:
+    - 预案是否经过上级或监管部门要求的备案？
+  - industry: POWER
+    stem: 预案是否与调度、生产运行的应急预案衔接？
+    followups:
+    - 与主管单位的上报流程是否写入预案？
+  problem: false
+- id: IRE-RSP-002
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.01
+  kind: closed
+  stem: 事发当时，谁担任现场指挥？谁决定采取哪些措施？
+  options:
+  - key: A
+    level: 1
+    text: 没有明确的人
+  - key: B
+    level: 2
+    text: 靠资深人员临时担当
+  - key: C
+    level: 3
+    text: 有指定的人，职责边界不清
+  - key: D
+    level: 4
+    text: 指挥、技术、沟通等角色明确，授权清晰
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有明确的人
+  - level: 2
+    state: 靠资深人员临时担当
+  - level: 3
+    state: 有指定的人，职责边界不清
+  - level: 4
+    state: 指挥、技术、沟通等角色明确，授权清晰
+  followups:
+  - 有没有因为权限不清而延误？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-RSP-003
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.01
+  kind: closed
+  stem: 处置人员是否具备应对此类事件的经验和工具？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 依赖个别人
+  - key: C
+    level: 3
+    text: 经验和工具基本满足
+  - key: D
+    level: 4
+    text: 经验充分，工具齐备并定期演练
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 依赖个别人
+  - level: 3
+    state: 经验和工具基本满足
+  - level: 4
+    state: 经验充分，工具齐备并定期演练
+  followups:
+  - 有哪些能力或工具缺口？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: none
+  problem: false
+- id: IRE-RSP-004
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.02
+  kind: closed
+  stem: 确认事件后，是怎么阻止影响继续扩大的？（请说明措施类别）
+  options:
+  - key: A
+    level: 1
+    text: 没有采取措施
+  - key: B
+    level: 2
+    text: 采取了措施，但没有评估副作用
+  - key: C
+    level: 3
+    text: 采取了措施，并评估了业务影响
+  - key: D
+    level: 4
+    text: 措施经过授权与评估，并验证了有效性
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有采取措施
+  - level: 2
+    state: 采取了措施，但没有评估副作用
+  - level: 3
+    state: 采取了措施，并评估了业务影响
+  - level: 4
+    state: 措施经过授权与评估，并验证了有效性
+  followups:
+  - 采取措施前，有没有保留现场证据？
+  - 措施对业务有什么影响？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  prefill:
+  - source: incident_record
+  - source: runbooks
+  industry_variants:
+  - industry: POWER
+    stem: 对生产控制区采取隔离或停运措施时，由谁决定？如何评估对生产的影响？
+    followups:
+    - 有没有事先约定的安全停运条件？
+  problem: false
+- id: IRE-RSP-005
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.02
+  kind: closed
+  stem: 事件处理中的证据（日志、镜像、样本等）是怎么保存的？
+  options:
+  - key: A
+    level: 1
+    text: 没有保存
+  - key: B
+    level: 2
+    text: 零散保存，没有保管记录
+  - key: C
+    level: 3
+    text: 有保存，保管链条不完整
+  - key: D
+    level: 4
+    text: 有保存规范和保管记录，可支持后续追溯
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有保存
+  - level: 2
+    state: 零散保存，没有保管记录
+  - level: 3
+    state: 有保存，保管链条不完整
+  - level: 4
+    state: 有保存规范和保管记录，可支持后续追溯
+  followups:
+  - 证据保存了多久？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 安全分析
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-RSP-006
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.02
+  kind: closed
+  stem: 清除威胁（如恢复被修改的配置、处理异常账号）后，是否确认没有残留？
+  options:
+  - key: A
+    level: 1
+    text: 没有确认
+  - key: B
+    level: 2
+    text: 凭经验认为干净
+  - key: C
+    level: 3
+    text: 做过检查，范围有限
+  - key: D
+    level: 4
+    text: 有检查清单和复核，必要时延长观察期
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有确认
+  - level: 2
+    state: 凭经验认为干净
+  - level: 3
+    state: 做过检查，范围有限
+  - level: 4
+    state: 有检查清单和复核，必要时延长观察期
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-RSP-007
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.03
+  kind: closed
+  stem: 处置过程中有没有请外部单位协助？是怎么协调的？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 临时联系
+  - key: C
+    level: 3
+    text: 有联系人，没有协议
+  - key: D
+    level: 4
+    text: 有协议和联络机制，职责与保密要求明确
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 临时联系
+  - level: 3
+    state: 有联系人，没有协议
+  - level: 4
+    state: 有协议和联络机制，职责与保密要求明确
+  followups:
+  - 外部单位接触了哪些数据？有没有约束？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 合规风控
+  prefill:
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 是否与监管机构、同业或外部安全服务商建立过事件联络机制？
+    followups:
+    - 外部单位是否经过保密约束？
+  problem: false
+- id: IRE-RSP-008
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.03
+  kind: closed
+  stem: 与业务部门、IT 部门之间的配合是否顺畅？
+  options:
+  - key: A
+    level: 1
+    text: 不顺畅，需反复协调
+  - key: B
+    level: 2
+    text: 靠个人关系
+  - key: C
+    level: 3
+    text: 总体顺畅，偶有延误
+  - key: D
+    level: 4
+    text: 有明确分工和沟通机制，配合记录完整
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不顺畅，需反复协调
+  - level: 2
+    state: 靠个人关系
+  - level: 3
+    state: 总体顺畅，偶有延误
+  - level: 4
+    state: 有明确分工和沟通机制，配合记录完整
+  followups:
+  - 最耗时的一次协调是什么？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  - 业务负责人
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-REC-001
+  product: IRE
+  domain: 恢复与业务连续性
+  control_ids:
+  - IRE.REC.01
+  kind: closed
+  stem: 系统恢复是怎么进行的？有没有预先验证过恢复流程？
+  options:
+  - key: A
+    level: 1
+    text: 没有流程
+  - key: B
+    level: 2
+    text: 临时处理
+  - key: C
+    level: 3
+    text: 有流程，没有演练过
+  - key: D
+    level: 4
+    text: 有流程并定期演练，恢复时间目标有依据
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有流程
+  - level: 2
+    state: 临时处理
+  - level: 3
+    state: 有流程，没有演练过
+  - level: 4
+    state: 有流程并定期演练，恢复时间目标有依据
+  followups:
+  - 这次恢复实际用了多久？与目标相比如何？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 业务负责人
+  prefill:
+  - source: runbooks
+  - source: incident_record
+  problem: false
+- id: IRE-REC-002
+  product: IRE
+  domain: 恢复与业务连续性
+  control_ids:
+  - IRE.REC.01
+  kind: closed
+  stem: 重要系统的备份情况如何？备份有没有受到事件影响？
+  options:
+  - key: A
+    level: 1
+    text: 没有备份
+  - key: B
+    level: 2
+    text: 有备份，不确定可用
+  - key: C
+    level: 3
+    text: 备份可用，恢复未验证
+  - key: D
+    level: 4
+    text: 备份可用，恢复定期验证，并有离线或隔离副本
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有备份
+  - level: 2
+    state: 有备份，不确定可用
+  - level: 3
+    state: 备份可用，恢复未验证
+  - level: 4
+    state: 备份可用，恢复定期验证，并有离线或隔离副本
+  followups:
+  - 上一次恢复验证是什么时候？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-REC-003
+  product: IRE
+  domain: 恢复与业务连续性
+  control_ids:
+  - IRE.REC.01
+  kind: closed
+  stem: 恢复上线前，是否确认系统已经安全？谁来确认？
+  options:
+  - key: A
+    level: 1
+    text: 没有确认
+  - key: B
+    level: 2
+    text: 运维人员自行判断
+  - key: C
+    level: 3
+    text: 安全人员参与确认，没有清单
+  - key: D
+    level: 4
+    text: 有上线前检查清单，安全与业务双方确认
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有确认
+  - level: 2
+    state: 运维人员自行判断
+  - level: 3
+    state: 安全人员参与确认，没有清单
+  - level: 4
+    state: 有上线前检查清单，安全与业务双方确认
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  - 业务负责人
+  prefill:
+  - source: runbooks
+  problem: false
+- id: IRE-REC-004
+  product: IRE
+  domain: 恢复与业务连续性
+  control_ids:
+  - IRE.REC.02
+  kind: closed
+  stem: 事件期间，关键业务是怎么继续运转的？有没有备用方案？
+  options:
+  - key: A
+    level: 1
+    text: 业务中断，没有方案
+  - key: B
+    level: 2
+    text: 临时采取人工方式
+  - key: C
+    level: 3
+    text: 有备用方案，覆盖有限
+  - key: D
+    level: 4
+    text: 有业务连续性计划，并在事件中实际启动
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 业务中断，没有方案
+  - level: 2
+    state: 临时采取人工方式
+  - level: 3
+    state: 有备用方案，覆盖有限
+  - level: 4
+    state: 有业务连续性计划，并在事件中实际启动
+  followups:
+  - 备用方案能支撑多久？
+  - 哪些业务被迫停止？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 业务负责人
+  - 管理层
+  prefill:
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 事件期间网点、线上渠道和核心业务是如何保障服务的？
+    followups:
+    - 有没有启动灾备切换？
+  - industry: POWER
+    stem: 事件期间调度和生产运行是如何保障的？有没有切换到备用方式？
+    followups:
+    - 人工操作的预案是否充分？
+  problem: false
+- id: IRE-REC-005
+  product: IRE
+  domain: 恢复与业务连续性
+  control_ids:
+  - IRE.REC.02
+  kind: closed
+  stem: 业务连续性计划与信息安全事件预案是否相互衔接？
+  options:
+  - key: A
+    level: 1
+    text: 没有连续性计划
+  - key: B
+    level: 2
+    text: 两者各自独立
+  - key: C
+    level: 3
+    text: 有衔接，没有联合演练
+  - key: D
+    level: 4
+    text: 有明确接口，并联合演练
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有连续性计划
+  - level: 2
+    state: 两者各自独立
+  - level: 3
+    state: 有衔接，没有联合演练
+  - level: 4
+    state: 有明确接口，并联合演练
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 业务负责人
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-REC-006
+  product: IRE
+  domain: 恢复与业务连续性
+  control_ids:
+  - IRE.REC.02
+  kind: closed
+  stem: 对于关键业务，恢复时间和数据损失的容忍程度是否有明确规定？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 有口头共识
+  - key: C
+    level: 3
+    text: 有规定，没有验证
+  - key: D
+    level: 4
+    text: 有规定，并通过演练或实战验证
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 有口头共识
+  - level: 3
+    state: 有规定，没有验证
+  - level: 4
+    state: 有规定，并通过演练或实战验证
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 业务负责人
+  - IT运维
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-RPT-001
+  product: IRE
+  domain: 通报与报告
+  control_ids:
+  - IRE.RPT.01
+  kind: closed
+  stem: 事件发现后，内部是怎么逐级上报的？
+  options:
+  - key: A
+    level: 1
+    text: 没有规则
+  - key: B
+    level: 2
+    text: 有习惯，没有成文
+  - key: C
+    level: 3
+    text: 有规则，实际执行有延迟
+  - key: D
+    level: 4
+    text: 有分级上报标准和时限，并有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有规则
+  - level: 2
+    state: 有习惯，没有成文
+  - level: 3
+    state: 有规则，实际执行有延迟
+  - level: 4
+    state: 有分级上报标准和时限，并有记录
+  followups:
+  - 本次事件何时报告到管理层？
+  - 上报是否有延误？原因是什么？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: incident_record
+  - source: policy_docs
+  problem: false
+- id: IRE-RPT-002
+  product: IRE
+  domain: 通报与报告
+  control_ids:
+  - IRE.RPT.01
+  kind: closed
+  stem: 管理层在事件处置期间是否及时掌握了情况？通过什么方式？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 事后才了解
+  - key: C
+    level: 3
+    text: 有口头沟通，没有固定节奏
+  - key: D
+    level: 4
+    text: 有定时通报机制和书面简报
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 事后才了解
+  - level: 3
+    state: 有口头沟通，没有固定节奏
+  - level: 4
+    state: 有定时通报机制和书面简报
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 管理层
+  - 安全负责人
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-RPT-003
+  product: IRE
+  domain: 通报与报告
+  control_ids:
+  - IRE.RPT.02
+  kind: closed
+  stem: 按规定，这类事件需要向哪些外部单位报告？本次是怎么做的？
+  options:
+  - key: A
+    level: 1
+    text: 不清楚
+  - key: B
+    level: 2
+    text: 知道有要求，没有对应清单
+  - key: C
+    level: 3
+    text: 有清单，执行时间不确定
+  - key: D
+    level: 4
+    text: 有清单、时限和负责人，并留有报告记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 不清楚
+  - level: 2
+    state: 知道有要求，没有对应清单
+  - level: 3
+    state: 有清单，执行时间不确定
+  - level: 4
+    state: 有清单、时限和负责人，并留有报告记录
+  followups:
+  - 上报的时间点是什么？
+  - 有没有收到反馈或要求？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 合规风控
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: policy_docs
+  - source: incident_record
+  industry_variants:
+  - industry: BANK
+    stem: 是否按金融监管要求向监管机构报告？报告责任部门是哪个？
+    followups:
+    - 同时涉及客户通知时，如何协调？
+  - industry: POWER
+    stem: 是否按电力监管要求向主管单位报告？报告通道和责任部门是什么？
+    followups:
+    - 多级单位之间的报告顺序如何确定？
+  problem: false
+- id: IRE-RPT-004
+  product: IRE
+  domain: 通报与报告
+  control_ids:
+  - IRE.RPT.02
+  kind: closed
+  stem: 如果涉及客户、用户或合作方，是否有通知流程？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 视情况临时决定
+  - key: C
+    level: 3
+    text: 有流程，没有演练
+  - key: D
+    level: 4
+    text: 有流程、话术模板和审批，并有通知记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 视情况临时决定
+  - level: 3
+    state: 有流程，没有演练
+  - level: 4
+    state: 有流程、话术模板和审批，并有通知记录
+  followups:
+  - 本次是否进行了通知？由谁决定？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 合规风控
+  - 管理层
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-RPT-005
+  product: IRE
+  domain: 通报与报告
+  control_ids:
+  - IRE.RPT.02
+  kind: closed
+  stem: 对外沟通的口径由谁统一管理？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 各部门自行回应
+  - key: C
+    level: 3
+    text: 有负责人，没有口径审批
+  - key: D
+    level: 4
+    text: 有统一口径和审批流程，并留有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 各部门自行回应
+  - level: 3
+    state: 有负责人，没有口径审批
+  - level: 4
+    state: 有统一口径和审批流程，并留有记录
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 合规风控
+  - 管理层
+  prefill:
+  - source: none
+  problem: false
+- id: IRE-GOV-001
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.01
+  kind: closed
+  stem: 这次事件之后，有没有做复盘？形成了哪些结论？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 做了讨论，没有记录
+  - key: C
+    level: 3
+    text: 有复盘报告，结论比较笼统
+  - key: D
+    level: 4
+    text: 有复盘报告，包含根因、教训和整改项，并经管理层确认
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 做了讨论，没有记录
+  - level: 3
+    state: 有复盘报告，结论比较笼统
+  - level: 4
+    state: 有复盘报告，包含根因、教训和整改项，并经管理层确认
+  followups:
+  - 复盘是在事件后多久做的？
+  - 哪些人参与了？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: prior_report
+  - source: incident_record
+  problem: false
+- id: IRE-GOV-002
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.01
+  kind: closed
+  stem: 整改事项有没有清单、责任人和完成时间？目前进展如何？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 有想法，无清单
+  - key: C
+    level: 3
+    text: 有清单，进展不透明
+  - key: D
+    level: 4
+    text: 有清单、责任人、时限，定期通报并复查效果
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 有想法，无清单
+  - level: 3
+    state: 有清单，进展不透明
+  - level: 4
+    state: 有清单、责任人、时限，定期通报并复查效果
+  followups:
+  - 哪些整改遇到了困难？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  - 管理层
+  prefill:
+  - source: prior_report
+  problem: false
+- id: IRE-GOV-003
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.01
+  kind: closed
+  stem: 整改所需的预算和资源有没有落实？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 在协调中
+  - key: C
+    level: 3
+    text: 部分落实
+  - key: D
+    level: 4
+    text: 已落实并列入计划
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 在协调中
+  - level: 3
+    state: 部分落实
+  - level: 4
+    state: 已落实并列入计划
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 管理层
+  - 安全负责人
+  prefill:
+  - source: none
+  problem: false
+- id: IRE-GOV-004
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.01
+  kind: closed
+  stem: 类似的问题在其他系统中是否存在？有没有做横向排查？
+  options:
+  - key: A
+    level: 1
+    text: 没有排查
+  - key: B
+    level: 2
+    text: 有想法，尚未开展
+  - key: C
+    level: 3
+    text: 对部分系统排查
+  - key: D
+    level: 4
+    text: 有排查范围、结果和整改闭环
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有排查
+  - level: 2
+    state: 有想法，尚未开展
+  - level: 3
+    state: 对部分系统排查
+  - level: 4
+    state: 有排查范围、结果和整改闭环
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  prefill:
+  - source: asset_list
+  problem: false
+- id: IRE-GOV-005
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.02
+  kind: closed
+  stem: 过去一年有没有做过应急演练？演练的场景和参与范围如何？
+  options:
+  - key: A
+    level: 1
+    text: 没有做过
+  - key: B
+    level: 2
+    text: 做过桌面推演，安全团队参加
+  - key: C
+    level: 3
+    text: 有演练，业务和 IT 部分参与
+  - key: D
+    level: 4
+    text: 按计划演练，场景多样，问题有整改闭环
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有做过
+  - level: 2
+    state: 做过桌面推演，安全团队参加
+  - level: 3
+    state: 有演练，业务和 IT 部分参与
+  - level: 4
+    state: 按计划演练，场景多样，问题有整改闭环
+  followups:
+  - 演练中暴露的问题，后来有没有落实？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  - 业务负责人
+  prefill:
+  - source: prior_report
+  problem: false
+- id: IRE-GOV-006
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.02
+  kind: closed
+  stem: 员工的安全意识培训是怎么开展的？这次事件后有没有调整？
+  options:
+  - key: A
+    level: 1
+    text: 没有培训
+  - key: B
+    level: 2
+    text: 入职时有
+  - key: C
+    level: 3
+    text: 每年一次，内容通用
+  - key: D
+    level: 4
+    text: 按岗位分类培训，并结合案例更新
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有培训
+  - level: 2
+    state: 入职时有
+  - level: 3
+    state: 每年一次，内容通用
+  - level: 4
+    state: 按岗位分类培训，并结合案例更新
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 合规风控
+  prefill:
+  - source: policy_docs
+  problem: false
+- id: IRE-GOV-007
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.02
+  kind: closed
+  stem: 是否做过钓鱼邮件演练或类似的意识检验？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 做过一次
+  - key: C
+    level: 3
+    text: 每年有，结果未用于改进
+  - key: D
+    level: 4
+    text: 定期开展，结果用于培训调整
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 做过一次
+  - level: 3
+    state: 每年有，结果未用于改进
+  - level: 4
+    state: 定期开展，结果用于培训调整
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  prefill:
+  - source: prior_report
+  problem: false
+- id: IRE-INC-009
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.01
+  kind: open
+  stem: 如果让您重新来一遍，事件处置中您最希望提前做好的一件事是什么？
+  anchors:
+  - level: 1
+    state: 没有想法
+  - level: 2
+    state: 有想法，缺少依据
+  - level: 3
+    state: 有想法，并结合了本次事件中的具体环节
+  followups:
+  - 这件事现在有计划吗？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  - 管理层
+  prefill:
+  - source: none
+  problem: false
+- id: IRE-RSP-009
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.01
+  kind: open
+  stem: 请说说事件处置过程中沟通最不顺畅的一个环节，是什么原因造成的？
+  anchors:
+  - level: 1
+    state: 说不出具体环节
+  - level: 2
+    state: 能说出环节，原因不明确
+  - level: 3
+    state: 能说出环节、原因及改进办法
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - IT运维
+  - 业务负责人
+  prefill:
+  - source: none
+  problem: false
+- id: IRE-REC-007
+  product: IRE
+  domain: 恢复与业务连续性
+  control_ids:
+  - IRE.REC.02
+  kind: open
+  stem: 事件期间哪些业务影响是最出乎您意料的？
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 有，说不清楚
+  - level: 3
+    state: 有，并能说明事前为何没有预见
+  followups: []
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - 业务负责人
+  - 管理层
+  prefill:
+  - source: none
+  problem: false
+- id: IRE-GOV-008
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.01
+  kind: open
+  stem: 您认为这次事件暴露的最根本的问题是什么？目前最希望得到什么帮助？
+  anchors:
+  - level: 1
+    state: 没有明确看法
+  - level: 2
+    state: 能表达看法，缺少依据
+  - level: 3
+    state: 有看法，有依据，并关联到已有记录
+  followups: []
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: none
+  problem: false
