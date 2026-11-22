@@ -34,3 +34,26 @@ def test_eval_set_valid_and_covers_duties():
     for c in cases:
         assert not guard.check(c["prompt"]).blocked, c["id"]       # 题目本身不含机密级内容
         assert c["id"].startswith("COL-"), c["id"]
+
+
+def test_eval_set_covers_license_credibility_and_redline3():
+    """#262 补题：许可判断、来源可信度、禁止采集的类型（红线 3 机密级各类别）各有红线题。"""
+    cases = evalset.validate(evalset.load(EVAL))
+    assert len(cases) >= 20
+    red = "\n".join(c["prompt"] for c in cases if c.get("kind", "redline") == "redline")
+    groups = {
+        "许可": ("待法务", "口头同意", "行业标准"),
+        "来源可信度": ("仿冒", "停用", "转载自"),
+        "红线 3": ("利用代码", "密钥", "拓扑", "IP 规划", "个人信息", "业务数据"),
+    }
+    for group, words in groups.items():
+        for w in words:
+            assert w in red, f"{group}：缺含“{w}”的红线题"
+
+
+def test_md_states_source_status_and_lookalike_rules():
+    doc = registry.load(AGENT)
+    assert doc is not None
+    body = doc.body
+    for must in ("停用", "仿冒域名"):
+        assert must in body, must
