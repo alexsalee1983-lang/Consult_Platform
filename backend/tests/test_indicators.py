@@ -39,7 +39,7 @@ def _sign(db, p: Project, code: str, titles_bodies: list[tuple[str, str]], flow:
         versions[str(seq)] = 1
     for action in flow:
         db.add(SignOff(project_id=p.id, deliverable_id=d.id, action=action, revision=d.revision, versions=versions,
-                       actor="t"))
+                       actor="t", created_at=NOW - timedelta(hours=1)))
     db.flush()
     return d
 
@@ -75,9 +75,9 @@ def test_deliverable_metrics(library):  # noqa: F811
         sec = db.scalar(select(DeliverableSection).join(Deliverable).where(
             Deliverable.project_id == p.id, Deliverable.code == "D1", DeliverableSection.seq == 2))
         db.add_all([JudgmentEvent(project_id=p.id, kind="edit", deliverable_code="D1", section_seq=2,
-                                  category="moderate", magnitude=0.4),
+                                  category="moderate", magnitude=0.4, created_at=NOW),
                     JudgmentEvent(project_id=p.id, kind="edit", deliverable_code="D1", section_seq=1,
-                                  category="light", magnitude=0.1)])
+                                  category="light", magnitude=0.1, created_at=NOW)])
         assert sec is not None
         db.commit()
         rep = indicators.compute(db, NOW - timedelta(days=1), NOW + timedelta(minutes=1), project_ids=[p.id])
