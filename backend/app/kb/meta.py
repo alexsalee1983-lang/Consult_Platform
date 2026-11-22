@@ -15,7 +15,7 @@ ItemMeta / VersionContent）：
 | 交付阶段 | stage | STAGES：启动……通用（中文） |
 | 交付物类型 | doc_type | DOC_TYPES 的键：TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT / SRC（依据原文，二期 B7）/ ENF / RAR / BMK / GLS（扩展分类，决策记录 2026-11-16） |
 | 能力域标签 | capabilities | CAPABILITIES：管理 / 运营 / 技术支撑（列表） |
-| 适用行业 | industries | 中文列表，通用的填 ["通用"] |
+| 适用行业 | industries | 中文列表，取值见 INDUSTRIES，通用的填 ["通用"] |
 | 密级 | classification | internal 内部 / restricted 受限 |
 | 脱敏状态 | KbVersion.deid_status | pending 未脱敏 / passed 已脱敏 / not_needed 无需脱敏 |
 | 来源 | source_type | expert 专家萃取 / project 项目沉淀 / public 公开资料 / internal 公司内部制度改造 |
@@ -52,6 +52,8 @@ PRODUCTS = {
     "NSG": "网络安全治理规划",
     "GEN": "通用（不限服务产品）",
 }
+# 适用行业（三期 B15 取值表，负责人 11-21 定）：多选；“通用”不和具体行业同时出现
+INDUSTRIES = ("通用", "银行", "证券", "保险", "电力", "制造", "政务", "医疗", "运营商")
 # 交付阶段
 STAGES = ("启动", "调研", "分析", "设计", "落地辅导", "验收", "通用")
 # 交付物类型（缩写 → 名称）

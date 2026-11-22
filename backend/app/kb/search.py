@@ -90,7 +90,10 @@ def _filters(layer: str, product: str, stage: str, doc_type: str, include_genera
         sql.append("i.layer = :layer")
         params["layer"] = layer
     if product:
-        sql.append("i.product IN (:product, 'GEN')" if include_general and product != "GEN" else "i.product = :product")
+        # 按标签表过滤（B15）：多产品条目在每个产品下都能检到；GEN 与具体产品互斥，所以 GEN 条目只有一个产品标签
+        values = "(:product, 'GEN')" if include_general and product != "GEN" else "(:product)"
+        sql.append("EXISTS (SELECT 1 FROM kb_item_labels pl WHERE pl.item_id = i.id AND pl.kind = 'product' "
+                   f"AND pl.value IN {values})")
         params["product"] = product
     if stage:
         sql.append("i.stage IN (:stage, '通用')")

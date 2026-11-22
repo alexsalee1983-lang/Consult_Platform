@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
-from ..kb import autopublish, citations
+from ..kb import autopublish, citations, labels
 from ..kb import meta as kb_meta
 from ..kb import refs as kb_refs
 from ..kb import review as rv
@@ -61,6 +61,7 @@ class ItemMetaIn(BaseModel):
     owner: str = ""
     tags: list[str] = Field(default_factory=list)
     control_ids: list[str] = Field(default_factory=list)
+    products: list[str] = Field(default_factory=list)   # 多个产品（B15），主产品 product 在前；空 = 只有主产品
 
 
 class ContentIn(BaseModel):
@@ -193,6 +194,7 @@ class ItemOut(BaseModel):
 class ItemDetail(ItemOut):
     versions: list[VersionBrief] = []
     aliases: list[str] = []             # 旧编号等别名（B15）；doc_id 是现行编号
+    products: list[str] = []            # 全部服务产品（B15 标签表），主产品在前
 
 
 def _err(e: rv.ReviewError):
@@ -284,6 +286,7 @@ def get_item(doc_id: str, db: Session = Depends(get_db), user: User = Depends(cu
     versions = item.versions if rv.is_knowledge_user(db, user) else [
         v for v in item.versions if v.id == item.current_version_id]
     out = _item_out(db, item, ItemDetail, versions)
+    out.products = labels.products_of(db, [item.id]).get(item.id, [item.product])
     out.aliases = kb_refs.aliases_of(db, item.id)
     return out
 
@@ -421,7 +424,7 @@ def basis(q: str = Query("", max_length=500), ref_document: str = Query("", max_
 @router.get("/meta")
 def meta_options() -> dict:
     m = kb_meta
-    return {"layers": m.LAYERS, "domains": m.DOMAINS, "products": m.PRODUCTS, "stages": list(m.STAGES),
+    return {"layers": m.LAYERS, "domains": m.DOMAINS, "products": m.PRODUCTS, "industries": list(m.INDUSTRIES), "stages": list(m.STAGES),
             "doc_types": m.DOC_TYPES, "capabilities": list(m.CAPABILITIES), "classifications": m.CLASSIFICATIONS,
             "source_types": m.SOURCE_TYPES, "visible_roles": m.VISIBLE_ROLES, "ref_statuses": m.REF_STATUSES,
             "version_statuses": m.VERSION_STATUSES}

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..core.db import utcnow
 from ..models import KbItem, KbItemAlias, KbMapping, KbVersion
-from . import mapping, meta
+from . import labels, mapping, meta
 
 
 @dataclass
@@ -31,9 +31,14 @@ class ItemMeta:
     owner: str = ""
     tags: list[str] = field(default_factory=list)   # 检索加权标签（二期 B2），对应模块配置的 kb_tags
     control_ids: list[str] = field(default_factory=list)   # 公司控制项编号（4A 埋点，k0008）
+    products: list[str] = field(default_factory=list)   # 全部服务产品（B15，主产品 product 在前）；空 = 只有主产品
 
     def check(self) -> None:
         meta.check_classification(self.layer, self.domain, self.product, self.doc_type)
+        if not self.product and self.products:
+            self.product = str(self.products[0]).strip()
+        self.products = labels.check_products(self.product, self.products)
+        self.industries = labels.check_industries(self.industries)
         meta.check_tags(self.stage, self.capabilities, self.industries)
         meta.check_visibility(self.classification, self.visible_roles)
         self.tags = check_search_tags(self.tags)
@@ -137,6 +142,7 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
             if attempt == retries - 1:
                 raise
             continue
+        labels.sync(db, item, m.products)
         v = _new_version(db, item, c, created_by)
         db.commit()
         return v

@@ -12,11 +12,11 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import Engine, Table, inspect, insert, select, text
 
-from ..models import KbChunk, KbDeidReport, KbItem, KbItemAlias, KbMapping, KbReview, KbUpload, KbVersion
+from ..models import KbChunk, KbDeidReport, KbItem, KbItemAlias, KbItemLabel, KbMapping, KbReview, KbUpload, KbVersion
 from .migrate import KB_TABLES, drop_main_kb_tables, kb_row_count
 
 # 按外键依赖排序；kb_items.current_version_id 指向 kb_versions，先置空，版本搬完再补
-COPY_ORDER: tuple[Table, ...] = tuple(m.__table__ for m in (KbUpload, KbDeidReport, KbItem, KbItemAlias, KbVersion, KbMapping, KbChunk, KbReview))
+COPY_ORDER: tuple[Table, ...] = tuple(m.__table__ for m in (KbUpload, KbDeidReport, KbItem, KbItemAlias, KbItemLabel, KbVersion, KbMapping, KbChunk, KbReview))
 _BATCH = 500
 
 
@@ -64,7 +64,7 @@ def _copy(main: Engine, kb: Engine) -> None:
                     "SELECT id, embedding_model, embedding::text FROM kb_chunks WHERE embedding IS NOT NULL")):
                 dst.execute(text("UPDATE kb_chunks SET embedding = CAST(:v AS vector), embedding_model = :m "
                                  "WHERE id = :id"), {"v": vec, "m": model, "id": cid})
-            for t in (t for t in KB_TABLES if t != "kb_item_aliases"):   # 别名表没有自增 id
+            for t in (t for t in KB_TABLES if t not in ("kb_item_aliases", "kb_item_labels")):   # 别名表、标签表没有自增 id
                 dst.execute(text(f"SELECT setval(pg_get_serial_sequence('{t}', 'id'), "  # nosec B608  表名是常量
                                  f"coalesce((SELECT max(id) FROM {t}), 0) + 1, false)"))
 

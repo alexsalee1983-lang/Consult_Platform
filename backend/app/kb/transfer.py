@@ -27,7 +27,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from ..core import audit
 from ..core.db import utcnow
@@ -35,6 +35,7 @@ from ..models import KbItem, KbReview, KbVersion, User
 from . import citations, importer
 from . import review as rv
 from .files import Entry, EntryError, format_entry, parse_entry
+from . import labels
 from .items import ItemMeta, VersionContent
 
 FORMAT = "kb-export/1"
@@ -87,7 +88,8 @@ def _entry(item: KbItem, v: KbVersion) -> Entry:
                  stage=item.stage, capabilities=list(item.capabilities or []), industries=list(item.industries or []),
                  classification=item.classification, visible_roles=list(item.visible_roles or []),
                  owner=item.owner, tags=list(item.tags or []),
-                 control_ids=list(item.control_ids or []))
+                 control_ids=list(item.control_ids or []),
+                 products=labels.products_of(object_session(item), [item.id]).get(item.id, []))   # 多产品（B15）
     c = VersionContent(title=v.title, body=v.body, source_type=v.source_type, source_detail=v.source_detail,
                        summary=v.summary, applicability=v.applicability, change_note=v.change_note,
                        ref_document=v.ref_document, ref_version=v.ref_version, ref_status=v.ref_status,

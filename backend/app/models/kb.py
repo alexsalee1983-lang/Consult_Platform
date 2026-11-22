@@ -13,7 +13,7 @@
 """
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import false as sql_false
 
@@ -66,6 +66,19 @@ class KbItemAlias(KbBase):
     item_id: Mapped[int] = mapped_column(ForeignKey("kb_items.id"), index=True)
     kind: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbItemLabel(KbBase):
+    """条目多值标签（三期 B15，知识区迁移 k0011）：kind 为 product / industry / control / capability / domain / tag，
+    一个条目可以挂多个产品、多个行业。只经 app/kb/labels.py 写入；读取以本表为准，kb_items 上的旧列只双写，
+    给回滚和旧报表用。source：manual（条目文件 / 界面）/ legacy（迁移回填）/ derived（B19 由控制项推出）。"""
+    __tablename__ = "kb_item_labels"
+    __table_args__ = (Index("ix_kb_item_labels_kind_value", "kind", "value", "item_id"),)
+
+    item_id: Mapped[int] = mapped_column(ForeignKey("kb_items.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    value: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source: Mapped[str] = mapped_column(String(16), default="manual")
 
 
 class KbVersion(KbBase):

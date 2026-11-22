@@ -5,7 +5,7 @@
     title: 无夜班客户的夜间值守做法
     layer: L2                        # 以下取值见 app/kb/meta.py（公共规范第 7 节）
     domain: OPS
-    product: SOC
+    product: SOC                     # 多个产品写列表 [SOC, ISO]，第一个是主产品；GEN 不和具体产品同时出现
     doc_type: MTD
     stage: 设计
     capabilities: [运营]
@@ -83,6 +83,9 @@ def parse_entry(text: str) -> Entry:
         return v if isinstance(v, list) else [x.strip() for x in str(v).split(",") if x.strip()]
 
     meta_kw = {k: head[k] for k in META_KEYS if k in head}
+    if isinstance(meta_kw.get("product"), list):    # 多个产品（B15）：第一个是主产品
+        meta_kw["products"] = [str(x).strip() for x in meta_kw["product"] if str(x).strip()]
+        meta_kw["product"] = meta_kw["products"][0] if meta_kw["products"] else ""
     for k in ("capabilities", "industries", "visible_roles", "tags", "control_ids"):
         if k in meta_kw:
             meta_kw[k] = [str(x) for x in as_list(meta_kw[k])]
@@ -113,6 +116,8 @@ def format_entry(e: Entry) -> str:
     head: dict = {"key": e.key, "title": e.content.title}
     for k in META_KEYS:
         v = getattr(e.meta, k)
+        if k == "product" and len(e.meta.products) > 1:
+            v = list(e.meta.products)
         if v not in ("", None, []) and not (k == "classification" and v == "internal") \
                 and not (k == "visible_roles" and v == ["consultant", "admin"]):
             head[k] = v
