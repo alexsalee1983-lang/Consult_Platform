@@ -5,7 +5,8 @@
   并更新本地文件 /tmp/worker.alive 的时间（容器健康检查用，不依赖 Redis）。
 - 收到 SIGTERM / SIGINT 时做完当前任务再退出。
 - 每 SCAN_SECONDS 秒扫描一次到期项目，自动发起删除申请（app/project/deletion.py）。
-- 每 DAILY_SECONDS 秒（启动时先做一次）排每日自检、停用长期未登录的账号（app/services/ops.py，二期 C5）。
+- 每 DAILY_SECONDS 秒（启动时先做一次）排每日自检、停用长期未登录的账号（app/services/ops.py，二期 C5）；
+  按日期切换依据现行状态（app/kb/reg_lifecycle.py，三期 B26）。
 - 每 RECHECK_SECONDS 秒扫描一次交付件里的知识引用，标记使用反馈待复查（app/kb/recheck.py，二期 B13）。
 - 不做数据库迁移（由 backend 启动时完成），compose 里 worker 在 backend 健康后才启动。
 """
@@ -164,6 +165,22 @@ def _daily() -> None:
             log.info("停用长期未登录的账号 %d 个", len(made))
     except Exception as e:  # noqa: BLE001
         log.warning("每日运维任务出错：%s", type(e).__name__)
+    _reg_lifecycle()
+
+
+def _reg_lifecycle() -> None:
+    """三期 B26：按施行日、废止日切换依据现行状态，处理替代关系（可重复执行）。"""
+    from datetime import date
+
+    from .kb import reg_lifecycle
+
+    try:
+        with SessionLocal() as db:
+            r = reg_lifecycle.run(db, date.today())
+        if r.changes:
+            log.info("法规生命周期：状态变化 %d 条，已登记 %d 条", len(r.changes), r.counts()["applied"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("法规生命周期任务出错：%s", type(e).__name__)
 
 
 def main() -> None:

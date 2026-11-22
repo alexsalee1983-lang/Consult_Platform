@@ -77,7 +77,10 @@ class VersionContent:
     ref_status: str = ""
     ref_code: str = ""
     ref_replaced_by: str = ""
+    ref_replaces: str = ""
+    ref_amends: str = ""
     effective_date: date | None = None
+    repeal_date: date | None = None
     review_date: date | None = None
 
     def check(self, layer: str) -> None:
@@ -106,7 +109,8 @@ def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) 
                   body=c.body, applicability=c.applicability, change_note=c.change_note,
                   source_type=c.source_type, source_detail=c.source_detail, ref_document=c.ref_document,
                   ref_version=c.ref_version, ref_status=c.ref_status, ref_code=c.ref_code,
-                  ref_replaced_by=c.ref_replaced_by, effective_date=effective,
+                  ref_replaced_by=c.ref_replaced_by, ref_replaces=c.ref_replaces, ref_amends=c.ref_amends,
+                  effective_date=effective, repeal_date=c.repeal_date,
                   review_date=review, created_by=created_by)
     db.add(v)
     if rows:

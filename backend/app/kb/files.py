@@ -21,7 +21,10 @@
     ref_status: current              # current / upcoming / repealed / superseded
     ref_code: GB/T 22239-2019        # 可选（二期 B7）：文号或标准号
     ref_replaced_by: ……              # 可选：已被替代时写替代文件名和版本
-    effective_date: 2017-06-01       # 可选：施行日期
+    effective_date: 2017-06-01       # 可选：施行日期（即将实施的到日自动转现行，三期 B26）
+    repeal_date: 2031-01-01          # 可选：废止日（到日自动转已废止 / 已被替代）
+    ref_replaces: ……                 # 可选：本文件替代的旧文件名称或文号（本文件施行时旧文件自动转已被替代）
+    ref_amends: ……                   # 可选：本文件部分修订的文件名称或文号（施行时只提示复核，不改状态）
     ---
     ## 章节标题（依据类用条款号，如“第二十一条 网络安全等级保护”）
 
@@ -45,7 +48,8 @@ KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 META_KEYS = ("layer", "domain", "product", "doc_type", "stage", "capabilities", "industries", "classification",
              "visible_roles", "owner", "tags", "control_ids")
 CONTENT_KEYS = ("title", "source_type", "source_detail", "summary", "applicability", "change_note", "ref_document",
-                "ref_version", "ref_status", "ref_code", "ref_replaced_by")
+                "ref_version", "ref_status", "ref_code", "ref_replaced_by",
+                "ref_replaces", "ref_amends")
 
 
 class EntryError(ValueError):
@@ -94,11 +98,12 @@ def parse_entry(text: str) -> Entry:
     if "title" not in content_kw or "source_type" not in content_kw:
         raise EntryError("元数据缺少 title 或 source_type")
     content = VersionContent(body=body, **content_kw)
-    if head.get("effective_date") not in (None, ""):
-        try:
-            content.effective_date = date.fromisoformat(str(head["effective_date"]))
-        except ValueError as e:
-            raise EntryError(f"effective_date 不是 YYYY-MM-DD 日期：{head['effective_date']!r}") from e
+    for k in ("effective_date", "repeal_date"):        # repeal_date：废止日（三期 B26）
+        if head.get(k) not in (None, ""):
+            try:
+                setattr(content, k, date.fromisoformat(str(head[k])))
+            except ValueError as e:
+                raise EntryError(f"{k} 不是 YYYY-MM-DD 日期：{head[k]!r}") from e
     try:
         item_meta.check()
         content.check(item_meta.layer)
@@ -120,7 +125,8 @@ def format_entry(e: Entry) -> str:
         v = getattr(e.content, k)
         if k != "title" and v:
             head[k] = v
-    if e.content.effective_date:
-        head["effective_date"] = e.content.effective_date.isoformat()
+    for k in ("effective_date", "repeal_date"):
+        if getattr(e.content, k):
+            head[k] = getattr(e.content, k).isoformat()
     return "---\n" + yaml.safe_dump(head, allow_unicode=True, sort_keys=False).strip() + "\n---\n\n" + \
         e.content.body.strip() + "\n"

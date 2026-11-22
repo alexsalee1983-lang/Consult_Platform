@@ -77,10 +77,13 @@ class KbVersion(KbBase):
     ref_status: Mapped[str] = mapped_column(String(16), default="")
     ref_code: Mapped[str] = mapped_column(String(100), default="")          # 文号或标准号（二期 B7）
     ref_replaced_by: Mapped[str] = mapped_column(String(200), default="")   # 已被替代时：替代文件名和版本
+    ref_replaces: Mapped[str] = mapped_column(String(200), default="")      # 本文件替代的旧文件（名称或文号，三期 B26）
+    ref_amends: Mapped[str] = mapped_column(String(200), default="")        # 本文件部分修订的文件（三期 B26）
     deid_status: Mapped[str] = mapped_column(String(16), default="pending")    # pending / passed / not_needed
     deid_report_id: Mapped[int | None] = mapped_column(ForeignKey("kb_deid_reports.id"), nullable=True)
     upload_id: Mapped[int | None] = mapped_column(ForeignKey("kb_uploads.id"), nullable=True)
     effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    repeal_date: Mapped[date | None] = mapped_column(Date, nullable=True)   # 废止日（三期 B26，到日自动切换）
     review_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
