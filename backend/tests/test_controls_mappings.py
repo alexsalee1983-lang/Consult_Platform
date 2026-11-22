@@ -42,6 +42,11 @@ CSF_WITHDRAWN = {
 }
 # 等保 2.0（GB/T 22239-2019）第三级安全通用要求：8.1.<层面>.<控制点>，层面 → 控制点数
 MLPS_L3 = {1: 10, 2: 3, 3: 6, 4: 11, 5: 4, 6: 4, 7: 5, 8: 4, 9: 10, 10: 14}
+# 第三级工业控制系统安全扩展要求：8.5.<层面>.<控制点>（物理环境 1、通信网络 2、区域边界 3、计算环境 1、建设管理 2）
+MLPS_ICS_L3 = {1: 1, 2: 2, 3: 3, 4: 1, 5: 2}
+MLPS_ICS_RE = re.compile(r"^8\.5\.(\d)\.(\d)$")
+# 只要求电力行业项（*.PWR.*）映射工控扩展；其余框架每项都要映射
+OPTIONAL_FW = {"MLPS_ICS"}
 MLPS_RE = re.compile(r"^8\.1\.(\d{1,2})\.(\d{1,2})$")
 CSF_RE = re.compile(r"^(GV|ID|PR|DE|RS|RC)\.[A-Z]{2}-\d{2}$")
 
@@ -57,6 +62,9 @@ def _valid_clause(fw: str, clause: str) -> bool:
     if fw == "MLPS":
         mm = MLPS_RE.match(clause)
         return bool(mm) and int(mm[1]) in MLPS_L3 and 1 <= int(mm[2]) <= MLPS_L3[int(mm[1])]
+    if fw == "MLPS_ICS":
+        mm = MLPS_ICS_RE.match(clause)
+        return bool(mm) and int(mm[1]) in MLPS_ICS_L3 and 1 <= int(mm[2]) <= MLPS_ICS_L3[int(mm[1])]
     return False
 
 
@@ -72,7 +80,7 @@ def test_header(data: tuple[dict, dict]) -> None:
     assert m["catalog_version"] == catalog["version"]
     assert m["status"] == "draft"
     assert m["expert_review"] == "pending"
-    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS"}
+    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS", "MLPS_ICS"}
     for fw in m["frameworks"].values():
         assert fw["name"] and fw["version"]
 
@@ -82,7 +90,7 @@ def test_every_control_mapped_to_each_framework(data: tuple[dict, dict]) -> None
     ids = {c["id"] for c in catalog["controls"]}
     assert set(m["mappings"]) == ids, "映射表与清单编号不一致"
     for cid, rows in m["mappings"].items():
-        for fw in m["frameworks"]:
+        for fw in set(m["frameworks"]) - OPTIONAL_FW:
             assert any(r["fw"] == fw for r in rows), f"{cid} 缺 {fw} 映射"
 
 
@@ -118,3 +126,26 @@ def test_clause_validator_rejects_bad_ids() -> None:
     assert not _valid_clause("MLPS", "8.1.2.4")
     assert not _valid_clause("MLPS", "7.1.4.1")  # 第二级
     assert not _valid_clause("MLPS", "8.5.1.1")  # 扩展要求另批
+
+
+def test_power_controls_mapped_to_ics_extension(data: tuple[dict, dict]) -> None:
+    """电力行业项都要有工控扩展映射，确实无对应控制点的写进 ics_not_applicable 并说明理由。"""
+    _, m = data
+    na = m.get("ics_not_applicable", {})
+    for cid, rows in m["mappings"].items():
+        has = any(r["fw"] == "MLPS_ICS" for r in rows)
+        if ".PWR." in cid:
+            assert has != (cid in na), f"{cid}：工控扩展映射与不适用说明须二选一"
+        else:
+            assert not has, f"{cid}：工控扩展只用于电力行业项"
+    for cid, why in na.items():
+        assert ".PWR." in cid and cid in m["mappings"], cid
+        assert 4 <= len(why) <= 40 and not any(w in why for w in FORBIDDEN), (cid, why)
+
+
+def test_ics_clause_validator() -> None:
+    assert _valid_clause("MLPS_ICS", "8.5.2.1")
+    assert _valid_clause("MLPS_ICS", "8.5.3.3")
+    assert not _valid_clause("MLPS_ICS", "8.5.4.2")
+    assert not _valid_clause("MLPS_ICS", "8.5.6.1")
+    assert not _valid_clause("MLPS_ICS", "8.1.2.1")
