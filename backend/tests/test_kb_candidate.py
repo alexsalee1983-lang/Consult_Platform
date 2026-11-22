@@ -79,10 +79,10 @@ def test_source_publish_lands_candidate_and_shadow_search(tmp_path):
         doc_ids = {v.item.doc_id for v in vs}
         q = f"{title} 运营者应当建立管理制度"
         # 交付侧检索（默认）查不到候选，知识侧用户也一样
-        assert not doc_ids & _doc_ids(search.search(db, db.merge(consultant), q, layer="L4"))
-        assert not doc_ids & _doc_ids(search.search(db, db.merge(checker), q, layer="L4"))
+        assert not doc_ids & _doc_ids(search.search(db, db.merge(consultant), q, layer="L4", limit=50))
+        assert not doc_ids & _doc_ids(search.search(db, db.merge(checker), q, layer="L4", limit=50))
         # 影子检索 / 评测带候选能查到
-        assert doc_ids & _doc_ids(search.search(db, db.merge(checker), q, layer="L4", include_candidates=True))
+        assert doc_ids & _doc_ids(search.search(db, db.merge(checker), q, layer="L4", include_candidates=True, limit=50))
         key = vs[0].item.import_key          # 第一条带唯一标题，不受其他用例留下的同文条款干扰
         questions = [{"id": "c1", "mode": "search", "question": f"{title} 规范示范管理", "expect": [key]}]
         assert evaluate.run(db, db.merge(checker), questions).results[0].rank is None
@@ -123,7 +123,7 @@ def test_promote_dry_run_then_promote(tmp_path):
         assert {(v.status, v.candidate_result) for v in vs} == {("published", "promoted")}
         assert all(v.item.current_version_id == v.id for v in vs)
         q = f"{title} 运营者应当建立管理制度"
-        assert {v.item.doc_id for v in vs} & _doc_ids(search.search(db, db.merge(consultant), q, layer="L4"))
+        assert {v.item.doc_id for v in vs} & _doc_ids(search.search(db, db.merge(consultant), q, layer="L4", limit=50))
         log = db.scalar(select(AuditLog).where(AuditLog.action == "kb.candidate_promote").order_by(AuditLog.id.desc()))
         assert "运营者" not in log.detail and title not in log.detail
         scan = db.scalar(select(AuditLog).where(AuditLog.action == "kb.candidate_scan").order_by(AuditLog.id.desc()))
@@ -148,9 +148,9 @@ def test_revision_keeps_old_published_until_promoted(tmp_path, monkeypatch):
         v1 = next(v for v in item.versions if v.version == 1)
         assert v2.status == "candidate" and item.current_version_id == v1.id and v1.status == "published"
         q = f"{title} 运营者应当建立管理制度"
-        live = search.search(db, db.merge(consultant), q, layer="L4")["items"]
+        live = search.search(db, db.merge(consultant), q, layer="L4", limit=50)["items"]
         assert (item.doc_id, 1) in {(h["doc_id"], h["version"]) for h in live}
-        shadow = search.search(db, db.merge(checker), q, layer="L4", include_candidates=True)["items"]
+        shadow = search.search(db, db.merge(checker), q, layer="L4", include_candidates=True, limit=50)["items"]
         got = {(h["doc_id"], h["version"]) for h in shadow}
         assert (item.doc_id, 2) in got and (item.doc_id, 1) not in got               # 候选替换旧现行版本
         if v2.sample_state == "pending":
