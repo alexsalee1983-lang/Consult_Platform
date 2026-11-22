@@ -5,7 +5,8 @@
 # 第三批：第三级工业控制系统安全扩展要求（8.5.层面.控制点），只映射电力行业项（*.PWR.*）；无对应控制点的写进 ics_not_applicable。
 # 第四批：NIST SP 800-61r3（2025），其建议按 CSF 2.0 子类组织，条款号即该文挂接的 CSF 子类；IRE 全部映射，SOC 只映射处置、复盘、手册 3 项。
 # 第五批：第三级云计算安全扩展要求（8.2.层面.控制点），只映射与云上系统直接相关的 16 项；电力行业项（生产控制区不上云）不映射。
-# SOC-CMM（等法务）、行业条款为下一批（12-18 前）。
+# 第六批：行业条款，条款号为“第 N 条”的 N；银行项只挂银行规定，电力项只挂电力规定（电力等保管理办法属定级备案程序，不挂）。
+# SOC-CMM（等法务）为下一批（12-18 前）。
 # 资质边界：映射只用于差距分析定位依据，不代表测评或认证的判定。
 catalog_version: v0
 status: draft
@@ -17,10 +18,16 @@ frameworks:
   MLPS_ICS: {name: GB/T 22239 网络安全等级保护基本要求（第三级工业控制系统安全扩展要求）, version: "2019"}
   SP80061: {name: NIST SP 800-61 事件响应建议（按 CSF 2.0 子类挂接）, version: "Rev.3"}
   MLPS_CLOUD: {name: GB/T 22239 网络安全等级保护基本要求（第三级云计算安全扩展要求）, version: "2019"}
+  BNK_ITRM: {name: 商业银行信息科技风险管理指引, version: "2009"}
+  BNK_BCM: {name: 商业银行业务连续性监管指引, version: "2011"}
+  BNK_OUTS: {name: 银行保险机构信息科技外包风险监管办法（银保监办发〔2021〕141号）, version: "2021"}
+  PBOC_IR: {name: 中国人民银行业务领域网络安全事件报告管理办法, version: "2025"}
+  PWR_SCADA: {name: 电力监控系统安全防护规定（国家发展改革委令第27号）, version: "2024"}
+  PWR_NSM: {name: 电力行业网络安全管理办法, version: "2022"}
 ics_not_applicable:
-  SOC.PWR.04: 通报衔接属行业管理规定，工控扩展无对应控制点
-  SOC.PWR.05: 值守协同属管理要求，工控扩展无对应控制点
-  IRE.PWR.03: 事件分级报告属行业管理规定，工控扩展无对应控制点
+  SOC.PWR.04: 通报衔接属行业管理规定，工控扩展无对应控制点（已挂行业条款）
+  SOC.PWR.05: 值守协同属管理要求，工控扩展无对应控制点（已挂行业条款）
+  IRE.PWR.03: 事件分级报告属行业管理规定，工控扩展无对应控制点（已挂行业条款）
 mappings:
   SOC.ORG.01:
   - {fw: ISO27001, clause: A.5.2, rel: 交集, strength: 7, why: 安全角色与职责分配}
@@ -64,12 +71,19 @@ mappings:
   - {fw: MLPS, clause: "8.1.8.4", rel: 交集, strength: 4, why: 外部人员访问管理}
   - {fw: MLPS_CLOUD, clause: "8.2.6.1", rel: 交集, strength: 6, why: 云服务商能力与合同约束}
   - {fw: MLPS_CLOUD, clause: "8.2.6.2", rel: 交集, strength: 5, why: 供应链变更与服务商监督}
+  - {fw: BNK_OUTS, clause: "23", rel: 交集, strength: 9, why: 外包服务过程持续监控}
+  - {fw: BNK_OUTS, clause: "24", rel: 交集, strength: 8, why: 服务水平监控评价机制}
+  - {fw: BNK_OUTS, clause: "27", rel: 交集, strength: 7, why: 异常督促整改与约谈}
+  - {fw: BNK_ITRM, clause: "40", rel: 交集, strength: 6, why: 第三方人员活动受监控}
   SOC.PWR.05:
   - {fw: ISO27001, clause: A.5.37, rel: 交集, strength: 3, why: 跨站值守协同规程}
   - {fw: CSF, clause: GV.RR-02, rel: 交集, strength: 4, why: 厂站与集控职责划分}
   - {fw: CSF, clause: RS.MA-04, rel: 交集, strength: 4, why: 现场到集控的升级}
   - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 跨部门沟通与协作}
   - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 4, why: 集中管控与统一监测}
+  - {fw: PWR_NSM, clause: "7", rel: 交集, strength: 8, why: 调度机构对厂站集控技术监督}
+  - {fw: PWR_SCADA, clause: "29", rel: 交集, strength: 7, why: 联合防护与应急处置指挥}
+  - {fw: PWR_NSM, clause: "20", rel: 交集, strength: 6, why: 监测预警与信息通报}
   SOC.PRC.01:
   - {fw: ISO27001, clause: A.5.25, rel: 交集, strength: 8, why: 安全事态评估与定级}
   - {fw: CSF, clause: DE.AE-02, rel: 交集, strength: 8, why: 不良事态分析研判}
@@ -131,6 +145,10 @@ mappings:
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 6, why: 按要求通知外部相关方}
   - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按规定报告安全事件}
   - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 与监管单位沟通}
+  - {fw: PBOC_IR, clause: "15", rel: 交集, strength: 9, why: 事发简要报告与事发报告时限}
+  - {fw: PBOC_IR, clause: "16", rel: 交集, strength: 8, why: 重大事件事中进展报告}
+  - {fw: PBOC_IR, clause: "25", rel: 交集, strength: 6, why: 事件台账记录留存}
+  - {fw: BNK_BCM, clause: "63", rel: 交集, strength: 6, why: 中断事件沟通与监管报告}
   SOC.PWR.03:
   - {fw: ISO27001, clause: A.5.26, rel: 交集, strength: 4, why: 调度侧事件的联合响应}
   - {fw: CSF, clause: DE.AE-03, rel: 交集, strength: 5, why: 多源信息关联}
@@ -139,11 +157,17 @@ mappings:
   - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 5, why: 与调度等部门协作}
   - {fw: MLPS_ICS, clause: "8.5.2.1", rel: 交集, strength: 4, why: 调度网络独立组网与分区}
   - {fw: MLPS_ICS, clause: "8.5.3.1", rel: 交集, strength: 4, why: 边界防护失效告警联动}
+  - {fw: PWR_SCADA, clause: "29", rel: 交集, strength: 9, why: 调度机构统一指挥应急处置}
+  - {fw: PWR_SCADA, clause: "17", rel: 交集, strength: 7, why: 告警信息同步传送调度机构}
+  - {fw: PWR_NSM, clause: "23", rel: 交集, strength: 7, why: 事件发生后启动预案并报告}
   SOC.PWR.04:
   - {fw: ISO27001, clause: A.5.5, rel: 交集, strength: 6, why: 与主管部门的联系}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 6, why: 按要求通知主管部门}
   - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 6, why: 与主管部门沟通合作}
   - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按规定报告安全事件}
+  - {fw: PWR_NSM, clause: "20", rel: 交集, strength: 9, why: 信息通报与向行业部门报告}
+  - {fw: PWR_NSM, clause: "23", rel: 交集, strength: 7, why: 事件按规定向主管部门报告}
+  - {fw: PWR_SCADA, clause: "17", rel: 交集, strength: 5, why: 监测告警向调度机构传送}
   SOC.TEC.01:
   - {fw: ISO27001, clause: A.8.15, rel: 交集, strength: 7, why: 日志产生与采集}
   - {fw: CSF, clause: PR.PS-04, rel: 交集, strength: 7, why: 日志可用于持续监测}
@@ -228,12 +252,18 @@ mappings:
   - {fw: CSF, clause: DE.CM-09, rel: 交集, strength: 5, why: 核心系统运行监测}
   - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 6, why: 重要系统运行集中监测}
   - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 5, why: 重要业务审计}
+  - {fw: BNK_BCM, clause: "61", rel: 交集, strength: 9, why: 业务运营监测与自动化监控}
+  - {fw: BNK_BCM, clause: "60", rel: 交集, strength: 7, why: 运营中断风险预警指标}
+  - {fw: BNK_ITRM, clause: "46", rel: 交集, strength: 7, why: 系统性能连续监控与预警}
   SOC.BNK.02:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 4, why: 交易异常监视}
   - {fw: CSF, clause: DE.CM-03, rel: 交集, strength: 4, why: 渠道使用行为监测}
   - {fw: CSF, clause: DE.AE-03, rel: 交集, strength: 4, why: 交易与安全事态关联}
   - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 4, why: 重要用户行为审计}
   - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 4, why: 异常网络行为检测}
+  - {fw: BNK_BCM, clause: "61", rel: 交集, strength: 8, why: 业务运行自动化监控}
+  - {fw: BNK_ITRM, clause: "29", rel: 交集, strength: 6, why: 柜员终端ATM等设备安全检查}
+  - {fw: BNK_ITRM, clause: "46", rel: 交集, strength: 6, why: 例外情况报告与预警}
   SOC.PWR.01:
   - {fw: ISO27001, clause: A.8.22, rel: 交集, strength: 5, why: 网络分区隔离}
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 分区边界监视}
@@ -244,6 +274,9 @@ mappings:
   - {fw: MLPS_ICS, clause: "8.5.2.1", rel: 交集, strength: 7, why: 生产控制区与管理区分区划分}
   - {fw: MLPS_ICS, clause: "8.5.3.1", rel: 交集, strength: 6, why: 跨区访问控制与失效告警}
   - {fw: MLPS_ICS, clause: "8.5.3.3", rel: 交集, strength: 4, why: 无线接入的识别与管控}
+  - {fw: PWR_SCADA, clause: "4", rel: 交集, strength: 8, why: 生产控制区管理信息区分区}
+  - {fw: PWR_SCADA, clause: "17", rel: 交集, strength: 9, why: 网络安全监测预警与探针}
+  - {fw: PWR_SCADA, clause: "9", rel: 交集, strength: 6, why: 区间横向单向隔离}
   SOC.PWR.02:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 4, why: 工控设备异常监视}
   - {fw: CSF, clause: DE.CM-09, rel: 交集, strength: 5, why: 工控软硬件监测}
@@ -254,6 +287,9 @@ mappings:
   - {fw: MLPS_ICS, clause: "8.5.3.1", rel: 交集, strength: 5, why: 边界通用网络服务访问告警}
   - {fw: MLPS_ICS, clause: "8.5.2.2", rel: 交集, strength: 4, why: 工控通信完整性校验}
   - {fw: MLPS_ICS, clause: "8.5.3.2", rel: 交集, strength: 3, why: 拨号访问的监测}
+  - {fw: PWR_SCADA, clause: "17", rel: 交集, strength: 9, why: 运行状态与可疑行为监视}
+  - {fw: PWR_SCADA, clause: "13", rel: 交集, strength: 6, why: 生产控制区外设与服务管控}
+  - {fw: PWR_SCADA, clause: "14", rel: 交集, strength: 5, why: 控制报文转发与身份认证}
   SOC.MET.01:
   - {fw: ISO27001, clause: "9.1", rel: 交集, strength: 7, why: 监视、测量、分析与评价}
   - {fw: CSF, clause: GV.OV-03, rel: 交集, strength: 6, why: 风险管理绩效评价}
@@ -288,6 +324,10 @@ mappings:
   - {fw: CSF, clause: GV.OC-04, rel: 交集, strength: 5, why: 关键业务与依赖识别}
   - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 5, why: 运行状况集中监测}
   - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 4, why: 业务高峰处理能力}
+  - {fw: BNK_BCM, clause: "60", rel: 交集, strength: 8, why: 风险预警指标设定}
+  - {fw: BNK_BCM, clause: "61", rel: 交集, strength: 8, why: 业务运营监测体系}
+  - {fw: BNK_BCM, clause: "62", rel: 交集, strength: 6, why: 关键时点监测预警}
+  - {fw: BNK_BCM, clause: "25", rel: 交集, strength: 6, why: 业务恢复时间与恢复点目标}
   IRE.INC.01:
   - {fw: ISO27001, clause: A.5.28, rel: 交集, strength: 5, why: 证据支撑时间线}
   - {fw: ISO27001, clause: A.8.17, rel: 交集, strength: 4, why: 时钟同步}
@@ -318,6 +358,10 @@ mappings:
   - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按影响程度分级处置}
   - {fw: MLPS, clause: "8.1.10.2", rel: 交集, strength: 4, why: 重要资产识别}
   - {fw: SP80061, clause: DE.AE-04, rel: 交集, strength: 5, why: 结合关键业务评估影响}
+  - {fw: BNK_BCM, clause: "23", rel: 交集, strength: 9, why: 业务影响分析与恢复优先顺序}
+  - {fw: BNK_BCM, clause: "24", rel: 交集, strength: 8, why: 重要业务识别与损失评估}
+  - {fw: BNK_BCM, clause: "66", rel: 交集, strength: 7, why: 事件影响评估与定级}
+  - {fw: BNK_BCM, clause: "25", rel: 交集, strength: 6, why: 恢复时间目标与恢复点目标}
   IRE.PWR.04:
   - {fw: ISO27001, clause: A.5.29, rel: 交集, strength: 4, why: 中断期间的安全}
   - {fw: CSF, clause: DE.AE-04, rel: 交集, strength: 5, why: 影响估计}
@@ -326,6 +370,9 @@ mappings:
   - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 4, why: 应急预案中的运行影响}
   - {fw: MLPS_ICS, clause: "8.5.2.1", rel: 交集, strength: 4, why: 隔离措施对实时性的影响}
   - {fw: SP80061, clause: DE.AE-04, rel: 交集, strength: 5, why: 结合关键运行评估影响}
+  - {fw: PWR_NSM, clause: "23", rel: 交集, strength: 8, why: 事件调查评估与防止扩大}
+  - {fw: PWR_SCADA, clause: "29", rel: 交集, strength: 6, why: 调度统一指挥应急处置}
+  - {fw: PWR_SCADA, clause: "33", rel: 交集, strength: 5, why: 重大风险时断开连接管控}
   IRE.PRO.01:
   - {fw: ISO27001, clause: A.8.20, rel: 交集, strength: 7, why: 网络安全}
   - {fw: ISO27001, clause: A.5.15, rel: 交集, strength: 5, why: 访问控制}
@@ -381,6 +428,9 @@ mappings:
   - {fw: MLPS_ICS, clause: "8.5.3.3", rel: 交集, strength: 5, why: 无线使用控制复核}
   - {fw: MLPS_ICS, clause: "8.5.2.2", rel: 交集, strength: 4, why: 通信传输保护复核}
   - {fw: SP80061, clause: PR.IR-01, rel: 交集, strength: 5, why: 隔离防护限制横向扩散}
+  - {fw: PWR_SCADA, clause: "9", rel: 交集, strength: 9, why: 横向单向安全隔离装置}
+  - {fw: PWR_SCADA, clause: "10", rel: 交集, strength: 8, why: 区间访问控制与逻辑隔离}
+  - {fw: PWR_SCADA, clause: "15", rel: 交集, strength: 8, why: 分区边界防护与禁止通用服务}
   IRE.DET.01:
   - {fw: ISO27001, clause: A.6.8, rel: 交集, strength: 6, why: 安全事态报告渠道}
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 监视发现异常}
@@ -462,6 +512,9 @@ mappings:
   - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 4, why: 重要事件专项预案}
   - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 4, why: 事件处置}
   - {fw: SP80061, clause: RS.MI-01, rel: 交集, strength: 5, why: 遏制交易侧事件影响}
+  - {fw: BNK_BCM, clause: "67", rel: 交集, strength: 8, why: 应急处置措施与对外沟通}
+  - {fw: BNK_BCM, clause: "66", rel: 交集, strength: 7, why: 响应事件并防止事态升级}
+  - {fw: BNK_ITRM, clause: "44", rel: 交集, strength: 6, why: 事故管理与处置机制}
   IRE.BNK.04:
   - {fw: ISO27001, clause: A.5.19, rel: 交集, strength: 4, why: 服务商关系中的安全}
   - {fw: ISO27001, clause: A.5.20, rel: 交集, strength: 4, why: 协议约定事件协同}
@@ -472,6 +525,10 @@ mappings:
   - {fw: SP80061, clause: RS.MA-01, rel: 交集, strength: 5, why: 与第三方协同执行响应}
   - {fw: MLPS_CLOUD, clause: "8.2.6.1", rel: 交集, strength: 5, why: 云服务商事件协同责任}
   - {fw: MLPS_CLOUD, clause: "8.2.6.2", rel: 交集, strength: 4, why: 供应链事件通报}
+  - {fw: BNK_OUTS, clause: "31", rel: 交集, strength: 8, why: 重要外包连续性风险缓释}
+  - {fw: BNK_OUTS, clause: "38", rel: 交集, strength: 7, why: 外包重大风险事件报告}
+  - {fw: BNK_BCM, clause: "37", rel: 交集, strength: 6, why: 外部供应商连续性计划}
+  - {fw: BNK_BCM, clause: "51", rel: 交集, strength: 5, why: 供应商纳入演练范围}
   IRE.PWR.01:
   - {fw: ISO27001, clause: A.8.22, rel: 交集, strength: 4, why: 网络隔离}
   - {fw: CSF, clause: RS.MI-01, rel: 交集, strength: 6, why: 事件遏制}
@@ -483,6 +540,9 @@ mappings:
   - {fw: MLPS_ICS, clause: "8.5.3.2", rel: 交集, strength: 4, why: 拨号通道的切断与管控}
   - {fw: MLPS_ICS, clause: "8.5.3.3", rel: 交集, strength: 4, why: 无线通道的切断与管控}
   - {fw: SP80061, clause: RS.MI-01, rel: 交集, strength: 6, why: 隔离遏制生产控制区事件}
+  - {fw: PWR_SCADA, clause: "33", rel: 交集, strength: 8, why: 断开网络连接管控风险}
+  - {fw: PWR_SCADA, clause: "29", rel: 交集, strength: 7, why: 联合防护与应急处置}
+  - {fw: PWR_NSM, clause: "23", rel: 交集, strength: 7, why: 消除隐患防止危害扩大}
   IRE.REC.01:
   - {fw: ISO27001, clause: A.8.13, rel: 交集, strength: 7, why: 信息备份}
   - {fw: CSF, clause: RC.RP-01, rel: 交集, strength: 6, why: 执行恢复计划}
@@ -518,6 +578,10 @@ mappings:
   - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 5, why: 灾备切换预案}
   - {fw: SP80061, clause: RC.RP-02, rel: 交集, strength: 5, why: 选择并执行恢复行动}
   - {fw: SP80061, clause: RC.RP-04, rel: 交集, strength: 5, why: 关键业务恢复优先}
+  - {fw: BNK_BCM, clause: "70", rel: 交集, strength: 9, why: 灾难备份切换决策}
+  - {fw: BNK_BCM, clause: "71", rel: 交集, strength: 8, why: 备份资源验证与切换监控}
+  - {fw: BNK_BCM, clause: "72", rel: 交集, strength: 8, why: 切换回切数据核对追补}
+  - {fw: BNK_ITRM, clause: "52", rel: 交集, strength: 5, why: 系统恢复与热备措施}
   IRE.PWR.02:
   - {fw: ISO27001, clause: A.5.28, rel: 交集, strength: 4, why: 工控现场证据收集}
   - {fw: CSF, clause: RS.AN-07, rel: 交集, strength: 4, why: 事件数据收集}
@@ -529,6 +593,9 @@ mappings:
   - {fw: MLPS_ICS, clause: "8.5.5.2", rel: 交集, strength: 3, why: 外包软件恶意代码排查}
   - {fw: SP80061, clause: RS.AN-07, rel: 交集, strength: 5, why: 工控环境数据收集保全}
   - {fw: SP80061, clause: RC.RP-05, rel: 交集, strength: 5, why: 核验恢复后运行状态}
+  - {fw: PWR_SCADA, clause: "28", rel: 交集, strength: 8, why: 系统备用恢复与恢复性测试}
+  - {fw: PWR_NSM, clause: "23", rel: 交集, strength: 7, why: 事件调查并保护现场}
+  - {fw: PWR_NSM, clause: "24", rel: 交集, strength: 6, why: 容灾备份制度}
   IRE.RPT.01:
   - {fw: ISO27001, clause: A.6.8, rel: 交集, strength: 7, why: 安全事态报告}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 5, why: 通知内部相关方}
@@ -559,6 +626,10 @@ mappings:
   - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按规定报告事件}
   - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 与监管单位沟通}
   - {fw: SP80061, clause: RS.CO-02, rel: 交集, strength: 6, why: 按监管要求通知}
+  - {fw: PBOC_IR, clause: "15", rel: 交集, strength: 9, why: 事发报告时限}
+  - {fw: PBOC_IR, clause: "17", rel: 交集, strength: 8, why: 事后调查总结报告}
+  - {fw: PBOC_IR, clause: "19", rel: 交集, strength: 7, why: 报告内容要素}
+  - {fw: BNK_BCM, clause: "89", rel: 交集, strength: 5, why: 中断事件评估总结报送}
   IRE.PWR.03:
   - {fw: ISO27001, clause: A.5.25, rel: 交集, strength: 4, why: 事件定级}
   - {fw: ISO27001, clause: A.5.5, rel: 交集, strength: 5, why: 与主管部门联系}
@@ -568,6 +639,9 @@ mappings:
   - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 与主管部门沟通}
   - {fw: SP80061, clause: RS.MA-03, rel: 交集, strength: 5, why: 事件分类与优先级}
   - {fw: SP80061, clause: RS.CO-02, rel: 交集, strength: 5, why: 按要求通知相关方}
+  - {fw: PWR_NSM, clause: "23", rel: 交集, strength: 9, why: 事件处置并按规定报告}
+  - {fw: PWR_NSM, clause: "20", rel: 交集, strength: 6, why: 信息通报与定期报告}
+  - {fw: PWR_NSM, clause: "21", rel: 交集, strength: 5, why: 事件应急预案与演练}
   IRE.GOV.01:
   - {fw: ISO27001, clause: A.5.27, rel: 交集, strength: 8, why: 从事件中学习}
   - {fw: CSF, clause: ID.IM-03, rel: 交集, strength: 6, why: 从运营中识别改进}

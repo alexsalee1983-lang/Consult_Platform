@@ -51,7 +51,11 @@ MLPS_CLOUD_L3 = {1: 1, 2: 1, 3: 3, 4: 7, 5: 1, 6: 2, 7: 1}
 MLPS_CLOUD_RE = re.compile(r"^8\.2\.(\d)\.(\d)$")
 # 云扩展只映射与云上系统直接相关的项；云与容器监测必须映射，电力生产控制区项不映射
 CLOUD_REQUIRED = {"SOC.TEC.08"}
-OPTIONAL_FW = {"MLPS_ICS", "SP80061", "MLPS_CLOUD"}
+# 行业条款（第六批）：框架 → 该规定的条数上限（条款号为“第 N 条”的 N）；银行项只挂银行规定，电力项只挂电力规定
+BNK_FW = {"BNK_ITRM": 76, "BNK_BCM": 99, "BNK_OUTS": 46, "PBOC_IR": 33}
+PWR_FW = {"PWR_SCADA": 37, "PWR_NSM": 35}
+INDUSTRY_FW = BNK_FW | PWR_FW
+OPTIONAL_FW = {"MLPS_ICS", "SP80061", "MLPS_CLOUD"} | set(INDUSTRY_FW)
 # SP 800-61r3 只用于事件响应：IRE 全部映射，SOC 只映射处置、复盘、手册
 SP61_SOC = {"SOC.PRC.02", "SOC.PRC.05", "SOC.PRC.08"}
 MLPS_RE = re.compile(r"^8\.1\.(\d{1,2})\.(\d{1,2})$")
@@ -72,6 +76,8 @@ def _valid_clause(fw: str, clause: str) -> bool:
     if fw == "MLPS_CLOUD":
         mm = MLPS_CLOUD_RE.match(clause)
         return bool(mm) and int(mm[1]) in MLPS_CLOUD_L3 and 1 <= int(mm[2]) <= MLPS_CLOUD_L3[int(mm[1])]
+    if fw in INDUSTRY_FW:
+        return clause.isdigit() and 1 <= int(clause) <= INDUSTRY_FW[fw]
     if fw == "MLPS_ICS":
         mm = MLPS_ICS_RE.match(clause)
         return bool(mm) and int(mm[1]) in MLPS_ICS_L3 and 1 <= int(mm[2]) <= MLPS_ICS_L3[int(mm[1])]
@@ -90,7 +96,7 @@ def test_header(data: tuple[dict, dict]) -> None:
     assert m["catalog_version"] == catalog["version"]
     assert m["status"] == "draft"
     assert m["expert_review"] == "pending"
-    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS", "MLPS_ICS", "SP80061", "MLPS_CLOUD"}
+    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS", "MLPS_ICS", "SP80061", "MLPS_CLOUD"} | set(INDUSTRY_FW)
     for fw in m["frameworks"].values():
         assert fw["name"] and fw["version"]
 
@@ -194,3 +200,27 @@ def test_cloud_clause_validator() -> None:
     assert not _valid_clause("MLPS_CLOUD", "8.2.2.2")
     assert not _valid_clause("MLPS_CLOUD", "8.2.8.1")
     assert not _valid_clause("MLPS_CLOUD", "8.5.2.1")
+
+
+def test_industry_controls_mapped_to_own_industry(data: tuple[dict, dict]) -> None:
+    """行业项至少 2 条本行业规定；行业规定只挂本行业项（银行规定不挂电力项，反之亦然）。"""
+    _, m = data
+    for cid, rows in m["mappings"].items():
+        fws = [r["fw"] for r in rows if r["fw"] in INDUSTRY_FW]
+        if ".BNK." in cid:
+            assert sum(f in BNK_FW for f in fws) >= 2, cid
+            assert not [f for f in fws if f in PWR_FW], cid
+        elif ".PWR." in cid:
+            assert sum(f in PWR_FW for f in fws) >= 2, cid
+            assert not [f for f in fws if f in BNK_FW], cid
+        else:
+            assert not fws, cid
+
+
+def test_industry_clause_validator() -> None:
+    assert _valid_clause("BNK_BCM", "99")
+    assert _valid_clause("PWR_SCADA", "1")
+    assert not _valid_clause("PBOC_IR", "34")
+    assert not _valid_clause("PWR_NSM", "0")
+    assert not _valid_clause("BNK_OUTS", "第十条")
+    assert not _valid_clause("BNK_ITRM", "8.1.2.1")
