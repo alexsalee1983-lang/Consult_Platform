@@ -1,6 +1,6 @@
 """知识区数据表（M2）。字段依据 agents/01_公共规范.md 第 7 节，取值和校验见 app/kb/meta.py。
 
-- kb_items：一个知识条目（doc_id 固定不变），放分类元数据；current_version_id 指向现行（已发布）版本。
+- kb_items：一个知识条目（doc_id 固定不变，B15 起为 KB-000123，旧编号见 kb_item_aliases），放分类元数据；current_version_id 指向现行（已发布）版本。
 - kb_versions：条目的每个版本，放标题、正文、来源、去标识、生效与复审日期；按状态流转，历史版本全部保留。
 - kb_chunks：已发布版本切分后的片段，供检索。PostgreSQL 上另有生成列 tsv（中文全文索引，迁移 0011 创建），
   向量列在确定向量模型后加入（S2 检索 PR）。
@@ -28,7 +28,9 @@ class KbItem(KbBase):
     __tablename__ = "kb_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    doc_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)   # L2-OPS-SOC-TPL-007
+    doc_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)   # KB-000123（B15 起；旧编号进别名表）
+    # 现行编号的序号（三期 B15，知识区迁移 k0012）：doc_id = KB- + 6 位补零的 seq；迁移时按 id 回填
+    seq: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
     layer: Mapped[str] = mapped_column(String(2), index=True)                  # L1～L5
     domain: Mapped[str] = mapped_column(String(3), index=True)                 # GOV / OPS ……
     product: Mapped[str] = mapped_column(String(8), index=True)                # SOC / GEN

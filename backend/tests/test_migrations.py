@@ -111,10 +111,13 @@ def test_unversioned_m0_database_is_stamped_and_keeps_data(engine):
 def test_downgrade_to_base_and_back(engine):
     upgrade_to_head(engine)
     with engine.begin() as conn:
+        # 同库时主链旧迁移（0016 等）会改 kb_items；知识区链 k0012 的视图引用 kb_items，SQLite 改表会校验视图，先退到 k0011
+        command.downgrade(alembic_config(conn, "kb"), "k0011_kb_labels")
         cfg = alembic_config(conn)
         command.downgrade(cfg, "base")
         assert "projects" not in inspect(conn).get_table_names()
         command.upgrade(cfg, "head")
+        command.upgrade(alembic_config(conn, "kb"), "head")
     assert _current(engine) == _head()
 
 

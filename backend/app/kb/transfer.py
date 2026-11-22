@@ -9,7 +9,7 @@
 
 导入（python -m app.cli kb-import-export <目录> --sha256 <清单哈希> --as <知识专家或知识管理员>）：
 - 清单哈希、每个文件的哈希都对得上才导入；任何一个不对整批不导入。
-- 按 key 对应生产条目：没有的新建（原 doc_id 未被占用时沿用）；与现行版本相同的跳过；有未完成草稿的跳过。
+- 按 key 对应生产条目：没有的新建（原 doc_id 和别名登记为本环境的别名，B15）；与现行版本相同的跳过；有未完成草稿的跳过。
 - 平台在生产上重新自动核验（自动化优先）：机密级检测、资质边界用语、引用核对（依据原文以外的引用类型）、
   元数据（自动发布的依据原文须有文号或标准号，Agent 审核发布的须有摘要和适用条件，解读、映射、执法案例须有依据文件），
   并核对导出的审核记录是完整的（平台核验、Agent 审核或两项人工审核各有一次通过）。
@@ -31,8 +31,8 @@ from sqlalchemy.orm import Session, object_session
 
 from ..core import audit
 from ..core.db import utcnow
-from ..models import KbItem, KbReview, KbVersion, User
-from . import citations, importer
+from ..models import KbItem, KbItemAlias, KbReview, KbVersion, User
+from . import citations, importer, refs
 from . import review as rv
 from .files import Entry, EntryError, format_entry, parse_entry
 from . import labels
@@ -109,7 +109,9 @@ def export(db: Session, user: User, out: Path) -> ExportReport:
         data = format_entry(e).encode("utf-8")
         (out / name).write_bytes(data)
         entries.append({
-            "file": name, "sha256": sha256(data), "key": e.key, "doc_id": item.doc_id, "version": v.version,
+            "file": name, "sha256": sha256(data), "key": e.key, "doc_id": item.doc_id,
+            "doc_type": item.doc_type, "aliases": sorted(a.alias for a in db.scalars(
+                select(KbItemAlias).where(KbItemAlias.item_id == item.id))), "version": v.version,
             "created_by": v.created_by, "submitted_by": v.submitted_by, "auto_review": v.auto_review,
             "single_review": v.single_review, "sample_state": v.sample_state, "recheck_state": v.recheck_state,
             "effective_date": _iso(v.effective_date), "review_date": _iso(v.review_date),
@@ -219,15 +221,25 @@ def _publish(db: Session, v: KbVersion, x: dict, manifest_sha: str) -> None:
     rv.publish(db, v)
 
 
+def register_source_ids(db: Session, item: KbItem, doc_id: str, aliases: list[str]) -> None:
+    """来源环境的编号和别名登记为本环境条目的别名（B15），交付件和评测里的引用照样能解析。
+    旧格式记 legacy、新格式记 transfer；已被本环境现行编号或别名占用的跳过（各环境编号各自从 seq 生成，靠 key 对应）。
+    新格式编号不沿用为现行编号：沿用会让 seq 与编号脱钩，别名解析效果相同。只 flush，调用方提交。"""
+    for ref in dict.fromkeys([doc_id, *aliases]):
+        if not ref or ref == item.doc_id or not refs.is_ref(ref):
+            continue
+        if db.scalar(select(KbItem.id).where(KbItem.doc_id == ref)) is not None or db.get(KbItemAlias, ref):
+            continue
+        refs.add_alias(db, ref, item.id, "legacy" if refs.is_legacy(ref) else "transfer")
+
+
 def _one(db: Session, user: User, e: Entry, x: dict, manifest_sha: str) -> ImportOutcome:
     o = ImportOutcome(file=x["file"], key=e.key)
     item = db.scalar(select(KbItem).where(KbItem.import_key == e.key))
     if item is None:
         v = rv.new_item(db, user, e.meta, e.content)
         v.item.import_key = e.key
-        want = x.get("doc_id", "")
-        if want and want != v.item.doc_id and db.scalar(select(KbItem.id).where(KbItem.doc_id == want)) is None:
-            v.item.doc_id = want              # 原 doc_id 未被占用时沿用，交付件和评测里的引用不变
+        register_source_ids(db, v.item, x.get("doc_id", ""), x.get("aliases") or [])
         db.commit()
     else:
         latest = item.versions[-1] if item.versions else None

@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, inspect, select
 
 from app.core.db import SessionLocal, utcnow
 from app.core.migrate import alembic_config, upgrade_to_head
-from app.kb import recheck, refs
+from app.kb import meta, recheck, refs
 from app.main import app
 from app.models import Deliverable, KbItem, KbItemAlias, Project, User
 from app.project import deliverables as dl
@@ -115,11 +115,11 @@ def test_add_alias_rejects_doc_id_duplicate_and_bad_input():
 def test_new_doc_id_skips_alias_numbers():
     """互斥的另一面：新条目生成编号时不占用已登记为别名的旧编号。"""
     first = _publish("别名测试-编号顺延")
-    layer, domain, product, doc_type, seq = first.split("-")[0], *first.split("-")[1:4], int(first.split("-")[-1])
-    taken = f"{layer}-{domain}-{product}-{doc_type}-{seq + 1:03d}"
+    seq = int(first[3:])
+    taken = meta.format_doc_id(seq + 1)
     _add(taken, first)
     nxt = _publish("别名测试-编号顺延二")
-    assert nxt != taken and int(nxt.split("-")[-1]) > seq + 1
+    assert nxt != taken and int(nxt[3:]) > seq + 1
 
 
 # ---- 使用点 ----

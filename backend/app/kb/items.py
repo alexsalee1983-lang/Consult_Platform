@@ -94,14 +94,12 @@ class VersionContent:
         meta.check_reference(layer, self.ref_document, self.ref_version, self.ref_status)
 
 
-def next_doc_id(db: Session, m: ItemMeta) -> str:
-    prefix = meta.doc_id_prefix(m.layer, m.domain, m.product, m.doc_type)
-    existing = list(db.scalars(select(KbItem.doc_id).where(KbItem.doc_id.like(prefix + "%"))))
-    # 已登记为别名的旧编号也不再占用（B15：别名与现行编号互斥）
-    existing += [a for a in db.scalars(select(KbItemAlias.alias).where(KbItemAlias.alias.like(prefix + "%")))
-                 if meta.DOC_ID_RE.match(a)]
-    seqs = [meta.parse_doc_id(d)[4] for d in existing]
-    return meta.format_doc_id(m.layer, m.domain, m.product, m.doc_type, max(seqs, default=0) + 1)
+def next_doc_id(db: Session) -> str:
+    """下一个现行编号 KB-000123：max(seq)+1，跳过已登记为别名的（B15：别名与现行编号互斥）。并发冲突由调用方重试。"""
+    seq = (db.scalar(select(func.max(KbItem.seq))) or 0) + 1
+    while db.get(KbItemAlias, meta.format_doc_id(seq)) is not None:
+        seq += 1
+    return meta.format_doc_id(seq)
 
 
 def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) -> KbVersion:
@@ -129,7 +127,8 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
     m.check()
     c.check(m.layer)
     for attempt in range(retries):
-        item = KbItem(doc_id=next_doc_id(db, m), layer=m.layer, domain=m.domain, product=m.product,
+        doc_id = next_doc_id(db)
+        item = KbItem(doc_id=doc_id, seq=int(doc_id[3:]), layer=m.layer, domain=m.domain, product=m.product,
                       doc_type=m.doc_type, stage=m.stage, capabilities=list(m.capabilities),
                       industries=list(m.industries), classification=m.classification,
                       visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags), control_ids=list(m.control_ids),

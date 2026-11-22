@@ -7,7 +7,7 @@ ItemMeta / VersionContent）：
 
 | 公共规范 | 代码 | 取值 |
 |---|---|---|
-| doc_id | KbItem.doc_id | 自动分配，格式见 DOC_ID_RE |
+| doc_id | KbItem.doc_id | 自动分配，KB-000123（B15 起，格式见 DOC_ID_RE；旧格式见 LEGACY_DOC_ID_RE，只做别名） |
 | 标题 | KbVersion.title / VersionContent.title | |
 | 层级 | KbItem.layer / ItemMeta.layer | LAYERS 的键：L1～L5 |
 | 一级目录 | domain | DOMAINS 的键：GOV / CMP / DAT / OPS / RES / ARC |
@@ -91,7 +91,10 @@ REVIEW_MONTHS_DEFAULT = 12
 REVIEW_MONTHS_REF = 6
 SHORT_REVIEW_TYPES = ("ENF", "BMK")
 
-DOC_ID_RE = re.compile(r"^(L[1-5])-([A-Z]{3})-([A-Z]{2,8})-([A-Z]{3})-(\d{3,})$")
+# 三期 B15 换号（知识区迁移 k0012）：现行编号是不带分类含义的稳定序号 KB-000123（kb_items.seq 补零 6 位）；
+# 旧格式 层级-目录-产品-类型-序号 只剩别名（kb_item_aliases，kind=legacy），由 refs 识别、k0012 回滚时分配
+DOC_ID_RE = re.compile(r"^KB-(\d{6})$")
+LEGACY_DOC_ID_RE = re.compile(r"^(L[1-5])-([A-Z]{3})-([A-Z]{2,8})-([A-Z]{3})-(\d{3,})$")
 
 
 class MetaError(ValueError):
@@ -112,19 +115,23 @@ def default_review_date(layer: str, effective: date, doc_type: str = "") -> date
     return add_months(effective, review_months(layer, doc_type))
 
 
-def doc_id_prefix(layer: str, domain: str, product: str, doc_type: str) -> str:
+def format_doc_id(seq: int) -> str:
+    return f"KB-{seq:06d}"
+
+
+def legacy_doc_id_prefix(layer: str, domain: str, product: str, doc_type: str) -> str:
     check_classification(layer, domain, product, doc_type)
     return f"{layer}-{domain}-{product}-{doc_type}-"
 
 
-def format_doc_id(layer: str, domain: str, product: str, doc_type: str, seq: int) -> str:
-    return f"{doc_id_prefix(layer, domain, product, doc_type)}{seq:03d}"
+def format_legacy_doc_id(layer: str, domain: str, product: str, doc_type: str, seq: int) -> str:
+    return f"{legacy_doc_id_prefix(layer, domain, product, doc_type)}{seq:03d}"
 
 
-def parse_doc_id(doc_id: str) -> tuple[str, str, str, str, int]:
-    m = DOC_ID_RE.match(doc_id)
+def parse_legacy_doc_id(doc_id: str) -> tuple[str, str, str, str, int]:
+    m = LEGACY_DOC_ID_RE.match(doc_id)
     if not m:
-        raise MetaError(f"doc_id 格式不对：{doc_id!r}，应为 层级-目录-产品-类型-序号，例如 L2-OPS-SOC-TPL-007")
+        raise MetaError(f"旧编号格式不对：{doc_id!r}，应为 层级-目录-产品-类型-序号，例如 L2-OPS-SOC-TPL-007")
     layer, domain, product, doc_type, seq = m.groups()
     check_classification(layer, domain, product, doc_type)
     return layer, domain, product, doc_type, int(seq)
