@@ -1,13 +1,13 @@
 // A15 交付件章节编辑器：CodeMirror 6 Markdown 源码模式（决策记录 2026-11-21 ⑥），来源标注显示为标签、整体删除。
 // 接口与原 textarea 同形：value、onChange(text)、placeholder；读写同一字符串、同一保存接口，后端不改。
 // 颜色只用 theme.css 令牌。按需加载（Deliverable.jsx 用 React.lazy），不进首屏包。
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, Language, defineLanguageFacet, syntaxHighlighting } from "@codemirror/language";
 import { GFM, parser as mdParser } from "@lezer/markdown";
 import { EditorView, keymap, placeholder as placeholderExt, drawSelection } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { External, createState, docText, refDecorations } from "../editor/core.js";
+import { External, createState, docText, insertWithSources, refDecorations } from "../editor/core.js";
 
 // 只取 @lezer/markdown 语法树做高亮：@codemirror/lang-markdown 会静态拉入 lang-html/css/javascript（嵌套代码高亮用），
 // 交付件正文用不到，去掉后编辑器块 gzip 179.5 KB 降到 105.0 KB。
@@ -38,9 +38,24 @@ const highlight = HighlightStyle.define([
   { tag: tags.quote, color: "var(--tx2)" },
 ]);
 
-export default function DocEditor({ value, onChange, placeholder = "", unresolved, ariaLabel = "章节正文编辑" }) {
+// ref 暴露给写稿侧栏（A15②）：selection() 取选中文字，insert(snippet) 在光标处插入或替换选区（来源标注原样保留）
+const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder = "", unresolved, ariaLabel = "章节正文编辑" }, ref) {
   const host = useRef(null);
   const view = useRef(null);
+  useImperativeHandle(ref, () => ({
+    selection() {
+      const v = view.current;
+      if (!v) return "";
+      const r = v.state.selection.main;
+      return v.state.sliceDoc(r.from, r.to);
+    },
+    insert(snippet) {
+      const v = view.current;
+      if (!v) return;
+      v.dispatch(insertWithSources(v.state, snippet));
+      v.focus();
+    },
+  }), []);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -78,4 +93,6 @@ export default function DocEditor({ value, onChange, placeholder = "", unresolve
   }, [value]);
 
   return <div ref={host} className="doc-editor" />;
-}
+});
+
+export default DocEditor;

@@ -199,3 +199,17 @@ select.sm { height: 28px; padding: 0 6px; border: 1px solid var(--ln2); border-r
 .ev-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--s2); border: 1px solid var(--ln); border-radius: 8px; }
 .run-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .run-steps > li { padding: 8px 10px; background: var(--s2); border-radius: 6px; display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
+
+/* 写稿助手侧栏（三期 A15②） */
+.assist-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+@media (max-width: 1100px) { .assist-grid { grid-template-columns: minmax(0, 1fr); } }
+.assist { display: flex; flex-direction: column; gap: 10px; padding: 12px; position: sticky; top: 12px; }
+.assist textarea.inp { height: auto; padding: 8px 10px; resize: vertical; }
+.assist-seg { gap: 0; }
+.assist-seg .btn { border-radius: 0; }
+.assist-seg .btn:first-child { border-radius: 6px 0 0 6px; }
+.assist-seg .btn:last-child { border-radius: 0 6px 6px 0; }
+.assist-seg .btn.on { background: var(--s3); border-color: var(--cyan); color: var(--tx); }
+.assist-out { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--ln); padding-top: 10px; }
+.assist-text { white-space: pre-wrap; font-size: 13px; line-height: 1.7; max-height: 40vh; overflow: auto; color: var(--tx2); }
+.assist-bad { color: var(--crim); font-size: 13px; }

@@ -1,10 +1,12 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api, CONCLUSION_CLS, DELIV_STATUS, SEVERITY_CLS, TIER } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
+import AssistPanel from "../components/AssistPanel.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
+import { noteAfterInsert, spliceText } from "../editor/assist.js";
 
 // A15：新编辑器按需加载；新旧并存一个关口，新编辑器默认开启（决策记录 2026-11-21 ⑦），可一键切回文本框
 const DocEditor = lazy(() => import("../components/DocEditor.jsx"));
@@ -124,6 +126,26 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [newEditor, toggleEditor] = useNewEditor();
+  const editorRef = useRef(null);     // 新编辑器：selection() / insert()
+  const areaRef = useRef(null);       // 文本框兜底
+  const bodyRef = useRef("");
+  bodyRef.current = edit?.body ?? "";
+
+  // 写稿助手（A15②）：取选中文字、插入回复（来源标注原样保留），修改说明记一笔“含写稿助手插入内容”
+  function selectionText() {
+    if (newEditor) return editorRef.current?.selection() || "";
+    const a = areaRef.current;
+    return a ? a.value.slice(a.selectionStart, a.selectionEnd) : "";
+  }
+  function insertReply(snippet) {
+    if (newEditor && editorRef.current) editorRef.current.insert(snippet);
+    else {
+      const a = areaRef.current;
+      const r = spliceText(bodyRef.current, a?.selectionStart, a?.selectionEnd, snippet);
+      setEdit((e) => ({ ...e, body: r.text }));
+    }
+    setEdit((e) => ({ ...e, note: noteAfterInsert(e.note) }));
+  }
 
   const load = useCallback(() => {
     setError(null);
@@ -188,17 +210,18 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
         {error && <div className="err">{error.message}</div>}
         {diff && <Diff lines={diff} />}
         {edit ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="assist-grid">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
             <div className="row" style={{ justifyContent: "flex-end" }}>
               <button className="btn sm" onClick={toggleEditor}>{newEditor ? "切回文本框" : "用新编辑器"}</button>
             </div>
             {newEditor ? (
               <Suspense fallback={<div className="sub">编辑器加载中…</div>}>
-                <DocEditor value={edit.body} onChange={(body) => setEdit((e) => ({ ...e, body }))} unresolved={new Set(unresolved)}
+                <DocEditor ref={editorRef} value={edit.body} onChange={(body) => setEdit((e) => ({ ...e, body }))} unresolved={new Set(unresolved)}
                   placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]，显示为标签，退格整体删除" />
               </Suspense>
             ) : (
-              <textarea className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
+              <textarea ref={areaRef} className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
                 placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]" />
             )}
             <input className="inp" maxLength={500} value={edit.note} placeholder="修改说明（可选）" onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
@@ -208,6 +231,9 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
               <button className="btnp" disabled={busy || !edit.body.trim()} onClick={save}>{busy ? "保存中…" : "保存为新版本"}</button>
               <button className="btn" disabled={busy} onClick={() => setEdit(null)}>取消</button>
             </div>
+          </div>
+          <AssistPanel code={code} dcode={dcode} seq={seq} getContext={() => bodyRef.current}
+            getSelection={selectionText} onInsert={insertReply} />
           </div>
         ) : s.version ? (
           <DocBody body={s.body} unresolved={unresolved} />
