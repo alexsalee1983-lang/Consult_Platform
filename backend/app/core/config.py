@@ -73,7 +73,10 @@ class Settings(BaseSettings):
     # 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：kb-source-publish 核验通过的 SRC 由平台自动发布，
     # 每批按比例随机抽检；最近 20 次抽检不通过率超过上限时暂停自动发布、全部转人工审核，直到抽检恢复。
     kb_src_auto_publish: bool = True
-    kb_sample_rate_src: float = 0.05
+    # 三期 B20：每批抽检量按统计抽样（超几何零接收）算，下面两个比例只作兜底下限；停止规则攒满 20 个样本才启用
+    kb_sample_defect_max: float = 0.1
+    kb_sample_confidence: float = 0.8
+    kb_sample_rate_src: float = 0.0
     kb_sample_rate_src_partial: float = 0.4   # 有条款被机密级检测退回的那几份（负责人 2026-11-16）
     kb_sample_fail_max: float = 0.1
     # 知识审核 Agent（二期 B11，二期开发计划第十二节第二级）：公开资料的解读、映射、方法和只含公开资料的案例、异议应答，

@@ -31,7 +31,8 @@ def _shadow(monkeypatch):
     monkeypatch.setattr(s, "kb_sample_fail_max", 1.0)       # 其他用例留下的抽检结果不影响
     monkeypatch.setattr(s, "kb_candidate_shadow", True)
     monkeypatch.setattr(s, "kb_candidate_days", 7)
-    monkeypatch.setattr(s, "kb_sample_rate_src", 0.0)        # 仍至少抽 1 条
+    monkeypatch.setattr(s, "kb_sample_rate_src", 0.0)
+    monkeypatch.setattr(s, "kb_sample_confidence", 0.3)      # 3 条的小批只抽 1 条（B20 统计抽样量见 test_kb_review_rules）
 
 
 def _people():
