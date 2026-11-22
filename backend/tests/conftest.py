@@ -54,6 +54,8 @@ elif os.environ.get("TEST_KB_SPLIT") == "1":
 else:
     os.environ["KB_DATABASE_URL"] = ""
 os.environ["APP_ENV"] = "test"
+# Agent md 一律读本仓库 agents/：测试机容器里的 /srv/agents 是部署挂载的副本，版本可能不同（test_env_isolation.py）
+os.environ["AGENTS_DIR"] = str(Path(__file__).resolve().parents[2] / "agents")
 os.environ["LLM_TOOL_CALLING"] = "false"   # 对话工具调用（A7）默认关，test_chat_tools.py 里打开
 os.environ["AUTO_FLOW"] = "false"   # 交付流程自动推进（C5）默认关，test_autoflow.py 里按需打开
 os.environ["KB_CITATION_GATE"] = "false"   # 二期 B8：已有测试的示范解读没有依据原文；test_kb_citations 单独打开
