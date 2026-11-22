@@ -10,11 +10,13 @@ kind：product 服务产品 / industry 行业 / control 控制项 / capability �
 """
 from __future__ import annotations
 
-from sqlalchemy import delete, select
+from dataclasses import dataclass, field
+
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..core import audit
-from ..models import KbItem, KbItemLabel
+from ..models import KbItem, KbItemLabel, KbVersion, User
 from . import meta
 
 KINDS = ("product", "industry", "control", "capability", "domain", "tag")
@@ -103,3 +105,82 @@ def sync(db: Session, item: KbItem, products: list[str] | None = None, *, source
 def set_products(db: Session, item: KbItem, products: list[str], *, actor: str) -> set[str]:
     """改条目的产品（主产品在前），记审计。调用方负责提交。"""
     return sync(db, item, check_products(products[0] if products else "", products), actor=actor)
+
+
+# ---- 只读查询（方案 8.2，给 A12 装配、就绪度和知识地图共用）----
+
+@dataclass(frozen=True)
+class MatchedItem:
+    doc_id: str                                   # 现行编号
+    version: int
+    layer: str
+    doc_type: str
+    matched: dict[str, list[str]] = field(default_factory=dict)
+
+
+def _with_label(kind: str, values: set[str]):
+    return select(KbItemLabel.item_id).where(KbItemLabel.kind == kind, KbItemLabel.value.in_(sorted(values)))
+
+
+def _live():
+    return (select(KbItem, KbVersion).join(KbVersion, KbVersion.id == KbItem.current_version_id)
+            .where(KbItem.retired.is_(False), KbVersion.status == "published"))
+
+
+def match(db: Session, user: User, *, products: list[str] | tuple[str, ...],
+          industries: list[str] | tuple[str, ...] = (), controls: list[str] | tuple[str, ...] = (),
+          layers: list[str] | tuple[str, ...] = (), doc_types: list[str] | tuple[str, ...] = (),
+          stage: str = "") -> list[MatchedItem]:
+    """按标签找条目：只返回已发布、未下线、调用人看得到的现行版本（口径同检索）。
+    products 自动带上 GEN，industries 自动带上“通用”；各类标签之间是“且”，同一类的多个取值是“或”。
+    matched 列出命中的取值：产品、行业总是给出（行业不过滤时给条目的全部行业），控制项只在按控制项过滤时给出。"""
+    from . import review as rv                    # review → items → labels，放函数里避免循环导入
+
+    prods = _clean(products)
+    if not prods:
+        raise meta.MetaError("至少指定一个服务产品")
+    want: dict[str, set[str]] = {"product": set(prods) | {GENERAL_PRODUCT}}
+    if inds := _clean(industries):
+        want["industry"] = set(inds) | {GENERAL_INDUSTRY}
+    if ctl := [c.upper() for c in _clean(controls)]:
+        want["control"] = set(ctl)
+    stmt = _live()
+    for kind, vals in want.items():
+        stmt = stmt.where(KbItem.id.in_(_with_label(kind, vals)))
+    for col, vals in ((KbItem.layer, _clean(layers)), (KbItem.doc_type, _clean(doc_types))):
+        if vals:
+            stmt = stmt.where(col.in_(vals))
+    if stage:
+        stmt = stmt.where(KbItem.stage == stage)
+    rows = [(i, v) for i, v in db.execute(stmt.order_by(KbItem.doc_id)).all() if rv.can_view(db, user, i, v)]
+    if not rows:
+        return []
+    have: dict[int, dict[str, list[str]]] = {}
+    kinds = {"product", "industry", *want}
+    for iid, kind, value in db.execute(select(KbItemLabel.item_id, KbItemLabel.kind, KbItemLabel.value)
+                                       .where(KbItemLabel.item_id.in_([i.id for i, _ in rows]),
+                                              KbItemLabel.kind.in_(sorted(kinds)))
+                                       .order_by(KbItemLabel.value)):
+        if kind not in want or value in want[kind]:
+            have.setdefault(iid, {}).setdefault(kind, []).append(value)
+    return [MatchedItem(doc_id=i.doc_id, version=v.version, layer=i.layer, doc_type=i.doc_type,
+                        matched=have.get(i.id, {})) for i, v in rows]
+
+
+def coverage(db: Session, *, products: list[str] | tuple[str, ...] = (),
+             industries: list[str] | tuple[str, ...] = (),
+             controls: list[str] | tuple[str, ...] = ()) -> dict[str, int]:
+    """每个取值下已发布、未下线的条目数，键为 “kind:取值”（如 product:SOC）。只计数，不看可见范围、不返回条目。
+    不自动带 GEN、“通用”：就绪度要看的是这个取值本身有多少条。"""
+    out: dict[str, int] = {}
+    live_ids = _live().with_only_columns(KbItem.id)
+    for kind, vals in (("product", _clean(products)), ("industry", _clean(industries)),
+                       ("control", [c.upper() for c in _clean(controls)])):
+        if not vals:
+            continue
+        counts = dict(db.execute(select(KbItemLabel.value, func.count())
+                                 .where(KbItemLabel.kind == kind, KbItemLabel.value.in_(vals),
+                                        KbItemLabel.item_id.in_(live_ids))
+                                 .group_by(KbItemLabel.value)).all())
+        out.update({f"{kind}:{v}": int(counts.get(v, 0)) for v in vals})
+    return out

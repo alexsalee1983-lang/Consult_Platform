@@ -41,7 +41,7 @@ from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
 from ..project import kb_impact
-from ..models import KbItem, KbItemAlias, KbVersion, User
+from ..models import KbItem, KbItemAlias, KbItemLabel, KbVersion, User
 
 router = APIRouter(prefix="/api/kb", tags=["kb"], dependencies=[Depends(require_business)])
 
@@ -252,10 +252,12 @@ def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
 def list_items(layer: str = "", product: str = "", stage: str = "", doc_type: str = "", status: str = "",
                q: str = Query("", max_length=100), db: Session = Depends(get_db), user: User = Depends(current_user)):
     stmt = select(KbItem).order_by(KbItem.doc_id).limit(500)
-    for col, val in ((KbItem.layer, layer), (KbItem.product, product), (KbItem.stage, stage),
-                     (KbItem.doc_type, doc_type)):
+    for col, val in ((KbItem.layer, layer), (KbItem.stage, stage), (KbItem.doc_type, doc_type)):
         if val:
             stmt = stmt.where(col == val)
+    if product:                                   # 按产品标签（B15）：多产品条目在每个产品下都列出
+        stmt = stmt.where(KbItem.id.in_(select(KbItemLabel.item_id).where(KbItemLabel.kind == "product",
+                                                                          KbItemLabel.value == product)))
     if status == "retired":
         stmt = stmt.where(KbItem.retired.is_(True))
     elif status == "published":
@@ -458,10 +460,12 @@ def stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> 
     rows = db.execute(live).all()
     by_source: dict[str, int] = {}
     coverage: dict[str, dict[str, int]] = {}
+    products = labels.products_of(db, [item.id for item, _ in rows])
     for item, v in rows:
         by_source[v.source_type] = by_source.get(v.source_type, 0) + 1
-        coverage.setdefault(item.product, {}).setdefault(item.stage, 0)
-        coverage[item.product][item.stage] += 1
+        for code in products.get(item.id, [item.product]):          # 按产品标签计数（B15）
+            coverage.setdefault(code, {}).setdefault(item.stage, 0)
+            coverage[code][item.stage] += 1
     month_ago = utcnow() - timedelta(days=30)
     searches = db.scalars(select(AuditLog.detail).where(AuditLog.action.in_(("kb.search", "kb.basis")),
                                                        AuditLog.result == "allowed", AuditLog.at >= month_ago)).all()
