@@ -12,11 +12,11 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import Engine, Table, inspect, insert, select, text
 
-from ..models import KbChunk, KbDeidReport, KbItem, KbMapping, KbReview, KbUpload, KbVersion
+from ..models import KbChunk, KbDeidReport, KbItem, KbItemAlias, KbMapping, KbReview, KbUpload, KbVersion
 from .migrate import KB_TABLES, drop_main_kb_tables, kb_row_count
 
 # 按外键依赖排序；kb_items.current_version_id 指向 kb_versions，先置空，版本搬完再补
-COPY_ORDER: tuple[Table, ...] = tuple(m.__table__ for m in (KbUpload, KbDeidReport, KbItem, KbVersion, KbMapping, KbChunk, KbReview))
+COPY_ORDER: tuple[Table, ...] = tuple(m.__table__ for m in (KbUpload, KbDeidReport, KbItem, KbItemAlias, KbVersion, KbMapping, KbChunk, KbReview))
 _BATCH = 500
 
 
@@ -42,7 +42,7 @@ def _copy(main: Engine, kb: Engine) -> None:
     postgres = main.dialect.name == "postgresql" and kb.dialect.name == "postgresql"
     with main.connect() as src, kb.begin() as dst:
         for table in COPY_ORDER:
-            rows = src.execute(select(table).order_by(table.c.id)).mappings()
+            rows = src.execute(select(table).order_by(*table.primary_key.columns)).mappings()   # 别名表主键是 alias
             batch: list[dict] = []
             for r in rows:
                 row = dict(r)
@@ -64,7 +64,7 @@ def _copy(main: Engine, kb: Engine) -> None:
                     "SELECT id, embedding_model, embedding::text FROM kb_chunks WHERE embedding IS NOT NULL")):
                 dst.execute(text("UPDATE kb_chunks SET embedding = CAST(:v AS vector), embedding_model = :m "
                                  "WHERE id = :id"), {"v": vec, "m": model, "id": cid})
-            for t in KB_TABLES:
+            for t in (t for t in KB_TABLES if t != "kb_item_aliases"):   # 别名表没有自增 id
                 dst.execute(text(f"SELECT setval(pg_get_serial_sequence('{t}', 'id'), "  # nosec B608  表名是常量
                                  f"coalesce((SELECT max(id) FROM {t}), 0) + 1, false)"))
 

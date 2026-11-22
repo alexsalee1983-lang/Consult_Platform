@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..core.db import utcnow
-from ..models import KbItem, KbMapping, KbVersion
+from ..models import KbItem, KbItemAlias, KbMapping, KbVersion
 from . import mapping, meta
 
 
@@ -91,7 +91,10 @@ class VersionContent:
 
 def next_doc_id(db: Session, m: ItemMeta) -> str:
     prefix = meta.doc_id_prefix(m.layer, m.domain, m.product, m.doc_type)
-    existing = db.scalars(select(KbItem.doc_id).where(KbItem.doc_id.like(prefix + "%"))).all()
+    existing = list(db.scalars(select(KbItem.doc_id).where(KbItem.doc_id.like(prefix + "%"))))
+    # 已登记为别名的旧编号也不再占用（B15：别名与现行编号互斥）
+    existing += [a for a in db.scalars(select(KbItemAlias.alias).where(KbItemAlias.alias.like(prefix + "%")))
+                 if meta.DOC_ID_RE.match(a)]
     seqs = [meta.parse_doc_id(d)[4] for d in existing]
     return meta.format_doc_id(m.layer, m.domain, m.product, m.doc_type, max(seqs, default=0) + 1)
 

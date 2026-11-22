@@ -56,6 +56,18 @@ class KbItem(KbBase):
         back_populates="item", foreign_keys="KbVersion.item_id", order_by="KbVersion.version")
 
 
+class KbItemAlias(KbBase):
+    """条目别名（三期 B15，知识区迁移 k0010）：旧编号（legacy，换号）、跨环境迁移时对方的编号（transfer）、
+    合并前的编号（merge）。别名永不删除，条目下线后照样能解析（结果为已下线）；与 kb_items.doc_id 互斥，
+    只经 app/kb/refs.add_alias 写入。"""
+    __tablename__ = "kb_item_aliases"
+
+    alias: Mapped[str] = mapped_column(String(40), primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("kb_items.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class KbVersion(KbBase):
     __tablename__ = "kb_versions"
     __table_args__ = (UniqueConstraint("item_id", "version", name="uq_kb_versions_item_version"),)

@@ -94,6 +94,36 @@ def test_regression_exits_nonzero(signed, tmp_path):
     assert cli.main(["kb-ref-check", "--compare", str(before)]) == 0
 
 
+def test_rename_with_alias_is_not_regression(signed, tmp_path):
+    """换了编号、旧编号登记为别名：通过别名解析到同一个 item_id，不算退化（B15 第二步）。"""
+    from sqlalchemy import delete
+
+    from app.kb import refs
+    from app.models import KbItemAlias
+
+    before = tmp_path / "before.json"
+    assert cli.main(["kb-ref-check", "--snapshot", str(before)]) == 0
+    renamed = f"L2-OPS-SOC-TPL-{secrets.randbelow(9000) + 90000}"
+    with SessionLocal() as db:
+        item = db.scalar(select(KbItem).where(KbItem.doc_id == signed["other"]))
+        item.doc_id = renamed
+        db.flush()
+        refs.add_alias(db, signed["other"], item.id, "legacy")
+        db.commit()
+    try:
+        after = _snap()
+        r = refcheck.compare(json.loads(before.read_text(encoding="utf-8")), after)
+        assert r.regressed == 0 and r.consistent > 0
+        mine = [e for e in after["entries"] if e.get("ref") == signed["other"] and e["source_kind"] == "stored"]
+        assert mine and all(e["via"] == "alias" and e["current_doc_id"] == renamed for e in mine)
+        assert cli.main(["kb-ref-check", "--compare", str(before)]) == 0
+    finally:
+        with SessionLocal() as db:     # 测试数据复原（平台不提供删除别名的函数）
+            db.execute(delete(KbItemAlias).where(KbItemAlias.alias == signed["other"]))
+            db.execute(update(KbItem).where(KbItem.doc_id == renamed).values(doc_id=signed["other"]))
+            db.commit()
+
+
 def test_signed_set_change_is_regression(signed):
     before = _snap()
     after = json.loads(json.dumps(before))

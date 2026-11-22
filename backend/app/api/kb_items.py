@@ -36,11 +36,12 @@ from ..core.db import get_db
 from ..core.permissions import require_business
 from ..kb import autopublish, citations
 from ..kb import meta as kb_meta
+from ..kb import refs as kb_refs
 from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
 from ..project import kb_impact
-from ..models import KbItem, KbVersion, User
+from ..models import KbItem, KbItemAlias, KbVersion, User
 
 router = APIRouter(prefix="/api/kb", tags=["kb"], dependencies=[Depends(require_business)])
 
@@ -191,6 +192,7 @@ class ItemOut(BaseModel):
 
 class ItemDetail(ItemOut):
     versions: list[VersionBrief] = []
+    aliases: list[str] = []             # 旧编号等别名（B15）；doc_id 是现行编号
 
 
 def _err(e: rv.ReviewError):
@@ -214,7 +216,9 @@ def _item_out(db: Session, item: KbItem, cls=ItemOut, versions: list[KbVersion] 
 
 
 def _item(db: Session, doc_id: str, user: User) -> KbItem:
-    item = db.scalar(select(KbItem).where(KbItem.doc_id == doc_id))
+    """路径参数可以是现行编号或别名（B15）：按别名访问直接返回该条目、不重定向；可见性与 404 语义不变。"""
+    r = kb_refs.resolve(db, [doc_id]).get(doc_id)
+    item = db.get(KbItem, r.item_id) if r else None
     if item is None or not rv.can_view(db, user, item):
         raise HTTPException(404, NOT_FOUND)
     return item
@@ -258,7 +262,8 @@ def list_items(layer: str = "", product: str = "", stage: str = "", doc_type: st
         stmt = stmt.where(KbItem.current_version_id.is_(None))
     if q:
         stmt = stmt.join(KbVersion, KbVersion.item_id == KbItem.id).where(
-            or_(KbItem.doc_id.contains(q), KbVersion.title.contains(q))).distinct()
+            or_(KbItem.doc_id.contains(q), KbVersion.title.contains(q),
+                KbItem.id.in_(select(KbItemAlias.item_id).where(KbItemAlias.alias.contains(q))))).distinct()
     return [_item_out(db, i) for i in db.scalars(stmt) if rv.can_view(db, user, i)]
 
 
@@ -277,7 +282,9 @@ def get_item(doc_id: str, db: Session = Depends(get_db), user: User = Depends(cu
     item = _item(db, doc_id, user)
     versions = item.versions if rv.is_knowledge_user(db, user) else [
         v for v in item.versions if v.id == item.current_version_id]
-    return _item_out(db, item, ItemDetail, versions)
+    out = _item_out(db, item, ItemDetail, versions)
+    out.aliases = kb_refs.aliases_of(db, item.id)
+    return out
 
 
 class UsageOut(BaseModel):
