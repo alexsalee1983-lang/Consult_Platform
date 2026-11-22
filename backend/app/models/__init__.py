@@ -12,7 +12,7 @@ from .job import Job
 from .judgment import JudgmentEvent
 from .kb import KbChunk, KbDeidReport, KbItem, KbMapping, KbReview, KbUpload, KbVersion
 from .project import Confirmation, Deliverable, Project, ProjectConfig, ProjectDeletion
-from .quality import QualityReview, ReviewWaiver, SignOff
+from .quality import QualityReview, ReviewIssue, ReviewWaiver, SignOff
 from .rbac import ProjectMember, Role, UserRole
 from .run import AgentRun, AgentRunStep
 from .usage import LlmUsage
@@ -20,4 +20,4 @@ from .user import User
 
 __all__ = ["Agent", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "Job", "JudgmentEvent", "KbChunk", "KbDeidReport", "KbItem", "KbMapping", "KbReview",
            "KbUpload", "KbVersion", "LlmUsage",
-           "Message", "Project", "ProjectConfig", "ProjectConsent", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityReview", "ReviewWaiver", "Role", "SectionVersion", "SignOff", "SummaryCard", "Tool", "User", "UserRole"]
+           "Message", "Project", "ProjectConfig", "ProjectConsent", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityReview", "ReviewIssue", "ReviewWaiver", "Role", "SectionVersion", "SignOff", "SummaryCard", "Tool", "User", "UserRole"]
