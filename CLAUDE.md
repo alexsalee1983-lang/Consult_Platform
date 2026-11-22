@@ -16,6 +16,7 @@
 | 开始一项工作 | `docs/二期开发计划.md`（一期：`docs/开发计划.md`） |
 | 设计数据表、权限、网关、部署 | `docs/架构设计.md`（第三节客户数据保护、第五节工具架构与 Agent × 工具授权矩阵、第七节安全） |
 | 遇到取舍 | `docs/决策记录.md`，已拍板的不要推翻；没覆盖到的问负责人 |
+| 起新工作项编号、查某个编号指什么 | `docs/工作项编号.md`（先登记再使用） |
 | 写界面 | `design/README.md` 和 `design/screens/*.html`（浏览器可直接打开），配色只用 `frontend/src/theme.css` 令牌 |
 | Agent 运行时、提示词 | `agents/01_公共规范.md`（所有 Agent 的公共前缀）、`agents/00_总体设计.md`、`agents/roles/*.md` |
 | 知识服务（M2） | `docs/知识库建设方案.md`、`docs/知识库建设总体计划.md`、`docs/Agent组开发项目方案.md` 第十二节 |
