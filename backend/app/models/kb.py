@@ -40,6 +40,10 @@ class KbItem(KbBase):
     tags: Mapped[list] = mapped_column(JSON, default=list)
     # 公司控制项编号（4A 埋点，知识区迁移 k0008）：条目级，同 tags 不进版本、不走审核；控制项中枢 v1 之前只记不用
     control_ids: Mapped[list] = mapped_column(JSON, default=list)
+    # 知识类型（三期 B35 最小版，知识区迁移 k0017）："" 通用 / practice 公司做法 / golden 黄金样例（app/kb/meta.py）；
+    # 后两类必须由作者以外的知识专家人工确认才能发布。slot：C10 章节槽位键，选填
+    knowledge_kind: Mapped[str] = mapped_column(String(16), default="", server_default="", index=True)
+    slot: Mapped[str] = mapped_column(String(64), default="", server_default="")
     classification: Mapped[str] = mapped_column(String(16), default="internal")  # internal / restricted
     visible_roles: Mapped[list] = mapped_column(JSON, default=_default_visible_roles)
     owner: Mapped[str] = mapped_column(String(64), default="")                 # 专家负责人（用户名）

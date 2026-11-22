@@ -60,6 +60,12 @@ DOC_TYPES = {
     "MAP": "映射矩阵", "CAS": "案例", "OBJ": "异议应答", "PIT": "踩坑记录", "SRC": "依据原文",
     "ENF": "执法案例", "RAR": "参考架构", "BMK": "基准数据", "GLS": "术语对照",
 }
+# 知识类型（三期 B35 最小版，知识区迁移 k0017）：公司做法、黄金样例只能靠人——Agent 或规划会话起草、专家确认；
+# 必须有作者以外的知识专家人工内容审核通过才能发布进检索（review.publish 守卫），不收公开资料。评分锚定与四格内容留四期 B35。
+KNOWLEDGE_KINDS = {"": "通用", "practice": "公司做法", "golden": "黄金样例"}
+PRACTICE_TYPES = ("TPL", "MTD", "CAS", "PIT", "POL", "OBJ", "BMK")   # 模板、方法、案例、常见坑、制度母版、异议应答、经验数值
+EXPERT_ONLY_KINDS = ("practice", "golden")
+SLOT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")             # C10 章节槽位键，例 SOC.D5.ch3；C10 落配置后再收紧
 # 能力域标签（可多选）
 CAPABILITIES = ("管理", "运营", "技术支撑")
 # 密级：受限条目只对 visible_roles 中的角色可见
@@ -168,3 +174,23 @@ def check_visibility(classification: str, visible_roles: list[str]) -> None:
     bad = [r for r in visible_roles if r not in VISIBLE_ROLES]
     if bad or not visible_roles:
         raise MetaError(f"可见角色至少选一个，只能是 {', '.join(VISIBLE_ROLES)}")
+
+
+def derive_kind(doc_type: str, source_type: str) -> str:
+    """不填知识类型时的推断：GLD 一律黄金样例；PRACTICE_TYPES 且来源非公开为公司做法；其余通用。"""
+    if doc_type == "GLD":
+        return "golden"
+    if doc_type in PRACTICE_TYPES and source_type != "public":
+        return "practice"
+    return ""
+
+
+def check_kind(kind: str, doc_type: str, slot: str) -> None:
+    if kind not in KNOWLEDGE_KINDS:
+        raise MetaError(f"知识类型只能是 {'、'.join(k for k in KNOWLEDGE_KINDS if k)} 或留空")
+    if (kind == "golden") != (doc_type == "GLD"):
+        raise MetaError("黄金样例的交付物类型必须是 GLD，GLD 条目的知识类型必须是黄金样例")
+    if kind == "practice" and doc_type not in PRACTICE_TYPES:
+        raise MetaError(f"公司做法的交付物类型只能是 {' / '.join(PRACTICE_TYPES)}")
+    if slot and not SLOT_RE.match(slot):
+        raise MetaError("章节槽位只能是字母、数字、点、下划线、连字符，至多 64 位")

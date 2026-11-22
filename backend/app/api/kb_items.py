@@ -60,6 +60,8 @@ class ItemMetaIn(BaseModel):
     owner: str = ""
     tags: list[str] = Field(default_factory=list)
     control_ids: list[str] = Field(default_factory=list)
+    knowledge_kind: str = ""          # 三期 B35："" / practice / golden，留空按类型和来源推断
+    slot: str = ""
 
 
 class ContentIn(BaseModel):
@@ -184,6 +186,8 @@ class ItemOut(BaseModel):
     owner: str
     tags: list[str] = []
     control_ids: list[str] = []
+    knowledge_kind: str = ""
+    slot: str = ""
     retired: bool
     title: str = ""
     current: VersionBrief | None = None
