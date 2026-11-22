@@ -62,6 +62,7 @@ class Step:
     output: str                 # 空 = 产出存运行记录
     query: str
     instruction: str
+    slots: tuple[dict[str, Any], ...] = ()   # 三期 A12：本步的知识槽位（parse_slots）
 
 
 @dataclass(frozen=True)
@@ -417,8 +418,9 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
         instruction = sp.text(s, "instruction", max_len=4000)
         _check_template(sp, "query", query)
         _check_template(sp, "instruction", instruction)
+        slots = parse_slots(sp, s.get("slots"))
         keys.append(key)
-        chain.append(Step(key, number, sname, agent, inputs, output, query, instruction))
+        chain.append(Step(key, number, sname, agent, inputs, output, query, instruction, slots))
     numbers = [s.number for s in chain]
     if numbers != sorted(numbers):
         p.add("chain 的 number 应按顺序递增")
@@ -435,6 +437,43 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
     return Product(code, name, domain, status, modules, tuple(deliverables), domains, frameworks, basis,
                    tuple(chain), gates, card_items, content_version(data), data, industry_basis, maturity_scores,
                    expert_review)
+
+
+SLOT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
+MAX_SLOTS, MAX_SLOT_NEED = 12, 5
+
+
+def parse_slots(p: _P, raw: Any) -> tuple[dict[str, Any], ...]:
+    """步骤的知识槽位（三期 A12；C10 槽位规格写进产品配置前可不写）。每个槽位：
+    id（本步内唯一）、type（条目类型，meta.DOC_TYPES 的键）、query（检索词）、need（所需条数 1～5，默认 1）、
+    required（必需槽位库里没有时发“知识不足”卡，默认否）。"""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or len(raw) > MAX_SLOTS:
+        p.add(f"slots 应为不超过 {MAX_SLOTS} 个槽位的列表")
+        return ()
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for i, r in enumerate(raw):
+        sp = _P(f"{p.where} slots[{i}]", p.out)
+        if not isinstance(r, dict):
+            sp.add("应为对象")
+            continue
+        sid, typ, query = sp.text(r, "id", max_len=40), sp.text(r, "type", max_len=8), sp.text(r, "query")
+        need, req = r.get("need", 1), r.get("required", False)
+        bad = len(p.out)
+        if sid and (not SLOT_ID.match(sid) or sid in seen):
+            sp.add(f"id {sid!r} 只能用字母、数字、- 和 _，且本步内不重复")
+        if typ and typ not in meta.DOC_TYPES:
+            sp.add(f"type {typ!r} 不是条目类型（{'/'.join(meta.DOC_TYPES)}）")
+        if not isinstance(need, int) or isinstance(need, bool) or not 1 <= need <= MAX_SLOT_NEED:
+            sp.add(f"need 应为 1～{MAX_SLOT_NEED} 的整数")
+        if not isinstance(req, bool):
+            sp.add("required 应为 true 或 false")
+        seen.add(sid)
+        if sid and typ and query and len(p.out) == bad:
+            out.append({"id": sid, "type": typ, "query": query, "need": need, "required": req})
+    return tuple(out)
 
 
 def _expert_review(p: _P, data: dict[str, Any]) -> str:
@@ -677,7 +716,7 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
             text = f"{text}\n{OUTLINE_HINT.format(code=s.output, titles='、'.join(outlines[s.output]))}"
         chain.append({"key": s.key, "number": s.number, "name": s.name, "agent": s.agent, "inputs": list(s.inputs),
                       "output": s.output, "query": render(s.query, merged, s.number, names, ""),
-                      "instruction": text})
+                      "instruction": text, **({"slots": [dict(x) for x in s.slots]} if s.slots else {})})
     deliverables = [{"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
                      "outline": outlines[d.code]} for d in prod.deliverables]
     return {
