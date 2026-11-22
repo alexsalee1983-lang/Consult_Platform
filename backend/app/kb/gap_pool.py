@@ -5,6 +5,9 @@
 - run_week：每周后台任务（worker 每周排一次 kb.gap_week），白名单取 B16 正式来源的网址前缀，
   结果写回每个缺口的 plan / score / planned_at；审计只记各路数量。
 - close / stats：关闭原因固定四类；关闭率与平均关闭时长供 F2 看板。
+- confirm_queue / decide_confirm：知识审批队列“来源确认”类。本周落在 confirm 的缺口按网址主机分组（编号类一组）；
+  知识管理员批量确认或不做。确认可顺带登记一个候选来源（必须覆盖这批网址），缺口标 confirmed，
+  仍要等来源由另一人批准转正式、进白名单，下周任务才把它排进 direct 出下发包；不做即关闭（dropped）。
 - dispatch_package / import_return：本周“直接采集”的缺口出下发包（只有网址与规则）；采集机回传批次先 verify_return，
   通过才关缺口（collected）并交 kb-source-publish；审计只记数量和问题类别，不记文件名。
 不存原文：gap_key 是编号或网址，events 只是事件编号（acquisition.EVENT_REF 校验）。
@@ -15,19 +18,24 @@ import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit
 from ..core.db import utcnow
-from ..models import KbGap, KbSource
+from ..core.permissions import KNOWLEDGE_ADMIN, roles_of
+from ..models import KbGap, KbSource, User
 from ..services import jobs
 from . import acquisition as acq
+from . import source_registry as reg
 
 JOB_KIND = "kb.gap_week"
 CLOSE_REASONS = {"published": "已入库", "collected": "已采集", "dropped": "不做", "duplicate": "重复"}
 DEFAULT_CAP = 20
+CONFIRMED = "confirmed"          # 来源确认已通过、等来源转正式
+DECISIONS = ("approve", "reject")
 
 
 def _aware(dt: datetime | None) -> datetime | None:
@@ -76,12 +84,19 @@ def whitelist(db: Session) -> tuple[str, ...]:
 
 def run_week(db: Session, today: date, *, thresholds: dict[str, int] | None = None, cap: int = DEFAULT_CAP,
              actor: str = "platform") -> dict[str, int]:
+    wl = whitelist(db)
     rows = list(db.scalars(select(KbGap).where(KbGap.status == "open").order_by(KbGap.id)))
+    # 来源确认过的缺口不再回队列：来源转正式（进白名单）后直接采集，之前一直等着
+    held = [r for r in rows if r.plan == CONFIRMED and not acq.in_whitelist(r.gap_key, wl)]
+    promoted = {r.gap_key for r in rows if r.plan == CONFIRMED and acq.in_whitelist(r.gap_key, wl)}
+    rows = [r for r in rows if r not in held]
     gaps = {r.gap_key: acq.Gap(key=r.gap_key, kinds=dict(r.kinds or {}), events=list(r.events or []),
                                impact=r.impact, due=r.due, authority=r.authority) for r in rows}
-    plan = acq.plan_week(list(gaps.values()), today, thresholds=thresholds or {}, whitelist=whitelist(db), cap=cap)
+    plan = acq.plan_week([g for k, g in gaps.items() if k not in promoted], today, thresholds=thresholds or {},
+                         whitelist=wl, cap=max(cap - len(promoted), 0))
     now = utcnow()
-    lanes = {"direct": plan.direct, "confirm": plan.confirm, "deferred": plan.deferred, "waiting": plan.waiting}
+    lanes = {"direct": [gaps[k] for k in sorted(promoted)] + plan.direct, "confirm": plan.confirm,
+             "deferred": plan.deferred, "waiting": plan.waiting}
     lane_of = {g.key: lane for lane, gs in lanes.items() for g in gs}
     for r in rows:
         r.plan = lane_of.get(r.gap_key, "")
@@ -90,6 +105,8 @@ def run_week(db: Session, today: date, *, thresholds: dict[str, int] | None = No
         r.updated_at = now
     db.commit()
     out = {lane: len(gs) for lane, gs in lanes.items()}
+    if held:
+        out[CONFIRMED] = len(held)
     audit.record(db, actor=actor, action="kb.gap.week", result="allowed", today=today.isoformat(), **out)
     return out
 
@@ -119,6 +136,48 @@ def stats(db: Session) -> dict:
     return {"total": len(rows), "open": len(rows) - len(closed), "closed": len(closed),
             "close_rate": round(len(closed) / len(rows), 4) if rows else 0.0,
             "avg_close_days": round(sum(days) / len(days), 2) if days else 0.0, "by_reason": by_reason}
+
+
+def confirm_queue(db: Session) -> list[dict[str, Any]]:
+    rows = db.scalars(select(KbGap).where(KbGap.status == "open", KbGap.plan == "confirm")
+                      .order_by(KbGap.score.desc(), KbGap.id))
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        u = urlsplit(r.gap_key)
+        group = (u.hostname or "").lower() if u.scheme in ("http", "https") and u.hostname else "编号"
+        groups.setdefault(group, []).append({
+            "id": r.id, "gap_key": r.gap_key, "kinds": dict(r.kinds or {}), "impact": r.impact, "due": r.due,
+            "authority": r.authority, "score": r.score, "opened_at": r.opened_at})
+    return [{"group": g, "items": items} for g, items in groups.items()]
+
+
+def decide_confirm(db: Session, user: User, gap_ids: list[int], decision: str,
+                   source: dict[str, str] | None = None) -> dict[str, Any]:
+    """只限知识管理员。approve：缺口标 confirmed，带 source 则登记候选来源；reject：关闭（dropped）。"""
+    if KNOWLEDGE_ADMIN not in roles_of(db, user.id):
+        raise reg.SourceError(403, "只有知识管理员能确认来源")
+    if decision not in DECISIONS:
+        raise reg.SourceError(422, "决定只能是 approve 或 reject")
+    ids = sorted(set(gap_ids))
+    rows = list(db.scalars(select(KbGap).where(KbGap.id.in_(ids), KbGap.status == "open", KbGap.plan == "confirm")))
+    if not ids or len(rows) != len(ids):
+        raise reg.SourceError(422, "有缺口不在来源确认队列里")
+    code = None
+    if decision == "approve" and source:
+        prefix = str(source.get("url", "")).strip()
+        if not all(acq.in_whitelist(r.gap_key, (prefix,)) for r in rows):
+            raise reg.SourceError(422, "登记的来源地址必须覆盖这批缺口的网址")
+        code = reg.create(db, user, **source).code
+    now = utcnow()
+    for r in rows:
+        if decision == "approve":
+            r.plan, r.updated_at = CONFIRMED, now
+        else:
+            r.status, r.close_reason, r.plan, r.closed_at, r.updated_at = "closed", "dropped", "", now, now
+    db.commit()
+    audit.record(db, actor=user.username, action="kb.gap.confirm", result="allowed", decision=decision,
+                 count=len(rows), source=code or "")
+    return {"decided": len(rows), "source": code}
 
 
 def dispatch_package(db: Session, rule: dict[str, Any] | None = None, *, actor: str = "cli") -> dict[str, Any]:

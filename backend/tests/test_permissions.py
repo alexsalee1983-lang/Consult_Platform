@@ -142,6 +142,9 @@ MATRIX = [
     (("GET", "/api/kb/search?q=值班", None),            (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/sources", None),                  (403, 403, 403, 403, 403)),   # 来源登记表只限知识专家、知识管理员（B16）
     (("POST", "/api/kb/sources/SR-999999/status", {"to": "trial"}), (403, 403, 403, 403, 403)),
+    (("GET", "/api/kb/sources/confirm-queue", None),    (403, 403, 403, 403, 403)),   # 来源确认队列（B25②），同上
+    (("POST", "/api/kb/sources/confirm-queue/decide", {"gap_ids": [999999], "decision": "reject"}),
+     (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
