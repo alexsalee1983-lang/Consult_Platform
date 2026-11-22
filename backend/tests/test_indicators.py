@@ -116,6 +116,10 @@ def test_kb_and_eval_metrics(library):  # noqa: F811
         finally:
             for v, (at, ar) in zip(vs, saved):
                 v.published_at, v.auto_review = at, ar
+            # 补一条达标记录：最近一次对比评测未达标会暂停自动发布（compare.gate_reason），影响后面的用例
+            audit.record(db, actor="t", action="kb.eval_compare", result="allowed", passed=True, questions=10,
+                         model="m", no_kb_accuracy=0.5, with_kb_accuracy=0.95, no_kb_fabricated=0,
+                         with_kb_fabricated=0)
             db.commit()
     assert m["auto_publish_rate"]["value"] == 0.5 and m["auto_publish_rate"]["detail"]["published"] == 2
     assert m["human_minutes_per_100"]["value"] is None
