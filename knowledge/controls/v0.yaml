@@ -2,6 +2,8 @@
 # 范围：四格 SOC、IRE × 银行、电力。编号全局唯一、只增不改（改名另做别名）；行业专属项用 BNK / PWR 段。
 # 与等保 2.0、ISO 27001 附录 A、CSF 2.0、SOC-CMM、SP 800-61、行业条款的映射是第二步（12-18），只写条款号。
 # 资质边界：这里是差距分析的评估维度，不是测评或认证的判定项。
+# 检查点（checkpoints）参照 SP 800-53A 评估目标：objective 写可核查的事实，methods 取 examine / interview / test；
+# applicability 空=不限；params 为组织定义参数，default 只是起草建议值，以客户制度为准。题库、评分锚定、发现初判挂到检查点（kb_control_checkpoints）。
 version: v0
 status: draft
 expert_review: pending
@@ -26,429 +28,784 @@ controls:
   domain: 组织与人员
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 已书面明确值班、分析、处置岗位职责, methods: [examine, interview]}
+  - {id: b, objective: 各岗位实际在岗人数与编制文件一致, methods: [examine, interview]}
+  - {id: c, objective: 关键岗位有指定的 AB 角, methods: [examine, interview]}
 - id: SOC.ORG.02
   name: 技能与培训
   product: SOC
   domain: 组织与人员
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 各岗位有书面的技能要求, methods: [examine]}
+  - {id: b, objective: 年度培训计划已制订并有执行记录, methods: [examine]}
+  - {id: c, objective: 分析人员能按处置手册完成指定研判操作, methods: [interview, test]}
 - id: SOC.ORG.03
   name: 值班与轮岗
   product: SOC
   domain: 组织与人员
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 有覆盖约定时段的排班表且与值班记录一致, methods: [examine]}
+  - {id: b, objective: 交接班有书面记录，含未闭环事项, methods: [examine]}
+  - {id: c, objective: 非工作时间有可联系的升级责任人, methods: [interview, test]}
+  params:
+  - {id: coverage_hours, label: 值班覆盖（小时/天）, default: 24}
 - id: SOC.ORG.04
   name: 外包与内外协同
   product: SOC
   domain: 组织与人员
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 外包服务合同写明服务范围、时限与交付物, methods: [examine]}
+  - {id: b, objective: 内外部团队的分工与交接界面已书面约定, methods: [examine, interview]}
+  - {id: c, objective: 外包人员的访问权限按最小必要授予并定期复核, methods: [examine, test]}
 - id: SOC.ORG.05
   name: 运营制度与授权
   product: SOC
   domain: 组织与人员
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 运营制度已发布并标明版本与生效日期, methods: [examine]}
+  - {id: b, objective: 高风险处置动作有书面授权规则, methods: [examine, interview]}
+  - {id: c, objective: 制度按约定周期复审并有记录, methods: [examine]}
+  params:
+  - {id: policy_review_months, label: 制度复审周期（月）, default: 12}
 - id: SOC.BNK.04
   name: 第三方与外包运营监督
   product: SOC
   domain: 组织与人员
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 外包运营服务已纳入第三方风险管理清单, methods: [examine]}
+  - {id: b, objective: 对外包服务商按约定周期开展监督检查并有记录, methods: [examine, interview]}
+  - {id: c, objective: 外包服务的退出与替代安排已书面明确, methods: [examine, interview]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
+  params:
+  - {id: vendor_review_months, label: 外包监督检查周期（月）, default: 12}
 - id: SOC.PWR.05
   name: 厂站与集控值守协同
   product: SOC
   domain: 组织与人员
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 厂站与集控中心的告警联络机制已书面明确, methods: [examine, interview]}
+  - {id: b, objective: 厂站侧值守人员知晓安全事件上报路径, methods: [interview, test]}
+  - {id: c, objective: 集控与厂站之间有联合处置演练记录, methods: [examine]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: SOC.PRC.01
   name: 告警分级与研判
   product: SOC
   domain: 流程
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 告警分级标准已书面明确且与工单系统字段一致, methods: [examine, test]}
+  - {id: b, objective: 各级告警有约定的研判时限, methods: [examine]}
+  - {id: c, objective: 抽样告警的研判记录包含依据与结论, methods: [examine, test]}
+  - {id: d, objective: 误报有分类归因并反馈到规则调整, methods: [examine, interview]}
+  params:
+  - {id: triage_minutes_high, label: 高等级告警研判时限（分钟）, default: 30}
 - id: SOC.PRC.02
   name: 事件处置与升级
   product: SOC
   domain: 流程
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件处置流程覆盖受理、研判、处置、关闭各环节, methods: [examine]}
+  - {id: b, objective: 升级条件与升级对象已书面明确, methods: [examine, interview]}
+  - {id: c, objective: 抽样事件的响应用时在约定时限内, methods: [examine, test]}
+  params:
+  - {id: response_minutes_critical, label: 重大事件响应时限（分钟）, default: 15}
+  - {id: response_hours_general, label: 一般事件响应时限（小时）, default: 4}
 - id: SOC.PRC.03
   name: 威胁情报使用
   product: SOC
   domain: 流程
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 威胁情报来源有清单并标明可信度, methods: [examine]}
+  - {id: b, objective: 情报指标能自动导入检测平台, methods: [examine, test]}
+  - {id: c, objective: 情报命中后有处置记录, methods: [examine]}
 - id: SOC.PRC.04
   name: 用例与规则变更管理
   product: SOC
   domain: 流程
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 检测规则变更有申请、审核、上线记录, methods: [examine]}
+  - {id: b, objective: 规则上线前有测试验证记录, methods: [examine, test]}
+  - {id: c, objective: 规则库有版本管理且可回退, methods: [examine, test]}
 - id: SOC.PRC.05
   name: 复盘与演练
   product: SOC
   domain: 流程
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件复盘按约定条件开展并形成报告, methods: [examine]}
+  - {id: b, objective: 演练按约定频次开展并有记录, methods: [examine]}
+  - {id: c, objective: 复盘与演练提出的改进项有跟踪记录, methods: [examine]}
+  params:
+  - {id: drill_per_year, label: 演练频次（次/年）, default: 2}
 - id: SOC.PRC.06
   name: 威胁狩猎
   product: SOC
   domain: 流程
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 威胁狩猎有计划和假设清单, methods: [examine, interview]}
+  - {id: b, objective: 狩猎活动有执行记录与发现汇总, methods: [examine]}
+  - {id: c, objective: 狩猎发现已转化为检测用例, methods: [examine, test]}
 - id: SOC.PRC.07
   name: 漏洞与暴露管理联动
   product: SOC
   domain: 流程
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 漏洞扫描结果能与告警研判关联查看, methods: [examine, test]}
+  - {id: b, objective: 高危暴露面有约定的处置时限并跟踪, methods: [examine]}
+  - {id: c, objective: 漏洞利用告警能定位到受影响资产与责任人, methods: [test]}
+  params:
+  - {id: critical_vuln_fix_days, label: 高危暴露处置时限（天）, default: 7}
 - id: SOC.PRC.08
   name: 处置手册与知识沉淀
   product: SOC
   domain: 流程
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 常见事件类型有书面处置手册, methods: [examine]}
+  - {id: b, objective: 处置手册按约定周期更新并有版本记录, methods: [examine]}
+  - {id: c, objective: 处置经验以案例形式沉淀并可检索, methods: [examine, test]}
+  params:
+  - {id: playbook_review_months, label: 处置手册更新周期（月）, default: 12}
 - id: SOC.BNK.03
   name: 金融监管报送衔接
   product: SOC
   domain: 流程
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 需报送监管的事件类型与时限已书面明确, methods: [examine, interview]}
+  - {id: b, objective: 运营流程中有监管报送触发点与责任人, methods: [examine, interview]}
+  - {id: c, objective: 历史报送记录与事件工单可对应, methods: [examine]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
 - id: SOC.PWR.03
   name: 调度系统安全事件联动
   product: SOC
   domain: 流程
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 与调度系统的安全事件联络人与路径已书面明确, methods: [examine, interview]}
+  - {id: b, objective: 调度相关告警有专门的研判与通知规则, methods: [examine, test]}
+  - {id: c, objective: 联动处置有演练或实际记录, methods: [examine]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: SOC.PWR.04
   name: 行业主管部门通报衔接
   product: SOC
   domain: 流程
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 向行业主管部门通报的事件类型与时限已书面明确, methods: [examine, interview]}
+  - {id: b, objective: 通报材料有模板与审批流程, methods: [examine]}
+  - {id: c, objective: 历史通报记录与事件工单可对应, methods: [examine]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: SOC.TEC.01
   name: 数据源覆盖
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 有数据源接入清单并标明覆盖的资产范围, methods: [examine]}
+  - {id: b, objective: 关键资产的日志已接入检测平台, methods: [examine, test]}
+  - {id: c, objective: 数据源中断能在约定时限内被发现, methods: [test]}
+  params:
+  - {id: source_outage_detect_hours, label: 数据源中断发现时限（小时）, default: 1}
 - id: SOC.TEC.02
   name: 检测用例
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 检测用例有清单并映射到攻击技术框架, methods: [examine]}
+  - {id: b, objective: 用例有触发条件、处置指引与负责人, methods: [examine]}
+  - {id: c, objective: 抽样用例经模拟触发能产生告警, methods: [test]}
 - id: SOC.TEC.03
   name: 平台与自动化
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 平台功能覆盖采集、关联分析、工单处置, methods: [examine, test]}
+  - {id: b, objective: 常见处置动作已编排为自动化剧本, methods: [examine, test]}
+  - {id: c, objective: 自动化剧本的执行有日志可查, methods: [examine]}
 - id: SOC.TEC.04
   name: 资产与漏洞关联
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 有资产清单并标明责任人与重要程度, methods: [examine]}
+  - {id: b, objective: 告警能自动关联资产信息与已知漏洞, methods: [test]}
+  - {id: c, objective: 资产清单按约定周期更新, methods: [examine, interview]}
+  params:
+  - {id: asset_review_months, label: 资产清单更新周期（月）, default: 3}
 - id: SOC.TEC.05
   name: 日志留存与质量
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 日志留存期限已书面规定, methods: [examine]}
+  - {id: b, objective: 抽查的日志实际留存时长不短于规定期限, methods: [test]}
+  - {id: c, objective: 日志字段完整性与时间同步有检查机制, methods: [examine, test]}
+  - {id: d, objective: 日志存储有防篡改或访问控制措施, methods: [examine, test]}
+  params:
+  - {id: log_retention_months, label: 日志保留月数, default: 6}
 - id: SOC.TEC.06
   name: 网络流量与终端检测
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 关键网络区域部署了流量检测, methods: [examine, test]}
+  - {id: b, objective: 终端检测覆盖率有统计并定期复核, methods: [examine]}
+  - {id: c, objective: 流量与终端告警能在平台中关联分析, methods: [test]}
 - id: SOC.TEC.07
   name: 身份与访问行为监测
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 登录鉴别与特权操作日志已接入平台, methods: [examine, test]}
+  - {id: b, objective: 有针对异常登录与权限滥用的检测用例, methods: [examine, test]}
+  - {id: c, objective: 特权账号行为有定期审查记录, methods: [examine]}
+  params:
+  - {id: privileged_review_months, label: 特权行为审查周期（月）, default: 3}
 - id: SOC.TEC.08
   name: 云与容器环境监测
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 云平台与容器环境的日志已接入平台, methods: [examine, test]}
+  - {id: b, objective: 有针对云配置变更与容器逃逸的检测用例, methods: [examine, test]}
+  - {id: c, objective: 云上资产清单与平台监测范围一致, methods: [examine, test]}
 - id: SOC.TEC.09
   name: 平台可用性与容灾
   product: SOC
   domain: 技术平台与数据源
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 检测平台有可用性监控与告警, methods: [examine, test]}
+  - {id: b, objective: 平台关键组件有冗余或备份, methods: [examine, interview]}
+  - {id: c, objective: 平台故障恢复有演练记录, methods: [examine]}
 - id: SOC.BNK.01
   name: 核心业务系统监测
   product: SOC
   domain: 技术平台与数据源
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 核心业务系统及其依赖组件已纳入监测范围, methods: [examine, test]}
+  - {id: b, objective: 核心系统有专门的检测用例, methods: [examine]}
+  - {id: c, objective: 核心系统告警有优先研判规则, methods: [examine, interview]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
 - id: SOC.BNK.02
   name: 交易与渠道异常监测
   product: SOC
   domain: 技术平台与数据源
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 交易与渠道异常的检测规则已上线, methods: [examine, test]}
+  - {id: b, objective: 安全运营与反欺诈团队的协同机制已书面明确, methods: [examine, interview]}
+  - {id: c, objective: 异常交易告警有处置记录, methods: [examine]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
 - id: SOC.PWR.01
   name: 生产控制区与管理信息区分区监测
   product: SOC
   domain: 技术平台与数据源
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 生产控制区与管理信息区的监测分别部署, methods: [examine, test]}
+  - {id: b, objective: 跨区监测数据的传输方式不破坏分区隔离, methods: [examine, interview]}
+  - {id: c, objective: 各区监测覆盖范围有清单, methods: [examine]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: SOC.PWR.02
   name: 工控协议与设备监测
   product: SOC
   domain: 技术平台与数据源
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 工控协议流量已纳入检测, methods: [examine, test]}
+  - {id: b, objective: 有针对工控设备异常指令的检测用例, methods: [examine, test]}
+  - {id: c, objective: 工控资产清单含设备型号与固件版本, methods: [examine]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: SOC.MET.01
   name: 指标体系
   product: SOC
   domain: 度量与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 运营指标有书面定义与计算口径, methods: [examine]}
+  - {id: b, objective: 指标数据来源于系统而非人工填报, methods: [examine, test]}
+  - {id: c, objective: 指标按约定周期统计并留存, methods: [examine]}
+  params:
+  - {id: metric_period_months, label: 指标统计周期（月）, default: 1}
 - id: SOC.MET.02
   name: 汇报与管理评审
   product: SOC
   domain: 度量与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 运营报告按约定周期提交管理层, methods: [examine]}
+  - {id: b, objective: 管理评审有会议记录与决议, methods: [examine]}
+  - {id: c, objective: 评审决议有跟踪落实记录, methods: [examine, interview]}
+  params:
+  - {id: report_period_months, label: 管理层汇报周期（月）, default: 3}
 - id: SOC.MET.03
   name: 持续改进
   product: SOC
   domain: 度量与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 有改进事项清单并标明来源、负责人、期限, methods: [examine]}
+  - {id: b, objective: 改进事项的完成情况有跟踪记录, methods: [examine]}
+  - {id: c, objective: 改进效果有前后指标对比, methods: [examine]}
 - id: SOC.MET.04
   name: 检测有效性验证
   product: SOC
   domain: 度量与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 检测有效性验证按约定频次开展, methods: [examine]}
+  - {id: b, objective: 验证覆盖重点攻击技术并记录检出情况, methods: [examine, test]}
+  - {id: c, objective: 未检出项已转为用例补充计划, methods: [examine]}
+  params:
+  - {id: validation_per_year, label: 有效性验证频次（次/年）, default: 2}
 - id: SOC.MET.05
   name: 资源与成本规划
   product: SOC
   domain: 度量与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 有年度人员与工具预算规划, methods: [examine, interview]}
+  - {id: b, objective: 数据接入量与存储容量有趋势统计, methods: [examine]}
+  - {id: c, objective: 资源规划与业务扩张计划有对应, methods: [interview]}
 - id: SOC.BNK.05
   name: 重要业务连续性监测指标
   product: SOC
   domain: 度量与改进
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 重要业务清单与对应的监测指标已书面明确, methods: [examine]}
+  - {id: b, objective: 重要业务中断的预警阈值已设置, methods: [examine, test]}
+  - {id: c, objective: 连续性监测指标纳入运营报告, methods: [examine]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
 - id: IRE.INC.01
   name: 时间线还原
   product: IRE
   domain: 事件经过与影响
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件时间线覆盖首次入侵到发现、处置各节点, methods: [examine]}
+  - {id: b, objective: 各时间节点有日志或证据支撑, methods: [examine]}
+  - {id: c, objective: 时间线中的空白段已标明原因, methods: [examine, interview]}
 - id: IRE.INC.02
   name: 影响范围评估
   product: IRE
   domain: 事件经过与影响
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 受影响资产、账号、数据已列出清单, methods: [examine]}
+  - {id: b, objective: 影响范围的判定依据已记录, methods: [examine, interview]}
+  - {id: c, objective: 对未排查完的范围标明了不确定性, methods: [examine]}
 - id: IRE.INC.03
   name: 根因分析
   product: IRE
   domain: 事件经过与影响
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 初始入侵途径已识别并有证据支撑, methods: [examine]}
+  - {id: b, objective: 根因分析区分了直接原因与管理原因, methods: [examine, interview]}
+  - {id: c, objective: 根因结论经相关责任方确认, methods: [interview]}
 - id: IRE.BNK.01
   name: 重要业务影响评估
   product: IRE
   domain: 事件经过与影响
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件涉及的重要业务已识别, methods: [examine, interview]}
+  - {id: b, objective: 重要业务中断时长与受影响客户范围已统计, methods: [examine]}
+  - {id: c, objective: 影响评估结果已提交业务连续性管理部门, methods: [examine, interview]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
 - id: IRE.PWR.04
   name: 调度与运行影响评估
   product: IRE
   domain: 事件经过与影响
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件对调度与运行的影响已评估, methods: [examine, interview]}
+  - {id: b, objective: 是否影响电力生产与供应已记录, methods: [examine]}
+  - {id: c, objective: 评估结果已与调度部门确认, methods: [interview]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: IRE.PRO.01
   name: 边界与访问控制
   product: IRE
   domain: 防护
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 入侵途径所涉边界的访问控制策略已复核, methods: [examine, test]}
+  - {id: b, objective: 对外暴露服务有清单并经审批, methods: [examine]}
+  - {id: c, objective: 事件后边界策略的调整有记录, methods: [examine]}
 - id: IRE.PRO.02
   name: 补丁与配置管理
   product: IRE
   domain: 防护
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 被利用漏洞的补丁状态已核实, methods: [examine, test]}
+  - {id: b, objective: 补丁管理流程有时限要求与执行记录, methods: [examine]}
+  - {id: c, objective: 同类系统的配置基线已复核, methods: [examine, test]}
+  params:
+  - {id: critical_patch_days, label: 高危补丁修复时限（天）, default: 15}
 - id: IRE.PRO.03
   name: 账号与权限
   product: IRE
   domain: 防护
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件涉及账号的权限与使用情况已核查, methods: [examine, test]}
+  - {id: b, objective: 特权账号启用多因素身份鉴别, methods: [examine, test]}
+  - {id: c, objective: 账号权限按约定周期复核并有记录, methods: [examine]}
+  params:
+  - {id: access_review_months, label: 账号权限复核周期（月）, default: 6}
 - id: IRE.PRO.04
   name: 数据保护与加密
   product: IRE
   domain: 防护
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件涉及的敏感数据已识别, methods: [examine, interview]}
+  - {id: b, objective: 敏感数据存储与传输的加密情况已核查, methods: [examine, test]}
+  - {id: c, objective: 数据访问日志可追溯到具体账号, methods: [test]}
 - id: IRE.PWR.05
   name: 边界防护与横向隔离复核
   product: IRE
   domain: 防护
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 横向隔离装置的策略已复核, methods: [examine, test]}
+  - {id: b, objective: 纵向加密装置的配置与日志已核查, methods: [examine, test]}
+  - {id: c, objective: 事件路径是否穿越分区边界已判明, methods: [examine, interview]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: IRE.DET.01
   name: 发现途径与时效
   product: IRE
   domain: 检测与监测
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件发现途径已记录（内部检测、外部通知等）, methods: [examine]}
+  - {id: b, objective: 从入侵到发现的时长已统计, methods: [examine]}
+  - {id: c, objective: 未能更早发现的原因已分析, methods: [examine, interview]}
 - id: IRE.DET.02
   name: 日志与监测覆盖
   product: IRE
   domain: 检测与监测
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件涉及系统的日志在当时已采集, methods: [examine, test]}
+  - {id: b, objective: 日志缺失的系统与时段已列出, methods: [examine]}
+  - {id: c, objective: 监测覆盖的补充计划已制订, methods: [examine]}
 - id: IRE.DET.03
   name: 失陷指标排查
   product: IRE
   domain: 检测与监测
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 已提取本次事件的失陷指标, methods: [examine]}
+  - {id: b, objective: 已用失陷指标对全网开展排查并记录结果, methods: [examine, test]}
+  - {id: c, objective: 失陷指标已加入检测规则, methods: [examine, test]}
 - id: IRE.RSP.01
   name: 预案与角色
   product: IRE
   domain: 响应与处置
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 有书面的应急预案并标明版本, methods: [examine]}
+  - {id: b, objective: 预案中的角色在事件中实际到位, methods: [examine, interview]}
+  - {id: c, objective: 预案联系人信息为最新, methods: [examine, test]}
 - id: IRE.RSP.02
   name: 遏制与取证
   product: IRE
   domain: 响应与处置
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 遏制措施及其执行时间已记录, methods: [examine]}
+  - {id: b, objective: 遏制前已按需留存证据, methods: [examine, interview]}
+  - {id: c, objective: 遏制措施的有效性已验证, methods: [examine, test]}
 - id: IRE.RSP.03
   name: 外部协同
   product: IRE
   domain: 响应与处置
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 外部协同对象（服务商、监管、执法）的联络方式已明确, methods: [examine]}
+  - {id: b, objective: 与外部协同的过程有记录, methods: [examine]}
+  - {id: c, objective: 外部服务商的应急服务合同条款已核实, methods: [examine]}
 - id: IRE.RSP.04
   name: 证据保全与监管链
   product: IRE
   domain: 响应与处置
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 证据采集有记录，含采集人、时间、方法, methods: [examine]}
+  - {id: b, objective: 证据的完整性有校验值, methods: [examine, test]}
+  - {id: c, objective: 证据的保管与移交有监管链记录, methods: [examine]}
 - id: IRE.RSP.05
   name: 应急沟通与决策
   product: IRE
   domain: 响应与处置
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 应急决策的授权人与决策记录已留存, methods: [examine, interview]}
+  - {id: b, objective: 内部沟通的渠道与频次在事件中执行, methods: [examine, interview]}
+  - {id: c, objective: 关键决策的依据已记录, methods: [examine]}
 - id: IRE.BNK.02
   name: 客户资金与交易风险处置
   product: IRE
   domain: 响应与处置
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件涉及的客户资金与交易风险已识别, methods: [examine, interview]}
+  - {id: b, objective: 可疑交易的拦截或冻结措施已记录, methods: [examine]}
+  - {id: c, objective: 客户损失的处理方案已制订, methods: [examine, interview]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
 - id: IRE.BNK.04
   name: 第三方服务商事件协同
   product: IRE
   domain: 响应与处置
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 涉事第三方服务商已识别并通知, methods: [examine, interview]}
+  - {id: b, objective: 服务商的配合处置过程有记录, methods: [examine]}
+  - {id: c, objective: 服务合同中的事件协同条款已核实, methods: [examine]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
 - id: IRE.PWR.01
   name: 生产控制区事件隔离
   product: IRE
   domain: 响应与处置
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 生产控制区内的受影响设备已隔离或确认未受影响, methods: [examine, interview]}
+  - {id: b, objective: 隔离措施对生产运行的影响已评估并经调度同意, methods: [examine, interview]}
+  - {id: c, objective: 隔离操作有记录, methods: [examine]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: IRE.REC.01
   name: 恢复流程与备份
   product: IRE
   domain: 恢复与业务连续性
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 恢复流程与恢复顺序已书面明确, methods: [examine]}
+  - {id: b, objective: 用于恢复的备份在事件前已验证可用, methods: [examine, test]}
+  - {id: c, objective: 恢复过程有记录, methods: [examine]}
 - id: IRE.REC.02
   name: 业务连续性
   product: IRE
   domain: 恢复与业务连续性
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 业务中断时长与恢复目标已对比, methods: [examine]}
+  - {id: b, objective: 业务连续性计划在事件中启动并有记录, methods: [examine, interview]}
+  - {id: c, objective: 恢复目标未达成的原因已分析, methods: [examine]}
 - id: IRE.REC.03
   name: 恢复验证与加固
   product: IRE
   domain: 恢复与业务连续性
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 恢复后的系统经扫描或检查未见残留威胁, methods: [examine, test]}
+  - {id: b, objective: 恢复后已实施针对性加固, methods: [examine, test]}
+  - {id: c, objective: 恢复后有约定期限的加强监测, methods: [examine, interview]}
+  params:
+  - {id: post_recovery_watch_days, label: 恢复后加强监测期（天）, default: 30}
 - id: IRE.BNK.05
   name: 灾备切换与重要业务恢复
   product: IRE
   domain: 恢复与业务连续性
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 灾备切换的决策与执行过程有记录, methods: [examine, interview]}
+  - {id: b, objective: 重要业务恢复时长与约定目标已对比, methods: [examine]}
+  - {id: c, objective: 灾备切换演练按约定频次开展, methods: [examine]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
+  params:
+  - {id: dr_drill_per_year, label: 灾备切换演练频次（次/年）, default: 1}
 - id: IRE.PWR.02
   name: 工控系统取证与恢复
   product: IRE
   domain: 恢复与业务连续性
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 工控系统取证方式不影响生产运行, methods: [examine, interview]}
+  - {id: b, objective: 工控设备的程序与配置已与基线比对, methods: [examine, test]}
+  - {id: c, objective: 工控系统恢复经调度与运行部门确认, methods: [examine, interview]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: IRE.RPT.01
   name: 内部上报
   product: IRE
   domain: 通报与报告
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 内部上报路径与时限已书面明确, methods: [examine]}
+  - {id: b, objective: 本次事件的内部上报时间已记录, methods: [examine]}
+  - {id: c, objective: 上报内容覆盖影响、处置进展与需决策事项, methods: [examine]}
+  params:
+  - {id: internal_report_hours, label: 内部上报时限（小时）, default: 1}
 - id: IRE.RPT.02
   name: 监管与客户通报
   product: IRE
   domain: 通报与报告
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 需通报的监管机构与客户范围已识别, methods: [examine, interview]}
+  - {id: b, objective: 通报时间在约定时限内, methods: [examine]}
+  - {id: c, objective: 通报内容经审批后发出, methods: [examine]}
+  params:
+  - {id: external_notice_hours, label: 监管与客户通报时限（小时）, default: 24}
 - id: IRE.RPT.03
   name: 对外信息发布
   product: IRE
   domain: 通报与报告
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 对外信息发布有授权人与审批流程, methods: [examine]}
+  - {id: b, objective: 对外口径与实际调查结果一致, methods: [examine, interview]}
+  - {id: c, objective: 舆情监测在事件期间开展, methods: [examine, interview]}
 - id: IRE.BNK.03
   name: 金融监管事件报告
   product: IRE
   domain: 通报与报告
   industries: [银行]
   status: draft
+  checkpoints:
+  - {id: a, objective: 金融监管要求报告的事件类型与时限已书面明确, methods: [examine]}
+  - {id: b, objective: 本次事件的报告时间与内容已留存, methods: [examine]}
+  - {id: c, objective: 后续报告按要求跟进提交, methods: [examine]}
+  applicability: {industries: [银行], jurisdictions: [CN]}
 - id: IRE.PWR.03
   name: 电力安全事件分级与报告
   product: IRE
   domain: 通报与报告
   industries: [电力]
   status: draft
+  checkpoints:
+  - {id: a, objective: 本次事件已按电力行业分级标准定级并记录依据, methods: [examine, interview]}
+  - {id: b, objective: 向行业主管部门报告的时间与内容已留存, methods: [examine]}
+  - {id: c, objective: 分级与报告责任人已书面明确, methods: [examine]}
+  applicability: {industries: [电力], jurisdictions: [CN]}
 - id: IRE.GOV.01
   name: 复盘与整改
   product: IRE
   domain: 治理与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 事件复盘已开展并形成书面报告, methods: [examine]}
+  - {id: b, objective: 复盘报告列出整改项、负责人与期限, methods: [examine]}
+  - {id: c, objective: 复盘结论已向管理层汇报, methods: [examine, interview]}
 - id: IRE.GOV.02
   name: 演练与培训
   product: IRE
   domain: 治理与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 应急演练按约定频次开展, methods: [examine]}
+  - {id: b, objective: 演练场景覆盖主要事件类型, methods: [examine]}
+  - {id: c, objective: 相关人员接受过应急培训并有记录, methods: [examine, interview]}
+  params:
+  - {id: drill_per_year, label: 应急演练频次（次/年）, default: 1}
 - id: IRE.GOV.03
   name: 事件分级标准
   product: IRE
   domain: 治理与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 有书面的事件分级标准, methods: [examine]}
+  - {id: b, objective: 分级标准与外部报告要求的分级对应, methods: [examine]}
+  - {id: c, objective: 本次事件的定级与标准一致并记录依据, methods: [examine, interview]}
 - id: IRE.GOV.04
   name: 整改跟踪与验证
   product: IRE
   domain: 治理与改进
   industries: [通用]
   status: draft
+  checkpoints:
+  - {id: a, objective: 整改项有跟踪台账, methods: [examine]}
+  - {id: b, objective: 已完成整改项有验证记录, methods: [examine, test]}
+  - {id: c, objective: 逾期整改项有升级处理, methods: [examine, interview]}

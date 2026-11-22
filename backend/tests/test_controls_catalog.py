@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -84,3 +85,60 @@ def test_question_bank_controls_included(catalog: dict) -> None:
         for q in bank.get("questions", []):
             for cid in q.get("control_ids", []):
                 assert cid in by_id, f"{path.name}: {cid}"
+
+
+# ---- 检查点（三期 B19，挂知识区 kb_control_checkpoints，参照 SP 800-53A 评估目标）----
+METHODS = {"examine", "interview", "test"}
+CHECKPOINT_ID_RE = re.compile(r"^[a-z]$")
+PARAM_ID_RE = re.compile(r"^[a-z][a-z0-9_]{1,40}$")
+APPLICABILITY_KEYS = {"industries", "mlps_levels", "jurisdictions", "deployments"}
+# 检查点写可核查的事实，不写结论性用语（导入时会拒收）
+OBJECTIVE_FORBIDDEN = FORBIDDEN + ("测评", "认证", "合格", "达标", "合规性结论", "满足等保")
+
+
+def test_checkpoints_structure(catalog: dict) -> None:
+    for c in catalog["controls"]:
+        cid = c["id"]
+        cps = c.get("checkpoints")
+        assert isinstance(cps, list) and 2 <= len(cps) <= 4, f"{cid}：检查点须 2～4 个"
+        ids = [cp["id"] for cp in cps]
+        assert len(set(ids)) == len(ids), f"{cid}：检查点编号重复"
+        assert ids == [chr(ord("a") + i) for i in range(len(ids))], f"{cid}：检查点编号须 a、b、c… 连续"
+        for cp in cps:
+            assert set(cp) <= {"id", "objective", "methods"}, (cid, cp["id"])
+            assert CHECKPOINT_ID_RE.match(cp["id"]), (cid, cp["id"])
+            obj = cp["objective"]
+            assert isinstance(obj, str) and 6 <= len(obj) <= 60, (cid, cp["id"])
+            assert not any(w in obj for w in OBJECTIVE_FORBIDDEN), (cid, cp["id"], obj)
+            m = cp["methods"]
+            assert m and set(m) <= METHODS and len(set(m)) == len(m), (cid, cp["id"])
+
+
+def test_applicability_and_params(catalog: dict) -> None:
+    for c in catalog["controls"]:
+        cid = c["id"]
+        app = c.get("applicability")
+        if c["industries"] != ["通用"]:
+            assert app and app.get("industries") == c["industries"], f"{cid}：行业专属项须补 applicability"
+        if app is not None:
+            assert set(app) <= APPLICABILITY_KEYS, cid
+            for k, v in app.items():
+                assert isinstance(v, list) and v, (cid, k)
+            if "industries" in app:
+                assert set(app["industries"]) <= INDUSTRIES - {"通用"}, cid
+            if "mlps_levels" in app:
+                assert set(app["mlps_levels"]) <= {1, 2, 3, 4, 5}, cid
+        seen: set[str] = set()
+        for p in c.get("params", []):
+            assert set(p) == {"id", "label", "default"}, (cid, p)
+            assert PARAM_ID_RE.match(p["id"]) and p["id"] not in seen, (cid, p["id"])
+            seen.add(p["id"])
+            assert isinstance(p["label"], str) and p["label"], (cid, p["id"])
+            assert isinstance(p["default"], (int, float, str)), (cid, p["id"])
+
+
+def test_params_present_for_obvious_cases(catalog: dict) -> None:
+    """保留期、响应时限、演练频次等组织定义参数至少覆盖到这些项。"""
+    by_id = {c["id"]: c for c in catalog["controls"]}
+    for cid in ("SOC.TEC.05", "SOC.PRC.02", "SOC.PRC.05", "IRE.GOV.02", "IRE.RPT.02"):
+        assert by_id[cid].get("params"), cid
