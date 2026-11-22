@@ -341,3 +341,43 @@ def test_admin_model_status_hides_keys(monkeypatch):
     assert body["rerank"]["status"].startswith("down")        # 重排服务上没有配置的模型
     for secret in ("Secret-pw", "sk-model-key-0001", "sk-rerank-key-0002", "token=abc", "user:"):
         assert secret not in r.text
+
+
+def _length_model(parts: list[tuple[str, str]], seen: list):
+    """依次返回 (内容, finish_reason)，并记下每次请求的 messages。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body["messages"])
+        text, reason = parts.pop(0)
+        return httpx.Response(200, json={"model": body["model"], "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+                                         "choices": [{"message": {"content": text}, "finish_reason": reason}]})
+    return handler
+
+
+def test_complete_continues_when_truncated_by_length(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
+    get_settings.cache_clear()
+    seen: list = []
+    gateway.set_transport(httpx.MockTransport(_length_model([("第一章……", "length"), ("第二章。", "stop")], seen)))
+    try:
+        c = gateway.complete("写章节", tier="standard", project_code="")
+    finally:
+        gateway.set_transport(None)
+        get_settings.cache_clear()
+    assert c.text == "第一章……第二章。"
+    assert c.completion_tokens == 10
+    assert seen[1][-2] == {"role": "assistant", "content": "第一章……"}
+
+
+def test_complete_raises_when_still_truncated(monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "http://llm.test/v1")
+    monkeypatch.setenv("LLM_MAX_CONTINUATIONS", "1")
+    get_settings.cache_clear()
+    seen: list = []
+    gateway.set_transport(httpx.MockTransport(_length_model([("甲", "length"), ("乙", "length")], seen)))
+    try:
+        with pytest.raises(GatewayError, match="输出被截断"):
+            gateway.complete("写章节", tier="standard", project_code="")
+    finally:
+        gateway.set_transport(None)
+        get_settings.cache_clear()
