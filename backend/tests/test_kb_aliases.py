@@ -95,7 +95,7 @@ def test_alias_batches_over_500():
 
 
 def test_add_alias_rejects_doc_id_duplicate_and_bad_input():
-    a, b = _publish("别名测试-互斥甲"), _publish("别名测试-互斥乙")
+    a, b = _publish("别名测试-互斥一"), _publish("别名测试-互斥二")
     old = _alias()
     _add(old, a)
     with SessionLocal() as db:

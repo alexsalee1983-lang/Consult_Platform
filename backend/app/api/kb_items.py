@@ -261,9 +261,10 @@ def list_items(layer: str = "", product: str = "", stage: str = "", doc_type: st
     elif status == "unpublished":
         stmt = stmt.where(KbItem.current_version_id.is_(None))
     if q:
-        stmt = stmt.join(KbVersion, KbVersion.item_id == KbItem.id).where(
-            or_(KbItem.doc_id.contains(q), KbVersion.title.contains(q),
-                KbItem.id.in_(select(KbItemAlias.item_id).where(KbItemAlias.alias.contains(q))))).distinct()
+        # 用子查询不用 JOIN + DISTINCT：kb_items 有 json 列，PostgreSQL 的 DISTINCT 比较不了 json
+        stmt = stmt.where(or_(KbItem.doc_id.contains(q),
+                              KbItem.id.in_(select(KbVersion.item_id).where(KbVersion.title.contains(q))),
+                              KbItem.id.in_(select(KbItemAlias.item_id).where(KbItemAlias.alias.contains(q)))))
     return [_item_out(db, i) for i in db.scalars(stmt) if rv.can_view(db, user, i)]
 
 
