@@ -97,6 +97,9 @@ class KbVersion(KbBase):
     recheck_state: Mapped[str] = mapped_column(String(16), default="", index=True)
     recheck_reason: Mapped[str] = mapped_column(String(200), default="")
     recheck_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 起草模型与家族（三期 G2③，知识区迁移 k0016）：Agent 起草导入时记，专家修订没写模型的沿用上一版；知识审核据此换家族
+    model: Mapped[str] = mapped_column(String(100), server_default="")
+    model_family: Mapped[str] = mapped_column(String(32), server_default="")
 
     item: Mapped[KbItem] = relationship(back_populates="versions", foreign_keys=[item_id])
     reviews: Mapped[list["KbReview"]] = relationship(back_populates="version", order_by="KbReview.id")

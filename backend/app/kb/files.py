@@ -22,6 +22,7 @@
     ref_code: GB/T 22239-2019        # 可选（二期 B7）：文号或标准号
     ref_replaced_by: ……              # 可选：已被替代时写替代文件名和版本
     effective_date: 2017-06-01       # 可选：施行日期
+    model: deepseek-v4.1-flash       # Agent 起草时平台写入的起草模型（三期 G2③），知识审核据此换家族；专家修改不用动
     ---
     ## 章节标题（依据类用条款号，如“第二十一条 网络安全等级保护”）
 
@@ -45,7 +46,7 @@ KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 META_KEYS = ("layer", "domain", "product", "doc_type", "stage", "capabilities", "industries", "classification",
              "visible_roles", "owner", "tags", "control_ids")
 CONTENT_KEYS = ("title", "source_type", "source_detail", "summary", "applicability", "change_note", "ref_document",
-                "ref_version", "ref_status", "ref_code", "ref_replaced_by")
+                "ref_version", "ref_status", "ref_code", "ref_replaced_by", "model")
 
 
 class EntryError(ValueError):

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..core.db import utcnow
 from ..models import KbItem, KbMapping, KbVersion
+from ..services import model_catalog
 from . import mapping, meta
 
 
@@ -79,6 +80,7 @@ class VersionContent:
     ref_replaced_by: str = ""
     effective_date: date | None = None
     review_date: date | None = None
+    model: str = ""                  # 起草模型 ID（三期 G2③）；空 = 沿用上一版
 
     def check(self, layer: str) -> None:
         if not self.title.strip():
@@ -96,6 +98,15 @@ def next_doc_id(db: Session, m: ItemMeta) -> str:
     return meta.format_doc_id(m.layer, m.domain, m.product, m.doc_type, max(seqs, default=0) + 1)
 
 
+def _generator(db: Session, item: KbItem, c: VersionContent) -> dict:
+    """三期 G2③：写了起草模型的按模型目录认家族；没写的（专家修订）沿用上一版，内容仍出自该模型。"""
+    if c.model.strip():
+        return {"model": c.model.strip()[:100], "model_family": model_catalog.family_of(c.model.strip())[:32]}
+    prev = db.scalars(select(KbVersion).where(KbVersion.item_id == item.id)
+                      .order_by(KbVersion.version.desc()).limit(1)).first() if item.id else None
+    return {"model": prev.model, "model_family": prev.model_family} if prev else {"model": "", "model_family": ""}
+
+
 def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) -> KbVersion:
     c.check(item.layer)
     rows = mapping.parse_rows(c.body) if item.doc_type == "MAP" else []   # 映射矩阵：正文表格必须能解析（B3）
@@ -107,7 +118,7 @@ def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) 
                   source_type=c.source_type, source_detail=c.source_detail, ref_document=c.ref_document,
                   ref_version=c.ref_version, ref_status=c.ref_status, ref_code=c.ref_code,
                   ref_replaced_by=c.ref_replaced_by, effective_date=effective,
-                  review_date=review, created_by=created_by)
+                  review_date=review, created_by=created_by, **_generator(db, item, c))
     db.add(v)
     if rows:
         db.flush()

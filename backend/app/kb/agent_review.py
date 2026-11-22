@@ -155,7 +155,7 @@ def _clean(data: dict) -> tuple[dict, list[dict], str]:
 
 def _agent(db: Session, v: KbVersion, cites: list[citations.Citation]) -> tuple[str, str, dict, str, str]:
     """返回 (状态 ok/skipped/failed, 说明, findings, 提示词版本, 模型)。
-    三期 G2：以 role="review" 调网关。知识条目没有记生成模型，网关按生成首选的家族排除；
+    三期 G2：以 role="review" 调网关，排除条目起草模型的家族（G2③ 起记在版本上）；没记的网关按生成首选的家族排除；
     配置了模型目录时 findings 记 model_family 和 degraded（同家族降级）。"""
     try:
         doc = call.load(db, AGENT)
@@ -163,7 +163,8 @@ def _agent(db: Session, v: KbVersion, cites: list[citations.Citation]) -> tuple[
         return "skipped", "知识审核 Agent 未登记、已停用或 md 缺失", {}, "", ""
     try:
         r = call.call(db, AGENT, _message(db, v, cites), actor=v.submitted_by or AGENT, doc=doc, extra=OUTPUT_RULES,
-                      level=LEVEL, parse=call.json_object, role="review")
+                      level=LEVEL, parse=call.json_object, role="review",
+                      exclude_families=[v.model_family] if v.model_family else ())
     except gateway.BlockedError:
         return "failed", "审查材料含机密级内容，未发送给模型", {}, doc.version, ""
     except gateway.GatewayError:
