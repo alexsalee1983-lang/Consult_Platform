@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from contextvars import ContextVar
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 
@@ -282,6 +283,22 @@ def _elapsed_ms(p: _Prepared) -> int:
     return int((time.monotonic() - p.started) * 1000)
 
 
+# 三期 G2：本上下文（请求 / 后台任务线程）最近一次生成调用用的 (模型, 家族)。Agent 随后写章节时记进章节版本；
+# 评审、仲裁调用不改写。
+_generation: ContextVar[tuple[str, str]] = ContextVar("gateway_generation", default=("", ""))
+
+
+def generation_model() -> tuple[str, str]:
+    """最近一次生成调用的 (模型 ID, 家族)；没配目录时家族按模型 ID 推断，推断不出为空。"""
+    model, family = _generation.get()
+    return model, family or (model_catalog.family_of(model) if model else "")
+
+
+def _note_generation(role: str, model: str, family: str) -> None:
+    if role == "generate" and model:
+        _generation.set((model, family))
+
+
 def complete(message: str, *, tier: str, project_code: str, level: str = "standard",
              terms: dict[str, str] | None = None, system: str | None = None,
              history: list[dict] | None = None, role: str = "generate",
@@ -303,6 +320,7 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
         except (ValueError, KeyError, IndexError, TypeError) as e:
             raise GatewayError("模型返回的结果无法解析", attempts) from e
     prompt_tokens, completion_tokens = _usage(data)
+    _note_generation(role, entry.id if entry else data.get("model", p.model), entry.family if entry else "")
     return Completion(text=p.pseudo.restore(text) if p.pseudo else text, model=data.get("model", p.model),
                       demo=False, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
                       latency_ms=_elapsed_ms(p), attempts=attempts, pseudonymized=p.pseudo is not None,
@@ -359,6 +377,7 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
             if first:                            # 只在开始输出前换备选模型；之后各轮沿用同一个模型
                 resp, attempts, entry, fallbacks = _send_planned(client, p, plan, stream=True)
                 model, first = p.model, False
+                _note_generation("generate", entry.id if entry else model, entry.family if entry else "")  # 本轮工具写章节时用
             else:
                 resp, attempts = _send(client, p.payload, stream=True)
             raw: list[str] = []                  # 本轮模型原样输出（假名化状态），交回模型时用

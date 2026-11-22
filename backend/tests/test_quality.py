@@ -445,3 +445,33 @@ def test_review_without_catalog_unchanged(team, model):
     rv = _review(member, code)
     assert not any("同家族降级" in i["problem"] for i in rv["issues"])
     assert "model_family" not in _last_review_audit()
+
+
+def test_section_versions_record_generator_family(team, model, monkeypatch):
+    """主链 0040：Agent 写入的章节版本记当次生成模型和家族；顾问手改沿用上一版的记录（内容仍出自该模型），
+    评审据此排除同家族；从没经过模型的章节不记。"""
+    from app.models import ProjectMember, User
+    from app.project import deliverables as svc
+
+    code, member, *_ = team
+    monkeypatch.setattr(get_settings(), "llm_model_catalog", json.dumps(TWO_FAMILIES))
+    _draft(member, code)                                    # 两章都是顾问手写 v1
+    gateway.complete("写第 1 章", tier="standard", project_code=code)          # 生成首选 ds-s（deepseek）
+    gateway.complete("评审", tier="standard", project_code=code, role="review")  # 评审调用不改写生成记录
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        d = next(x for x in p.deliverables if x.code == "D4")
+        user = db.scalar(select(User).join(ProjectMember, ProjectMember.user_id == User.id)
+                         .where(ProjectMember.project_id == p.id, ProjectMember.project_role == "member"))
+        svc.write_section(db, user, p, d, 1, BODY1 + "\n\n补充：值班交接改为电子记录。", agent_code="report-writer")
+    assert member.put(f"/api/projects/{code}/deliverables/D4/sections/1",
+                      json={"body": BODY1 + "\n\n补充：值班交接改为电子台账。"}).status_code == 201
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        d = next(x for x in p.deliverables if x.code == "D4")
+        rows = {(s.seq, v.version): (v.model, v.model_family) for s in d.sections for v in s.versions}
+        assert rows[(1, 1)] == ("", "") and rows[(2, 1)] == ("", "")
+        assert rows[(1, 2)] == ("ds-s", "deepseek")
+        assert rows[(1, 3)] == ("ds-s", "deepseek")            # 手改沿用
+        assert quality.generator_families(db, p, d, {"1": 3, "2": 1}) == {"deepseek"}
+        assert quality.generator_families(db, p, d, {"1": 1, "2": 1}) == set()
