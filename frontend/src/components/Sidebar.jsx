@@ -89,6 +89,7 @@ export default function Sidebar() {
         { to: "/kb/review", icon: "review", label: "审批队列" },
         { to: "/kb/map", icon: "map", label: "知识地图与健康" },
       ] : []),
+      ...(isKnowledge(user) || lead ? [{ to: "/kb/readiness", icon: "dash", label: "就绪度看板" }] : []),
     ] : []),
     ...(isAuditor(user) ? [{ to: "/audit", icon: "audit", label: "审计日志" }] : []),
     ...(isSysAdmin(user) ? [

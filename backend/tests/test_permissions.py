@@ -142,6 +142,7 @@ MATRIX = [
     (("GET", "/api/kb/search?q=值班", None),            (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
+    (("GET", "/api/kb/readiness", None),                (403, 403, 403, 403, 403)),   # F2②：知识专家、知识管理员、项目负责人
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/samples", None),                  (403, 403, 403, 403, 403)),   # 抽检队列（二期 B10），同上
     (("POST", "/api/kb/versions/999999/sample", {"decision": "pass"}), (404, 404, 403, 403, 403)),

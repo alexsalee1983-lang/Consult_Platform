@@ -219,6 +219,7 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  kbReadiness: (days = 90) => request(`/api/kb/readiness?days=${days}`),   // 三期 F2②
   kbUpload: (file, project = "") => {
     const fd = new FormData();
     fd.append("file", file);

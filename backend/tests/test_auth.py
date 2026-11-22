@@ -127,6 +127,7 @@ PROTECTED = [
     ("GET", "/api/kb/meta"),
     ("GET", "/api/kb/versions"),
     ("GET", "/api/kb/stats"),
+    ("GET", "/api/kb/readiness"),
 ]
 
 
