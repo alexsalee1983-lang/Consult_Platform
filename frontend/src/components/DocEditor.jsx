@@ -3,11 +3,15 @@
 // 颜色只用 theme.css 令牌。按需加载（Deliverable.jsx 用 React.lazy），不进首屏包。
 import { useEffect, useRef } from "react";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, Language, defineLanguageFacet, syntaxHighlighting } from "@codemirror/language";
+import { GFM, parser as mdParser } from "@lezer/markdown";
 import { EditorView, keymap, placeholder as placeholderExt, drawSelection } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { External, createState, docText, refDecorations } from "../editor/core.js";
+
+// 只取 @lezer/markdown 语法树做高亮：@codemirror/lang-markdown 会静态拉入 lang-html/css/javascript（嵌套代码高亮用），
+// 交付件正文用不到，去掉后编辑器块 gzip 179.5 KB 降到 105.0 KB。
+const mdLanguage = new Language(defineLanguageFacet({}), mdParser.configure(GFM), [], "markdown");
 
 const theme = EditorView.theme({
   "&": { background: "var(--s2)", color: "var(--tx)", border: "1px solid var(--ln2)", borderRadius: "6px", fontSize: "14px", minHeight: "420px" },
@@ -48,7 +52,7 @@ export default function DocEditor({ value, onChange, placeholder = "", unresolve
         drawSelection(),
         EditorView.lineWrapping,
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-        markdown({ base: markdownLanguage }),
+        mdLanguage,
         syntaxHighlighting(highlight),
         theme,
         placeholderExt(placeholder),
