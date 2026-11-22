@@ -12,6 +12,9 @@ PATCH /api/kb/versions/{id}              修改草稿
 POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
+GET  /api/kb/practice-queue              公司做法确认队列（三期 B17），按章节就绪度排（知识专家、知识管理员）
+POST /api/kb/practice-queue/decide       采纳 / 修改 / 驳回，可批量（只有知识专家能拍板）
+GET  /api/kb/practice-queue/stats        确认耗时与修改幅度汇总（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
 GET  /api/kb/samples                     抽检队列：自动发布（平台核验的依据原文、知识审核 Agent 审过的）中待抽检、
                                          抽检不通过的，附两类各自的问题率（同上；B11）；另含使用反馈待复查的条目（B13）
@@ -36,6 +39,7 @@ from ..core.db import get_db
 from ..core.permissions import require_business
 from ..kb import autopublish, citations
 from ..kb import meta as kb_meta
+from ..kb import practice_queue as pq
 from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
@@ -366,6 +370,44 @@ def review_queue(db: Session = Depends(get_db), user: User = Depends(current_use
     _knowledge_only(db, user)
     rows = db.scalars(select(KbVersion).where(KbVersion.status == "in_review").order_by(KbVersion.submitted_at))
     return [_version_out(db, v, user) for v in rows]
+
+
+class PracticeDecisionIn(BaseModel):
+    version_id: int
+    decision: str = Field(pattern="^(adopt|modify|reject)$")
+    body: str = Field(default="", max_length=200_000)
+    comment: str = Field(default="", max_length=1000)
+    elapsed_ms: int = Field(default=0, ge=0)
+
+
+class PracticeBatchIn(BaseModel):
+    items: list[PracticeDecisionIn] = Field(min_length=1, max_length=50)
+
+
+@router.get("/practice-queue")
+def practice_queue(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+    _knowledge_only(db, user)
+    return pq.queue(db)
+
+
+@router.post("/practice-queue/decide")
+def practice_decide(body: PracticeBatchIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _knowledge_only(db, user)
+    results = []
+    for it in body.items:                           # 逐条独立处理：一条失败不影响其他条
+        try:
+            v = pq.decide(db, user, it.version_id, it.decision, it.body, it.comment, it.elapsed_ms)
+            results.append({"version_id": it.version_id, "ok": True, "version_status": v.status})
+        except rv.ReviewError as e:
+            db.rollback()
+            results.append({"version_id": it.version_id, "ok": False, "status": e.status, "error": str(e)})
+    return {"results": results}
+
+
+@router.get("/practice-queue/stats")
+def practice_stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _knowledge_only(db, user)
+    return pq.stats(db)
 
 
 @router.get("/review-due", response_model=list[VersionOut])

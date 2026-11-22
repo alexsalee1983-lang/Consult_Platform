@@ -13,7 +13,7 @@
 """
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import false as sql_false
 
@@ -155,6 +155,19 @@ class KbReview(KbBase):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     version: Mapped[KbVersion] = relationship(back_populates="reviews")
+
+
+class KbPracticeDecision(KbBase):
+    """三期 B17（拆出）：公司做法确认队列每条决定的耗时与修改幅度（迁移 k0018）。不记正文。"""
+    __tablename__ = "kb_practice_decisions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version_id: Mapped[int] = mapped_column(ForeignKey("kb_versions.id"), index=True)
+    reviewer: Mapped[str] = mapped_column(String(64))
+    decision: Mapped[str] = mapped_column(String(16))                       # adopt 采纳 / modify 修改后采纳 / reject 驳回
+    elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)            # 卡片打开到拍板（前端计时，封顶 1 小时）
+    change_ratio: Mapped[float] = mapped_column(Float, default=0.0)        # 修改幅度 0～1（1 - 相似度），采纳、驳回为 0
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class KbUpload(KbBase):
