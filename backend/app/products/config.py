@@ -139,6 +139,7 @@ class Industry:
     version: str
     raw: dict[str, Any]
     expert_review: str = "pending"
+    kb_tags: tuple[str, ...] = ()     # 检索加权标签，并入快照 kb_tags（同模块）
 
 
 @dataclass
@@ -515,6 +516,9 @@ def parse_module(path: Path, out: list[str]) -> Module | None:
                   content_version(data), data, expert_review)
 
 
+INDUSTRY_MERGED_MODULES = ("HYJG",)   # 已冻结、内容并入行业包的模块（负责人 2026-11-18）
+
+
 def parse_industry(path: Path, out: list[str]) -> Industry | None:
     data = _read_yaml(path, out)
     if data is None:
@@ -550,7 +554,7 @@ def parse_industry(path: Path, out: list[str]) -> Industry | None:
     return Industry(code, name, aliases, status, level, p.texts(data, "products"),
                     p.texts(data, "basis", required=True), p.texts(data, "terms"), p.texts(data, "roles"),
                     p.texts(data, "threats"), instructions, gates, p.text(data, "tier_hint", required=False),
-                    content_version(data), data, _expert_review(p, data))
+                    content_version(data), data, _expert_review(p, data), p.texts(data, "kb_tags"))
 
 
 def _known_agents() -> set[str] | None:
@@ -761,11 +765,16 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
     merged = replace(prod, frameworks=tuple(_merged(prod.frameworks, *(m.frameworks for m in mods))),
                      basis=tuple(_merged(prod.basis, *(m.basis for m in mods), industry.basis if industry else ())))
     names = tuple(m.name for m in mods)
+    # hyjg 并入行业包（三期 A11）：勾了行业监管模块且行业包命中时，模块说明改按行业包依据查
+    merges = [m.code for m in mods if m.code in INDUSTRY_MERGED_MODULES] if industry is not None else []
     chain = []
     for s in prod.chain:
         adds = [m.instructions[s.key] for m in mods if m.instructions.get(s.key)]
         if industry is not None and industry.instructions.get(s.key):
             adds.append(industry.instructions[s.key])
+        if merges and any(m.code in merges and m.instructions.get(s.key) for m in mods):
+            adds.append(f"行业监管已并入行业包“{industry.name}”：适用的行业监管文件先查 {'、'.join(industry.basis)}"
+                        "（依据只来自知识库，未入库的标【依据待核实】）。")
         extra = "\n".join(adds)
         extra = render(extra, merged, s.number, names) if extra else ""
         text = render(s.instruction, merged, s.number, names, extra)
@@ -792,7 +801,7 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
                  + [_gate_dict(g, m.code) for m in mods for g in m.gates]
                  + [_gate_dict(g, industry.code) for g in (industry.gates if industry else ())],
         "card_items": _merged(prod.card_items, *(m.card_items for m in mods)),
-        "kb_tags": _merged(*(m.kb_tags for m in mods)),
+        "kb_tags": _merged(*(m.kb_tags for m in mods), industry.kb_tags if industry else ()),
         "expert_pending": [x.code for x in (prod, *mods, *([industry] if industry else []))
                            if x.expert_review != "done"],
     }
@@ -801,6 +810,8 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
                             "level": industry.level, "basis": list(industry.basis), "terms": list(industry.terms),
                             "roles": list(industry.roles), "threats": list(industry.threats),
                             "tier_hint": industry.tier_hint}
+        if merges:
+            snap["industry"]["merges"] = merges
     return snap
 
 

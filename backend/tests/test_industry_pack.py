@@ -126,3 +126,35 @@ def test_project_card_shows_industry_pack(monkeypatch) -> None:
         assert configs.snapshot(db, project)["industry"]["code"] == "POWER"
         card = runtime.project_card(db, user, "consultant-lead", "GRID-IP")
     assert "行业包：电力" in card and "待专家复核" in card and "生产控制区" in card
+
+
+HYJG = {"code": "HYJG", "name": "行业监管专项", "status": "ready", "products": ["SOC"],
+        "adds": {"instructions": {"gap": "按项目卡的行业列出适用的行业监管文件。"}, "kb_tags": ["行业监管"]}}
+
+
+def test_industry_kb_tags_boost_search(tmp_path: Path) -> None:
+    """检索加权（A11 补字段）：行业包的 kb_tags 并入快照 kb_tags，排在模块标签之后。"""
+    cat = _cat(tmp_path, {**BANK, "kb_tags": ["银行", "行业监管"]})
+    assert cat.problems == []
+    prod, bank = cat.products["SOC"], cat.industries["BANK"]
+    assert bank.kb_tags == ("银行", "行业监管")
+    assert config.compose(prod, (cat.modules["DJBH"],), bank)["kb_tags"] == ["等保", "银行", "行业监管"]
+    assert config.compose(prod, (cat.modules["DJBH"],))["kb_tags"] == ["等保"]       # 无行业包不变
+    assert any("kb_tags" in p for p in _cat(tmp_path / "bad", {**BANK, "kb_tags": "银行"}).problems)
+
+
+def test_hyjg_merged_into_industry_pack(tmp_path: Path) -> None:
+    """hyjg 并入行业包（A11）：勾了 HYJG 且行业包命中时，HYJG 的说明改按行业包依据查；没命中照旧。"""
+    base = _write_ind(_write(tmp_path, {**PRODUCT, "modules": ["DJBH", "HYJG"]}, MODULE), BANK)
+    (base / "modules" / "hyjg.yaml").write_text(yaml.safe_dump(HYJG, allow_unicode=True), encoding="utf-8")
+    cat = config.load(base, agents=AGENTS)
+    assert cat.problems == []
+    prod, hyjg, bank = cat.products["SOC"], cat.modules["HYJG"], cat.industries["BANK"]
+    snap = config.compose(prod, (hyjg,), bank)
+    gap = next(s for s in snap["chain"] if s["key"] == "gap")["instruction"]
+    assert "行业监管已并入行业包“银行”" in gap and "JR/T 0071-2020" in gap
+    assert snap["industry"]["merges"] == ["HYJG"]
+    plain = config.compose(prod, (hyjg,))
+    assert "已并入行业包" not in next(s for s in plain["chain"] if s["key"] == "gap")["instruction"]
+    assert "merges" not in config.compose(prod, (), bank)["industry"]                  # 没勾 HYJG 不加键
+    config.check_snapshot(snap)
