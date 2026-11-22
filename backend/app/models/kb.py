@@ -208,3 +208,44 @@ class KbDeidReport(KbBase):
     deid_key: Mapped[str] = mapped_column(String(512), default="")            # 去标识后正文（知识区）
     safe_filename: Mapped[str] = mapped_column(String(255), default="")       # 去标识后的文件名
     comment: Mapped[str] = mapped_column(String(1000), default="")            # 人工确认意见
+
+
+class KbSource(KbBase):
+    """来源登记表（三期 B16，知识区迁移 k0014）：采集机只按这张表里试用、正式的来源抓取。
+
+    状态 candidate 候选 → trial 试用 → active 正式 → demoted 降级 → retired 停用；许可和权威类别必填，
+    等级由类别推出（B27 最小版三级）。规则只在 app/kb/source_registry.py。
+    """
+
+    __tablename__ = "kb_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), unique=True, index=True)        # SR-0001
+    name: Mapped[str] = mapped_column(String(200))
+    url: Mapped[str] = mapped_column(String(500), unique=True)
+    host: Mapped[str] = mapped_column(String(253), index=True)
+    publisher: Mapped[str] = mapped_column(String(200), default="")
+    license: Mapped[str] = mapped_column(String(300))
+    authority_kind: Mapped[str] = mapped_column(String(16))                       # 法律……厂商资料
+    authority_level: Mapped[int] = mapped_column(Integer, index=True)             # 1 / 2 / 3
+    status: Mapped[str] = mapped_column(String(12), default="candidate", index=True)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String(64))
+    approved_by: Mapped[str] = mapped_column(String(64), default="")
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbSourceEvent(KbBase):
+    """来源状态变更记录，只追加。"""
+
+    __tablename__ = "kb_source_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("kb_sources.id", ondelete="CASCADE"), index=True)
+    from_status: Mapped[str] = mapped_column(String(12), default="")
+    to_status: Mapped[str] = mapped_column(String(12))
+    reason: Mapped[str] = mapped_column(String(300), default="")
+    actor: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

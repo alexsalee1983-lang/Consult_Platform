@@ -678,6 +678,24 @@ def kb_reconfirm_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_source_registry(args: argparse.Namespace) -> int:
+    """来源登记表导出（三期 B16）：试用、正式的来源，供采集机按表抓取；候选、降级、停用不下发。"""
+    import csv
+    import json
+
+    from .kb import source_registry
+    with SessionLocal() as db:
+        rows = source_registry.export_for_collector(db)
+    if args.json:
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return 0
+    cols = ["code", "name", "url", "host", "status", "license", "authority_kind", "authority_level"]
+    w = csv.DictWriter(sys.stdout, fieldnames=cols)
+    w.writeheader()
+    w.writerows(rows)
+    return 0
+
+
 def kb_source_publish(args: argparse.Namespace) -> int:
     """依据原文自动核验发布（二期 B10）：从原件切条、核验，通过的由平台自动发布并抽检，没通过的转人工审核。"""
     import json
@@ -957,6 +975,9 @@ def main(argv: list[str] | None = None) -> int:
     ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
     ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     ksp.set_defaults(func=kb_source_publish)
+    ksr = sub.add_parser("kb-source-registry", help="导出来源登记表里试用、正式的来源（CSV，供采集机按表抓取）")
+    ksr.add_argument("--json", action="store_true", help="输出 JSON")
+    ksr.set_defaults(func=kb_source_registry)
     sub.add_parser("kb-reconfirm-scan", help="立即扫描复审到期的公开知识条目，排知识审核 Agent 复查（worker 每小时自动执行）")         .set_defaults(func=kb_reconfirm_scan)
     ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
