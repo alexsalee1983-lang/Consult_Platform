@@ -46,7 +46,9 @@ MLPS_L3 = {1: 10, 2: 3, 3: 6, 4: 11, 5: 4, 6: 4, 7: 5, 8: 4, 9: 10, 10: 14}
 MLPS_ICS_L3 = {1: 1, 2: 2, 3: 3, 4: 1, 5: 2}
 MLPS_ICS_RE = re.compile(r"^8\.5\.(\d)\.(\d)$")
 # 只要求电力行业项（*.PWR.*）映射工控扩展；其余框架每项都要映射
-OPTIONAL_FW = {"MLPS_ICS"}
+OPTIONAL_FW = {"MLPS_ICS", "SP80061"}
+# SP 800-61r3 只用于事件响应：IRE 全部映射，SOC 只映射处置、复盘、手册
+SP61_SOC = {"SOC.PRC.02", "SOC.PRC.05", "SOC.PRC.08"}
 MLPS_RE = re.compile(r"^8\.1\.(\d{1,2})\.(\d{1,2})$")
 CSF_RE = re.compile(r"^(GV|ID|PR|DE|RS|RC)\.[A-Z]{2}-\d{2}$")
 
@@ -54,7 +56,7 @@ CSF_RE = re.compile(r"^(GV|ID|PR|DE|RS|RC)\.[A-Z]{2}-\d{2}$")
 def _valid_clause(fw: str, clause: str) -> bool:
     if fw == "ISO27001":
         return clause in ISO_ANNEX_A or clause in ISO_BODY
-    if fw == "CSF":
+    if fw in ("CSF", "SP80061"):  # SP 800-61r3 的建议按 CSF 2.0 子类组织
         if not CSF_RE.match(clause) or clause in CSF_WITHDRAWN:
             return False
         cat, num = clause.split("-")
@@ -80,7 +82,7 @@ def test_header(data: tuple[dict, dict]) -> None:
     assert m["catalog_version"] == catalog["version"]
     assert m["status"] == "draft"
     assert m["expert_review"] == "pending"
-    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS", "MLPS_ICS"}
+    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS", "MLPS_ICS", "SP80061"}
     for fw in m["frameworks"].values():
         assert fw["name"] and fw["version"]
 
@@ -149,3 +151,20 @@ def test_ics_clause_validator() -> None:
     assert not _valid_clause("MLPS_ICS", "8.5.4.2")
     assert not _valid_clause("MLPS_ICS", "8.5.6.1")
     assert not _valid_clause("MLPS_ICS", "8.1.2.1")
+
+
+def test_sp80061_scope(data: tuple[dict, dict]) -> None:
+    """SP 800-61r3：IRE 每项都要映射；SOC 只限处置、复盘、手册三项。"""
+    _, m = data
+    for cid, rows in m["mappings"].items():
+        has = any(r["fw"] == "SP80061" for r in rows)
+        if cid.startswith("IRE."):
+            assert has, f"{cid} 缺 SP 800-61r3 映射"
+        else:
+            assert has == (cid in SP61_SOC), f"{cid}：SP 800-61r3 映射范围不对"
+
+
+def test_sp80061_clause_validator() -> None:
+    assert _valid_clause("SP80061", "RS.MA-04")
+    assert not _valid_clause("SP80061", "RS.AN-01")  # 2.0 已撤销
+    assert not _valid_clause("SP80061", "3.2.4")  # r2 章节号
