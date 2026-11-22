@@ -46,7 +46,12 @@ MLPS_L3 = {1: 10, 2: 3, 3: 6, 4: 11, 5: 4, 6: 4, 7: 5, 8: 4, 9: 10, 10: 14}
 MLPS_ICS_L3 = {1: 1, 2: 2, 3: 3, 4: 1, 5: 2}
 MLPS_ICS_RE = re.compile(r"^8\.5\.(\d)\.(\d)$")
 # 只要求电力行业项（*.PWR.*）映射工控扩展；其余框架每项都要映射
-OPTIONAL_FW = {"MLPS_ICS", "SP80061"}
+# 第三级云计算安全扩展要求：8.2.<层面>.<控制点>（物理环境 1、通信网络 1、区域边界 3、计算环境 7、管理中心 1、建设管理 2、运维管理 1）
+MLPS_CLOUD_L3 = {1: 1, 2: 1, 3: 3, 4: 7, 5: 1, 6: 2, 7: 1}
+MLPS_CLOUD_RE = re.compile(r"^8\.2\.(\d)\.(\d)$")
+# 云扩展只映射与云上系统直接相关的项；云与容器监测必须映射，电力生产控制区项不映射
+CLOUD_REQUIRED = {"SOC.TEC.08"}
+OPTIONAL_FW = {"MLPS_ICS", "SP80061", "MLPS_CLOUD"}
 # SP 800-61r3 只用于事件响应：IRE 全部映射，SOC 只映射处置、复盘、手册
 SP61_SOC = {"SOC.PRC.02", "SOC.PRC.05", "SOC.PRC.08"}
 MLPS_RE = re.compile(r"^8\.1\.(\d{1,2})\.(\d{1,2})$")
@@ -64,6 +69,9 @@ def _valid_clause(fw: str, clause: str) -> bool:
     if fw == "MLPS":
         mm = MLPS_RE.match(clause)
         return bool(mm) and int(mm[1]) in MLPS_L3 and 1 <= int(mm[2]) <= MLPS_L3[int(mm[1])]
+    if fw == "MLPS_CLOUD":
+        mm = MLPS_CLOUD_RE.match(clause)
+        return bool(mm) and int(mm[1]) in MLPS_CLOUD_L3 and 1 <= int(mm[2]) <= MLPS_CLOUD_L3[int(mm[1])]
     if fw == "MLPS_ICS":
         mm = MLPS_ICS_RE.match(clause)
         return bool(mm) and int(mm[1]) in MLPS_ICS_L3 and 1 <= int(mm[2]) <= MLPS_ICS_L3[int(mm[1])]
@@ -82,7 +90,7 @@ def test_header(data: tuple[dict, dict]) -> None:
     assert m["catalog_version"] == catalog["version"]
     assert m["status"] == "draft"
     assert m["expert_review"] == "pending"
-    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS", "MLPS_ICS", "SP80061"}
+    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS", "MLPS_ICS", "SP80061", "MLPS_CLOUD"}
     for fw in m["frameworks"].values():
         assert fw["name"] and fw["version"]
 
@@ -168,3 +176,21 @@ def test_sp80061_clause_validator() -> None:
     assert _valid_clause("SP80061", "RS.MA-04")
     assert not _valid_clause("SP80061", "RS.AN-01")  # 2.0 已撤销
     assert not _valid_clause("SP80061", "3.2.4")  # r2 章节号
+
+
+def test_cloud_extension_scope(data: tuple[dict, dict]) -> None:
+    """云扩展：云与容器监测必须映射；电力行业项（生产控制区不上云）不映射；至少覆盖 10 项。"""
+    _, m = data
+    mapped = {cid for cid, rows in m["mappings"].items() if any(r["fw"] == "MLPS_CLOUD" for r in rows)}
+    assert CLOUD_REQUIRED <= mapped
+    assert not {cid for cid in mapped if ".PWR." in cid}
+    assert len(mapped) >= 10
+
+
+def test_cloud_clause_validator() -> None:
+    assert _valid_clause("MLPS_CLOUD", "8.2.4.7")
+    assert _valid_clause("MLPS_CLOUD", "8.2.6.2")
+    assert not _valid_clause("MLPS_CLOUD", "8.2.4.8")
+    assert not _valid_clause("MLPS_CLOUD", "8.2.2.2")
+    assert not _valid_clause("MLPS_CLOUD", "8.2.8.1")
+    assert not _valid_clause("MLPS_CLOUD", "8.5.2.1")

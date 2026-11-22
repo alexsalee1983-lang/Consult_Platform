@@ -4,7 +4,8 @@
 # 第二批：等保 2.0（GB/T 22239-2019）第三级安全通用要求，到控制点（8.1.层面.控制点）。
 # 第三批：第三级工业控制系统安全扩展要求（8.5.层面.控制点），只映射电力行业项（*.PWR.*）；无对应控制点的写进 ics_not_applicable。
 # 第四批：NIST SP 800-61r3（2025），其建议按 CSF 2.0 子类组织，条款号即该文挂接的 CSF 子类；IRE 全部映射，SOC 只映射处置、复盘、手册 3 项。
-# 云扩展、SOC-CMM（等法务）、行业条款为下一批（12-18 前）。
+# 第五批：第三级云计算安全扩展要求（8.2.层面.控制点），只映射与云上系统直接相关的 16 项；电力行业项（生产控制区不上云）不映射。
+# SOC-CMM（等法务）、行业条款为下一批（12-18 前）。
 # 资质边界：映射只用于差距分析定位依据，不代表测评或认证的判定。
 catalog_version: v0
 status: draft
@@ -15,6 +16,7 @@ frameworks:
   MLPS: {name: GB/T 22239 网络安全等级保护基本要求（第三级安全通用要求）, version: "2019"}
   MLPS_ICS: {name: GB/T 22239 网络安全等级保护基本要求（第三级工业控制系统安全扩展要求）, version: "2019"}
   SP80061: {name: NIST SP 800-61 事件响应建议（按 CSF 2.0 子类挂接）, version: "Rev.3"}
+  MLPS_CLOUD: {name: GB/T 22239 网络安全等级保护基本要求（第三级云计算安全扩展要求）, version: "2019"}
 ics_not_applicable:
   SOC.PWR.04: 通报衔接属行业管理规定，工控扩展无对应控制点
   SOC.PWR.05: 值守协同属管理要求，工控扩展无对应控制点
@@ -44,6 +46,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.9.10", rel: 交集, strength: 5, why: 服务供应商选择与协议}
   - {fw: MLPS, clause: "8.1.10.14", rel: 交集, strength: 6, why: 外包运维管理}
   - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 5, why: 内外部沟通与合作}
+  - {fw: MLPS_CLOUD, clause: "8.2.6.1", rel: 交集, strength: 5, why: 云服务商选择与责任划分}
+  - {fw: MLPS_CLOUD, clause: "8.2.7.1", rel: 交集, strength: 4, why: 云计算环境运维与外包协同}
   SOC.ORG.05:
   - {fw: ISO27001, clause: A.5.1, rel: 交集, strength: 6, why: 运营制度与策略}
   - {fw: ISO27001, clause: A.5.37, rel: 交集, strength: 6, why: 文件化操作规程}
@@ -58,6 +62,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.10.14", rel: 交集, strength: 7, why: 外包运维服务商管控}
   - {fw: MLPS, clause: "8.1.9.10", rel: 交集, strength: 5, why: 服务供应商评审与监督}
   - {fw: MLPS, clause: "8.1.8.4", rel: 交集, strength: 4, why: 外部人员访问管理}
+  - {fw: MLPS_CLOUD, clause: "8.2.6.1", rel: 交集, strength: 6, why: 云服务商能力与合同约束}
+  - {fw: MLPS_CLOUD, clause: "8.2.6.2", rel: 交集, strength: 5, why: 供应链变更与服务商监督}
   SOC.PWR.05:
   - {fw: ISO27001, clause: A.5.37, rel: 交集, strength: 3, why: 跨站值守协同规程}
   - {fw: CSF, clause: GV.RR-02, rel: 交集, strength: 4, why: 厂站与集控职责划分}
@@ -145,6 +151,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.5.2", rel: 交集, strength: 6, why: 审计管理与审计记录分析}
   - {fw: MLPS, clause: "8.1.3.5", rel: 交集, strength: 6, why: 边界审计覆盖}
   - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 6, why: 主机与应用审计覆盖}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.3", rel: 交集, strength: 6, why: 云上网络行为审计接入}
+  - {fw: MLPS_CLOUD, clause: "8.2.5.1", rel: 交集, strength: 5, why: 云资源日志集中收集}
   SOC.TEC.02:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 7, why: 异常行为监视}
   - {fw: CSF, clause: DE.AE-02, rel: 交集, strength: 6, why: 检测逻辑支撑事态分析}
@@ -172,6 +180,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 6, why: 审计记录集中留存}
   - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 6, why: 审计记录保护与留存}
   - {fw: MLPS, clause: "8.1.3.5", rel: 交集, strength: 5, why: 边界审计记录保护}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.3", rel: 交集, strength: 5, why: 云服务商与租户审计记录留存}
+  - {fw: MLPS_CLOUD, clause: "8.2.5.1", rel: 交集, strength: 5, why: 集中管控与审计数据汇聚}
   SOC.TEC.06:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 6, why: 网络与终端异常监视}
   - {fw: ISO27001, clause: A.8.7, rel: 交集, strength: 4, why: 恶意软件防范}
@@ -180,6 +190,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 7, why: 网络入侵行为检测}
   - {fw: MLPS, clause: "8.1.3.4", rel: 交集, strength: 5, why: 恶意代码检测与清除}
   - {fw: MLPS, clause: "8.1.4.5", rel: 交集, strength: 5, why: 终端恶意代码防范}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.2", rel: 交集, strength: 6, why: 云边界入侵与异常流量检测}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.3", rel: 交集, strength: 6, why: 虚拟机入侵与恶意代码检测}
   SOC.TEC.07:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 用户行为异常监视}
   - {fw: ISO27001, clause: A.8.2, rel: 交集, strength: 4, why: 特权账号使用监测}
@@ -187,6 +199,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.4.1", rel: 交集, strength: 5, why: 身份鉴别与登录监测}
   - {fw: MLPS, clause: "8.1.4.2", rel: 交集, strength: 5, why: 访问控制策略执行}
   - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 5, why: 用户行为审计}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.1", rel: 交集, strength: 5, why: 远程管理云资源的身份鉴别}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.3", rel: 交集, strength: 5, why: 云服务商特权操作审计}
   SOC.TEC.08:
   - {fw: ISO27001, clause: A.5.23, rel: 交集, strength: 5, why: 云服务使用安全}
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 4, why: 云环境监视}
@@ -194,6 +208,11 @@ mappings:
   - {fw: CSF, clause: DE.CM-06, rel: 交集, strength: 4, why: 云服务方活动监测}
   - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 4, why: 统一监测含云上资源}
   - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 3, why: 区域边界入侵检测}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.2", rel: 交集, strength: 7, why: 云边界攻击与异常流量检测}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.3", rel: 交集, strength: 7, why: 云上操作审计与特权行为}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.3", rel: 交集, strength: 7, why: 虚拟机与容器入侵检测}
+  - {fw: MLPS_CLOUD, clause: "8.2.5.1", rel: 交集, strength: 8, why: 云资源集中监测与管控}
+  - {fw: MLPS_CLOUD, clause: "8.2.2.1", rel: 交集, strength: 4, why: 虚拟网络隔离与架构}
   SOC.TEC.09:
   - {fw: ISO27001, clause: A.8.14, rel: 交集, strength: 6, why: 信息处理设施冗余}
   - {fw: ISO27001, clause: A.8.6, rel: 交集, strength: 4, why: 容量管理}
@@ -201,6 +220,8 @@ mappings:
   - {fw: CSF, clause: PR.IR-04, rel: 交集, strength: 5, why: 资源容量充足}
   - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 5, why: 关键设备与线路冗余}
   - {fw: MLPS, clause: "8.1.4.9", rel: 交集, strength: 6, why: 系统热冗余与备份}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.6", rel: 交集, strength: 5, why: 云上数据备份与恢复}
+  - {fw: MLPS_CLOUD, clause: "8.2.5.1", rel: 交集, strength: 4, why: 管理平台运行状态监测}
   SOC.BNK.01:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 核心系统异常监视}
   - {fw: CSF, clause: ID.AM-05, rel: 交集, strength: 5, why: 按重要性排定资产优先级}
@@ -313,6 +334,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.3.2", rel: 交集, strength: 7, why: 边界访问控制规则}
   - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 5, why: 区域划分与隔离}
   - {fw: SP80061, clause: PR.IR-01, rel: 交集, strength: 5, why: 网络防护降低事件发生与扩散}
+  - {fw: MLPS_CLOUD, clause: "8.2.2.1", rel: 交集, strength: 6, why: 虚拟网络隔离与边界}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.1", rel: 交集, strength: 7, why: 云边界访问控制策略}
   IRE.PRO.02:
   - {fw: ISO27001, clause: A.8.8, rel: 交集, strength: 7, why: 技术脆弱性管理}
   - {fw: ISO27001, clause: A.8.9, rel: 交集, strength: 7, why: 配置管理}
@@ -322,6 +345,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.10.8", rel: 交集, strength: 6, why: 配置基线管理}
   - {fw: MLPS, clause: "8.1.10.10", rel: 交集, strength: 4, why: 变更控制}
   - {fw: SP80061, clause: PR.PS-02, rel: 交集, strength: 5, why: 及时修补以减少可利用面}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.4", rel: 交集, strength: 5, why: 镜像加固与完整性校验}
+  - {fw: MLPS_CLOUD, clause: "8.2.7.1", rel: 交集, strength: 3, why: 云计算环境运维管理}
   IRE.PRO.03:
   - {fw: ISO27001, clause: A.5.18, rel: 交集, strength: 7, why: 访问权限}
   - {fw: ISO27001, clause: A.8.2, rel: 交集, strength: 6, why: 特权访问权限}
@@ -331,6 +356,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.4.2", rel: 交集, strength: 7, why: 账户与权限管理}
   - {fw: MLPS, clause: "8.1.10.6", rel: 交集, strength: 4, why: 运维账户管理}
   - {fw: SP80061, clause: PR.AA-05, rel: 交集, strength: 5, why: 最小权限限制事件影响}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.1", rel: 交集, strength: 6, why: 云管理端身份鉴别}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.2", rel: 交集, strength: 6, why: 虚拟机迁移与访问控制}
   IRE.PRO.04:
   - {fw: ISO27001, clause: A.8.24, rel: 交集, strength: 6, why: 密码技术使用}
   - {fw: ISO27001, clause: A.8.12, rel: 交集, strength: 4, why: 防数据泄露}
@@ -340,6 +367,9 @@ mappings:
   - {fw: MLPS, clause: "8.1.4.7", rel: 交集, strength: 5, why: 数据完整性}
   - {fw: MLPS, clause: "8.1.10.9", rel: 交集, strength: 5, why: 密码管理}
   - {fw: SP80061, clause: PR.DS-01, rel: 交集, strength: 4, why: 静态数据保护降低泄露影响}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.5", rel: 交集, strength: 7, why: 云上数据完整性与保密性}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.7", rel: 交集, strength: 5, why: 剩余信息清除}
+  - {fw: MLPS_CLOUD, clause: "8.2.1.1", rel: 交集, strength: 3, why: 数据与基础设施位置}
   IRE.PWR.05:
   - {fw: ISO27001, clause: A.8.22, rel: 交集, strength: 7, why: 网络隔离}
   - {fw: CSF, clause: PR.IR-01, rel: 交集, strength: 6, why: 环境间逻辑访问控制}
@@ -369,6 +399,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.5.2", rel: 交集, strength: 5, why: 审计集中管理}
   - {fw: SP80061, clause: DE.CM-01, rel: 交集, strength: 6, why: 网络监测支撑事件发现}
   - {fw: SP80061, clause: PR.PS-04, rel: 交集, strength: 6, why: 生成日志供持续监测}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.3", rel: 交集, strength: 6, why: 云上审计覆盖}
+  - {fw: MLPS_CLOUD, clause: "8.2.5.1", rel: 交集, strength: 6, why: 云资源集中监测}
   IRE.DET.03:
   - {fw: ISO27001, clause: A.5.7, rel: 交集, strength: 5, why: 威胁情报提供指标}
   - {fw: CSF, clause: DE.AE-07, rel: 交集, strength: 6, why: 情报融入分析}
@@ -397,6 +429,8 @@ mappings:
   - {fw: SP80061, clause: RS.MI-01, rel: 交集, strength: 7, why: 遏制事件防止扩大}
   - {fw: SP80061, clause: RS.MI-02, rel: 交集, strength: 6, why: 根除事件}
   - {fw: SP80061, clause: RS.AN-07, rel: 交集, strength: 6, why: 收集并保全事件数据}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.4", rel: 交集, strength: 4, why: 快照用于取证留存}
+  - {fw: MLPS_CLOUD, clause: "8.2.3.2", rel: 交集, strength: 4, why: 云边界攻击的阻断}
   IRE.RSP.03:
   - {fw: ISO27001, clause: A.5.6, rel: 交集, strength: 4, why: 与专业组织的联系}
   - {fw: CSF, clause: RS.MA-01, rel: 交集, strength: 6, why: 与第三方协同执行响应}
@@ -436,6 +470,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.9.10", rel: 交集, strength: 4, why: 供应商协议责任}
   - {fw: SP80061, clause: GV.SC-08, rel: 交集, strength: 7, why: 供应方纳入事件响应活动}
   - {fw: SP80061, clause: RS.MA-01, rel: 交集, strength: 5, why: 与第三方协同执行响应}
+  - {fw: MLPS_CLOUD, clause: "8.2.6.1", rel: 交集, strength: 5, why: 云服务商事件协同责任}
+  - {fw: MLPS_CLOUD, clause: "8.2.6.2", rel: 交集, strength: 4, why: 供应链事件通报}
   IRE.PWR.01:
   - {fw: ISO27001, clause: A.8.22, rel: 交集, strength: 4, why: 网络隔离}
   - {fw: CSF, clause: RS.MI-01, rel: 交集, strength: 6, why: 事件遏制}
@@ -456,6 +492,8 @@ mappings:
   - {fw: MLPS, clause: "8.1.4.9", rel: 交集, strength: 7, why: 数据备份恢复}
   - {fw: SP80061, clause: RC.RP-01, rel: 交集, strength: 7, why: 执行恢复计划}
   - {fw: SP80061, clause: RC.RP-03, rel: 交集, strength: 6, why: 恢复前核验备份完整性}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.6", rel: 交集, strength: 7, why: 云上备份与异地恢复}
+  - {fw: MLPS_CLOUD, clause: "8.2.4.4", rel: 交集, strength: 4, why: 镜像与快照恢复}
   IRE.REC.02:
   - {fw: ISO27001, clause: A.5.29, rel: 交集, strength: 6, why: 中断期间的安全}
   - {fw: ISO27001, clause: A.5.30, rel: 交集, strength: 7, why: 业务连续性信息通信就绪}
