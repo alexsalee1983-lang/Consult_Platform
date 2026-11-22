@@ -39,6 +39,7 @@ SYSTEM_STRICT = (
 )
 DEMO_TEXT = ("【演示回复】模型地址尚未配置（.env 中的 LLM_BASE_URL）。"
              "你的问题已通过机密级检查，配置公司白名单大模型后这里会返回正式答复。")
+CONTINUE_NOTE = "（平台说明：上一段输出因长度上限被截断。请从中断处直接接着写，不要重复已输出的内容，不要加开场白。）"
 RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
@@ -235,14 +236,32 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
     p = _prepare(message, tier, project_code, level, terms, stream=False, system=system, history=history)
     if not get_settings().llm_base_url:
         return Completion(text=DEMO_TEXT, model=p.model, demo=True)
+    text = ""
+    prompt_tokens = completion_tokens = 0
+    attempts = 0
+    payload = p.payload
     with _client() as client:
-        resp, attempts = _send(client, p.payload, stream=False)
-        try:
-            data = resp.json()
-            text = data["choices"][0]["message"]["content"] or ""
-        except (ValueError, KeyError, IndexError, TypeError) as e:
-            raise GatewayError("模型返回的结果无法解析", attempts) from e
-    prompt_tokens, completion_tokens = _usage(data)
+        for rounds in range(get_settings().llm_max_continuations + 1):
+            resp, n = _send(client, payload, stream=False)
+            attempts += n
+            try:
+                data = resp.json()
+                choice = data["choices"][0]
+                part = choice["message"]["content"] or ""
+            except (ValueError, KeyError, IndexError, TypeError) as e:
+                raise GatewayError("模型返回的结果无法解析", attempts) from e
+            text += part
+            pt, ct = _usage(data)
+            prompt_tokens += pt
+            completion_tokens += ct
+            if choice.get("finish_reason") != "length":
+                break
+            # 输出撞到模型的输出上限被截断：带上已输出的部分请模型接着写，写完为止
+            payload = {**p.payload, "messages": [*p.payload["messages"],
+                                                {"role": "assistant", "content": text},
+                                                {"role": "user", "content": CONTINUE_NOTE}]}
+        else:
+            raise GatewayError(f"模型输出被截断：达到输出上限，续写 {get_settings().llm_max_continuations} 次后仍未完成", attempts)
     return Completion(text=p.pseudo.restore(text) if p.pseudo else text, model=data.get("model", p.model),
                       demo=False, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
                       latency_ms=_elapsed_ms(p), attempts=attempts, pseudonymized=p.pseudo is not None, external=uses_external_model())

@@ -48,6 +48,11 @@ class ToolError(Exception):
             self.status = status
         super().__init__(detail if isinstance(detail, str) else detail.get("summary", "被拒绝"))
 
+    @property
+    def retryable(self) -> bool:
+        """临时性失败（限流、冲突、服务端暂时不可用）可以换个时机重试；参数、授权类错误重试无益。"""
+        return self.status in (408, 409, 425, 429) or self.status >= 500
+
 
 class ToolDenied(ToolError):
     status = 403
@@ -248,9 +253,12 @@ def granted_tools(db: Session, agent_code: str) -> list[str]:
 
 
 def invoke(db: Session, user: User, agent_code: str, tool_code: str, args: dict[str, Any] | None = None,
-           project_code: str | None = None) -> dict:
+           project_code: str | None = None, conversation_id: int | None = None) -> dict:
     args = args or {}
-    meta = {"agent": agent_code, "tool": tool_code, "args_length": len(json.dumps(args, ensure_ascii=False))}
+    meta: dict[str, Any] = {"agent": agent_code, "tool": tool_code,
+                            "args_length": len(json.dumps(args, ensure_ascii=False))}
+    if conversation_id is not None:
+        meta["conversation_id"] = conversation_id    # 对话里调用时带对话号，便于按对话追溯（只记编号，不记原文）
 
     def deny(exc: type[ToolError], reason: str, message: str):
         audit.record(db, actor=user.username, action="tool.call", result="blocked", project_code=project_code or "",

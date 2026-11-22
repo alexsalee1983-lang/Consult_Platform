@@ -180,7 +180,7 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
         # 二期 A7：Agent 自己决定调用哪个工具（function calling），每次调用经工具层（授权、硬规则、审计）
         system = runtime.system_prompt(doc, card, tool_mode=True)
         tool_args = {"tools": chat_tools.schemas(offered),
-                     "run_tool": chat_tools.runner(user.id, agent_code, project.code, refs, used)}
+                     "run_tool": chat_tools.runner(user.id, agent_code, project.code, refs, used, conv_id)}
     else:
         # 提问前先检索知识库，命中的条目附进系统提示（检索经工具层，按授权和可见范围，写审计）
         kb_block, refs = knowledge.retrieve(db, user, agent_code, project, body.message)

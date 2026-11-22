@@ -23,3 +23,14 @@ def test_leaky_settings_at_defaults() -> None:
     assert s.rerank_base_url == "" and s.embed_base_url == "" and s.llm_base_url == ""
     assert s.llm_external is False and s.rerank_external is False
     assert s.kb_single_reviewer_public is False
+
+
+def test_agents_dir_pinned_to_repo() -> None:
+    """测试机容器里有 /srv/agents（部署挂载的 md，可能是别的版本）：测试一律读本仓库 agents/，
+    不随部署副本变（测试机误报：test_md_model_tier_wins_over_caller_default）。"""
+    from pathlib import Path
+
+    from app.agents import registry
+    repo_agents = Path(__file__).resolve().parents[2] / "agents"
+    assert registry.agents_dir().resolve() == repo_agents.resolve()
+    assert Path(get_settings().agents_dir).resolve() == repo_agents.resolve()
