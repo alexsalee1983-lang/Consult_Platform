@@ -796,6 +796,37 @@ def agent_eval(args: argparse.Namespace) -> int:
     return 0 if rep.passed else 3
 
 
+def kb_assembly_eval(args: argparse.Namespace) -> int:
+    import json
+    from pathlib import Path
+
+    from .kb import assembly_eval as ae
+    from .kb import search
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == args.as_user))
+        if user is None or not user.is_active:
+            print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
+            return 1
+        try:
+            report = ae.run(db, user, ae.load(Path(args.evalset)), strategy=args.strategy)
+            verdict = None
+            if args.baseline:
+                base = json.loads(Path(args.baseline).read_text(encoding="utf-8"))
+                verdict = ae.compare(report, base, min_gain=args.min_gain)
+        except (ae.AssemblyEvalError, search.SearchError, OSError, ValueError) as e:
+            print(f"装配评测没有完成：{e}", file=sys.stderr)
+            return 1
+    print(ae.format_report(report))
+    if args.out:
+        Path(args.out).write_text(json.dumps(report.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"明细已写到 {args.out}（只有章节编号、知识 key 和计数，不含正文）")
+    if verdict is not None:
+        print(verdict[1])
+        return 0 if verdict[0] else 3
+    return 0
+
+
 def kb_eval(args: argparse.Namespace) -> int:
     import json
     from pathlib import Path
@@ -972,6 +1003,16 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("--b-model", default="", help="候选模型名，如 BAAI/bge-m3")
     ke.add_argument("--b-dim", type=int, default=0, help="候选模型向量维度，如 1024")
     ke.set_defaults(func=kb_eval)
+    kae = sub.add_parser("kb-assembly-eval", help="章节级装配评测（三期 A24）：每章应命中知识的就绪度、命中率、缺槽；"
+                         "给 --baseline 时命中率不低于基线 + --min-gain 退出码 0，否则 3")
+    kae.add_argument("evalset", help="评测集文件（YAML，每章 3～5 条应命中知识）")
+    kae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
+    kae.add_argument("--strategy", default="baseline", choices=["baseline", "chapter"],
+                     help="baseline 交付链步骤固定查询（现行做法）；chapter 章节查询")
+    kae.add_argument("--out", default="", help="把明细写成 JSON 文件（可作下次的 --baseline）")
+    kae.add_argument("--baseline", default="", help="基线报告 JSON（--out 写出的）")
+    kae.add_argument("--min-gain", type=float, default=0.0, help="要求比基线高出多少（如 0.01 = 1 个百分点）")
+    kae.set_defaults(func=kb_assembly_eval)
     ae = sub.add_parser("agent-eval", help="Agent 评测（二期 C4）：红线用例、黄金样例要点、埋雷，全部通过时退出码 0")
     ae.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
     ae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份调用（记用量）")
