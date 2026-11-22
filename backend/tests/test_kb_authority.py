@@ -38,14 +38,14 @@ def test_label_and_sort_rank():
 
 def test_search_tie_prefers_higher_authority_and_labels_reference(people):  # noqa: F811
     """正文相同（全文同分）的三条：先发布的是白皮书，检索时法律、标准排在前面；结果带等级与“参考资料”标签。"""
-    body = "## 日志留存\n\n网络日志留存不少于六个月，便于事件溯源。"
+    body = "## 巡检台账\n\n量子密钥分发设备巡检台账保存三年，便于复盘。"
     common = {"layer": "L4", "product": "GEN", "doc_type": "REF", "stage": "通用"}
-    paper = _publish(people, "日志白皮书解读", body, ref=("日志审计白皮书", "2024", "current"), **common)
-    std = _publish(people, "日志标准解读", body, ref=("GB/T 88001 日志审计规范", "2020", "current"), **common)
-    law = _publish(people, "日志法律解读", body, ref=("中华人民共和国网络安全法", "2017", "current"), **common)
+    paper = _publish(people, "巡检白皮书解读", body, ref=("巡检台账白皮书", "2024", "current"), **common)
+    std = _publish(people, "巡检标准解读", body, ref=("GB/T 88001 巡检台账规范", "2020", "current"), **common)
+    law = _publish(people, "巡检法律解读", body, ref=("中华人民共和国网络安全法", "2017", "current"), **common)
     assert paper.id < std.id < law.id   # 不加权时按编号排，白皮书会在最前
 
-    items = [h for h in _search(people, "consultant", "网络日志留存六个月溯源", product="GEN", limit=10)["items"]
+    items = [h for h in _search(people, "consultant", "量子密钥分发设备巡检台账", product="GEN", limit=10)["items"]
              if h["doc_id"] in {paper.doc_id, std.doc_id, law.doc_id}]
     assert [h["doc_id"] for h in items] == [law.doc_id, std.doc_id, paper.doc_id]
     assert [h["authority_level"] for h in items] == [1, 2, 3]
