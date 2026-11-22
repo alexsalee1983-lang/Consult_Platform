@@ -7,6 +7,7 @@
 公司安全咨询团队的内部平台：顾问与 Agent 组协作完成咨询交付件，平台接入**公司私有化部署的白名单大模型**，并维护公司知识库。一期目标：2027-01-15 交付第一个可用版本。
 
 一期已于 2026-11-14 打 `v1.0`。二期（11-16 起，11-30 为努力目标，4A v4.0）范围、工作线和关口看 `docs/二期开发计划.md`，验收标准以该文件第五节为准；当前进度看 `docs/开发进度与交接.md`。
+三期（12-01 起，12-31 关口，4A v4.0）工作项与关口看 `docs/三期开发计划.md`；三期代码 11-30 后合并。
 
 ## 资料索引（规划与设计都在仓库里，不需要也无法访问 claude.ai）
 
@@ -21,6 +22,7 @@
 | 交付链（M3） | `docs/Agent组开发项目方案.md`（D1～D8、交付链 7 步、确认卡） |
 | 删除、告知、严格档（M4） | `docs/客户数据告知模板与合同条款.md`：这是对客户的承诺，平台功能必须能兑现 |
 | 测试与回报 | `docs/测试交接规范.md` |
+| 改某个模块的代码（网关、知识库、交付链、删除等约定）、运维命令 | `docs/模块约定.md` 对应一节 |
 | 生产部署、运维 | `docs/部署手册.md`、`docs/运维手册.md` |
 
 `agents/` 下的 md 是 Agent 组的正式版本，修改须经负责人同意（`01_公共规范.md` 的修改影响所有 Agent）。
@@ -34,6 +36,8 @@
 | 测试助手 | 测试机上的 Claude Code（2026-11-18 起为高配电脑，两套并行环境） | 拉取 PR 分支，用 Docker 跑起来测试，按 `docs/测试交接规范.md` 把结果写成 PR 评论 |
 | 规划与审阅 | claude.ai 对话 | 维护计划、架构、设计稿；按验收标准审阅 PR |
 | 负责人 | 用户本人 | 拍板、合并 PR |
+
+开发线 2 的会话从 `C:\Alex_Work\cp-line2` 启动。
 
 ## 数据保护红线（违反任何一条都不能合并）
 
@@ -86,188 +90,23 @@ docker compose up -d --build
 bash scripts/smoke_test.sh
 docker compose logs --no-color backend | tail -100
 
-# 用户管理：日常在网页“用户与角色”页操作（系统管理员）；以下命令行用于首个管理员、审计员任命和应急（口令交互输入）
-docker compose exec backend python -m app.cli create-user --username <名字> --display-name <姓名>
-docker compose exec backend python -m app.cli unlock --username <名字>
-docker compose exec backend python -m app.cli reset-totp --username <名字>
-docker compose exec backend python -m app.cli grant-role --username <名字> --role consultant   # 审计员只能这样授予
-docker compose exec backend python -m app.cli list-users
-docker compose exec backend python -m app.cli add-member --project <项目> --username <名字> --role manager   # 没有项目经理的项目指定首位经理、应急；日常由项目经理在网页调整
-docker compose exec backend python -m app.cli create-project --code <客户代号> --tier standard --manager <名字> [--industry 银行]   # 立项（一期无网页立项）：必须定档，建 D1～D8，指定首位项目经理
-docker compose exec backend python -m app.cli retention-report      # 已验收项目的保留期与到期状态（--all 含未验收）
-docker compose exec backend python -m app.cli deletion-scan         # 立即扫描到期项目并发起删除申请（worker 每小时自动扫描）
-docker compose exec backend python -m app.cli deletion-report       # 未完成的删除申请（--all 含已删除、已撤销）
-docker compose exec backend python -m app.cli verify-audit          # 校验审计哈希链（问题时退出码 2）
-bash scripts/audit_chain_check.sh                                    # 测试机：多进程并发写审计后校验（生产拒绝执行）
-docker compose exec backend python -m app.cli usage-report --days 30 # 大模型用量（按人、项目、模型）
-BACKUP_PASSPHRASE_FILE=/etc/consult-platform/backup.pass bash scripts/backup.sh /srv/backups/consult-platform   # 每日备份（docs/备份与恢复.md）
-BACKUP_PASSPHRASE_FILE=... bash scripts/restore.sh <备份目录>          # 恢复：清空并覆盖当前数据，要输入目录名确认
 
-# 知识批量入库与评测（条目文件格式见 backend/app/kb/files.py，示范见 knowledge/samples；正式资料放 /srv/knowledge/downloads，不进代码仓）
-docker compose exec backend python -m app.cli kb-import /srv/knowledge/samples --as <知识专家> [--submit]
-docker compose exec backend python -m app.cli kb-export /tmp/kb-export --as <知识专家>   # 测试机导出已发布公开知识，打印清单哈希
-docker compose exec backend python -m app.cli kb-import-export /srv/kb-export --sha256 <清单哈希> --as <知识专家>   # 生产导入：校验哈希、自动核验后发布
-docker compose exec backend python -m app.cli kb-draft --source <公开资料> --source-detail "<来源>" --out /tmp/drafts --as <知识专家>
-docker compose exec backend python -m app.cli kb-basis-check /srv/knowledge/check.csv --as <知识管理员> [--apply]   # 季度依据变更登记（B5）
-docker compose exec backend python -m app.cli kb-eval /srv/knowledge/eval/samples.yaml --as <用户> [--out /tmp/report.json]
-docker compose exec backend python -m app.cli kb-eval <题目.yaml> --as <用户> --compare   # 有无知识库对比评测（B1 补充），每批入库后跑，未达标暂停自动发布docker compose exec backend python -m app.cli kb-reconfirm-scan    # 复审到期的公开知识排 Agent 复查（worker 每小时自动做）
-
-# 没有公司模型时，用模拟模型跑通网关真实路径（.env 设 LLM_BASE_URL=http://mock-llm:8000/v1）
-docker compose --profile mock-llm up -d --build
-SMOKE_EXPECT_LLM=ok bash scripts/smoke_test.sh
+# 更多运维命令（用户管理、立项、删除、审计、备份、知识入库与评测、模拟模型）见 `docs/模块约定.md` 第一节。
 ```
 
-工具约定：Agent 读写数据只经 `app/agents/tools.py` 的 `invoke()`（授权 + 硬规则 + 项目成员检查 + 审计）。
-Agent × 工具授权由迁移写入，改授权要新迁移、同步 `tests/test_tools.py` 的 `EXPECTED`，并在 PR 写明依据；不提供修改授权的接口。
-调试接口 `POST /api/agents/{agent}/tools/{tool}` 只能调读取类工具，写入类（`doc.generate`、`confirm.create`）只由平台运行时调用（渗透测试 P-02）。
-新工具要在 `tools` 表登记区域（knowledge / project / staging / none）和读写，硬规则按这两项判断。
+## 模块约定（改哪个模块先读 `docs/模块约定.md` 对应一节）
 
-运行时约定：Agent 的系统提示 = `agents/01_公共规范.md` + 角色 md 正文 + 平台生成的项目卡（`app/agents/runtime.py`）；项目卡经工具层 `project.read` 读取。
-md 的 frontmatter 只读 `name`（必须与 Agent 代号一致）、`model_tier`、`tools`（仅作说明）、`service_modules`。
-md 的 `tools` 只写平台工具名（`registry.TOOL_NAMES`），与迁移写入的授权一致（“读项目区”已含查证据、发确认卡），由 `tests/test_runtime.py` 校验；改授权要同步改 md（负责人同意，2026-11-16）。
-每条对话和回复记下提示词版本（md 内容哈希）。
-平台调 Agent（交付链、质量评审、知识审核、脱敏审查、起草）只经 `app/agents/call.py` 的 `call()`：取 md（停用、缺失拒绝）、按 md 的 `model_tier` 定等级、经网关、记用量，传 `parse` 时格式不对带纠正说明重试一次；新增调用点不要直接写 `gateway.complete`。
-后端镜像以仓库根目录为构建范围，`agents/` 打进镜像（`backend/Dockerfile`、根目录 `.dockerignore`）；测试机可只读挂载 `./agents:/srv/agents:ro`，md 改了自动重新加载。
+硬规则摘要：模型只经 `gateway.py`；Agent 读写只经 `tools.invoke()`；平台调 Agent 只经 `agents/call.py`；文件只经 `storage.py`；耗时操作走 `jobs.enqueue()`；审计只经 `audit.record()` 且不记原文；新接口加进 `tests/test_auth.py` 的 `PROTECTED`，改权限同步 `tests/test_permissions.py`；修改类请求带 `X-CSRF-Token`。
 
-网关约定：大模型调用只经 `app/services/gateway.py` 的 `complete()` / `stream()`；调用方负责写审计和用量（`services/usage.record`），都不记提问和回复原文。
-测试里用 `gateway.set_transport(httpx.MockTransport(...))` 模拟模型，不要连真实地址。
-系统管理员在“模型配置状态”页（`GET /api/admin/models`，只读）看大模型、向量、重排的地址、模型名、是否外部和连通状态；不返回密钥，地址去掉账号口令和查询参数。
+节名：工具约定、运行时约定、网关约定、对象存储约定、后台任务约定、知识库约定、对比评测约定、分库约定、数据库账号约定、检索约定、映射约定、项目区约定、交付件约定、确认卡约定、导出约定、质量门禁与签署约定、编排约定、判断数据埋点约定、自动推进约定、保留期约定、摘要卡约定、现场工具约定、删除约定、运维自动化约定、对话转交约定、对话工具调用约定、审计约定、登录约定、权限约定。
 
-对象存储约定：文件只经 `app/services/storage.py` 读写（S3 协议，一期为自建 MinIO，见 `deploy/minio/README.md`）；只有 project（项目区）和 knowledge（知识区）两个区，分桶存放、默认服务端加密；哪个 Agent 能碰哪个区由工具层硬规则判断。测试里设 `TEST_S3_ENDPOINT` 才连真实存储，否则相关测试跳过。
+## token 规则（负责人 2026-11-19，所有会话照做）
 
-后台任务约定：耗时操作（解析、向量化、到期删除）不在请求里做，用 `app/services/jobs.py` 的 `enqueue()` 排队，由 worker 容器（`python -m app.worker`）执行；处理器用 `@jobs.handler("种类")` 注册，必须可重复执行；任务参数只放编号和对象键，不放原文。
-运维：`python -m app.cli jobs`（状态）、`python -m app.cli selfcheck`（自检）。
-
-知识库约定：知识区表结构在 `app/models/kb.py`（继承 `KbBase`），元数据取值和校验在 `app/kb/meta.py`（依据公共规范第 7 节，改取值要同步公共规范并经负责人同意）；建条目、建版本只经 `app/kb/items.py`。
-条目的 doc_id 固定不变，内容变化一律建新版本，历史版本保留。
-知识区只收去标识后的做法：去标识报告只记类别、占位符和次数，上传记录只记机密级命中类别，都不记原文。
-去标识只经 `app/kb/deid_flow.py`：规则词库（`deid.py`）→ 脱敏审查 Agent 复查（`deid_agent.py`，经网关，返回的漏网名称只在内存里用）→ 知识管理员确认（不能是上传者）；确认后原件和未去标识的解析结果从对象存储删除。
-发布审核按两人原则（`app/kb/review.py`，决策记录 2026-11-13）：作者不能审自己的版本；内容审核要知识专家、合规审核要知识管理员，一人持两个角色可以审两项；`KB_SINGLE_REVIEWER_PUBLIC=true` 时公开资料可由作者本人审核发布，标记 `single_review`，作者以外的知识专家复审确认后清除。
-第三级（二期 B12，`review.level3`）：去标识已确认的项目沉淀、专家经验、内部制度改造，合规审核并入去标识确认，提交后知识审核 Agent 先审、只出意见（`agent_review._advise`，不发布、不抽检，不受 `KB_AGENT_AUTO_PUBLISH` 影响），由一位知识专家（不能是作者）做内容审核即发布，合规审核 409；`VersionBrief.required_roles` 给出需要的审核项。
-依据原文（二期 B7）：公开资料按下载清单经 `app/kb/sources.py`（`python -m app.cli kb-source-split <清单.csv> --dir <资料目录> --out <目录>`）机械切成 doc_type SRC 的 L4 条目文件，再 `kb-import --submit`；法规按“第 X 条”切（条号须逐条递增），国家标准、行业标准只收条款号和标题、不收正文（版权），NIST 等按控制号或编号标题切；不调模型、不入库；带 ref_code（文号或标准号）、ref_replaced_by，ref_status 多一个 superseded（已被替代，质量评审按已废止判）。
-依据变更登记（二期 B5）：季度官网核对清单（表头同下载清单）经 `app/kb/basis_change.py`（`python -m app.cli kb-basis-check <清单.csv> --as <知识管理员> [--apply]`）与库内 L4 依据比对，分时效变更、版本不同、待复核（多文件条目、有未完成草稿）、库内没有、一致；只有清单写明、文件和版本都对得上的时效变更由 `--apply` 自动登记：沿用正文建新版本、只改 ref_status / ref_replaced_by，审核记录写 `platform:basis-check` 后直接发布（自动化优先），其余只列出；不联网、不调模型，审计只记计数和条目编号。
-起草引用校验（二期 B8）：解读、映射、案例、异议应答（REF / MAP / CAS / OBJ）引用的“文件 + 条款号”只经 `app/kb/citations.py` 核对——《文件名》第 X 条、标准号 + 条款号，以及条目自身 ref_document 下的“第 X 条”，按 B7 的 key 规则在已发布的 SRC 里找，找不到的列为待核：`kb-draft` 报告列出，`review.submit` 拒绝提交（`KB_CITATION_GATE=false` 只显示不拦，测试默认关），审核页（版本详情 `citations`，只给知识侧角色）并排显示原文摘录。
-依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：`python -m app.cli kb-source-publish <清单.csv> --dir <资料目录> --as <知识专家>` 只经 `app/kb/autopublish.py`，从原件直接切条、按 `sources.verify` 核验（原网址在官方白名单 `sources.OFFICIAL_HOSTS`（gov.cn、nist.gov 和境外政府域名，决策记录 2026-11-16）/ `KB_SOURCE_HOSTS`、清单 sha256 列与原件一致、有文号或标准号、切出了条款、法规条号连续；机密级检测退回的条款不入库、不影响同一份其余条款），全部通过的由平台自动发布（`auto_review=platform`，审核记录 reviewer / review_role 为 platform），没通过的提交走两项人工审核；每批按 `KB_SAMPLE_RATE_SRC`（5%，至少 1 条）随机抽检，有退回条款的那几份按 `KB_SAMPLE_RATE_SRC_PARTIAL`（40%），知识专家（不能是导入人）在审批页“抽检”判通过或不通过（`POST /api/kb/versions/{id}/sample`）；最近 20 次抽检不通过率超过 `KB_SAMPLE_FAIL_MAX`（10%）或 `KB_SRC_AUTO_PUBLISH=false` 时整批转人工。
-审计只记编号、规则、计数和结论。
-知识审核 Agent（二期 B11）：公开资料、无需去标识的 REF / MAP / MTD / CAS / OBJ 提交审核后排后台任务 `kb.agent_review`，只经 `app/kb/agent_review.py`：程序规则（引用已核对、无结论用语、无机密级、摘要和适用条件齐全）+ 知识审核 Agent `kb-reviewer`（经网关，不授权工具，平台直接交条目、引用到的依据原文和相近条目）按七项清单逐项判断；全部通过的自动发布（`auto_review=agent`，审核记录 reviewer `agent:kb-reviewer`、review_role agent），按 `KB_SAMPLE_RATE_AGENT`（20%，问题率超上限一半时加倍）抽检，与 B10 共用抽检队列和暂停规则（`KB_AGENT_AUTO_PUBLISH=false` 也暂停）；存疑的审核记录 decision=flag，问题清单在 `kb_reviews.findings`（只在知识区库，不进审计），照常两项人工审核。
-扩展分类（决策记录 2026-11-16）：交付物类型加 ENF 执法案例 / RAR 参考架构 / BMK 基准数据 / GLS 术语对照；ENF、RAR、GLS 的公开资料同样走 `kb.agent_review`（ENF 须写依据文件、按 B8 核对引用），BMK 走第三级；复审周期由 `meta.review_months(layer, doc_type)` 按层级和类型取，L4、ENF、BMK 6 个月。
-条目挂公司控制项（4A v4.0 §7.2 埋点，知识区迁移 k0008）：条目文件可选字段 `control_ids`（规则在 `items.check_control_ids`：转大写、去重，至多 20 个，字母数字和 . _ -），同 tags 是条目级字段、不进版本内容、不走审核，重复导入直接更新、搬迁带上；控制项中枢 v1（五期）之前只记不用。
-审计 `kb.agent_review` 记规则、Agent、提示词版本和模型，不记正文和意见。
-复审到期（人工环节复查 K7）：同一范围的现行版本复审日期到了，worker 每小时排 `kb.agent_reconfirm`，只经 `app/kb/reconfirm_agent.py`，用同一套程序规则和七项清单复查，通过的顺延复审日期（Agent 审核发布、未抽检过的按比例抽检），存疑的留在“复审到期”由知识专家处理；复查记录 review_role=reconfirm，每版本一条、每周期覆盖；SRC、项目沉淀、专家经验、待补复审的照旧人工复审；应急 `python -m app.cli kb-reconfirm-scan`。
-知识迁移（决策记录 2026-11-16）：测试环境已发布的公开知识搬到生产只经 `app/kb/transfer.py`：`python -m app.cli kb-export <目录> --as <知识专家>` 导出条目文件和 manifest.json（文件 sha256、原 doc_id、作者、审核记录，不带意见原文），打印清单哈希；生产 `kb-import-export <目录> --sha256 <清单哈希> --as <知识专家>` 哈希全对才导入，平台重新自动核验（审核记录完整、机密级、资质边界、引用、元数据），通过的保留原作者和原审核人发布、另记审核 `platform:kb-transfer` / transfer，没通过的提交审核；审计只记编号、计数和规则。
-使用反馈待复查（二期 B13）：只经 `app/kb/recheck.py`（worker 每天扫描，`python -m app.cli kb-recheck-scan`）：Agent 写的章节版本引用了条目、紧接着顾问手改版不再引用，记一次删除；近 90 天被删章节 ≥3、涉及项目 ≥2、占 Agent 引用章节一半以上的现行版本标 `recheck_state=pending`（知识区迁移 k0007），进抽检队列，知识专家（不能是作者）复查，通过清除、不通过留到出新版本或下线；与自动发布抽检分开，不计入抽检不通过率；只数现行版本发布后、上次复查后的删除；原因只写计数，审计 `kb.recheck_mark` 只记条目编号。
-知识地图（二期 B6）：`GET /api/kb/stats` 的覆盖矩阵、缺口 TOP、贡献统计只经 `app/kb/kbmap.py`：行按产品配置（含草稿）、知识元数据、GEN 和模块 kb_tags 列出；缺口按检索审计里的产品、阶段过滤条件和零命中次数归类，反复零命中按 query_sha 计数，不记、不显示检索词。
-
-对比评测约定（二期 B1 补充）：有无知识库对比评测只经 `app/kb/compare.py`（`kb-eval --compare`）：题目带 `expect_refs`（文件 + 条款号）和 `category`（clause / mapping / industry），同一题分别不用、用知识库（先 `search.basis`，非 clause 再加 `search.search`）经网关作答，答案里的引用按 `citations.check` 核对：引用了期望依据之一算准确，文件在库里有依据原文但条款号没有的记编造条号，文件不在库里的只记库外引用。
-达标 = 用知识库准确率 ≥ `KB_EVAL_MIN_ACCURACY`（0.9）、编造 0 次、不低于不用知识库；结果写审计 `kb.eval_compare`（只记计数和是否达标）。
-`KB_EVAL_GATE` 开启时最近一次未达标即暂停 B10、B11 自动发布（`autopublish.suspended` → `compare.gate_reason`），再跑一次达标恢复；演示模式不判达标、不记审计。
-门槛校准（v0.2 关口）只经 `app/kb/sweep.py`（`kb-eval <题目.yaml> --as <用户> --sweep`）：每题以门槛 0 经网关重排检索一次，本地按各候选门槛筛选，算依据查询（`KB_BASIS_MIN_RERANK`）和知识检索（`KB_SEARCH_MIN_RERANK`）的准确率、负例误命中、正例漏掉，给推荐值（最优区间含现值则保持）；只出报告、不改配置，由负责人定；审计 `kb.eval_sweep` 只记题数、计数、准确率和推荐值。
-向量模型对比（决策记录 2026-11-18）只经 `app/kb/embed_compare.py`（`kb-eval <题目.yaml> --as <用户> --embed-compare --b-url … --b-model … --b-dim …`，候选模型用 compose profile `embed-compare` 的 `embed-m3` 服务）：现用和候选模型各自经 `gateway.embed`（候选地址、模型、维度只在这里覆盖）向量化调用人看得到的已发布现行切片和题目，只比向量召回（命中@1/3/5/10、MRR、耗时）；不写库、不改配置，生产拒绝；审计 `kb.eval_embed` 只记题数、切片数、模型名和指标。
-
-分库约定（M5 ③）：知识区表（`kb_` 开头）在单独的库 `KB_DATABASE_URL`（compose 为 `consult_kb`，账号 `consult_kb` 非超级用户、连不上主库；不配则同库，生产不分库拒绝启动）。
-会话按 `KbBase` 自动把知识区读写发往知识区库；原生 SQL 查知识区表要带 `bind_arguments=KB_BIND`，知识区和主库的表不能 JOIN、不能建跨库外键，一次提交跨两库不是原子的。
-知识区表结构只经知识区迁移链 `backend/alembic_kb`（版本表 `alembic_version_kb`，`alembic -n kb revision --autogenerate --rev-id k0002_xxx`）修改，主迁移链不再动 `kb_` 表。
-旧库搬迁：`docker compose exec postgres kb-init.sh` → `python -m app.cli kb-split` → 核对后 `kb-split --drop-source`（删数据，先经负责人同意），见 `docs/知识区分库.md`。
-
-数据库账号约定（M5 ⑧）：后端和 worker 用主库应用账号 `consult_app`（非超级用户，主库和库内对象的属主，`deploy/postgres/app-init.sh` 建立和转属主，可重复执行）和知识区账号 `consult_kb` 连库；超级用户 `consult` 只给本机运维（备份、恢复、`app-init.sh` / `kb-init.sh`）。
-迁移里需要超级用户的操作（装扩展）放进这两个脚本，迁移只写 `IF NOT EXISTS`。
-生产后端以超级用户连库拒绝启动（`bootstrap.check_db_accounts`）。
-生产部署和运维见 `docs/部署手册.md`、`docs/运维手册.md`；生产用 `deploy/prod/docker-compose.override.yml` 去掉后端调试端口。
-
-检索约定：知识检索只经 `app/kb/search.py`（全文 + 向量，RRF 融合），只查已发布、未下线、调用人看得到的现行版本；Agent 经工具 `kb.search`、`basis.lookup` 调用。
-重排只经网关 `gateway.rerank()`（tools/rerank 服务，默认 bge-reranker-v2-m3 int8；查询过机密级检测，命中的候选不发出、记 0 分），RRF 后前 `KB_RERANK_CANDIDATES` 个切片按重排分数排序，依据查询门槛用 `KB_BASIS_MIN_RERANK`；重排不可用时退回 RRF 排序和余弦相似度门槛，返回体 `rerank` 字段注明。
-外部重排服务（`RERANK_EXTERNAL=true`，决策记录 2026-11-14）同外部模型，只限开发测试、虚拟数据，生产拒绝启动。
-查询写了标准号或法规条号时先按 L4 元数据精确匹配（`search._exact_match`）。
-二期 B2 起按产品：传了 `product`（交付侧 Agent 在项目里调用 `kb.search` / `basis.lookup` 时默认取项目配置快照的产品，显式传入的优先）本产品条目排在通用 GEN 前面；所选模块的 `kb_tags` 与条目 `tags`（知识区迁移 k0002，条目文件可选字段）相同的、依据查询里属于快照 `basis` 标准的，同组内排序分数乘 `search.BOOST`；返回体每条带 `scope`（product / general）。
-向量化只经网关 `gateway.embed()`（每条先过机密级检测）；向量列维度 512 写在迁移 0014 和 `gateway.EMBED_DIM`，换维度不同的模型要新迁移并执行 `python -m app.cli kb-reembed`。
-
-映射约定（二期 B3）：控制映射矩阵是知识条目（L4、类型 MAP），正文用 Markdown 表格写映射（表头“源标准 | 目标标准 | 关系 | 说明”，关系为等同 / 部分覆盖 / 相关，四级条款号写成“第 8.1.6.1 条”以免被机密级检测当作 IP），建版本和改草稿时由 `app/kb/mapping.py` 解析进 `kb_mappings`（知识区 k0003），解析不了的拒收；Agent 经工具 `kb.mapping` 查询（只查已发布现行版本、按可见范围，标准号前缀匹配、可反向查，审计只记标准号和条数）。
-第一份 v0 草稿在 `knowledge/mappings/`，须知识专家核对后导入审核。
-
-项目区约定（M3）：客户资料、访谈纪要、现场观察只经 `app/project/evidence.py` 进入平台（先过机密级检测；严格档一律拒收），按项目分配证据编号 D-xx / I-xx / O-xx，编号不变、不复用；访谈纪要只写受访者角色。
-纪要可从文件导入（`POST /api/projects/{code}/notes/extract`，.docx / .md / .txt ≤2MB）：只提取正文填进录入框、过机密级检测，文件不保存、不分配编号，审计只记格式和字数。
-资料原件和解析结果存对象存储项目区，键里不用原文件名；文件名和正文不进审计。
-Agent 经工具 `project.evidence` 读证据。
-改名、删除（`PATCH` / `DELETE /api/projects/{code}/evidences/{ev}`，录入人或项目经理）：改名过机密级检测；删除用于传错、录错，编号保留不复用，标题、正文、文件和解析结果清空，同一文件可重新上传，已签署交付件引用的 409，未签署的引用同仅现场使用一样在写入、签署门禁和平台规则里阻断（`evidence.withdrawn_codes`），不可撤销；审计不记标题和正文。
-仅现场使用（M4 ③）：项目经理凭客户书面通知把资料 D-xx 标为仅现场使用（`POST /api/projects/{code}/evidences/{ev}/local-only`，写文号不写客户名，不可撤销），平台立即删除对象存储里的原件和解析结果、清空文件名，编号和 sha256 保留；同一文件或正文相同的另存件（`text_sha256`，迁移 0031）再上传 422，`project.evidence` 读不到，交付件写入引用 422，已有引用在签署门禁和质量评审平台规则里判阻断；审计不记文号。
-
-交付件约定（M3）：交付件按章节存储，只经 `app/project/deliverables.py` 写入（Agent 经工具 `doc.generate`，顾问经 `/api/projects/{code}/deliverables/...`）：先写大纲再写各章，每次写入新建一个版本、旧版本保留（`section_versions` 只追加）；正文和标题先过机密级检测；严格档只收占位符版本（M4 ④b：`cards.placeholder_problems` 查机构名、人名、联系方式、网络标识、系统名、原话，命中 422 不保存）、已签署拒绝；正文里的来源标注 `[I-01]` `[D-12]` `[O-05]` `[S-02]`（严格档摘要卡）`[L4-…]` `[推断]` 写入时核对并记在版本的 `sources` 里，核对不上的不拒绝、列入 `unresolved`。
-审计只记编号、版本、字数和摘要哈希，不记正文和标题。
-成熟度与符合性（二期 A10）只经 `app/project/assessment.py`：不建表，读取时从最近一次差距分析产出（依据与差距分析 Agent 的运行记录）解析差距分析表（能力域、符合性初判、影响、可能性）和成熟度初判表，D4 已签署时分数取 D4 的成熟度初判表（顾问在 D4 里改，不发确认卡）；产品 `baseline.maturity_scores: false` 不给分数；`GET /api/projects/{code}/assessment` 只给项目成员，只读、不写审计。
-发布影响（二期 B4）只经 `app/project/kb_impact.py`：不建表，读取时比较各章当前版本引用的条目（`sources.knowledge` 里核对上的）的现行版本发布时间与该章写入时间，判出“已更新 / 已下线”；项目侧 `GET /api/projects/{code}/knowledge-updates` 和交付件概览只给项目成员，知识侧 `GET /api/kb/items/{doc_id}/usage` 只给知识专家、知识管理员且只返回计数，不返回项目代号；改写该章后提醒消失。
-
-确认卡约定（M3）：Agent 遇到方案取舍、来源冲突、证据不足、范围确认、入库确认，经工具 `confirm.create` 发卡（选项、推荐和理由、影响，可关联交付件某章），规则只在 `app/project/confirmations.py`：卡片文字过机密级检测；同一 Agent 重复发同标题的未处理卡不新建；顾问经 `POST /api/confirmations/{id}/resolve` 选选项（`choice`）或写意见（`resolution`），处理过的不能再处理。
-审计不记标题、选项和意见原文。
-
-导出约定（M3 ⑥）：交付件 Word 导出只经 `app/project/export.py`（`GET /api/projects/{code}/deliverables/{dcode}/export`）：模板从 `EXPORT_TEMPLATE` 读（不配用内置默认模板；配了但打不开返回 503，不退回默认），占位符和 `{{正文}}` 锚点见文件头；未签署的每页页眉标草稿，页脚写导出人、时间和导出编号；来源标注保留原样并加 Word 脚注（python-docx 不支持脚注，直接写 `word/footnotes.xml`）；严格档导出占位符版本（M4 ④b）、没有大纲 409。
-审计只记编号、各章版本号、文件大小和哈希、模板类别和导出编号，不记正文、标题和模板路径。
-
-质量门禁与签署约定（M3 ⑤）：质量评审和签署只经 `app/project/quality.py`（接口 `/api/projects/{code}/deliverables/{dcode}/reviews`、`.../signoff`）。
-评审是后台任务 `quality.review`：平台硬规则（缺正文、机密级、测评 / 认证结论用语、来源核对不上 → 阻断；整章只有推断 → 重要；二期 A6 起再查项目配置快照里产品层、模块层的 gates，同样不能驳回，快照读不出来记阻断；二期 B9：按知识库当前状态，引用已下线条目或已废止依据 → 阻断，即将实施 → 重要，签署门禁再实时查下线和废止）+ 质量评审 Agent 经网关评审（平台按发起人身份把发起时各章版本的正文交给它，不新增工具授权），结论由平台按 `qa-reviewer.md` 的规则重算（有阻断不通过、重要 ≥3 修改后通过）。
-门禁：每章有正文、最近一次评审针对当前修订且未驳回的阻断为 0；项目经理可写理由（去空白至少 10 字）逐条驳回评审 Agent 提出的阻断（`review_waivers`，只追加，接口 `.../reviews/{rid}/waivers`），平台规则判出的阻断不能驳回；严格档另有平台规则“占位符”（正文出现真名、网络标识、系统名、原话 → 阻断）。
-流程：项目成员提交签署（review）→ 项目经理签署（signed，可签自己提交的）或退回（必须写理由，回 drafting）；待签署时改正文自动回 drafting；签署后只读、导出不带草稿页眉，一期不提供撤销。
-`sign_offs` 只追加。
-审计只记编号、修订号、版本号、计数和结论，不记正文、问题描述、意见和驳回理由。
-
-编排约定（M3 ④）：交付链运行只经 `app/project/runs.py`（平台自写流程控制，不用 LangGraph）：步骤按项目配置快照的 chain（二期 A5 起 SOC 为 3→4→5→6→7：D3 → 差距分析 → 目标运营模型 → D6 → D4、D5、D7、D8；没有写交付件授权的 Agent 产出存运行记录，按 inputs 的 run:<key> 交给后续步骤），每步是后台任务 `agent_run.step`，开头看运行状态、不是 queued 就不做；Agent 读写仍只经 `tools.invoke`，模型只经 `gateway.complete`。
-没有证据发“证据不足”卡停在本步；模型输出里的确认卡照发、停在下一步之前，顾问处理完等待的卡后自动继续（`on_card_resolved`），处理结果作为“顾问已确认事项”交给后续步骤，同一问题本次运行不再问。
-严格档（M4 ④b）读摘要卡 S-xx 起草、提示加 `STRICT_RULES`（标 `[S-xx]`、只用占位符），没有摘要卡发“证据不足”卡，输出不过占位符检查的本步失败、不保存；要写的 D3 / D4 已签署 422，同一项目同时只能有一个未结束的运行（409）；取消和 worker 改运行状态都先锁行再判断，模型返回后、写入前再看一次状态，已取消就不写；最后一步的卡处理完直接结束。
-接口 `/api/projects/{code}/runs`。
-行业包（三期，4A v4.0 §2.4）：`industries/*.yaml` 只经 `app/products/config.py` 读取校验（`parse_industry`、`resolve_industry`），立项按项目行业文字匹配 `aliases`、并入快照 `industry`（依据、步骤说明、门禁、术语、受访角色、威胁画像），项目卡带行业包一行；没有匹配的快照不带该键；格式见 `docs/接口约定.md` 第九节。
-待专家复核（决策记录 2026-11-18）：产品、模块配置可写 `expert_review: pending | done`（缺省 pending，`app/products/config.py`），立项快照记 `expert_pending`，立项弹窗和项目列表标“待专家复核”；专家复核后由配置 PR 改 done。
-审计只记编号、步骤、字数和用量。
-运行记录带配置哈希 `agent_runs.config_sha`（`runs.config_sha`：配置快照、各步 md 版本和模型档、各档模型名），同一哈希的运行可以比较效果（4A v4.0 §7.2，迁移 0038）。
-
-判断数据埋点约定（4A v4.0 §7.2，决策记录 2026-11-18）：只经 `app/project/judgment.py` 写 `judgment_events`（迁移 0038）：顾问改了 Agent 写的章节记改稿幅度（1 − 相似度，分 light / moderate / heavy），处理确认卡记类别、选项数、是否按推荐、是否写意见；不记正文、标题、选项文字和意见。
-`JUDGMENT_CAPTURE` 默认关（客户项目内部信息等法务意见），关闭时什么也不写；项目删除时一并删除。
-立项可选组织类型 `org_type`（`configs.ORG_TYPES`：央企、地方国企、民营企业、外资企业、政府机关、事业单位、其他），网页 `org_type`、命令行 `--org-type`；差距分析解析出的每条差距由平台按顺序编 F-01…（`assessment.parse` 的 `fid`），Agent 写的编号照旧保留。
-
-自动推进约定（二期 C5，决策记录 2026-11-15）：交付链自动发起、自动质量评审、门禁通过自动提交签署只经 `app/project/autoflow.py`（`AUTO_FLOW`，默认开；测试默认关，`tests/test_autoflow.py` 里打开）。
-worker 每小时 `scan_runs`：没跑过交付链、交付件还没有正文、证据齐（标准档有可用证据且文件都已解析，严格档有有效同意和摘要卡）且 `AUTO_RUN_QUIET_HOURS` 内没有新证据的项目，以最近一条证据的录入人（不是成员时用项目经理）发起，发起前用 `runs.preflight` 检查、不写拒绝审计；`scan_reviews`：起草中、每章有正文、没有未结束的运行、当前修订没评审过，最后写入是 Agent（交付链结束时也立即查）或顾问修改后闲置 `AUTO_REVIEW_IDLE_HOURS`，以最后写入的人发起；评审完成门禁通过时自动提交，提交人记 `platform`。
-签署、退回、驳回阻断仍由人做。
-自动提交只限自主度 L3 的交付件（`AUTO_SUBMIT_DELIVERABLES`，默认 D1、D2、D6、D8）；D3、D4、D5、D7 为 L2，门禁通过后由顾问看过标出的问题再提交（决策记录 2026-11-18）。
-审计照旧，另记 `trigger`（规则名）。
-
-保留期约定（M4 ①）：项目验收与保留期只经 `app/project/retention.py`（接口 `POST /api/projects/{code}/acceptance`，项目经理）：登记验收日（不晚于今天）和保留月数（0～24，默认 6，按合同约定或客户制度调整），平台算到期日（月末顺延到当月最后一天），项目列表和详情带 `retention_state`（active / retained / due_soon 到期前 30 天 / due）；可更正，每次进审计（只记日期和月数）。
-运维用 `python -m app.cli retention-report` 看到期情况。
-更正保留期后不再到期的，待确认的到期删除申请自动撤销。
-
-摘要卡约定（M4 ④）：严格档的客户同意记录和去标识摘要卡只经 `app/project/cards.py`（接口 `/api/projects/{code}/consents`、`/api/projects/{code}/summary-cards`）。
-项目经理登记客户书面同意（文号 + 签署日期，不写客户名称，同一项目同时只有一条有效）；没有有效同意不能上传；项目成员整批上传摘要卡（评估项、现状、数量级、现场证据编号、客户审阅日期），先过机密级检测再过摘要卡规则（机构名、人名、联系方式、网络标识、系统 / 产品名和版本号、引号原话），任何一张不过整批拒收；二期 A8 起评估项随项目配置快照的 `card_items`（产品 + 模块，非空时只能取清单值，记“评估项不在清单”；快照读不出来拒收 503），模板带下清单；内容相同不重复；编号 S-xx 不复用。
-上传者或项目经理可撤下单张卡、客户书面撤回同意时项目经理登记撤回，内容都立即清空；撤回时据摘要卡写成的未签署交付件正文、评审意见、交付链产出一并清空、未结束的运行取消（`cards.clear_derived`，已签署的保留），严格档没有有效同意时交付件写入和交付链都 422。
-Agent 经 `project.evidence` 读摘要卡（严格档返回 S-xx，不新增工具授权）。
-项目删除时一并删除。
-审计只记编号、张数、字数和命中类别，不记卡片内容和文号。
-
-现场工具约定（M4 ⑤）：严格档现场工具是单个离线网页 `field-tool/field-tool.html`（CSP 禁止一切网络请求，不加外部脚本、字体，不用 localStorage；颜色令牌照抄 `theme.css` 的 `:root`，测试核对）。
-摘要卡自检规则来自 `cards.field_checks()`（模板接口带下，页面内置一份 DEFAULT_CHECKS）；改了 `cards.py` 或 `kb/deid.py` 的规则要运行 `python ../scripts/update_field_tool_checks.py`（backend 目录下），并用 `field-tool/test/cases.json` 两边核对（`tests/test_field_tool.py`、`node --test field-tool/test/core.test.mjs`）。
-对照表（占位符 ↔ 真名）只存在加密工作文件 `.cpwork` 里、只留现场；上传包 `.cpcard` 只含摘要卡，正文即 `POST /summary-cards` 请求体；加密为 PBKDF2-SHA256（60 万次）+ AES-256-GCM，格式见 `field-tool/README.md`。
-
-删除约定（M4 ②）：项目资料删除只经 `app/project/deletion.py`（决策记录 2026-11-13）。
-到期由 worker 每小时扫描自动发起（`requested_by=platform`，也可 `python -m app.cli deletion-scan`）；客户书面要求提前删除由项目经理发起（`POST /api/projects/{code}/deletions`，写文号不写客户名，10 个工作日内完成，周一至周五计，不含节假日）；都由项目负责人确认（`/api/deletions`，不必是成员，不能是发起人），提前删除可由负责人写理由撤销，到期申请不能撤销。
-确认时必选经验回流情况（已回流填投料编号 / 无可回流 / 客户不同意回流），项目经理可标记“客户不同意回流”（`PUT /api/projects/{code}/flowback`），标记后只能选客户不同意；回流不阻断删除。
-经验回流预填（二期 P16）：投料时项目成员可选填来源项目（`POST /api/kb/intake` 的 `project`，非成员 404，存 `kb_uploads.source_project`，知识区迁移 k0009，投料接口不返回），待确认的删除申请带 `flowback_suggested`（该项目去标识已通过的投料编号，标了客户不同意回流的为空），确认页据此预填，负责人核对后确认。
-确认后后台任务 `project.delete` 删对象存储 `{code}/` 下全部文件和证据、资料、交付件（含已签署）及章节版本、评审、签署、确认卡、对话、运行和成员关系，项目行保留（代号不复用、所有项目接口 404）；完成后的申请就是可交给客户的删除记录（只有编号、日期、计数、确认人和回流情况）。
-审计只记编号、日期和计数，不记文号和内容。
-运维 `python -m app.cli deletion-report [--all]`。
-
-运维自动化约定（二期 C5 O5～O8）：规则在 `app/services/ops.py`。
-worker 每天排一次自检（`system.selfcheck`，结果进指标 `cp_selfcheck_*`）、把超过 `INACTIVE_ACCOUNT_DAYS` 天没登录的账号自动停用（审计 `user.disable`，actor=platform；系统管理员不自动停用；管理员启用后从 `users.enabled_at` 重新计时）；后端指标导出删除申请逾期数和最近一次备份时间，`alerts.yml` 对自检失败、删除逾期、备份超过 26 小时告警（`docs/监控.md`）。
-删除完成情况按月汇总用 `deletion-report --monthly`。
-
-对话转交约定（二期 C2）：咨询师 Agent 不自己做专业任务，在回复末尾写公共规范第 9 节的【交接】行（每个目标一行），解析和建对话只在 `app/agents/handoff.py`；顾问经 `POST /api/conversations/{id}/handoff`（`message_id`、`agent_code`）转交，平台经工具 `agent.handoff`（项目区写，迁移 0033 只授权咨询师 Agent，调试接口不能调）为目标交付侧 Agent 新建对话、记 `handoff_from`，交接说明先过机密级检测，作为草稿返回、由顾问确认后发送，不自动发给模型。
-对话详情的每条回复带 `handoffs`（只有有转交授权的 Agent 才有）。
-审计只记来源和新对话编号、目标 Agent 和说明长度。
-对话工具调用约定（二期 A7）：对话里 Agent 经 function calling 自己调用工具，规格和执行只在 `app/agents/chat_tools.py`（只给已授权的读取类工具，函数名为代号点换下划线，每次经 `tools.invoke`），多轮循环在 `gateway.stream(tools=, run_tool=)`（工具结果过机密级检测、截断、假名化，最多 `LLM_TOOL_MAX_ROUNDS` 轮后 tool_choice=none）；SSE 多一个 `tool` 事件，done 带 `tool_calls`；`LLM_TOOL_CALLING=false`（测试默认）退回提问前检索注入（`knowledge.retrieve`）。
-
-审计约定：审计只经 `app/core/audit.record()` 写入（只追加的哈希链，写入串行化）；不得 UPDATE / DELETE `audit_logs`（数据库触发器会拒绝）。以后的迁移如果要在 SQLite 上用 batch 模式改 `audit_logs`，要重建触发器。
-
-登录约定：默认所有接口都要登录，公开接口只有 `/api/health` 和 `/api/auth/login`（白名单在 `app/core/auth.py`）；新增接口必须加进 `tests/test_auth.py` 的 `PROTECTED` 列表，否则测试失败。
-修改类请求（POST / PUT / PATCH / DELETE）要带请求头 `X-CSRF-Token`，值取登录接口或 `GET /api/auth/me` 返回体里的 `csrf_token` 字段（**不在 cookie 里**；会话 cookie `cp_session` 是 HttpOnly，脚本读不到）；改口令成功后会换新会话，要用新返回的 `csrf_token`。
-管理员在网页上建的账号或重置过口令的账号（`must_change_password`），改口令前只能访问 `PASSWORD_CHANGE_PATHS`（同一文件）。
-
-权限约定（规则全文在 `app/core/permissions.py` 文件头）：业务接口在路由上挂 `require_business`；按项目取数据一律用 `project_for_member`（非成员 404）；系统管理员、安全审计员与其他角色互斥且看不到业务数据；审计员只能用命令行授予。
-新增或改动接口权限，必须同步更新 `tests/test_permissions.py` 的权限矩阵。
+- 消耗 ≈ 调用次数 × 上下文。一个任务做完：交接写进记忆或 PR 评论，然后开新会话（/new），不在一个会话里连做多件事。
+- 一件事写一个脚本做完，只输出结论；不逐步试错、不重读大文件（用 grep 或行号范围）。
+- 需要反复试探、批量阅读的，交给 Sonnet / Haiku 子代理，只带回结论；常规工作（贴评论、看群、等 CI）用便宜模型。
+- 群里一单一个结论，不发进度；不轮询，等待用后台任务通知，非轮询不可时间隔 ≥15 分钟。
+- 测试机：每单结论后 /new；大的模型评测（agent-eval、kb-eval、md 评测）攒成一批跑，不重复跑。
 
 ## 分支、提交与 PR
 
@@ -277,6 +116,7 @@ worker 每天排一次自检（`system.selfcheck`，结果进指标 `cp_selfchec
 - 测试先行（决策记录 2026-11-16）：修缺陷、加功能先写会失败的测试，再改代码让它通过；PR 的“怎么测”写明新增的测试。
 - 完成前先验证：说“完成”“已修复”之前，贴出本机实际跑过的命令和结果（ruff、pytest、构建）；本机跑不了的（Docker、compose）明写“未验证，交测试机”。
 - 合并条件：CI 全绿 → 测试助手在测试机上测试通过并在 PR 留评论 → 负责人合并。
+- 免测 PR 例外（决策记录 2026-11-20）：PR 描述写明“测试机：不需要”及所属类别、CI 全绿后，由统筹会话（飞书群会话）直接合并；必测与免测的划分见 `docs/测试交接规范.md` 第 5 节，拿不准按必测。
 - 开发与测试经 PR 通信，标签 `待测试` / `测试未通过` / `测试通过` 表示轮到谁（`docs/测试交接规范.md` 第 0 节）。开发助手开 PR 或修完推送后打 `待测试`；修复后的复测项写成标题为“复核说明”的 PR 评论。
 - **每个开发会话在自己的工作树里改仓库**（决策记录 2026-11-14）：主目录 `Consult_Platform` 只用来拉取和查看，不在主目录切分支、改文件、提交。开工时 `git worktree add ../cp-wt-<任务> -b <分支> origin/main`（或 `claude --worktree <名字>`），用完 `git worktree remove`；桌面 app、飞书 cc-connect 等入口启动的会话同样先进自己的工作树再动手。
 - 开工前在自己的工作树里 `git status`，发现不是自己改的未提交文件，先停下问负责人，不要覆盖、不要提交。
