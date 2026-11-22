@@ -178,6 +178,15 @@ def test_sp80061_scope(data: tuple[dict, dict]) -> None:
             assert has == (cid in SP61_SOC), f"{cid}：SP 800-61r3 映射范围不对"
 
 
+def test_sp80061_clauses_also_in_csf(data: tuple[dict, dict]) -> None:
+    """r3 按 CSF 2.0 子类挂接：同一控制项挂的 r3 子类必须也出现在它的 CSF 映射里（自查补漏）。"""
+    _, m = data
+    for cid, rows in m["mappings"].items():
+        csf = {r["clause"] for r in rows if r["fw"] == "CSF"}
+        sp = {r["clause"] for r in rows if r["fw"] == "SP80061"}
+        assert sp <= csf, f"{cid}：r3 挂接 {sorted(sp - csf)} 未见于 CSF 映射"
+
+
 def test_sp80061_clause_validator() -> None:
     assert _valid_clause("SP80061", "RS.MA-04")
     assert not _valid_clause("SP80061", "RS.AN-01")  # 2.0 已撤销
