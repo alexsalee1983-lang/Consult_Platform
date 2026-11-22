@@ -159,7 +159,7 @@ jobs:
         run: |
           q() { docker compose exec -T postgres psql -U consult -d "$1" -Atc "$2"; }
           test "$(q consult "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "0"
-          test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "7"   # 知识区表数：基线 6 张 + B3 kb_mappings；新增知识区表要同步这里和下面恢复演练
+          test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "11"   # 知识区表数：基线 6 张 + B3 kb_mappings + B19 控制项中枢 4 张；新增知识区表要同步这里和下面恢复演练
           test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename in ('projects','users','audit_logs')")" = "0"
           test "$(q consult "select rolsuper::text from pg_roles where rolname='consult_kb'")" = "false"
           kbpw=$(grep -E '^KB_POSTGRES_PASSWORD=' .env | cut -d= -f2)
@@ -278,7 +278,7 @@ jobs:
           test "$n" = "0"
           test "$(objects)" = "$before"
           test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename='drill_marker'")" = "0"
-          test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename like 'kb\_%'")" = "7"
+          test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename like 'kb\_%'")" = "11"
           docker compose exec -T postgres psql -U consult -d consult -tAc \
             "select count(*) from audit_logs where action in ('backup.create','backup.restore')" | grep -qx 1   # 恢复的是备份时的库，只有恢复这一条
           bash scripts/smoke_test.sh http://localhost:8080
