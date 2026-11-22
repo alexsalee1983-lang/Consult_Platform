@@ -19,6 +19,7 @@ from .conftest import ask, create_user, logged_in_client, sse
 
 
 def _publish(people, title):
+    # 标题只用 ASCII 编号：发布的条目留在共享库里，标题里的单字（如“甲乙丙丁”）会被其他检索测试的独特词命中
     with SessionLocal() as db:
         u = {k: db.scalar(select(User).where(User.username == v[0])) for k, v in people.items()}
         m = ItemMeta(layer="L2", domain="OPS", product="SOC", doc_type="TPL", stage="设计", capabilities=["管理"])
@@ -72,7 +73,7 @@ def _review(seq=1, version=1):
 
 
 def test_review_three_keys_and_flag_goes_to_recheck(people):
-    x, y = _publish(people, f"反馈测试-甲{secrets.token_hex(2)}"), _publish(people, "反馈测试-乙")
+    x, y = _publish(people, f"反馈测试-F1-{secrets.token_hex(2)}"), _publish(people, f"反馈测试-F2-{secrets.token_hex(2)}")
     code, member = _project()
     _write(code, member, 1, f"现状与建议 [{x}] [{y}]。", agent="report-writer")
     c = logged_in_client(app, member)
@@ -111,7 +112,7 @@ def test_review_three_keys_and_flag_goes_to_recheck(people):
 
 
 def test_rejects_uncited_bad_rating_guard_hit_and_strict_note(people):
-    x = _publish(people, f"反馈测试-丙{secrets.token_hex(2)}")
+    x = _publish(people, f"反馈测试-F3-{secrets.token_hex(2)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}]。", agent="report-writer")
     s_code, s_member = _project(tier="strict")
@@ -158,7 +159,7 @@ def _message(code, member, refs):
 
 
 def test_chat_feedback_only_for_conversation_owner(people):
-    x = _publish(people, f"反馈测试-丁{secrets.token_hex(2)}")
+    x = _publish(people, f"反馈测试-F4-{secrets.token_hex(2)}")
     code, member = _project()
     other = create_user(("consultant",), {code: "member"})
     mid = _message(code, member, [x])
@@ -178,7 +179,7 @@ def test_chat_feedback_only_for_conversation_owner(people):
 
 
 def test_old_flags_do_not_retrigger_after_recheck_handled(people):
-    x = _publish(people, f"反馈测试-戊{secrets.token_hex(2)}")
+    x = _publish(people, f"反馈测试-F5-{secrets.token_hex(2)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}]。", agent="report-writer")
     c = logged_in_client(app, member)
@@ -199,7 +200,7 @@ def test_old_flags_do_not_retrigger_after_recheck_handled(people):
 
 
 def test_usage_stats_citations_and_adoption(people):
-    x, y = _publish(people, f"反馈测试-己{secrets.token_hex(2)}"), _publish(people, f"反馈测试-庚{secrets.token_hex(2)}")
+    x, y = _publish(people, f"反馈测试-F6-{secrets.token_hex(2)}"), _publish(people, f"反馈测试-F7-{secrets.token_hex(2)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}] [{y}]。", agent="report-writer")
     _write(code, member, 1, f"现状（顾问改写） [{y}]。")           # 顾问删掉 x 的引用
@@ -223,7 +224,7 @@ def test_usage_stats_citations_and_adoption(people):
         assert items[x]["citations"] == 2 and items[x]["adoption_rate"] == 0.0
         assert items[y]["section_citations"] == 2 and items[y]["adoption_rate"] == 1.0
         assert items[y]["feedback"] == {"useful": 1, "outdated": 0, "wrong": 0}
-        assert items[y]["title"].startswith("反馈测试-庚")
+        assert items[y]["title"].startswith("反馈测试-F7-")
         assert body["totals"]["citations"] >= 5
         assert c.get("/api/kb-usage", params={"days": 0}).status_code == 422
     finally:
@@ -231,7 +232,7 @@ def test_usage_stats_citations_and_adoption(people):
 
 
 def test_delete_for_project(people):
-    x = _publish(people, f"反馈测试-辛{secrets.token_hex(2)}")
+    x = _publish(people, f"反馈测试-F8-{secrets.token_hex(2)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}]。", agent="report-writer")
     c = logged_in_client(app, member)
