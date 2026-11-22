@@ -13,7 +13,7 @@
 """
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import false as sql_false
 
@@ -249,3 +249,31 @@ class KbSourceEvent(KbBase):
     reason: Mapped[str] = mapped_column(String(300), default="")
     actor: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbGap(KbBase):
+    """知识缺口池（三期 B25②，知识区迁移 k0019）：五类触发源的信号按 gap_key 合并，每周排计划。
+
+    只存编号与计数，不存原文：gap_key 是来源或依据编号、或网址；events 只是事件编号。
+    状态 open 未关闭 → closed 已关闭（close_reason：published 已入库 / collected 已采集 / dropped 不做 / duplicate 重复）；
+    关闭后又来新信号就重新打开（reopened 加一）。规则只在 app/kb/gap_pool.py。
+    """
+
+    __tablename__ = "kb_gaps"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    gap_key: Mapped[str] = mapped_column(String(500), unique=True)
+    kinds: Mapped[dict] = mapped_column(JSON, default=dict)                     # {触发源: 信号次数}
+    events: Mapped[list] = mapped_column(JSON, default=list)                    # 事件编号
+    impact: Mapped[int] = mapped_column(Integer, default=0)
+    due: Mapped[date | None] = mapped_column(Date, nullable=True)
+    authority: Mapped[int] = mapped_column(Integer, default=3)
+    status: Mapped[str] = mapped_column(String(12), default="open", index=True)
+    plan: Mapped[str] = mapped_column(String(12), default="")                   # direct / confirm / deferred / waiting
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    planned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    close_reason: Mapped[str] = mapped_column(String(16), default="")
+    reopened: Mapped[int] = mapped_column(Integer, default=0)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
