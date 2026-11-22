@@ -3,32 +3,45 @@
 # 没导入时期望条目都“没有已发布的现行版本”，准确率很低，不代表检索有问题。
 # 正式评测题（50～100 题）在正式条目起草后编写，经知识专家评审。
 # expect 为空列表 = 期望查不到（依据查询应提示【依据待核实】）。
+# expect_refs（文件 + 条款号，网安法按 2025 修正后的条号）供 kb-eval --compare 使用，只有能落到具体条款的题才写。
 
 # ---- 依据查询（只查 L4）----
 - id: B001
   mode: basis
   question: 网络运营者的网络日志至少要留存多久？
   expect: [csl-art21-mlps]
+  category: clause
+  expect_refs: ["《网络安全法》第二十三条"]
 - id: B002
   mode: basis
   question: 等级保护制度要求网络运营者履行哪些安全保护义务？
   expect: [csl-art21-mlps]
+  category: clause
+  expect_refs: ["《网络安全法》第二十三条"]
 - id: B003
   mode: basis
   question: 发生危害网络安全的事件时，运营者要做什么？依据是什么？
   expect: [csl-art25-incident-plan]
+  category: clause
+  expect_refs: ["《网络安全法》第二十七条"]
 - id: B004
   mode: basis
   question: 应急预案有没有法定要求？
   expect: [csl-art25-incident-plan]
+  category: clause
+  expect_refs: ["《网络安全法》第二十七条"]
 - id: B005
   mode: basis
   question: 数据分类和重要数据备份加密的要求出自哪里？
   expect: [csl-art21-mlps]
+  category: clause
+  expect_refs: ["《网络安全法》第二十三条"]
 - id: B006
   mode: basis
   question: 发现系统漏洞和网络攻击后要及时处置，有什么依据？
   expect: [csl-art25-incident-plan]
+  category: clause
+  expect_refs: ["《网络安全法》第二十七条"]
 - id: B007
   mode: basis
   question: 量子通信卫星的频谱分配标准是什么？
