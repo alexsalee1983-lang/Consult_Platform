@@ -495,7 +495,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     except tools.ToolError as e:
         raise StepFailed(f"读项目卡被拒绝（{e.status}）") from e
 
-    record = AgentRunStep(run_id=run.id, step=step.key, agent_code=step.agent, status="done",
+    record = AgentRunStep(run_id=run.id, step=step.key, agent_code=step.agent, status="done", started_at=utcnow(),
                           prompt_version=doc.version, refs={})
     try:
         if "evidence" in step.inputs:
