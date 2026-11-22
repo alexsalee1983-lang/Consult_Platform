@@ -54,7 +54,7 @@ from ..models import (
     User,
 )
 from ..services import guard, jobs, storage
-from . import judgment, retention
+from . import findings, judgment, retention
 
 JOB_KIND = "project.delete"
 PLATFORM = "platform"
@@ -271,6 +271,7 @@ def purge(db: Session, p: Project) -> dict:
     counts["messages"] = drop(Message, Message.conversation_id.in_(conv))
     db.execute(update(Conversation).where(Conversation.project_id == pid).values(handoff_from=None))  # 自引用先断开
     counts["conversations"] = drop(Conversation, Conversation.project_id == pid)
+    counts["findings"] = findings.delete_for_project(db, pid)        # 发现引用运行记录，先删
     runs = select(AgentRun.id).where(AgentRun.project_id == pid)
     drop(AgentRunStep, AgentRunStep.run_id.in_(runs))
     counts["runs"] = drop(AgentRun, AgentRun.project_id == pid)
