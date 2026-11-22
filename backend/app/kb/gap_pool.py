@@ -5,11 +5,16 @@
 - run_week：每周后台任务（worker 每周排一次 kb.gap_week），白名单取 B16 正式来源的网址前缀，
   结果写回每个缺口的 plan / score / planned_at；审计只记各路数量。
 - close / stats：关闭原因固定四类；关闭率与平均关闭时长供 F2 看板。
+- dispatch_package / import_return：本周“直接采集”的缺口出下发包（只有网址与规则）；采集机回传批次先 verify_return，
+  通过才关缺口（collected）并交 kb-source-publish；审计只记数量和问题类别，不记文件名。
 不存原文：gap_key 是编号或网址，events 只是事件编号（acquisition.EVENT_REF 校验）。
 """
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timezone
+from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -114,6 +119,38 @@ def stats(db: Session) -> dict:
     return {"total": len(rows), "open": len(rows) - len(closed), "closed": len(closed),
             "close_rate": round(len(closed) / len(rows), 4) if rows else 0.0,
             "avg_close_days": round(sum(days) / len(days), 2) if days else 0.0, "by_reason": by_reason}
+
+
+def dispatch_package(db: Session, rule: dict[str, Any] | None = None, *, actor: str = "cli") -> dict[str, Any]:
+    """本周计划为 direct（白名单内外部变化）的未关闭缺口出下发包；白名单外的 build_dispatch 直接拒绝。"""
+    wl = whitelist(db)
+    urls = [k for k in db.scalars(select(KbGap.gap_key).where(KbGap.status == "open", KbGap.plan == "direct")
+                                  .order_by(KbGap.score.desc(), KbGap.id)) if acq.in_whitelist(k, wl)]
+    pkg = acq.build_dispatch(urls, wl, rule)
+    audit.record(db, actor=actor, action="kb.gap.dispatch", result="allowed", tasks=len(pkg["tasks"]))
+    return pkg
+
+
+def import_return(db: Session, batch: Path, *, actor: str = "cli") -> tuple[acq.ReturnReport, int]:
+    """回传批次核对；通过的按 manifest 里的网址关闭对应缺口（collected）。返回（核对结果，关闭数）。"""
+    report = acq.verify_return(batch, whitelist(db))
+    if not report.ok:
+        cats: dict[str, int] = {}
+        for p in report.problems:
+            c = p.split(":", 1)[0]
+            cats[c] = cats.get(c, 0) + 1
+        audit.record(db, actor=actor, action="kb.gap.return", result="blocked", problems=cats)
+        return report, 0
+    rows = json.loads((batch / acq.RETURN_MANIFEST).read_text(encoding="utf-8"))["files"]
+    closed = 0
+    for url in sorted({str(r["url"]) for r in rows}):
+        try:
+            close(db, url, "collected", actor=actor)
+            closed += 1
+        except LookupError:
+            pass
+    audit.record(db, actor=actor, action="kb.gap.return", result="allowed", files=report.count, closed=closed)
+    return report, closed
 
 
 @jobs.handler(JOB_KIND)

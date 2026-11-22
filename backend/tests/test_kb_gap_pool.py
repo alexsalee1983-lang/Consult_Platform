@@ -93,3 +93,79 @@ def test_weekly_job_registered_and_runs():
     gap_pool._job({"today": TODAY.isoformat()}, None)
     with SessionLocal() as db:
         assert db.scalar(select(KbGap).where(KbGap.gap_key == "K-J")).plan == "confirm"
+
+
+# ③ 下发包导出 / 回传批次导入（CLI kb-acquire-dispatch、kb-acquire-import）
+import hashlib  # noqa: E402
+import json  # noqa: E402
+
+from app import cli  # noqa: E402
+
+GP = "https://gp.example.gov.cn/"
+
+
+def _planned_direct(db) -> str:
+    _active_source(db, GP)
+    url = GP + "law/1.html"
+    gap_pool.record(db, [Signal(url, "external", "EV-D1", impact=5)])
+    gap_pool.record(db, [Signal("GB/T 99999", "usage", "EV-D2")])          # 不是网址 → 来源确认，不下发
+    gap_pool.run_week(db, TODAY)
+    return url
+
+
+def test_dispatch_package_only_direct_whitelisted(tmp_path):
+    with SessionLocal() as db:
+        url = _planned_direct(db)
+        pkg = gap_pool.dispatch_package(db)
+        assert [t["url"] for t in pkg["tasks"]] == [url]
+        assert set(pkg) == {"format", "tasks"}
+        a = db.scalar(select(AuditLog).where(AuditLog.action == "kb.gap.dispatch").order_by(AuditLog.id.desc()))
+        assert a is not None and json.loads(a.detail)["tasks"] == 1
+    out = tmp_path / "pkg.json"
+    assert cli.main(["kb-acquire-dispatch", "--out", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["tasks"][0]["url"] == url
+
+
+def _batch(tmp_path, url: str, *, tamper: bool = False, extra: bool = False):
+    b = tmp_path / "batch"
+    b.mkdir()
+    (b / "a.html").write_bytes(b"<html>public</html>")
+    digest = hashlib.sha256(b"<html>public</html>").hexdigest()
+    if tamper:
+        (b / "a.html").write_bytes(b"changed")
+    if extra:
+        (b / "x.bin").write_bytes(b"?")
+    (b / "manifest.json").write_text(json.dumps({"files": [{"file": "a.html", "sha256": digest, "url": url}]}),
+                                     encoding="utf-8")
+    return b
+
+
+def test_import_rejects_bad_batch_and_records_categories_only(tmp_path):
+    with SessionLocal() as db:
+        url = _planned_direct(db)
+    b = _batch(tmp_path, url, tamper=True, extra=True)
+    assert cli.main(["kb-acquire-import", str(b)]) == 2
+    with SessionLocal() as db:
+        a = db.scalar(select(AuditLog).where(AuditLog.action == "kb.gap.return").order_by(AuditLog.id.desc()))
+        assert a.result == "blocked" and json.loads(a.detail)["problems"] == {"extra": 1, "sha256": 1}
+        assert "a.html" not in a.detail
+        assert db.scalar(select(KbGap).where(KbGap.gap_key == url)).status == "open"
+
+
+def test_import_rejects_offlist_url(tmp_path):
+    with SessionLocal() as db:
+        _planned_direct(db)
+    b = _batch(tmp_path, "https://evil.example.com/a.html")
+    assert cli.main(["kb-acquire-import", str(b)]) == 2
+
+
+def test_import_ok_closes_collected_gaps(tmp_path):
+    with SessionLocal() as db:
+        url = _planned_direct(db)
+    b = _batch(tmp_path, url)
+    assert cli.main(["kb-acquire-import", str(b)]) == 0                  # 不带 --manifest：只核对、关缺口
+    with SessionLocal() as db:
+        g = db.scalar(select(KbGap).where(KbGap.gap_key == url))
+        assert g.status == "closed" and g.close_reason == "collected"
+        a = db.scalar(select(AuditLog).where(AuditLog.action == "kb.gap.return").order_by(AuditLog.id.desc()))
+        assert a.result == "allowed" and json.loads(a.detail)["files"] == 1 and json.loads(a.detail)["closed"] == 1

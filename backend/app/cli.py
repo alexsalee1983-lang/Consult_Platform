@@ -696,6 +696,47 @@ def kb_source_registry(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_acquire_dispatch(args: argparse.Namespace) -> int:
+    """采集下发包导出（三期 B25③）：本周“直接采集”的缺口，只含网址与采集规则，交采集机。"""
+    import json
+    from pathlib import Path
+
+    from .kb import gap_pool
+    with SessionLocal() as db:
+        try:
+            pkg = gap_pool.dispatch_package(db)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+    Path(args.out).write_text(json.dumps(pkg, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"下发包已写出：{len(pkg['tasks'])} 个网址")
+    return 0
+
+
+def kb_acquire_import(args: argparse.Namespace) -> int:
+    """采集回传批次导入（三期 B25③）：先核对清单、哈希、白名单，通过才关缺口；带 --manifest 时接着走 kb-source-publish。"""
+    from pathlib import Path
+
+    from .kb import gap_pool
+    batch = Path(args.batch)
+    if not batch.is_dir():
+        print("回传批次目录不存在", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        report, closed = gap_pool.import_return(db, batch)
+    if not report.ok:
+        print("回传批次核对未通过，整批不入库：" + "；".join(report.problems[:20]), file=sys.stderr)
+        return 2
+    print(f"回传批次核对通过：{report.count} 个文件，关闭缺口 {closed} 个")
+    if not args.manifest:
+        return 0
+    if not args.as_user:
+        print("带 --manifest 入库时必须指定 --as", file=sys.stderr)
+        return 1
+    return kb_source_publish(argparse.Namespace(manifest=args.manifest, dir=str(batch), as_user=args.as_user,
+                                                report=args.report))
+
+
 def kb_source_publish(args: argparse.Namespace) -> int:
     """依据原文自动核验发布（二期 B10）：从原件切条、核验，通过的由平台自动发布并抽检，没通过的转人工审核。"""
     import json
@@ -975,6 +1016,15 @@ def main(argv: list[str] | None = None) -> int:
     ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
     ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     ksp.set_defaults(func=kb_source_publish)
+    kad = sub.add_parser("kb-acquire-dispatch", help="导出采集下发包：本周直接采集的缺口网址与规则（白名单外拒绝）")
+    kad.add_argument("--out", required=True, help="下发包 JSON 文件")
+    kad.set_defaults(func=kb_acquire_dispatch)
+    kai = sub.add_parser("kb-acquire-import", help="导入采集回传批次：核对清单、哈希、白名单，通过才关缺口并可接着自动核验发布")
+    kai.add_argument("batch", help="回传批次目录（含 manifest.json）")
+    kai.add_argument("--manifest", default="", help="下载清单；给了就接着走 kb-source-publish")
+    kai.add_argument("--as", dest="as_user", default="", help="导入人（知识专家或知识管理员）")
+    kai.add_argument("--report", default="", help="核验记录写成 JSON 文件")
+    kai.set_defaults(func=kb_acquire_import)
     ksr = sub.add_parser("kb-source-registry", help="导出来源登记表里试用、正式的来源（CSV，供采集机按表抓取）")
     ksr.add_argument("--json", action="store_true", help="输出 JSON")
     ksr.set_defaults(func=kb_source_registry)
