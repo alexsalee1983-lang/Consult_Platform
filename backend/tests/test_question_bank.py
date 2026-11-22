@@ -89,3 +89,20 @@ def _check_question(q: dict, product: str, data: dict, controls: dict) -> None:
         assert v["industry"] in INDUSTRIES and v["stem"].strip() and isinstance(v["followups"], list)
     text = q["stem"] + "".join(q["followups"])
     assert not any(w in text for w in BANNED), f"{qid} 含不合适措辞"
+
+
+def test_control_ids_follow_kb_rule() -> None:
+    """B15 对齐：题目与控制项编号用知识库同一规则（items.check_control_ids，B15 labels.check_control 在 B19 前沿用）
+    规整后不变；控制项编号跨题库全局唯一（B19 kb_controls 以 control_id 为主键）。"""
+    from app.kb.items import check_control_ids
+
+    seen: dict[str, str] = {}
+    for path in FILES:
+        data = _load(path)
+        ids = [c["id"] for c in data["controls"]]
+        for cid in ids:
+            assert cid not in seen, f"控制项 {cid} 在 {seen.get(cid)} 和 {path.stem} 重复"
+            seen[cid] = path.stem
+        assert check_control_ids(ids) == ids
+        for q in data["questions"]:
+            assert check_control_ids(q["control_ids"]) == q["control_ids"], f"{q['id']} 控制项编号需规整（大写、去重、≤20）"
