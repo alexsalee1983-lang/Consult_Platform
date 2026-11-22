@@ -744,6 +744,32 @@ def kb_draft(args: argparse.Namespace) -> int:
     return 0
 
 
+def agent_eval_lint(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .agents import evalgate
+
+    n, issues, extras = evalgate.run(Path(args.path))
+    for i in issues:
+        print(f"  {i}")
+    print(f"评测门：{n} 个文件，问题 {len(issues)} 处；扩展：{'、'.join(extras) or '无（A24 未接入）'}")
+    print("评测门通过" if n and not issues else "评测门未通过")
+    return 0 if n and not issues else 1
+
+
+def agent_eval_majority(args: argparse.Namespace) -> int:
+    import json
+    from pathlib import Path
+
+    from .agents import evalgate
+
+    ok, lines = evalgate.majority([json.loads(Path(f).read_text(encoding="utf-8")) for f in args.reports])
+    for line in lines:
+        print(line)
+    print(f"{len(args.reports)} 轮多数判定：{'通过' if ok else '未通过'}")
+    return 0 if ok else 1
+
+
 def agent_eval(args: argparse.Namespace) -> int:
     import json
     from pathlib import Path
@@ -981,6 +1007,12 @@ def main(argv: list[str] | None = None) -> int:
     ae.add_argument("--case-timeout", type=float, default=300, help="单题总耗时上限（秒，默认 300，0 不限）；超时记出错、继续下一题")
     ae.add_argument("--answers", default="", help="把每题答案原文写到目录（<题号>.md，只限开发、测试环境，回放核对用）")
     ae.set_defaults(func=agent_eval)
+    al = sub.add_parser("agent-eval-lint", help="评测门（三期 C8，CI 跑，不连模型）：评测集格式、红线、资质用语，全部通过时退出码 0")
+    al.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
+    al.set_defaults(func=agent_eval_lint)
+    am3 = sub.add_parser("agent-eval-majority", help="真模型多轮判定（三期 C8，测试机用）：多份 agent-eval --out 结果按每题多数判定，红线题一轮失败即不通过")
+    am3.add_argument("reports", nargs="+", help="各轮 agent-eval --out 写出的 JSON")
+    am3.set_defaults(func=agent_eval_majority)
     lt = sub.add_parser("loadtest-accounts", help="压测账号（只在开发、测试环境）：建或重置 lt-xx 并加入压测项目；--disable 停用")
     lt.add_argument("--count", type=int, default=20)
     lt.add_argument("--project", default="LOAD-A")
@@ -997,7 +1029,7 @@ def main(argv: list[str] | None = None) -> int:
     br.add_argument("--bytes", type=int, default=0)
     br.set_defaults(func=backup_record)
     args = p.parse_args(argv)
-    if args.func in (catalog_check, kb_source_split):      # 只读配置文件，不连数据库（开发线 2 本地校验用）
+    if args.func in (catalog_check, kb_source_split, agent_eval_lint, agent_eval_majority):      # 只读配置文件，不连数据库（开发线 2 本地校验用）
         return args.func(args)
     try:
         upgrade_to_head()
