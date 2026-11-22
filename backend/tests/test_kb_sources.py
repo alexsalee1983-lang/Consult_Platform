@@ -1,323 +1,111 @@
-"""依据原文切条（二期 B7）：法规按条、标准只收条款目录、清单解析、切出的条目能导入，已被替代按已废止判。"""
-from datetime import date
+"""三期 B16：来源登记表（知识区 k0014）。生命周期、许可与权威等级必填、批准规则、采集机导出。"""
+import json
 
+import pytest
 from sqlalchemy import select
 
 from app.cli import main as cli_main
 from app.core.db import SessionLocal
-from app.kb import importer, sources
-from app.kb.files import parse_entry
-from app.models import KbItem, User
+from app.core.permissions import CONSULTANT, KNOWLEDGE_ADMIN, KNOWLEDGE_EXPERT
+from app.main import app
+from app.models import AuditLog, KbSource, KbSourceEvent
 
-from .conftest import create_user
+from .conftest import create_user, logged_in_client
 
-LAW = """中华人民共和国示范安全法
-第一章 总则
-第一条 为了保障示范安全，制定本法。
-第二条 在境内建设、运营示范系统，适用本法。
-依照第一条规定，本行为换行开头，
-第一条 这一行在正文中换行开头，不是新的一条。
-第二章 运行安全
-第一节 一般规定
-第三条 运营者应当按照等级保护制度的要求，
-履行下列安全保护义务。
-第三条之一 运营者应当制定应急预案。
-第四条 本法自2030年1月1日起施行。
-"""
-
-STANDARD = """示范安全技术 基本要求
-目次
-8.1.4 安全计算环境 ........ 12
-8.1 安全通用要求
-8.1.4 安全计算环境
-8.1.4.1 身份鉴别
-应对登录的用户进行身份标识和鉴别，身份标识具有唯一性。
-8.1.4.2 访问控制
-应对登录的用户分配账户和权限。
-"""
-
-MANIFEST = """文件名,名称,发布机关,文号/标准号,发布日期,施行日期,现行状态,原网址,获取方式,替代文件
-law.txt,中华人民共和国示范安全法,示范机关,主席令第1号,2029-06-01,2030-01-01,现行,https://example.gov.cn/1,已下载,
-std.txt,示范安全技术 基本要求,示范标委,GB/T 99999-2029,2029-05-10,2029-12-01,已被替代,https://example.gov.cn/2,已下载,GB/T 99999-2031
-old.txt,示范旧办法,示范机关,令第2号,2010-01-01,2010-03-01,已废止,,未公开,
-"""
+GOOD = {"name": "测试来源：国家标准全文公开系统", "url": "https://openstd.example.gov.cn/b16-a",
+        "publisher": "测试发布机关", "license": "公开发布，可内部引用并注明出处", "authority_kind": "国家标准"}
 
 
-def test_cn_int():
-    assert [sources.cn_int(x) for x in ("一", "十", "十二", "二十一", "一百零三", "两百", "7", "甲")] == \
-        [1, 10, 12, 21, 103, 200, 7, 0]
+@pytest.fixture(scope="module")
+def people():
+    users = {"expert": create_user((KNOWLEDGE_EXPERT,)), "admin": create_user((KNOWLEDGE_ADMIN,)),
+             "admin2": create_user((KNOWLEDGE_ADMIN,)), "consultant": create_user((CONSULTANT,))}
+    made = {k: logged_in_client(app, u) for k, u in users.items()}
+    made["_names"] = {k: u[0] for k, u in users.items()}
+    yield made
+    for k, c in made.items():
+        if k != "_names":
+            c.__exit__(None, None, None)
 
 
-def test_law_split_sequential_and_chapters():
-    ps = sources.split_law([ln for ln in LAW.splitlines() if ln.strip()])
-    assert [p.clause for p in ps] == ["第一条", "第二条", "第三条", "第三条之一", "第四条"]
-    assert "不是新的一条" in ps[1].text                     # 正文换行开头的“第一条”不切
-    assert ps[2].text == "运营者应当按照等级保护制度的要求，履行下列安全保护义务。"   # 断行拼回
-    assert ps[2].context == "第二章 运行安全 第一节 一般规定"
-    assert [p.key_part for p in ps] == ["1", "2", "3", "3-1", "4"]
+def _new(c, **kw):
+    body = {**GOOD, **kw}
+    return c.post("/api/kb/sources", json=body)
 
 
-def test_manifest_and_modes():
-    docs, skipped = sources.read_manifest(MANIFEST.encode("utf-8-sig"))
-    assert [d.file for d in docs] == ["law.txt", "std.txt"]
-    assert "未公开" in skipped[0]
-    law, std = docs
-    assert (law.mode, law.status, law.effective, law.version) == ("law", "current", date(2030, 1, 1), "2029")
-    assert (std.mode, std.status, std.version, std.replaced_by) == ("catalog", "superseded", "2029", "GB/T 99999-2031")
+def test_create_requires_license_and_authority(people):
+    c = people["expert"]
+    assert _new(c, url="https://x.example.gov.cn/b16-1", license="").status_code == 422
+    assert _new(c, url="https://x.example.gov.cn/b16-2", authority_kind="").status_code == 422
+    assert _new(c, url="https://x.example.gov.cn/b16-3", authority_kind="论坛帖子").status_code == 422
+    assert _new(c, url="ftp://x.example.gov.cn/b16-4").status_code == 422
+    r = _new(c, url="https://x.example.gov.cn/b16-5")
+    assert r.status_code == 201, r.text
+    out = r.json()
+    assert out["status"] == "candidate" and out["authority_level"] == 2 and out["host"] == "x.example.gov.cn"
+    assert out["code"].startswith("SR-")
+    assert _new(c, url="https://x.example.gov.cn/b16-5").status_code == 409   # 同一地址不重复登记
 
 
-def test_catalog_has_no_body_text():
-    docs, _ = sources.read_manifest(MANIFEST.encode())
-    entries, rejected, note = sources.split_doc(docs[1], STANDARD.encode())
-    assert not rejected and not note
-    assert [e.title.split()[-2] for e in entries] == ["8.1", "8.1.4", "8.1.4.1", "8.1.4.2"]
-    for e in entries:
-        assert "身份标识具有唯一性" not in e.content.body and sources.CATALOG_NOTE in e.content.body
-        assert (e.meta.layer, e.meta.doc_type, e.content.ref_code, e.content.ref_status) == \
-            ("L4", "SRC", "GB/T 99999-2029", "superseded")
+def test_authority_levels_three_tiers(people):
+    c = people["expert"]
+    levels = {k: _new(c, url=f"https://lv.example.gov.cn/{i}", authority_kind=k).json()["authority_level"]
+              for i, k in enumerate(("法律", "行政法规", "监管通报", "国家标准", "行业标准", "白皮书", "厂商资料"))}
+    assert levels == {"法律": 1, "行政法规": 1, "监管通报": 1, "国家标准": 2, "行业标准": 2, "白皮书": 3, "厂商资料": 3}
 
 
-def test_guard_hit_rejected():
-    d = sources.Doc(file="x.txt", title="示范办法")
-    text = "第一条 正常条款。\n第二条 管理口令为 password=Abc!23456 。\n"
-    entries, rejected, _ = sources.split_doc(d, text.encode())
-    assert [e.content.title for e in entries] == ["示范办法 第一条"]
-    assert len(rejected) == 1 and "机密级" in rejected[0][1] and "Abc" not in rejected[0][1]
+def test_guard_blocks_secret_in_note(people):
+    r = _new(people["expert"], url="https://g.example.gov.cn/1", note="登录口令 password=Zx9#kLm2Qw8!")
+    assert r.status_code == 422
 
 
-def test_cli_split_then_import(tmp_path):
-    src, out = tmp_path / "src", tmp_path / "out"
-    src.mkdir()
-    (src / "law.txt").write_text(LAW, encoding="utf-8")
-    (src / "std.txt").write_text(STANDARD, encoding="utf-8")
-    (tmp_path / "m.csv").write_text(MANIFEST, encoding="utf-8")
-    assert cli_main(["kb-source-split", str(tmp_path / "m.csv"), "--dir", str(src), "--out", str(out)]) == 0
-    files = sorted(p.name for p in out.glob("*.md"))
-    assert len(files) == 9 and (out / "_report.json").is_file()
-    e = parse_entry((out / files[0]).read_text(encoding="utf-8"))
-    assert e.content.source_type == "public" and e.content.source_detail.startswith("公开资料：")
-
-    name, *_ = create_user(("knowledge_expert",))
+def test_lifecycle_and_approval(people):
+    e, a, a2 = people["expert"], people["admin"], people["admin2"]
+    code = _new(a, url="https://life.example.gov.cn/1").json()["code"]
+    move = lambda c, to, reason="": c.post(f"/api/kb/sources/{code}/status", json={"to": to, "reason": reason})  # noqa: E731
+    assert move(e, "active").status_code == 409            # 候选不能直接转正式
+    assert move(e, "trial").status_code == 200
+    assert move(e, "active").status_code == 403            # 转正式只限知识管理员
+    assert move(a, "active").status_code == 403            # 登记人本人不能批准
+    r = move(a2, "active")
+    assert r.status_code == 200 and r.json()["status"] == "active" and r.json()["approved_by"]
+    assert move(a2, "demoted").status_code == 422           # 降级、停用必须写理由
+    assert move(a2, "demoted", "近一年未更新").status_code == 200
+    assert move(e, "retired", "发布机关撤站").status_code == 200
+    assert move(e, "trial").status_code == 409              # 停用后只能重新登记为候选
+    assert move(e, "candidate", "站点恢复").status_code == 200
+    ev = e.get(f"/api/kb/sources/{code}/events").json()
+    assert [x["to_status"] for x in ev] == ["candidate", "trial", "active", "demoted", "retired", "candidate"]
     with SessionLocal() as db:
-        u = db.scalar(select(User).where(User.username == name))
-        rs = importer.import_dir(db, u, out)
-        assert [r.action for r in rs] == ["created"] * 9, [(r.file, r.message) for r in rs]
-        art3 = db.scalar(select(KbItem).where(KbItem.import_key == sources.src_key("中华人民共和国示范安全法", "3")))
-        v = art3.versions[-1]
-        assert (v.ref_code, v.ref_status, v.effective_date) == ("主席令第1号", "current", date(2030, 1, 1))
-        assert importer.import_dir(db, u, out)[0].action == "skipped"     # 草稿未处理
+        actions = set(db.scalars(select(AuditLog.action).where(AuditLog.action.like("kb.source%"))))
+        assert {"kb.source.create", "kb.source.status"} <= actions
+        detail = db.scalars(select(AuditLog.detail).where(AuditLog.action == "kb.source.status")).all()
+        assert all("近一年未更新" not in d for d in detail)   # 审计只记理由长度
 
 
-GUIDE = """示范事件分级指南
-一、
-特别重大示范事件
-符合下列情形之一的，为特别重大示范事件：
-1.示范系统大面积瘫痪。
-二、
-重大示范事件
-（一）示范系统长时间中断。
-四、这一行项号跳过三，不是新的一项。
-三、对示范处理活动进行审计的，应当重点审查下列事项：
-（一）是否取得示范同意。
-注：本指南中的“以上”均包括本数。
-"""
+def test_update_fields_and_visibility(people):
+    e = people["expert"]
+    code = _new(e, url="https://upd.example.gov.cn/1").json()["code"]
+    r = e.patch(f"/api/kb/sources/{code}", json={"license": "", "authority_kind": "法律"})
+    assert r.status_code == 422
+    r = e.patch(f"/api/kb/sources/{code}", json={"authority_kind": "法律", "note": "改为法律库"})
+    assert r.status_code == 200 and r.json()["authority_level"] == 1
+    assert people["consultant"].get("/api/kb/sources").status_code == 403
+    rows = e.get("/api/kb/sources?status=candidate").json()
+    assert code in {x["code"] for x in rows} and all(x["status"] == "candidate" for x in rows)
+    assert e.get("/api/kb/sources/SR-999999/events").status_code == 404
 
 
-def test_item_split_sequential_and_headings():
-    ps = sources.split_items([ln for ln in GUIDE.splitlines() if ln.strip()])
-    assert [(p.clause, p.key_part, p.heading) for p in ps] == [
-        ("一、", "1", "特别重大示范事件"), ("二、", "2", "重大示范事件"), ("三、", "3", "")]
-    assert ps[0].text == "符合下列情形之一的，为特别重大示范事件：1.示范系统大面积瘫痪。"
-    assert "不是新的一项" in ps[1].text                      # 跳号的“四、”留在正文里
-    assert ps[2].text.startswith("对示范处理活动进行审计的") and ps[2].text.endswith("均包括本数。")
-
-
-def test_item_mode_manifest_and_verify():
-    m = ("文件名,名称,文号/标准号,原网址,切分方式\n"
-         "g.txt,示范事件分级指南,示范办法附件,https://www.example.gov.cn/g,按项\n")
-    (d,), _ = sources.read_manifest(m.encode())
-    assert d.mode == "item"
-    data = GUIDE.encode()
-    entries, rejected, _ = sources.split_doc(d, data)
-    assert [e.content.title for e in entries] == ["示范事件分级指南 一、 特别重大示范事件",
-                                                  "示范事件分级指南 二、 重大示范事件", "示范事件分级指南 三、"]
-    assert entries[0].key == sources.src_key("示范事件分级指南", "1")
-    assert "continuous" in sources.verify(d, data, entries, rejected)     # 行首“四、”没切出来，转人工
-    ok = GUIDE.replace("四、这一行项号跳过三，不是新的一项。\n", "").encode()
-    e2, r2, _ = sources.split_doc(d, ok)
-    assert "continuous" not in sources.verify(d, ok, e2, r2)
-
-
-def test_law_stops_at_appendix_and_strips_pdf_page_numbers():
-    d = sources.Doc(file="x.txt", title="示范等级保护管理办法")
-    text = ("第一条 运营者应当开展定级、等— 5 —级测评。\n第二条 本办法自发布之日起施行。\n"
-            "附件：示范定级审核表\n附件\n示范定级审核表\n第三条 表格里的说明，不是条款。\n")
-    entries, rejected, _ = sources.split_doc(d, text.encode())
-    assert [e.content.title for e in entries] == ["示范等级保护管理办法 第一条", "示范等级保护管理办法 第二条"]
-    assert "审核表" not in entries[1].content.body
-    assert sources.verify(d, text.encode(), entries, rejected) == ["official_source", "sha256", "code"]
-    pdf = sources.parse.ParsedDoc(kind="pdf", sections=[sources.parse.Section(heading="", text=text)])
-    assert sources._lines(pdf)[0] == "第一条 运营者应当开展定级、等级测评。"
-
-
-FOREIGN_EN = """ARRANGEMENT OF SECTIONS
-1. Objectives
-2. Application
-3. Exemption
-1.—(1) The objectives of this Act are to safeguard the rights of data subjects.
-(2) This subsection continues section one.
-2.—(1) This Act shall apply to the processing of personal data.
-4. A numbered line that skips three is not a new section.
-3. This Act shall not apply to processing for household purposes.
-SCHEDULE
-Fees payable under the regulations.
-"""
-
-FOREIGN_FR = """Article Premier.
-La présente loi a pour objet de protéger les données.
-Article 2.
-1) Toute collecte est soumise à la présente loi.
-Article 3 : Les traitements temporaires sont exclus.
-"""
-
-FOREIGN_PT = """Artigo 1.º (Objecto)
-A presente lei estabelece as regras.
-Artigo 2.º
-Âmbito de aplicação.
-"""
-
-FOREIGN_AR = """مادة (1)
-مواد الإصدار.
-مادة (2)
-يعمل بهذا القانون.
-المادة (١)
-يقصد بالبيانات الشخصية أي بيانات تتعلق بشخص طبيعي محدد أو يمكن تحديده بشكل مباشر أو غير مباشر.
-المادة (٢)
-لا يجوز جمع البيانات الشخصية أو معالجتها إلا بموافقة صريحة من الشخص المعني بالبيانات.
-المادة (٣)
-يلتزم المتحكم بتعيين مسؤول لحماية البيانات الشخصية داخل الجهة.
-"""
-
-
-def _art(text: str) -> list[sources.Piece]:
-    return sources.split_articles([ln for ln in text.splitlines() if ln.strip()])
-
-
-def test_article_split_skips_contents_and_stops_at_schedule():
-    ps = _art(FOREIGN_EN)
-    assert [p.clause for p in ps] == ["Section 1", "Section 2", "Section 3"]
-    assert "continues section one" in ps[0].text                  # 目录那一遍不取，正文逐条切
-    assert "skips three" in ps[1].text                              # 跳号的“4.”不切
-    assert "Fees" not in ps[2].text                                 # SCHEDULE 起为附件
-    assert [p.key_part for p in ps] == ["1", "2", "3"]
-
-
-def test_article_split_french_portuguese_arabic():
-    assert [p.clause for p in _art(FOREIGN_FR)] == ["Article 1", "Article 2", "Article 3"]
-    assert _art(FOREIGN_FR)[2].text == "Les traitements temporaires sont exclus."
-    pt = _art(FOREIGN_PT)
-    assert [p.clause for p in pt] == ["Artigo 1.º", "Artigo 2.º"] and pt[0].text.startswith("(Objecto)")
-    ar = _art(FOREIGN_AR)                                           # 颁布条款 (1)(2) 之后正文重新从 1 起，取正文那一遍
-    assert [p.clause for p in ar] == ["المادة 1", "المادة 2", "المادة 3"] and "بموافقة" in ar[1].text
-
-
-FOREIGN_ASIA = """Pasal 1
-Dalam Undang-Undang ini yang dimaksud dengan Data Pribadi adalah data tentang orang perseorangan.
-Pasal 2
-Undang-Undang ini berlaku untuk setiap Orang yang melakukan pemrosesan Data Pribadi.
-"""
-
-FOREIGN_VI = """Điều 1. Phạm vi điều chỉnh
-Luật này quy định về dữ liệu cá nhân và bảo vệ dữ liệu cá nhân.
-Điều 2. Giải thích từ ngữ
-"""
-
-FOREIGN_TH = """มาตรา ๑ พระราชบัญญัตินี้เรียกว่า พระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล
-มาตรา ๒ พระราชบัญญัตินี้ให้ใช้บังคับตั้งแต่วันถัดจากวันประกาศในราชกิจจานุเบกษา
-"""
-
-
-def test_article_split_indonesian_vietnamese_thai():
-    assert [p.clause for p in _art(FOREIGN_ASIA)] == ["Pasal 1", "Pasal 2"]
-    vi = _art(FOREIGN_VI)
-    assert [p.clause for p in vi] == ["Điều 1", "Điều 2"] and vi[0].text.startswith("Phạm vi")
-    assert [p.clause for p in _art(FOREIGN_TH)] == ["มาตรา 1", "มาตรา 2"]
-
-
-def test_law_split_traditional_chinese():
-    lines = ["第一章 一般規定", "第一條 標的", "本法律訂定個人資料處理的一般制度。", "第二節 處理原則",
-             "第二條 一般原則", "個人資料的處理應以透明的方式進行。"]
-    ps = sources.split_law(lines)
-    assert [p.clause for p in ps] == ["第一條", "第二條"]
-    assert ps[1].context == "第一章 一般規定 第二節 處理原則" and "透明" in ps[1].text
-
-
-def test_article_mode_manifest():
-    m = ("文件名,名称,文号/标准号,原网址,切分方式\n"
-         "a.txt,Demo Data Protection Act,Act No. 99 of 2030,https://www.example.gov.za/a,外文按条\n")
-    (d,), _ = sources.read_manifest(m.encode())
-    assert d.mode == "article"
-    entries, rejected, _ = sources.split_doc(d, FOREIGN_EN.encode())
-    assert [e.content.title for e in entries][0] == "Demo Data Protection Act Section 1" and not rejected
-
-
-def test_article_split_suffix_and_repealed():
-    """新加坡式：修正插入的“15A.”“26B.”接在 15、26 后面，“[Repealed …]”的条文照样切出，不中断。"""
-    text = ("Short title\n1.  This Act is the Example Act.\n2.  In this Act, organisation means any person.\n"
-            "2A.—(1)  This section applies to deemed consent.\n2B.  Notification required.\n"
-            "3.  [Repealed by Act 40 of 2020]\n4.—(1)  An organisation must protect personal data.\n"
-            "5.  See section 2A.\n")
-    got = [(p.clause, p.key_part) for p in _art(text)]
-    assert got == [("Section 1", "1"), ("Section 2", "2"), ("Section 2A", "2a"), ("Section 2B", "2b"),
-                   ("Section 3", "3"), ("Section 4", "4"), ("Section 5", "5")]
-    assert "Schedule paragraph" not in _art(text)[-1].text
-    assert not sources._follows((3, "A"), (2, "B")) and not sources._follows((2, "A"), (2, "B"))
-
-
-def test_article_split_hk_chinese_bare():
-    """香港中文本：行首“1.簡稱及生效日期”“11A.豁免”，條號後直接接中文標題。"""
-    text = "第1部\n導言\n1.簡稱及生效日期\n(1)本條例可引稱為某條例。\n2.釋義\n(1)在本條例中——\n2A.豁免\n本條不適用。\n3.《某條例》的過渡條文\n本條訂定過渡安排。\n"
-    assert [p.clause for p in _art(text)] == ["Article 1", "Article 2", "Article 2A", "Article 3"]
-
-
-def test_article_split_drops_part_headings():
-    """PART 大标题是边界：新加坡一行“PART 6A NOTIFICATION …”、香港“Part 6A”+ 标题 +“(Part 6A added …)”都不进上一条正文。"""
-    sg = ("1. Short title\nThis Act is the Demo Act.\n2. Interpretation\nIn this Act, demo means demo.\n"
-          "PART 6A NOTIFICATION OF DATA BREACHES\n3. Notifiable breach\nA breach is notifiable.\n"
-          "Part 7\nEnforcement of this Act\n4. Directions\nThe Commission may give directions.\n")
-    ps = _art(sg)
-    assert [p.clause for p in ps] == ["Article 1", "Article 2", "Article 3", "Article 4"]
-    assert all("PART" not in p.text and "Part 7" not in p.text and "Enforcement" not in p.text for p in ps)
-    hk = ("Part 1\nPreliminary\n1.Short title\nThis Ordinance is the Demo Ordinance.\n2.Interpretation\n"
-          "In this Ordinance demo means demo.\nPart 6A\nUse of Personal Data in Direct Marketing\n"
-          "(Part 6A added 18 of 2012 s. 21)\n3.Application\nThis Part applies to demo users.\n")
-    ps = _art(hk)
-    assert [p.clause for p in ps] == ["Article 1", "Article 2", "Article 3"]
-    assert ps[1].text == "Interpretation In this Ordinance demo means demo." and "Part 6A" not in ps[2].text
-    body = "1. Scope\nThis Act applies.\n2. Application\nPart 2 of this Act applies to demo users.\n"
-    assert "Part 2 of this Act" in _art(body)[1].text
-
-
-FRAMEWORK = """1. Introduction
-This framework is a demo.
-2. Demo Core
-o GV.OC-01: The demo mission is understood
-o GV.OC-02: Demo stakeholders are understood, and their needs and
-expectations are considered
-ID.IM-P1: Demo systems are inventoried
-PO.1.1: Identify and document all demo requirements
-GOVERN 1.1: Demo legal requirements are managed
-GV.OC-01 The demo mission is (table reference without colon, not a heading)
-3.1. Demo Profiles
-A demo profile.
-"""
-
-
-def test_section_split_framework_ids_and_dotted_numbers():
-    ps = sources.split_sections([ln for ln in FRAMEWORK.splitlines() if ln.strip()], with_text=True)
-    assert [p.clause for p in ps] == ["1", "2", "GV.OC-01", "GV.OC-02", "ID.IM-P1", "PO.1.1", "GOVERN 1.1", "3.1"]
-    by = {p.clause: p for p in ps}
-    assert by["GV.OC-01"].text == "The demo mission is understood"        # 整句在标题行里：正文为空时取标题行
-    assert "without colon" in by["GOVERN 1.1"].text  # 没有冒号的引用留在上一条正文
-    assert by["GV.OC-02"].text == "expectations are considered"
-    assert by["1"].heading == "Introduction" and by["3.1"].text == "A demo profile."
+def test_export_for_collector(people, capsys):
+    e, a, a2 = people["expert"], people["admin"], people["admin2"]
+    code = _new(e, url="https://exp.example.gov.cn/1").json()["code"]
+    e.post(f"/api/kb/sources/{code}/status", json={"to": "trial"})
+    a.post(f"/api/kb/sources/{code}/status", json={"to": "active"})
+    cand = _new(a2, url="https://exp.example.gov.cn/2").json()["code"]
+    assert cli_main(["kb-source-registry", "--json"]) == 0
+    rows = {x["code"]: x for x in json.loads(capsys.readouterr().out)}
+    assert rows[code]["status"] == "active" and rows[code]["license"] and rows[code]["authority_level"] == 2
+    assert cand not in rows                                  # 候选不下发采集机
+    with SessionLocal() as db:
+        assert db.scalar(select(KbSource).where(KbSource.code == code)).approved_by
+        assert db.scalars(select(KbSourceEvent).where(KbSourceEvent.source_id.is_not(None))).first()
