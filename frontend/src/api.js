@@ -200,6 +200,7 @@ export const api = {
     request(`/api/projects/${encodeURIComponent(code)}/flowback`, { method: "PUT", body: JSON.stringify({ allowed }) }),
   deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
   portfolio: () => request("/api/portfolio"),
+  indicators: (days) => request(`/api/indicators?days=${days}`),
   workbench: () => request("/api/workbench"),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
