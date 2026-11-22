@@ -219,6 +219,9 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  kbBatches: () => request("/api/kb/batches"),
+  kbBatchSources: () => request("/api/kb/batches/sources"),
+  kbBatchStart: (body) => request("/api/kb/batches", { method: "POST", body: JSON.stringify(body) }),
   kbUpload: (file, project = "") => {
     const fd = new FormData();
     fd.append("file", file);

@@ -10,6 +10,7 @@ import Deletions from "./pages/Deletions.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
 import Workbench from "./pages/Workbench.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
+import KbBatches from "./pages/KbBatches.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
 import KbMap from "./pages/KbMap.jsx";
 import KbReview from "./pages/KbReview.jsx";
@@ -87,6 +88,7 @@ export default function App() {
           <Route path="/kb/intake" element={<KbIntake />} />
           <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />
           <Route path="/kb/map" element={<RequireKnowledge><KbMap /></RequireKnowledge>} />
+          <Route path="/kb/batches" element={<KbBatches />} />
         </Route>
         <Route path="/audit" element={<RequireAuditor><Audit /></RequireAuditor>} />
         <Route path="/admin/users" element={<RequireSysAdmin><Users /></RequireSysAdmin>} />

@@ -85,6 +85,8 @@ class Settings(BaseSettings):
     # 未达标就暂停自动发布（B10、B11 两级），直到再跑一次达标
     kb_eval_min_accuracy: float = 0.9
     kb_eval_gate: bool = True
+    # 知识批次页（三期 B18）发起 kb-import、kb-eval 时，资料目录和题目文件只能在这个目录下（后端容器里的只读挂载）
+    kb_batch_dir: str = "/srv/knowledge/downloads"
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
 

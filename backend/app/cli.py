@@ -448,7 +448,7 @@ def kb_source_split(args: argparse.Namespace) -> int:
     """依据原文切条（二期 B7）：按下载清单把公开资料机械切成 SRC 条目文件，不入库、不调模型。"""
     from pathlib import Path
 
-    from .kb import sources
+    from .kb import batches, sources
 
     r = sources.split_all(Path(args.manifest), Path(args.dir), Path(args.out))
     total = 0
@@ -460,6 +460,8 @@ def kb_source_split(args: argparse.Namespace) -> int:
             print("  核验未通过（kb-source-publish 会转人工审核）：" + "；".join(sources.VERIFY_RULES[k] for k in d.failed))
     for s in r.skipped:
         print(f"跳过：{s}", file=sys.stderr)
+    batches.record_cli("split", "cli", {"docs": len(r.docs), "entries": total,
+                                       "rejected": sum(d.rejected for d in r.docs)}, args.dir)
     print(f"共 {len(r.docs)} 份、{total} 条，写到 {args.out}；核对后用 kb-import {args.out} --as <知识专家> --submit 导入")
     return 0 if total else 1
 
@@ -470,6 +472,7 @@ def kb_basis_check(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     from .kb import basis_change as bc
+    from .kb import batches
 
     path = Path(args.manifest)
     if not path.is_file():
@@ -493,6 +496,7 @@ def kb_basis_check(args: argparse.Namespace) -> int:
     for s in r.skipped:
         print(f"跳过：{s}", file=sys.stderr)
     c = r.counts()
+    batches.record_cli("basis", args.as_user, {**c, "apply": bool(args.apply)}, args.manifest)
     print("合计：" + "，".join(f"{bc.KIND_NAMES[k]} {n}" for k, n in c.items() if n)
           + ("；时效变更已登记并发布" if args.apply else "；未登记，确认后加 --apply"))
     if args.out:
@@ -601,7 +605,7 @@ def _knowledge_user(db, username: str):
 def kb_import(args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from .kb import importer
+    from .kb import batches, importer
 
     path = Path(args.dir)
     if not path.is_dir():
@@ -617,6 +621,7 @@ def kb_import(args: argparse.Namespace) -> int:
         where = f" {r.doc_id}" if r.doc_id else ""
         print(f"  {label.get(r.action, r.action)}  {r.file}{where}" + (f"  —— {r.message}" if r.message else ""))
     counts = {k: sum(1 for r in results if r.action == k) for k in label}
+    batches.record_cli("import", args.as_user, {**counts, "total": len(results), "submit": bool(args.submit)}, args.dir)
     print("合计：" + "，".join(f"{label[k]} {n}" for k, n in counts.items() if n) +
           ("；已提交审核，仍需双人审核后发布" if args.submit else "；均为草稿，在审批队列提交审核"))
     return 2 if counts["error"] else 0
@@ -683,7 +688,7 @@ def kb_source_publish(args: argparse.Namespace) -> int:
     import json
     from pathlib import Path
 
-    from .kb import autopublish, sources
+    from .kb import autopublish, batches, sources
 
     manifest, src = Path(args.manifest), Path(args.dir)
     if not manifest.is_file() or not src.is_dir():
@@ -705,6 +710,10 @@ def kb_source_publish(args: argparse.Namespace) -> int:
             print(f"  跳过：{s}")
     for s in r.skipped:
         print(f"清单跳过：{s}", file=sys.stderr)
+    batches.record_cli("source_publish", args.as_user,
+                       {"docs": len(r.docs), "published": sum(d.published for d in r.docs),
+                        "manual": sum(d.manual for d in r.docs), "rejected": sum(d.rejected for d in r.docs),
+                        "sampled": len(r.sampled), "suspended": bool(r.suspended)}, args.dir)
     print(f"合计：自动发布 {sum(d.published for d in r.docs)}，转人工 {sum(d.manual for d in r.docs)}；"
           f"抽检 {len(r.sampled)} 条（知识审批页“抽检”）")
     if args.report:
@@ -715,7 +724,7 @@ def kb_source_publish(args: argparse.Namespace) -> int:
 def kb_draft(args: argparse.Namespace) -> int:
     from pathlib import Path
 
-    from .kb import drafting
+    from .kb import batches, drafting
 
     src = Path(args.source)
     if not src.is_file():
@@ -733,6 +742,8 @@ def kb_draft(args: argparse.Namespace) -> int:
             print(f"起草失败：{e}", file=sys.stderr)
             return 2
     written = drafting.write_report(report, Path(args.out))
+    batches.record_cli("draft", args.as_user, {"accepted": len(report.accepted), "rejected": len(report.rejected),
+                                               "pending": len(report.pending), "calls": report.calls}, args.source)
     print(f"调用模型 {report.calls} 次（{report.model}）。{report.note}")
     print(f"起草 {len(report.accepted)} 条，写到 {args.out}；退回 {len(report.rejected)} 条（见 {args.out}/_rejected/）")
     for p in written:
@@ -800,7 +811,7 @@ def kb_eval(args: argparse.Namespace) -> int:
     import json
     from pathlib import Path
 
-    from .kb import embed_compare, evaluate
+    from .kb import batches, embed_compare, evaluate
     from .services import gateway
 
     with SessionLocal() as db:
@@ -842,11 +853,17 @@ def kb_eval(args: argparse.Namespace) -> int:
             print(f"明细已写到 {args.out}（只有门槛、计数和准确率）")
         return 0
     if args.compare:
+        batches.record_cli("eval", args.as_user, {"total": cmp.total, "compare": True, "passed": cmp.passed,
+                                                  "demo": cmp.demo, "accuracy_with_kb": cmp.with_kb.get("accuracy"),
+                                                  "accuracy_no_kb": cmp.no_kb.get("accuracy")}, args.questions)
         print(compare.format_report(cmp))
         if args.out:
             Path(args.out).write_text(json.dumps(cmp.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")
             print(f"明细已写到 {args.out}（含题号和识别出的引用，不含答案原文）")
         return 0 if cmp.passed else 3
+    batches.record_cli("eval", args.as_user, {"total": report.total, "compare": False,
+                                              "accuracy": round(report.accuracy, 4),
+                                              "passed": report.accuracy >= 0.9}, args.questions)
     print(evaluate.format_report(report))
     if args.out:
         Path(args.out).write_text(json.dumps(report.to_json(), ensure_ascii=False, indent=2), encoding="utf-8")

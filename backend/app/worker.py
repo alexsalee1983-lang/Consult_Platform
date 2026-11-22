@@ -21,7 +21,7 @@ from pathlib import Path
 from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
-from .kb import agent_review, deid_flow, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review 等任务处理器
+from .kb import agent_review, batches, deid_flow, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review、kb.batch_* 等任务处理器
 from .project import autoflow, deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs, ops
 
