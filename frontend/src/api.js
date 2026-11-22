@@ -219,6 +219,11 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  // 知识使用反馈（三期 B29）：target 为 {message_id} 或 {deliverable, seq, version}
+  kbFeedback: (code, target) => request(`/api/projects/${encodeURIComponent(code)}/kb-feedback?${new URLSearchParams(target)}`),
+  sendKbFeedback: (code, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/kb-feedback`, { method: "POST", body: JSON.stringify(body) }),
+  kbUsage: (days = 90) => request(`/api/kb-usage?days=${days}`),
   kbUpload: (file, project = "") => {
     const fd = new FormData();
     fd.append("file", file);

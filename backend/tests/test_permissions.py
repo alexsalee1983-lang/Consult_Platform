@@ -161,6 +161,12 @@ MATRIX = [
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
                                                         (403, 403, 403, 403, 403)),
+    # 知识使用反馈（三期 B29）：member 不给引用位置 → 422（不留数据）；非成员 404；看板只给知识专家、知识管理员
+    (("GET", "/api/projects/BANK-A/kb-feedback", None), (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/kb-feedback", {"doc_id": "L4-NOPE", "rating": "useful"}),
+                                                        (422, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/kb-feedback?message_id=1", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/kb-usage", None),                    (403, 403, 403, 403, 403)),
 ]
 
 

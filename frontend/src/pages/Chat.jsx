@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, sendMessage, TIER } from "../api.js";
 import { TopBar } from "../components/common.jsx";
+import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
 
 // 首次使用的 6 张示例卡（4A 架构设计 v4.0 §3.6、§7.2 埋点）：对话定位为副驾驶，点卡片把示例放进输入框，改好再发
 const EXAMPLES = [
@@ -26,17 +27,22 @@ function Blocked({ detail }) {
   );
 }
 
-// 本条回复前平台检索到、附给 Agent 的知识库条目
-function References({ refs }) {
+// 本条回复前平台检索到、附给 Agent 的知识库条目；回复存好后（有 id）每条可标“有用 / 过时 / 不对”（三期 B29）
+function References({ refs, code, messageId }) {
+  const fb = useKbFeedback(code, messageId && refs?.length ? { message_id: messageId } : null);
   if (!refs || refs.length === 0) return null;
   return (
-    <div className="refs" aria-label="参考知识">
+    <div className="refs" aria-label="参考知识" style={{ flexDirection: "column", alignItems: "flex-start" }}>
       <span className="cap">参考知识</span>
       {refs.map((r) => (
-        <span key={r.doc_id} className="ref" title={r.citation || r.heading || r.title}>
-          <span className="mono">{r.doc_id}</span> {r.title}{r.heading ? ` · ${r.heading}` : ""}
-        </span>
+        <div key={r.doc_id} className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+          <span className="ref" title={r.citation || r.heading || r.title}>
+            <span className="mono">{r.doc_id}</span> {r.title}{r.heading ? ` · ${r.heading}` : ""}
+          </span>
+          {messageId && <FeedbackKeys docId={r.doc_id} fb={fb} />}
+        </div>
       ))}
+      {fb.error && <div className="err" role="alert">{fb.error}</div>}
     </div>
   );
 }
@@ -156,7 +162,7 @@ export default function Chat({ code }) {
         }
       }, (t) => setToolNote(t.name));
       setToolNote("");
-      if (started) patchLast((last) => ({ ...last, streaming: false, model: done.model, demo: done.demo, references: done.references || [], toolCalls: done.tool_calls || 0 }));
+      if (started) patchLast((last) => ({ ...last, id: done.message_id ?? last.id, streaming: false, model: done.model, demo: done.demo, references: done.references || [], toolCalls: done.tool_calls || 0 }));
       if (full.includes("【交接】")) {
         // 回复里有交接信息时重新取一次，拿到消息编号和可转交的目标
         const d = await api.conversation(current.id);
@@ -256,7 +262,7 @@ export default function Chat({ code }) {
                       {m.streaming ? " · 输出中……" : ""}{m.interrupted ? " · 输出中断，内容不完整" : ""}
                     </div>
                     <div className="body">{m.content}</div>
-                    <References refs={m.references} />
+                    <References refs={m.references} code={code} messageId={m.streaming ? null : m.id} />
                     {m.handoffs?.length > 0 && m.id && (
                       <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                         {m.handoffs.map((h) => (
