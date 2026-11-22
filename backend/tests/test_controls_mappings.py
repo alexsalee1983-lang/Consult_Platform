@@ -18,7 +18,7 @@ MAPPINGS = ROOT / "knowledge" / "controls" / "mappings_v0.yaml"
 
 RELATIONS = {"等价", "子集", "超集", "交集"}
 # 资质边界：映射理由不得出现结论性用语
-FORBIDDEN = ("测评结论", "密评结论", "认证结论", "通过测评", "符合认证要求", "可通过审核", "满足等保")
+FORBIDDEN = ("测评结论", "密评结论", "认证结论", "通过测评", "符合认证要求", "可通过审核", "满足等保", "符合等保", "达到三级")
 
 # ISO/IEC 27001:2022 附录 A：5.1～5.37、6.1～6.8、7.1～7.14、8.1～8.34
 ISO_ANNEX_A = {f"A.{t}.{n}" for t, top in ((5, 37), (6, 8), (7, 14), (8, 34)) for n in range(1, top + 1)}
@@ -40,6 +40,9 @@ CSF_WITHDRAWN = {
     "DE.CM-04", "DE.CM-05", "DE.CM-07", "DE.CM-08", "DE.AE-01", "DE.AE-05",
     "RS.AN-01", "RS.AN-02", "RS.AN-04", "RS.AN-05", "RS.CO-01", "RC.CO-01", "RC.CO-02",
 }
+# 等保 2.0（GB/T 22239-2019）第三级安全通用要求：8.1.<层面>.<控制点>，层面 → 控制点数
+MLPS_L3 = {1: 10, 2: 3, 3: 6, 4: 11, 5: 4, 6: 4, 7: 5, 8: 4, 9: 10, 10: 14}
+MLPS_RE = re.compile(r"^8\.1\.(\d{1,2})\.(\d{1,2})$")
 CSF_RE = re.compile(r"^(GV|ID|PR|DE|RS|RC)\.[A-Z]{2}-\d{2}$")
 
 
@@ -51,6 +54,9 @@ def _valid_clause(fw: str, clause: str) -> bool:
             return False
         cat, num = clause.split("-")
         return cat in CSF_MAX and 1 <= int(num) <= CSF_MAX[cat]
+    if fw == "MLPS":
+        mm = MLPS_RE.match(clause)
+        return bool(mm) and int(mm[1]) in MLPS_L3 and 1 <= int(mm[2]) <= MLPS_L3[int(mm[1])]
     return False
 
 
@@ -66,7 +72,7 @@ def test_header(data: tuple[dict, dict]) -> None:
     assert m["catalog_version"] == catalog["version"]
     assert m["status"] == "draft"
     assert m["expert_review"] == "pending"
-    assert set(m["frameworks"]) == {"ISO27001", "CSF"}
+    assert set(m["frameworks"]) == {"ISO27001", "CSF", "MLPS"}
     for fw in m["frameworks"].values():
         assert fw["name"] and fw["version"]
 
@@ -106,3 +112,9 @@ def test_clause_validator_rejects_bad_ids() -> None:
     assert not _valid_clause("CSF", "DE.CM-04")  # 2.0 已撤销
     assert not _valid_clause("CSF", "RS.MA-06")
     assert not _valid_clause("CSF", "DE.DP-01")  # 1.1 类别
+    assert _valid_clause("MLPS", "8.1.4.1")
+    assert _valid_clause("MLPS", "8.1.10.14")
+    assert not _valid_clause("MLPS", "8.1.10.15")
+    assert not _valid_clause("MLPS", "8.1.2.4")
+    assert not _valid_clause("MLPS", "7.1.4.1")  # 第二级
+    assert not _valid_clause("MLPS", "8.5.1.1")  # 扩展要求另批

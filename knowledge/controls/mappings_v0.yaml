@@ -1,7 +1,7 @@
 # 控制项映射 v0（三期 B19 第二步之一：ISO 27001 附录 A、CSF 2.0；公开方法版草稿，待产品专家复核）。
 # 只写条款号，不收标准正文（法务意见待定前的做法，三期计划第四节）。
 # rel：控制项相对条款的关系（等价 / 子集 / 超集 / 交集，参照 NIST IR 8477、SCF STRM）；strength 1～10。
-# 等保 2.0、SOC-CMM、SP 800-61、行业条款映射为下一批（12-18 前）。
+# 第二批：等保 2.0（GB/T 22239-2019）第三级安全通用要求，到控制点（8.1.层面.控制点）；扩展要求（云、工控）、SOC-CMM、SP 800-61r3、行业条款为下一批（12-18 前）。
 # 资质边界：映射只用于差距分析定位依据，不代表测评或认证的判定。
 catalog_version: v0
 status: draft
@@ -9,305 +9,463 @@ expert_review: pending
 frameworks:
   ISO27001: {name: ISO/IEC 27001, version: "2022"}
   CSF: {name: NIST Cybersecurity Framework, version: "2.0"}
+  MLPS: {name: GB/T 22239 网络安全等级保护基本要求（第三级安全通用要求）, version: "2019"}
 mappings:
   SOC.ORG.01:
   - {fw: ISO27001, clause: A.5.2, rel: 交集, strength: 7, why: 安全角色与职责分配}
   - {fw: CSF, clause: GV.RR-02, rel: 交集, strength: 7, why: 角色、职责与权限确立}
   - {fw: CSF, clause: GV.RR-03, rel: 交集, strength: 5, why: 资源与编制充足}
+  - {fw: MLPS, clause: "8.1.7.1", rel: 交集, strength: 7, why: 安全管理岗位设置与职责}
+  - {fw: MLPS, clause: "8.1.7.2", rel: 交集, strength: 6, why: 系统、审计、安全管理员配备}
   SOC.ORG.02:
   - {fw: ISO27001, clause: A.6.3, rel: 交集, strength: 6, why: 安全意识、教育与培训}
   - {fw: ISO27001, clause: "7.2", rel: 交集, strength: 5, why: 人员能力要求}
   - {fw: CSF, clause: PR.AT-02, rel: 超集, strength: 7, why: 专门岗位技能培训}
+  - {fw: MLPS, clause: "8.1.8.3", rel: 交集, strength: 7, why: 安全意识教育与岗位技能培训}
   SOC.ORG.03:
   - {fw: ISO27001, clause: A.5.37, rel: 交集, strength: 4, why: 值班交接纳入操作规程}
   - {fw: ISO27001, clause: A.5.3, rel: 交集, strength: 3, why: 轮岗与职责分离}
   - {fw: CSF, clause: GV.RR-03, rel: 交集, strength: 4, why: 持续值守所需人员配置}
+  - {fw: MLPS, clause: "8.1.7.2", rel: 交集, strength: 4, why: 关键岗位人员配备}
+  - {fw: MLPS, clause: "8.1.10.6", rel: 交集, strength: 3, why: 运维操作规程与值守}
   SOC.ORG.04:
   - {fw: ISO27001, clause: A.5.19, rel: 交集, strength: 5, why: 外包方关系中的安全}
   - {fw: ISO27001, clause: A.5.20, rel: 交集, strength: 5, why: 外包协议约定安全要求}
   - {fw: CSF, clause: GV.SC-08, rel: 交集, strength: 6, why: 供应方纳入事件响应协同}
+  - {fw: MLPS, clause: "8.1.9.10", rel: 交集, strength: 5, why: 服务供应商选择与协议}
+  - {fw: MLPS, clause: "8.1.10.14", rel: 交集, strength: 6, why: 外包运维管理}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 5, why: 内外部沟通与合作}
   SOC.ORG.05:
   - {fw: ISO27001, clause: A.5.1, rel: 交集, strength: 6, why: 运营制度与策略}
   - {fw: ISO27001, clause: A.5.37, rel: 交集, strength: 6, why: 文件化操作规程}
   - {fw: CSF, clause: GV.PO-01, rel: 交集, strength: 6, why: 安全策略制定与沟通}
+  - {fw: MLPS, clause: "8.1.6.2", rel: 交集, strength: 6, why: 安全管理制度体系}
+  - {fw: MLPS, clause: "8.1.7.3", rel: 交集, strength: 6, why: 授权与审批}
   SOC.BNK.04:
   - {fw: ISO27001, clause: A.5.22, rel: 交集, strength: 7, why: 供应方服务监视与评审}
   - {fw: ISO27001, clause: A.5.21, rel: 交集, strength: 4, why: 信息通信供应链安全}
   - {fw: CSF, clause: GV.SC-07, rel: 交集, strength: 7, why: 供应方风险识别与持续监视}
   - {fw: CSF, clause: DE.CM-06, rel: 交集, strength: 6, why: 外部服务方活动监测}
+  - {fw: MLPS, clause: "8.1.10.14", rel: 交集, strength: 7, why: 外包运维服务商管控}
+  - {fw: MLPS, clause: "8.1.9.10", rel: 交集, strength: 5, why: 服务供应商评审与监督}
+  - {fw: MLPS, clause: "8.1.8.4", rel: 交集, strength: 4, why: 外部人员访问管理}
   SOC.PWR.05:
   - {fw: ISO27001, clause: A.5.37, rel: 交集, strength: 3, why: 跨站值守协同规程}
   - {fw: CSF, clause: GV.RR-02, rel: 交集, strength: 4, why: 厂站与集控职责划分}
   - {fw: CSF, clause: RS.MA-04, rel: 交集, strength: 4, why: 现场到集控的升级}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 跨部门沟通与协作}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 4, why: 集中管控与统一监测}
   SOC.PRC.01:
   - {fw: ISO27001, clause: A.5.25, rel: 交集, strength: 8, why: 安全事态评估与定级}
   - {fw: CSF, clause: DE.AE-02, rel: 交集, strength: 8, why: 不良事态分析研判}
   - {fw: CSF, clause: DE.AE-08, rel: 交集, strength: 7, why: 满足条件时宣告事件}
   - {fw: CSF, clause: RS.MA-03, rel: 交集, strength: 6, why: 事件分类与优先级}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 7, why: 安全事件报告与分类处置}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 5, why: 安全事件集中识别与分析}
   SOC.PRC.02:
   - {fw: ISO27001, clause: A.5.26, rel: 交集, strength: 8, why: 安全事件响应}
   - {fw: CSF, clause: RS.MA-02, rel: 交集, strength: 6, why: 事件报告分诊与确认}
   - {fw: CSF, clause: RS.MA-04, rel: 交集, strength: 8, why: 事件按需升级}
   - {fw: CSF, clause: RS.MI-01, rel: 交集, strength: 5, why: 事件遏制}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 8, why: 安全事件处置流程}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 5, why: 应急预案启动}
   SOC.PRC.03:
   - {fw: ISO27001, clause: A.5.7, rel: 交集, strength: 8, why: 威胁情报收集与分析}
   - {fw: CSF, clause: ID.RA-02, rel: 交集, strength: 7, why: 从共享渠道获取情报}
   - {fw: CSF, clause: DE.AE-07, rel: 交集, strength: 8, why: 情报融入事态分析}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 与外部单位情报沟通}
+  - {fw: MLPS, clause: "8.1.10.5", rel: 交集, strength: 4, why: 威胁与漏洞信息跟踪}
   SOC.PRC.04:
   - {fw: ISO27001, clause: A.8.32, rel: 交集, strength: 6, why: 检测规则变更管理}
   - {fw: CSF, clause: ID.RA-07, rel: 交集, strength: 4, why: 变更的风险评估与记录}
+  - {fw: MLPS, clause: "8.1.10.10", rel: 交集, strength: 6, why: 变更申请审批与记录}
+  - {fw: MLPS, clause: "8.1.10.8", rel: 交集, strength: 5, why: 配置基线与变更}
   SOC.PRC.05:
   - {fw: ISO27001, clause: A.5.27, rel: 交集, strength: 7, why: 从事件中学习}
   - {fw: CSF, clause: ID.IM-02, rel: 交集, strength: 7, why: 从测试与演练中改进}
   - {fw: CSF, clause: ID.IM-04, rel: 交集, strength: 5, why: 响应计划维护与改进}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 7, why: 应急预案培训与演练}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 事件原因分析与总结}
   SOC.PRC.06:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 主动发现异常活动}
   - {fw: ISO27001, clause: A.5.7, rel: 交集, strength: 4, why: 情报驱动的狩猎假设}
   - {fw: CSF, clause: DE.AE-02, rel: 交集, strength: 5, why: 主动分析潜在不良事态}
   - {fw: CSF, clause: ID.RA-03, rel: 交集, strength: 4, why: 识别内外部威胁}
+  - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 4, why: 边界入侵与新型攻击检测}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 4, why: 安全事件集中分析}
   SOC.PRC.07:
   - {fw: ISO27001, clause: A.8.8, rel: 交集, strength: 7, why: 技术脆弱性管理}
   - {fw: CSF, clause: ID.RA-01, rel: 交集, strength: 7, why: 资产脆弱性识别与记录}
   - {fw: CSF, clause: ID.RA-05, rel: 交集, strength: 4, why: 结合威胁排定处置优先级}
+  - {fw: MLPS, clause: "8.1.10.5", rel: 交集, strength: 8, why: 漏洞识别与及时修补}
+  - {fw: MLPS, clause: "8.1.4.4", rel: 交集, strength: 5, why: 已知漏洞发现与修补}
   SOC.PRC.08:
   - {fw: ISO27001, clause: A.5.37, rel: 交集, strength: 7, why: 处置手册即文件化规程}
   - {fw: ISO27001, clause: A.5.27, rel: 交集, strength: 4, why: 事件经验沉淀}
   - {fw: CSF, clause: ID.IM-03, rel: 交集, strength: 5, why: 从运营过程中改进}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 事件处置经验与记录}
+  - {fw: MLPS, clause: "8.1.6.3", rel: 交集, strength: 4, why: 操作规程制定与发布}
   SOC.BNK.03:
   - {fw: ISO27001, clause: A.5.5, rel: 交集, strength: 6, why: 与监管机构的联系}
   - {fw: ISO27001, clause: A.5.31, rel: 交集, strength: 4, why: 行业监管要求识别}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 6, why: 按要求通知外部相关方}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按规定报告安全事件}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 与监管单位沟通}
   SOC.PWR.03:
   - {fw: ISO27001, clause: A.5.26, rel: 交集, strength: 4, why: 调度侧事件的联合响应}
   - {fw: CSF, clause: DE.AE-03, rel: 交集, strength: 5, why: 多源信息关联}
   - {fw: CSF, clause: RS.CO-03, rel: 交集, strength: 4, why: 与调度相关方共享信息}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 事件报告与协同处置}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 5, why: 与调度等部门协作}
   SOC.PWR.04:
   - {fw: ISO27001, clause: A.5.5, rel: 交集, strength: 6, why: 与主管部门的联系}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 6, why: 按要求通知主管部门}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 6, why: 与主管部门沟通合作}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按规定报告安全事件}
   SOC.TEC.01:
   - {fw: ISO27001, clause: A.8.15, rel: 交集, strength: 7, why: 日志产生与采集}
   - {fw: CSF, clause: PR.PS-04, rel: 交集, strength: 7, why: 日志可用于持续监测}
   - {fw: CSF, clause: DE.CM-09, rel: 交集, strength: 5, why: 软硬件与运行环境监测}
+  - {fw: MLPS, clause: "8.1.5.2", rel: 交集, strength: 6, why: 审计管理与审计记录分析}
+  - {fw: MLPS, clause: "8.1.3.5", rel: 交集, strength: 6, why: 边界审计覆盖}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 6, why: 主机与应用审计覆盖}
   SOC.TEC.02:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 7, why: 异常行为监视}
   - {fw: CSF, clause: DE.AE-02, rel: 交集, strength: 6, why: 检测逻辑支撑事态分析}
   - {fw: CSF, clause: DE.CM-01, rel: 交集, strength: 5, why: 网络监测用例}
+  - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 6, why: 入侵行为检测与告警}
+  - {fw: MLPS, clause: "8.1.4.4", rel: 交集, strength: 5, why: 主机入侵检测与报警}
   SOC.TEC.03:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 监视活动的平台支撑}
   - {fw: CSF, clause: DE.AE-06, rel: 交集, strength: 6, why: 事态信息推送给人员与工具}
   - {fw: CSF, clause: DE.AE-03, rel: 交集, strength: 6, why: 平台多源关联}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 7, why: 集中管控与分析平台}
+  - {fw: MLPS, clause: "8.1.5.3", rel: 交集, strength: 4, why: 安全策略集中管理}
   SOC.TEC.04:
   - {fw: ISO27001, clause: A.5.9, rel: 交集, strength: 6, why: 资产清单}
   - {fw: ISO27001, clause: A.8.8, rel: 交集, strength: 5, why: 脆弱性信息关联}
   - {fw: CSF, clause: ID.AM-01, rel: 交集, strength: 5, why: 硬件资产清单}
   - {fw: CSF, clause: ID.AM-02, rel: 交集, strength: 5, why: 软件与服务清单}
   - {fw: CSF, clause: ID.RA-01, rel: 交集, strength: 5, why: 资产脆弱性记录}
+  - {fw: MLPS, clause: "8.1.10.2", rel: 交集, strength: 7, why: 资产清单与分类标识}
+  - {fw: MLPS, clause: "8.1.10.5", rel: 交集, strength: 6, why: 漏洞与资产关联管理}
   SOC.TEC.05:
   - {fw: ISO27001, clause: A.8.15, rel: 交集, strength: 8, why: 日志保存与保护}
   - {fw: ISO27001, clause: A.8.17, rel: 交集, strength: 5, why: 时钟同步保证时间一致}
   - {fw: CSF, clause: PR.PS-04, rel: 交集, strength: 7, why: 日志生成与可用}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 6, why: 审计记录集中留存}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 6, why: 审计记录保护与留存}
+  - {fw: MLPS, clause: "8.1.3.5", rel: 交集, strength: 5, why: 边界审计记录保护}
   SOC.TEC.06:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 6, why: 网络与终端异常监视}
   - {fw: ISO27001, clause: A.8.7, rel: 交集, strength: 4, why: 恶意软件防范}
   - {fw: CSF, clause: DE.CM-01, rel: 交集, strength: 7, why: 网络与网络服务监测}
   - {fw: CSF, clause: DE.CM-09, rel: 交集, strength: 6, why: 终端与运行环境监测}
+  - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 7, why: 网络入侵行为检测}
+  - {fw: MLPS, clause: "8.1.3.4", rel: 交集, strength: 5, why: 恶意代码检测与清除}
+  - {fw: MLPS, clause: "8.1.4.5", rel: 交集, strength: 5, why: 终端恶意代码防范}
   SOC.TEC.07:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 用户行为异常监视}
   - {fw: ISO27001, clause: A.8.2, rel: 交集, strength: 4, why: 特权账号使用监测}
   - {fw: CSF, clause: DE.CM-03, rel: 交集, strength: 7, why: 人员活动与技术使用监测}
+  - {fw: MLPS, clause: "8.1.4.1", rel: 交集, strength: 5, why: 身份鉴别与登录监测}
+  - {fw: MLPS, clause: "8.1.4.2", rel: 交集, strength: 5, why: 访问控制策略执行}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 5, why: 用户行为审计}
   SOC.TEC.08:
   - {fw: ISO27001, clause: A.5.23, rel: 交集, strength: 5, why: 云服务使用安全}
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 4, why: 云环境监视}
   - {fw: CSF, clause: DE.CM-09, rel: 交集, strength: 6, why: 运行环境监测}
   - {fw: CSF, clause: DE.CM-06, rel: 交集, strength: 4, why: 云服务方活动监测}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 4, why: 统一监测含云上资源}
+  - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 3, why: 区域边界入侵检测}
   SOC.TEC.09:
   - {fw: ISO27001, clause: A.8.14, rel: 交集, strength: 6, why: 信息处理设施冗余}
   - {fw: ISO27001, clause: A.8.6, rel: 交集, strength: 4, why: 容量管理}
   - {fw: CSF, clause: PR.IR-03, rel: 交集, strength: 6, why: 韧性机制}
   - {fw: CSF, clause: PR.IR-04, rel: 交集, strength: 5, why: 资源容量充足}
+  - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 5, why: 关键设备与线路冗余}
+  - {fw: MLPS, clause: "8.1.4.9", rel: 交集, strength: 6, why: 系统热冗余与备份}
   SOC.BNK.01:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 核心系统异常监视}
   - {fw: CSF, clause: ID.AM-05, rel: 交集, strength: 5, why: 按重要性排定资产优先级}
   - {fw: CSF, clause: DE.CM-09, rel: 交集, strength: 5, why: 核心系统运行监测}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 6, why: 重要系统运行集中监测}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 5, why: 重要业务审计}
   SOC.BNK.02:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 4, why: 交易异常监视}
   - {fw: CSF, clause: DE.CM-03, rel: 交集, strength: 4, why: 渠道使用行为监测}
   - {fw: CSF, clause: DE.AE-03, rel: 交集, strength: 4, why: 交易与安全事态关联}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 4, why: 重要用户行为审计}
+  - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 4, why: 异常网络行为检测}
   SOC.PWR.01:
   - {fw: ISO27001, clause: A.8.22, rel: 交集, strength: 5, why: 网络分区隔离}
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 分区边界监视}
   - {fw: CSF, clause: DE.CM-01, rel: 交集, strength: 6, why: 分区网络监测}
+  - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 6, why: 安全区域划分}
+  - {fw: MLPS, clause: "8.1.3.1", rel: 交集, strength: 6, why: 跨区域边界防护}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 5, why: 分区集中监测}
   SOC.PWR.02:
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 4, why: 工控设备异常监视}
   - {fw: CSF, clause: DE.CM-09, rel: 交集, strength: 5, why: 工控软硬件监测}
   - {fw: CSF, clause: DE.CM-01, rel: 交集, strength: 5, why: 工控协议流量监测}
+  - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 4, why: 网络攻击行为检测}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 3, why: 设备审计记录}
   SOC.MET.01:
   - {fw: ISO27001, clause: "9.1", rel: 交集, strength: 7, why: 监视、测量、分析与评价}
   - {fw: CSF, clause: GV.OV-03, rel: 交集, strength: 6, why: 风险管理绩效评价}
+  - {fw: MLPS, clause: "8.1.7.5", rel: 交集, strength: 5, why: 定期安全检查与统计}
+  - {fw: MLPS, clause: "8.1.10.5", rel: 交集, strength: 3, why: 定期风险评估与核查}
   SOC.MET.02:
   - {fw: ISO27001, clause: "9.3", rel: 交集, strength: 7, why: 管理评审}
   - {fw: CSF, clause: GV.OV-01, rel: 交集, strength: 6, why: 结果评审支撑决策}
   - {fw: CSF, clause: GV.RR-01, rel: 交集, strength: 4, why: 管理层担责}
+  - {fw: MLPS, clause: "8.1.7.5", rel: 交集, strength: 6, why: 检查结果汇总与通报}
+  - {fw: MLPS, clause: "8.1.6.4", rel: 交集, strength: 5, why: 制度定期论证与评审}
   SOC.MET.03:
   - {fw: ISO27001, clause: "10.1", rel: 交集, strength: 7, why: 持续改进}
   - {fw: CSF, clause: ID.IM-01, rel: 交集, strength: 6, why: 从评价中识别改进}
   - {fw: CSF, clause: ID.IM-03, rel: 交集, strength: 6, why: 从运营过程中改进}
+  - {fw: MLPS, clause: "8.1.6.4", rel: 交集, strength: 5, why: 制度评审与修订}
+  - {fw: MLPS, clause: "8.1.7.5", rel: 交集, strength: 5, why: 检查发现问题整改}
   SOC.MET.04:
   - {fw: ISO27001, clause: "9.1", rel: 交集, strength: 5, why: 检测有效性的测量}
   - {fw: ISO27001, clause: A.5.35, rel: 交集, strength: 4, why: 独立评审}
   - {fw: CSF, clause: ID.IM-02, rel: 交集, strength: 7, why: 通过测试验证并改进}
+  - {fw: MLPS, clause: "8.1.7.5", rel: 交集, strength: 5, why: 技术检查与有效性核查}
+  - {fw: MLPS, clause: "8.1.10.5", rel: 交集, strength: 5, why: 定期风险评估与技术核查}
   SOC.MET.05:
   - {fw: ISO27001, clause: "7.1", rel: 交集, strength: 6, why: 资源保障}
   - {fw: CSF, clause: GV.RR-03, rel: 交集, strength: 7, why: 资源与风险匹配}
+  - {fw: MLPS, clause: "8.1.7.2", rel: 交集, strength: 4, why: 人员配备}
+  - {fw: MLPS, clause: "8.1.9.2", rel: 交集, strength: 4, why: 安全建设规划设计}
   SOC.BNK.05:
   - {fw: ISO27001, clause: A.5.30, rel: 交集, strength: 5, why: 业务连续性信息通信就绪}
   - {fw: ISO27001, clause: "9.1", rel: 交集, strength: 4, why: 指标监视与测量}
   - {fw: CSF, clause: GV.OC-04, rel: 交集, strength: 5, why: 关键业务与依赖识别}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 5, why: 运行状况集中监测}
+  - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 4, why: 业务高峰处理能力}
   IRE.INC.01:
   - {fw: ISO27001, clause: A.5.28, rel: 交集, strength: 5, why: 证据支撑时间线}
   - {fw: ISO27001, clause: A.8.17, rel: 交集, strength: 4, why: 时钟同步}
   - {fw: CSF, clause: RS.AN-03, rel: 交集, strength: 7, why: 确定事件经过}
   - {fw: CSF, clause: RS.AN-06, rel: 交集, strength: 5, why: 调查动作记录}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 7, why: 审计记录含时间与事件}
+  - {fw: MLPS, clause: "8.1.5.4", rel: 交集, strength: 5, why: 集中审计与时钟同步}
   IRE.INC.02:
   - {fw: ISO27001, clause: A.5.25, rel: 交集, strength: 5, why: 事态影响评估}
   - {fw: CSF, clause: DE.AE-04, rel: 交集, strength: 7, why: 估计影响与范围}
   - {fw: CSF, clause: RS.AN-08, rel: 交集, strength: 7, why: 估计并确认事件规模}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 6, why: 事件影响范围分析}
+  - {fw: MLPS, clause: "8.1.10.2", rel: 交集, strength: 5, why: 资产清单支撑影响判定}
   IRE.INC.03:
   - {fw: ISO27001, clause: A.5.27, rel: 交集, strength: 5, why: 从事件中学习}
   - {fw: CSF, clause: RS.AN-03, rel: 交集, strength: 8, why: 根因分析}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 7, why: 分析事件原因与证据}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 5, why: 审计记录支撑溯源}
   IRE.BNK.01:
   - {fw: ISO27001, clause: A.5.29, rel: 交集, strength: 4, why: 中断期间的安全}
   - {fw: CSF, clause: DE.AE-04, rel: 交集, strength: 5, why: 影响估计}
   - {fw: CSF, clause: GV.OC-04, rel: 交集, strength: 5, why: 关键业务识别}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按影响程度分级处置}
+  - {fw: MLPS, clause: "8.1.10.2", rel: 交集, strength: 4, why: 重要资产识别}
   IRE.PWR.04:
   - {fw: ISO27001, clause: A.5.29, rel: 交集, strength: 4, why: 中断期间的安全}
   - {fw: CSF, clause: DE.AE-04, rel: 交集, strength: 5, why: 影响估计}
   - {fw: CSF, clause: GV.OC-04, rel: 交集, strength: 4, why: 关键运行功能识别}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 事件影响评估}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 4, why: 应急预案中的运行影响}
   IRE.PRO.01:
   - {fw: ISO27001, clause: A.8.20, rel: 交集, strength: 7, why: 网络安全}
   - {fw: ISO27001, clause: A.5.15, rel: 交集, strength: 5, why: 访问控制}
   - {fw: CSF, clause: PR.IR-01, rel: 交集, strength: 7, why: 防止未授权逻辑访问}
+  - {fw: MLPS, clause: "8.1.3.1", rel: 交集, strength: 7, why: 边界防护与非授权连接}
+  - {fw: MLPS, clause: "8.1.3.2", rel: 交集, strength: 7, why: 边界访问控制规则}
+  - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 5, why: 区域划分与隔离}
   IRE.PRO.02:
   - {fw: ISO27001, clause: A.8.8, rel: 交集, strength: 7, why: 技术脆弱性管理}
   - {fw: ISO27001, clause: A.8.9, rel: 交集, strength: 7, why: 配置管理}
   - {fw: CSF, clause: PR.PS-01, rel: 交集, strength: 7, why: 配置管理实践}
   - {fw: CSF, clause: PR.PS-02, rel: 交集, strength: 6, why: 软件维护与更新}
+  - {fw: MLPS, clause: "8.1.10.5", rel: 交集, strength: 7, why: 漏洞修补}
+  - {fw: MLPS, clause: "8.1.10.8", rel: 交集, strength: 6, why: 配置基线管理}
+  - {fw: MLPS, clause: "8.1.10.10", rel: 交集, strength: 4, why: 变更控制}
   IRE.PRO.03:
   - {fw: ISO27001, clause: A.5.18, rel: 交集, strength: 7, why: 访问权限}
   - {fw: ISO27001, clause: A.8.2, rel: 交集, strength: 6, why: 特权访问权限}
   - {fw: CSF, clause: PR.AA-01, rel: 交集, strength: 6, why: 身份与凭证管理}
   - {fw: CSF, clause: PR.AA-05, rel: 交集, strength: 7, why: 权限管理与最小权限}
+  - {fw: MLPS, clause: "8.1.4.1", rel: 交集, strength: 7, why: 身份鉴别}
+  - {fw: MLPS, clause: "8.1.4.2", rel: 交集, strength: 7, why: 账户与权限管理}
+  - {fw: MLPS, clause: "8.1.10.6", rel: 交集, strength: 4, why: 运维账户管理}
   IRE.PRO.04:
   - {fw: ISO27001, clause: A.8.24, rel: 交集, strength: 6, why: 密码技术使用}
   - {fw: ISO27001, clause: A.8.12, rel: 交集, strength: 4, why: 防数据泄露}
   - {fw: CSF, clause: PR.DS-01, rel: 交集, strength: 6, why: 静态数据保护}
   - {fw: CSF, clause: PR.DS-02, rel: 交集, strength: 6, why: 传输中数据保护}
+  - {fw: MLPS, clause: "8.1.4.8", rel: 交集, strength: 7, why: 数据传输与存储保密性}
+  - {fw: MLPS, clause: "8.1.4.7", rel: 交集, strength: 5, why: 数据完整性}
+  - {fw: MLPS, clause: "8.1.10.9", rel: 交集, strength: 5, why: 密码管理}
   IRE.PWR.05:
   - {fw: ISO27001, clause: A.8.22, rel: 交集, strength: 7, why: 网络隔离}
   - {fw: CSF, clause: PR.IR-01, rel: 交集, strength: 6, why: 环境间逻辑访问控制}
+  - {fw: MLPS, clause: "8.1.3.1", rel: 交集, strength: 7, why: 边界防护}
+  - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 6, why: 区域划分与隔离手段}
   IRE.DET.01:
   - {fw: ISO27001, clause: A.6.8, rel: 交集, strength: 6, why: 安全事态报告渠道}
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 5, why: 监视发现异常}
   - {fw: CSF, clause: DE.AE-02, rel: 交集, strength: 5, why: 事态分析}
+  - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 5, why: 入侵检测与报警}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 事件及时报告}
   IRE.DET.02:
   - {fw: ISO27001, clause: A.8.15, rel: 交集, strength: 6, why: 日志记录}
   - {fw: ISO27001, clause: A.8.16, rel: 交集, strength: 6, why: 监视活动}
   - {fw: CSF, clause: PR.PS-04, rel: 交集, strength: 6, why: 日志可用于监测}
   - {fw: CSF, clause: DE.CM-01, rel: 交集, strength: 5, why: 网络监测}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 7, why: 计算环境审计覆盖}
+  - {fw: MLPS, clause: "8.1.3.5", rel: 交集, strength: 6, why: 边界审计覆盖}
+  - {fw: MLPS, clause: "8.1.5.2", rel: 交集, strength: 5, why: 审计集中管理}
   IRE.DET.03:
   - {fw: ISO27001, clause: A.5.7, rel: 交集, strength: 5, why: 威胁情报提供指标}
   - {fw: CSF, clause: DE.AE-07, rel: 交集, strength: 6, why: 情报融入分析}
   - {fw: CSF, clause: DE.CM-09, rel: 交集, strength: 4, why: 主机环境排查}
+  - {fw: MLPS, clause: "8.1.4.4", rel: 交集, strength: 5, why: 主机入侵检测}
+  - {fw: MLPS, clause: "8.1.4.5", rel: 交集, strength: 5, why: 恶意代码检测}
+  - {fw: MLPS, clause: "8.1.10.7", rel: 交集, strength: 4, why: 恶意代码定期查杀}
   IRE.RSP.01:
   - {fw: ISO27001, clause: A.5.24, rel: 交集, strength: 8, why: 事件管理规划与准备}
   - {fw: CSF, clause: ID.IM-04, rel: 交集, strength: 7, why: 响应计划制定与维护}
   - {fw: CSF, clause: GV.RR-02, rel: 交集, strength: 4, why: 响应角色与权限}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 8, why: 应急预案框架与角色}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 6, why: 事件处置职责}
   IRE.RSP.02:
   - {fw: ISO27001, clause: A.5.26, rel: 交集, strength: 6, why: 事件响应}
   - {fw: ISO27001, clause: A.5.28, rel: 交集, strength: 5, why: 证据收集}
   - {fw: CSF, clause: RS.MI-01, rel: 交集, strength: 7, why: 事件遏制}
   - {fw: CSF, clause: RS.MI-02, rel: 交集, strength: 5, why: 事件根除}
   - {fw: CSF, clause: RS.AN-07, rel: 交集, strength: 5, why: 事件数据收集}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 6, why: 事件处置与证据收集}
+  - {fw: MLPS, clause: "8.1.3.3", rel: 交集, strength: 3, why: 入侵行为阻断}
   IRE.RSP.03:
   - {fw: ISO27001, clause: A.5.6, rel: 交集, strength: 4, why: 与专业组织的联系}
   - {fw: CSF, clause: RS.MA-01, rel: 交集, strength: 6, why: 与第三方协同执行响应}
   - {fw: CSF, clause: RS.CO-03, rel: 交集, strength: 5, why: 与外部相关方共享信息}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 6, why: 与外部单位沟通合作}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 4, why: 协同处置}
   IRE.RSP.04:
   - {fw: ISO27001, clause: A.5.28, rel: 交集, strength: 8, why: 证据收集与保全}
   - {fw: CSF, clause: RS.AN-06, rel: 交集, strength: 7, why: 记录完整性与来源保全}
   - {fw: CSF, clause: RS.AN-07, rel: 交集, strength: 7, why: 事件数据完整性与来源}
+  - {fw: MLPS, clause: "8.1.4.3", rel: 交集, strength: 5, why: 审计记录保护}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 事件证据保存}
   IRE.RSP.05:
   - {fw: ISO27001, clause: A.5.26, rel: 交集, strength: 4, why: 响应决策}
   - {fw: CSF, clause: RS.MA-04, rel: 交集, strength: 5, why: 升级至决策层}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 5, why: 通知内部相关方}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 5, why: 应急预案决策流程}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 5, why: 内部协作沟通}
   IRE.BNK.02:
   - {fw: ISO27001, clause: A.5.26, rel: 交集, strength: 3, why: 业务侧风险处置}
   - {fw: CSF, clause: RS.MI-01, rel: 交集, strength: 4, why: 交易风险遏制}
   - {fw: CSF, clause: RC.RP-04, rel: 交集, strength: 3, why: 结合关键业务恢复运营}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 4, why: 重要事件专项预案}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 4, why: 事件处置}
   IRE.BNK.04:
   - {fw: ISO27001, clause: A.5.19, rel: 交集, strength: 4, why: 服务商关系中的安全}
   - {fw: ISO27001, clause: A.5.20, rel: 交集, strength: 4, why: 协议约定事件协同}
   - {fw: CSF, clause: GV.SC-08, rel: 交集, strength: 7, why: 服务商纳入事件响应}
+  - {fw: MLPS, clause: "8.1.10.14", rel: 交集, strength: 6, why: 外包运维事件协同}
+  - {fw: MLPS, clause: "8.1.9.10", rel: 交集, strength: 4, why: 供应商协议责任}
   IRE.PWR.01:
   - {fw: ISO27001, clause: A.8.22, rel: 交集, strength: 4, why: 网络隔离}
   - {fw: CSF, clause: RS.MI-01, rel: 交集, strength: 6, why: 事件遏制}
+  - {fw: MLPS, clause: "8.1.2.1", rel: 交集, strength: 5, why: 区域隔离手段}
+  - {fw: MLPS, clause: "8.1.3.1", rel: 交集, strength: 5, why: 边界受控接口}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 4, why: 事件处置}
   IRE.REC.01:
   - {fw: ISO27001, clause: A.8.13, rel: 交集, strength: 7, why: 信息备份}
   - {fw: CSF, clause: RC.RP-01, rel: 交集, strength: 6, why: 执行恢复计划}
   - {fw: CSF, clause: RC.RP-03, rel: 交集, strength: 6, why: 使用前校验备份完整性}
   - {fw: CSF, clause: PR.DS-11, rel: 交集, strength: 6, why: 备份创建、保护与测试}
+  - {fw: MLPS, clause: "8.1.10.11", rel: 交集, strength: 8, why: 备份与恢复管理}
+  - {fw: MLPS, clause: "8.1.4.9", rel: 交集, strength: 7, why: 数据备份恢复}
   IRE.REC.02:
   - {fw: ISO27001, clause: A.5.29, rel: 交集, strength: 6, why: 中断期间的安全}
   - {fw: ISO27001, clause: A.5.30, rel: 交集, strength: 7, why: 业务连续性信息通信就绪}
   - {fw: CSF, clause: RC.RP-04, rel: 交集, strength: 5, why: 关键功能恢复后运营}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 6, why: 应急预案与业务保障}
+  - {fw: MLPS, clause: "8.1.4.9", rel: 交集, strength: 5, why: 异地备份与热冗余}
   IRE.REC.03:
   - {fw: CSF, clause: RC.RP-05, rel: 交集, strength: 8, why: 恢复资产完整性校验}
   - {fw: CSF, clause: RC.RP-06, rel: 交集, strength: 5, why: 宣告恢复结束}
   - {fw: ISO27001, clause: A.8.9, rel: 交集, strength: 4, why: 加固后的配置管理}
+  - {fw: MLPS, clause: "8.1.10.11", rel: 交集, strength: 5, why: 恢复过程验证}
+  - {fw: MLPS, clause: "8.1.10.5", rel: 交集, strength: 5, why: 漏洞修补与加固}
   IRE.BNK.05:
   - {fw: ISO27001, clause: A.5.30, rel: 交集, strength: 7, why: 灾备就绪}
   - {fw: ISO27001, clause: A.8.14, rel: 交集, strength: 5, why: 冗余设施}
   - {fw: CSF, clause: RC.RP-02, rel: 交集, strength: 5, why: 恢复动作排序执行}
   - {fw: CSF, clause: PR.IR-03, rel: 交集, strength: 5, why: 韧性机制}
+  - {fw: MLPS, clause: "8.1.4.9", rel: 交集, strength: 6, why: 异地实时备份}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 5, why: 灾备切换预案}
   IRE.PWR.02:
   - {fw: ISO27001, clause: A.5.28, rel: 交集, strength: 4, why: 工控现场证据收集}
   - {fw: CSF, clause: RS.AN-07, rel: 交集, strength: 4, why: 事件数据收集}
   - {fw: CSF, clause: RC.RP-05, rel: 交集, strength: 5, why: 恢复后完整性校验}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 4, why: 事件分析与证据}
+  - {fw: MLPS, clause: "8.1.10.11", rel: 交集, strength: 4, why: 备份恢复}
   IRE.RPT.01:
   - {fw: ISO27001, clause: A.6.8, rel: 交集, strength: 7, why: 安全事态报告}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 5, why: 通知内部相关方}
   - {fw: CSF, clause: RS.MA-04, rel: 交集, strength: 5, why: 事件升级}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 7, why: 及时向管理部门报告}
+  - {fw: MLPS, clause: "8.1.7.3", rel: 交集, strength: 4, why: 审批与上报程序}
   IRE.RPT.02:
   - {fw: ISO27001, clause: A.5.5, rel: 交集, strength: 6, why: 与监管机构的联系}
   - {fw: ISO27001, clause: A.5.31, rel: 交集, strength: 4, why: 法定报告义务识别}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 7, why: 按要求通知外部相关方}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按规定报告事件}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 5, why: 与监管单位沟通}
   IRE.RPT.03:
   - {fw: CSF, clause: RC.CO-04, rel: 交集, strength: 7, why: 按批准口径公开通报}
   - {fw: CSF, clause: RC.CO-03, rel: 交集, strength: 4, why: 恢复进展沟通}
   - {fw: ISO27001, clause: A.5.26, rel: 交集, strength: 3, why: 响应中的对外沟通}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 对外沟通与合作}
+  - {fw: MLPS, clause: "8.1.7.3", rel: 交集, strength: 4, why: 对外发布审批}
   IRE.BNK.03:
   - {fw: ISO27001, clause: A.5.5, rel: 交集, strength: 6, why: 与金融监管机构联系}
   - {fw: ISO27001, clause: A.5.31, rel: 交集, strength: 5, why: 行业报告要求识别}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 6, why: 按要求通知监管}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 5, why: 按规定报告事件}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 与监管单位沟通}
   IRE.PWR.03:
   - {fw: ISO27001, clause: A.5.25, rel: 交集, strength: 4, why: 事件定级}
   - {fw: ISO27001, clause: A.5.5, rel: 交集, strength: 5, why: 与主管部门联系}
   - {fw: CSF, clause: RS.MA-03, rel: 交集, strength: 5, why: 事件分类定级}
   - {fw: CSF, clause: RS.CO-02, rel: 交集, strength: 5, why: 按要求通知主管部门}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 6, why: 事件分级报告与处置}
+  - {fw: MLPS, clause: "8.1.7.4", rel: 交集, strength: 4, why: 与主管部门沟通}
   IRE.GOV.01:
   - {fw: ISO27001, clause: A.5.27, rel: 交集, strength: 8, why: 从事件中学习}
   - {fw: CSF, clause: ID.IM-03, rel: 交集, strength: 6, why: 从运营中识别改进}
   - {fw: CSF, clause: ID.IM-04, rel: 交集, strength: 5, why: 更新响应计划}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 7, why: 总结教训防止再发}
+  - {fw: MLPS, clause: "8.1.7.5", rel: 交集, strength: 5, why: 检查问题整改}
   IRE.GOV.02:
   - {fw: ISO27001, clause: A.6.3, rel: 交集, strength: 5, why: 培训与意识}
   - {fw: ISO27001, clause: A.5.24, rel: 交集, strength: 4, why: 响应准备含演练}
   - {fw: CSF, clause: ID.IM-02, rel: 交集, strength: 7, why: 演练中识别改进}
   - {fw: CSF, clause: PR.AT-02, rel: 交集, strength: 5, why: 响应岗位专门培训}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 8, why: 预案培训与演练}
+  - {fw: MLPS, clause: "8.1.8.3", rel: 交集, strength: 5, why: 安全意识与技能培训}
   IRE.GOV.03:
   - {fw: ISO27001, clause: A.5.25, rel: 交集, strength: 6, why: 事态评估与分级准则}
   - {fw: CSF, clause: RS.MA-03, rel: 交集, strength: 6, why: 事件分类与优先级}
   - {fw: CSF, clause: DE.AE-08, rel: 交集, strength: 5, why: 宣告事件的准则}
+  - {fw: MLPS, clause: "8.1.10.12", rel: 交集, strength: 6, why: 事件分类分级}
+  - {fw: MLPS, clause: "8.1.10.13", rel: 交集, strength: 5, why: 预案分级启动}
   IRE.GOV.04:
   - {fw: ISO27001, clause: "10.2", rel: 交集, strength: 6, why: 不符合与纠正措施}
   - {fw: CSF, clause: ID.IM-01, rel: 交集, strength: 5, why: 从评价中识别改进}
   - {fw: CSF, clause: ID.RA-06, rel: 交集, strength: 4, why: 风险应对的跟踪}
+  - {fw: MLPS, clause: "8.1.7.5", rel: 交集, strength: 6, why: 整改跟踪与复查}
+  - {fw: MLPS, clause: "8.1.10.5", rel: 交集, strength: 4, why: 漏洞修补跟踪}
