@@ -84,8 +84,16 @@ class Hit:
         return asdict(self)
 
 
-def _filters(layer: str, product: str, stage: str, doc_type: str, include_general: bool) -> tuple[str, dict]:
-    sql, params = [], {}
+# 交付侧只取已发布的现行版本；评测、影子检索（include_candidates）另取候选（三期 B24①），
+# 同一条目有候选时用候选替换它的旧现行版本，看候选晋级后的效果
+_LIVE = "v.status = 'published' AND i.current_version_id = v.id"
+_SHADOW = ("(v.status = 'candidate' OR (v.status = 'published' AND i.current_version_id = v.id AND NOT EXISTS "
+           "(SELECT 1 FROM kb_versions cv WHERE cv.item_id = i.id AND cv.status = 'candidate')))")
+
+
+def _filters(layer: str, product: str, stage: str, doc_type: str, include_general: bool,
+             include_candidates: bool = False) -> tuple[str, dict]:
+    sql, params = [_SHADOW if include_candidates else _LIVE], {}
     if layer:
         sql.append("i.layer = :layer")
         params["layer"] = layer
@@ -102,8 +110,8 @@ def _filters(layer: str, product: str, stage: str, doc_type: str, include_genera
 
 
 _BASE = """FROM kb_chunks c
-JOIN kb_versions v ON v.id = c.version_id AND v.status = 'published'
-JOIN kb_items i ON i.current_version_id = v.id AND NOT i.retired"""
+JOIN kb_versions v ON v.id = c.version_id
+JOIN kb_items i ON i.id = v.item_id AND NOT i.retired"""   # 版本状态条件在 _filters 里（_LIVE / _SHADOW）
 
 
 def _fulltext_pg(db: Session, q: str, where: str, params: dict) -> list[int]:
@@ -259,8 +267,9 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
            doc_type: str = "", limit: int = 8, include_general: bool = True, purpose: str = "kb.search",
            min_similarity: float | None = None, strict: bool = False, min_rerank: float | None = None,
            boost_tags: tuple[str, ...] | list[str] = (), boost_refs: tuple[str, ...] | list[str] = (),
-           trace: dict | None = None) -> dict:
-    """trace：评测诊断用（kb-eval），传入空 dict 时填入两路检索和融合后的切片编号顺序，只含编号。"""
+           trace: dict | None = None, include_candidates: bool = False) -> dict:
+    """trace：评测诊断用（kb-eval），传入空 dict 时填入两路检索和融合后的切片编号顺序，只含编号。
+    include_candidates：评测、影子检索带上候选版本（三期 B24①）；交付侧（工具、对话、导出）不传，只取已发布。"""
     query = query.strip()
     if not query:
         raise SearchError(422, "检索词不能为空")
@@ -273,7 +282,7 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
                                              for f in result.findings[:10]]})
     s = get_settings()
     limit = max(1, min(limit, MAX_LIMIT))
-    where, params = _filters(layer, product, stage, doc_type, include_general)
+    where, params = _filters(layer, product, stage, doc_type, include_general, include_candidates)
     postgres = db.get_bind(KbChunk).dialect.name == "postgresql"
     full = (_fulltext_pg if postgres else _fulltext_simple)(db, query, where, params)
 
@@ -416,13 +425,13 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
 
 def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit: int = 5,
           min_rerank: float | None = None, product: str = "", boost_refs: tuple[str, ...] | list[str] = (),
-          trace: dict | None = None) -> dict:
+          trace: dict | None = None, include_candidates: bool = False) -> dict:
     """依据查询：只查 L4 依据库。查不到时提示按公共规范第 3 节标注【依据待核实】。
     product、boost_refs 由工具层按项目配置快照填（本产品优先、快照 basis 列出的标准加权）。"""
     q = f"{ref_document} {query}".strip() if ref_document else query
     out = search(db, user, q, layer="L4", product=product, limit=limit, include_general=True, purpose="kb.basis",
                  min_similarity=get_settings().kb_basis_min_similarity, strict=True, min_rerank=min_rerank,
-                 boost_refs=boost_refs, trace=trace)
+                 boost_refs=boost_refs, trace=trace, include_candidates=include_candidates)
     if ref_document:
         out["items"] = [h for h in out["items"] if ref_document in h["ref_document"]] or out["items"]
     if not out["items"]:
@@ -461,8 +470,9 @@ def enqueue_embedding(db: Session, version_id: int, created_by: str) -> int | No
 
 
 def reembed_all(db: Session, created_by: str) -> int:
-    ids = db.scalars(select(KbVersion.id).join(KbItem, KbItem.current_version_id == KbVersion.id)
-                     .where(KbVersion.status == "published", KbItem.retired.is_(False))).all()
+    live = select(KbVersion.id).join(KbItem, KbItem.current_version_id == KbVersion.id)         .where(KbVersion.status == "published", KbItem.retired.is_(False))
+    shadow = select(KbVersion.id).join(KbItem, KbItem.id == KbVersion.item_id)         .where(KbVersion.status == "candidate", KbItem.retired.is_(False))      # 候选（三期 B24①）也要向量化
+    ids = [*db.scalars(live).all(), *db.scalars(shadow).all()]
     return sum(1 for vid in ids if enqueue_embedding(db, vid, created_by))
 
 
@@ -472,7 +482,7 @@ def _embed_job(payload: dict, ctx: jobs.JobContext) -> None:
 
     with SessionLocal() as db:
         v = db.get(KbVersion, int(payload["version_id"]))
-        if v is None or v.status != "published":
+        if v is None or v.status not in ("published", "candidate"):
             return                                  # 已被替代或下线，不用再向量化
         try:
             embed_version(db, v.id)

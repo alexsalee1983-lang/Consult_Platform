@@ -97,6 +97,10 @@ class KbVersion(KbBase):
     recheck_state: Mapped[str] = mapped_column(String(16), default="", index=True)
     recheck_reason: Mapped[str] = mapped_column(String(200), default="")
     recheck_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 候选影子期（三期 B24①，知识区迁移 k0015）：自动发布先落 status=candidate，candidate_since 为进入候选的时间；
+    # candidate_result 空 = 未出结果，promoted 晋级 / returned 抽检不通过退回人工 / superseded 被更新的版本替代
+    candidate_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    candidate_result: Mapped[str] = mapped_column(String(16), default="")
 
     item: Mapped[KbItem] = relationship(back_populates="versions", foreign_keys=[item_id])
     reviews: Mapped[list["KbReview"]] = relationship(back_populates="version", order_by="KbReview.id")
