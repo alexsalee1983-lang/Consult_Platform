@@ -213,6 +213,9 @@ export const api = {
   addIncidentEvent: (id, body) =>
     request(`/api/quality-incidents/${id}/events`, { method: "POST", body: JSON.stringify(body) }),
   workbench: () => request("/api/workbench"),
+  myTasks: () => request("/api/my-tasks"),
+  returnTask: (kind, ref_id, reason) =>
+    request("/api/my-tasks/return", { method: "POST", body: JSON.stringify({ kind, ref_id, reason }) }),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
     request(`/api/deletions/${id}/confirm`, { method: "POST", body: JSON.stringify({ flowback, flowback_refs }) }),

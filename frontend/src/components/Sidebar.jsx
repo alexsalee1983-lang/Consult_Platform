@@ -73,6 +73,7 @@ export default function Sidebar() {
   const items = [
     ...(business ? [
       { to: "/workbench", icon: "inbox", label: "工作台", badge: todo },
+      { to: "/my-tasks", icon: "review", label: "我的任务" },
       { group: "项目交付" },
       { to: "/projects", icon: "proj", label: "我的项目" },
       ...(code ? [

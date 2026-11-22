@@ -23,6 +23,8 @@ PROTECTED = [
     ("GET", "/api/quality-incidents/1"),
     ("POST", "/api/quality-incidents/1/events"),
     ("GET", "/api/workbench"),
+    ("GET", "/api/my-tasks"),
+    ("POST", "/api/my-tasks/return"),
     ("GET", "/api/projects/BANK-A"),
     ("POST", "/api/projects"),
     ("GET", "/api/catalog/products"),

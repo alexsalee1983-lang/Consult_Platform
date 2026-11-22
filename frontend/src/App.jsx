@@ -11,6 +11,7 @@ import Portfolio from "./pages/Portfolio.jsx";
 import Indicators from "./pages/Indicators.jsx";
 import QualityIncidents from "./pages/QualityIncidents.jsx";
 import Workbench from "./pages/Workbench.jsx";
+import MyTasks from "./pages/MyTasks.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
 import KbBatches from "./pages/KbBatches.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
@@ -82,6 +83,7 @@ export default function App() {
         <Route index element={<HomeRedirect />} />
         <Route element={<Business />}>
           <Route path="/workbench" element={<Workbench />} />
+          <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/project/:code" element={<OverviewPage />} />
           <Route path="/project/:code/deliverables" element={<DeliverableHome />} />
