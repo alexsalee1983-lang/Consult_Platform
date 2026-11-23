@@ -27,6 +27,12 @@ deliverables:
   title: 设计方案
   stage: 设计
   client_facing: true
+  # 章节取自 design_doc 步骤任务说明（三期前 SOC 只此一份大纲，其余交付件按任务说明成章）
+  outline:
+  - 设计目标与原则
+  - 目标运营模型
+  - 方案取舍说明
+  - 设计与主要差距的对应关系
 - code: D6
   title: 制度文件包
   stage: 设计
@@ -146,6 +152,14 @@ chain:
   output: D8
   query: SOC 高层汇报 管理层 决策
   instruction: 任务：交付链第 7 步。根据下面的 D4 现状评估报告、D5 设计方案和 D7 实施路线图，起草 D8 高层汇报：面向客户管理层，每章是一页汇报的要点（现状结论、主要风险与业务影响、目标运营模型概要、路线图与资源需求、需要管理层决策的事项），结论先行、语言简洁。只用这三份文件里已有的结论并标注来源，不新增结论；用“差距分析、整改建议”的说法，不出具测评或认证结论。
-gates: []
+gates:
+- id: soc-sections
+  kind: required_sections
+  deliverable: D5
+  sections:
+  - 设计目标
+  - 目标运营模型
+  level: blocking
+  message: 设计方案缺少设计目标或目标运营模型章节
 strict:
   card_items: []

@@ -109,6 +109,15 @@ def test_iso_soa_gate_lists_all_93_annex_a_controls():
     full = "\n".join(f"{c} 适用" for c in want)
     assert all(covers(full, c) for c in items)
     assert [c for c in items if not covers(full.replace("5.1 适用\n", ""), c)] == ["5.1"]
+def test_iso_cert_promise_gate_covers_implied_results():
+    """v2.0 收尾：ISO 资质边界门禁也拦“符合认证要求”“可通过审核”这类暗示认证结果的说法。"""
+    cat = config.load()
+    assert not cat.problems
+    gate = next(g for g in cat.products["ISO"].gates if g.id == "no-cert-promise")
+    assert gate.level == "blocking" and gate.deliverable == ""
+    assert {"符合认证要求", "可通过审核", "保证通过认证"} <= set(gate.params["terms"])
+
+
 def test_dsm_config_loads_with_boundary_gate():
     """D2：数据安全产品草稿可加载；资质边界门禁覆盖全部交付件。"""
     cat = config.load()

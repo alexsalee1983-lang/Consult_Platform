@@ -283,3 +283,33 @@ def test_final_round_only_markup_gives_notice(tool_mode, client, monkeypatch):
     assert len(m.requests) == 2 and "tools" not in m.requests[1]
     text = _deltas(r)
     assert "DSML" not in text and "没有给出答复" in text
+
+
+def test_tool_call_audit_has_conversation_id(tool_mode, client, night):
+    tool_mode([[*_call("kb_search", {"query": "夜间值守 托管方"}), _finish("tool_calls")],
+               [_text("好。"), _finish("stop")]])
+    before = _last_audit()
+    conv, r = _ask(client, "consultant-lead", "夜间值守怎么安排？")
+    assert r.status_code == 200
+    calls = _tool_audits(before)
+    kb = [c for c in calls if c["tool"] == "kb.search"]
+    assert kb and all(c["conversation_id"] == conv["id"] for c in kb)
+    assert "夜间值守" not in json.dumps(calls, ensure_ascii=False)             # 不记原文，只记长度
+
+
+def test_retryable_tool_error_gets_hint(tool_mode, client, monkeypatch):
+    from app.agents import tools
+
+    def boom(ctx, args):
+        raise tools.ToolError("检索服务暂时不可用", status=503)
+    monkeypatch.setitem(tools.IMPLEMENTATIONS, "kb.search", boom)
+    m = tool_mode([[*_call("kb_search", {"query": "x"}), _finish("tool_calls")], [_text("好。"), _finish("stop")]])
+    _ask(client, "consultant-lead", "查一下")
+    res = json.loads([x for x in m.requests[1]["messages"] if x["role"] == "tool"][-1]["content"])
+    assert res["retryable"] is True and "重试" in res["hint"]
+
+
+def test_non_retryable_error_has_no_hint():
+    from app.agents import tools
+    assert not tools.ToolError("参数错", status=422).retryable
+    assert tools.ToolError("忙", status=429).retryable
