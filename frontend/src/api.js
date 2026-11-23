@@ -46,9 +46,15 @@ export function sendMessage(conversationId, message, onDelta, onTool) {
   return streamPost(`/api/conversations/${conversationId}/messages`, { message }, onDelta, onTool);
 }
 
-async function streamPost(url, body, onDelta, onTool) {
+// 写稿助手（三期 A15）：侧栏问 / 改，流式返回；signal 为 AbortController.signal，停止即断开连接
+export function assistSection(code, dcode, seq, body, onDelta, signal) {
+  return streamPost(`${dpath(code, dcode)}/sections/${seq}/assist`, body, onDelta, undefined, signal);
+}
+
+async function streamPost(url, body, onDelta, onTool, signal) {
   const res = await fetch(url, {
     method: "POST",
+    signal,
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
     body: JSON.stringify(body),
