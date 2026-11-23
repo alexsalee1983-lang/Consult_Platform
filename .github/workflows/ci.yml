@@ -354,4 +354,6 @@ jobs:
           $dl "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt" -o checksums.txt
           grep " $tarball\$" checksums.txt | sha256sum -c -
           tar -xzf "$tarball" gitleaks
-          ./gitleaks git --redact --verbose .
+          # 只扫本次检出提交能到达的全部历史（PR 为合并后的提交，main 为 main），不扫其他未合并分支：
+          # 别的分支里的问题由它自己的 PR 检查拦住，不连累无关 PR（2026-11-23 #344 的测试样例曾让所有 PR 变红）。
+          ./gitleaks git --redact --verbose --log-opts="HEAD" .
