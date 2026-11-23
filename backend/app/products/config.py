@@ -633,6 +633,18 @@ def _gate_dict(g: Gate, source: str) -> dict[str, Any]:
             "source": source, **copy.deepcopy(g.params)}
 
 
+OUTLINE_HINT = "{code} 必须包含这些章节（按这个顺序，章节标题保留这些字样，可在章下细分）：{titles}。"
+
+
+def _module_section_gates(m: Module, product_code: str) -> list[dict[str, Any]]:
+    """模块给本产品追加的章节自动成为必备章节门禁（模块已自写同一交付件的 required_sections 时不重复）。"""
+    own = {g.deliverable for g in m.gates if g.kind == "required_sections"}
+    return [{"id": f"{m.code.lower()}-sections-{dcode.lower()}", "kind": "required_sections", "deliverable": dcode,
+             "level": "blocking", "message": f"勾选了{m.name}模块，{dcode} 缺少模块追加的章节", "source": m.code,
+             "sections": list(titles)}
+            for dcode, titles in m.sections.get(product_code, {}).items() if titles and dcode not in own]
+
+
 def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> dict[str, Any]:
     """产品 + 所选模块合并成完整配置（立项快照的 snapshot 字段）。
 
@@ -652,6 +664,8 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
     merged = replace(prod, frameworks=tuple(_merged(prod.frameworks, *(m.frameworks for m in mods))),
                      basis=tuple(_merged(prod.basis, *(m.basis for m in mods))))
     names = tuple(m.name for m in mods)
+    outlines = {d.code: _merged(d.outline, *(m.sections.get(prod.code, {}).get(d.code, ()) for m in mods))
+                for d in prod.deliverables}
     chain = []
     for s in prod.chain:
         extra = "\n".join(m.instructions[s.key] for m in mods if m.instructions.get(s.key))
@@ -659,14 +673,13 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
         text = render(s.instruction, merged, s.number, names, extra)
         if extra and "module_instructions" not in (_template_vars(s.instruction) or set()):
             text = f"{text}\n{extra}"
+        if outlines.get(s.output):
+            text = f"{text}\n{OUTLINE_HINT.format(code=s.output, titles='、'.join(outlines[s.output]))}"
         chain.append({"key": s.key, "number": s.number, "name": s.name, "agent": s.agent, "inputs": list(s.inputs),
                       "output": s.output, "query": render(s.query, merged, s.number, names, ""),
                       "instruction": text})
-    deliverables = []
-    for d in prod.deliverables:
-        outline = _merged(d.outline, *(m.sections.get(prod.code, {}).get(d.code, ()) for m in mods))
-        deliverables.append({"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
-                             "outline": outline})
+    deliverables = [{"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
+                     "outline": outlines[d.code]} for d in prod.deliverables]
     return {
         "format": SNAPSHOT_FORMAT,
         "product": prod.code, "product_name": prod.name, "product_version": prod.version,
@@ -677,7 +690,8 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
         "maturity_scores": prod.maturity_scores,
         "chain": chain,
         "gates": [_gate_dict(g, prod.code) for g in prod.gates]
-                 + [_gate_dict(g, m.code) for m in mods for g in m.gates],
+                 + [_gate_dict(g, m.code) for m in mods for g in m.gates]
+                 + [g for m in mods for g in _module_section_gates(m, prod.code)],
         "card_items": _merged(prod.card_items, *(m.card_items for m in mods)),
         "kb_tags": _merged(*(m.kb_tags for m in mods)),
         "expert_pending": [x.code for x in (prod, *mods) if x.expert_review != "done"],
