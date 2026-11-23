@@ -219,6 +219,11 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  // 知识使用反馈（三期 B29）：target 为 {message_id} 或 {deliverable, seq, version}
+  kbFeedback: (code, target) => request(`/api/projects/${encodeURIComponent(code)}/kb-feedback?${new URLSearchParams(target)}`),
+  sendKbFeedback: (code, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/kb-feedback`, { method: "POST", body: JSON.stringify(body) }),
+  kbUsage: (days = 90) => request(`/api/kb-usage?days=${days}`),
   kbUpload: (file, project = "") => {
     const fd = new FormData();
     fd.append("file", file);
@@ -254,6 +259,12 @@ export const api = {
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
   kbBasis: (q) => request(`/api/kb/basis?q=${encodeURIComponent(q)}`),
+  // 来源登记表（三期 B16）：列表、登记、状态流转、事件记录
+  kbSources: (status = "") => request(`/api/kb/sources${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  kbSourceCreate: (body) => request("/api/kb/sources", { method: "POST", body: JSON.stringify(body) }),
+  kbSourceStatus: (code, to, reason = "") =>
+    request(`/api/kb/sources/${encodeURIComponent(code)}/status`, { method: "POST", body: JSON.stringify({ to, reason }) }),
+  kbSourceEvents: (code) => request(`/api/kb/sources/${encodeURIComponent(code)}/events`),
   // ---- 交付件（M3）：章节与版本、质量评审、签署、导出 ----
   deliverable: (code, dcode) => request(dpath(code, dcode)),
   putOutline: (code, dcode, titles) =>
