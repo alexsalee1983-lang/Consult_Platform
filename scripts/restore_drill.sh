@@ -29,7 +29,7 @@ for k in sys.argv[2:]:
     v = v[k]
 print("" if v is None else v)' "$SRC/manifest.json" "$@"
 }
-psql_su() { docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U consult -qtA "$@"; }
+psql_su() { docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U consult -qtA "$@" </dev/null; }   # 不读 stdin：否则会吃掉下面 while read 的输入，只比到第一张表
 
 started_at="$(date +%s)"
 for f in "$SRC"/*.gpg; do
