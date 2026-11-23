@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 from ..core import audit
 from ..core.config import get_settings
 from ..core.db import KB_BIND
-from ..models import KbChunk, KbItem, KbVersion, User
+from ..models import KbChunk, KbItem, KbItemLabel, KbVersion, User
 from ..services import gateway, guard, jobs, usage
 from . import review
 
@@ -84,13 +84,23 @@ class Hit:
         return asdict(self)
 
 
+_PRODUCT_LABEL = ("EXISTS (SELECT 1 FROM kb_item_labels pl WHERE pl.item_id = i.id AND pl.kind = 'product' "
+                  "AND pl.value = :product)")
+_PRODUCT_LABEL_WITH_GEN = ("EXISTS (SELECT 1 FROM kb_item_labels pl WHERE pl.item_id = i.id AND pl.kind = 'product' "
+                           "AND pl.value IN (:product, 'GEN'))")
+
+
 def _filters(layer: str, product: str, stage: str, doc_type: str, include_general: bool) -> tuple[str, dict]:
     sql, params = [], {}
     if layer:
         sql.append("i.layer = :layer")
         params["layer"] = layer
     if product:
-        sql.append("i.product IN (:product, 'GEN')" if include_general and product != "GEN" else "i.product = :product")
+        # 按标签表过滤（B15）：多产品条目在每个产品下都能检到；GEN 与具体产品互斥，所以 GEN 条目只有一个产品标签
+        if include_general and product != "GEN":
+            sql.append(_PRODUCT_LABEL_WITH_GEN)
+        else:
+            sql.append(_PRODUCT_LABEL)
         params["product"] = product
     if stage:
         sql.append("i.stage IN (:stage, '通用')")
@@ -243,14 +253,19 @@ def _priorities(db: Session, ids: set[int], prefer: str, boost_tags, boost_refs)
     tags, refs = set(boost_tags or ()), [_ref_key(r) for r in boost_refs or () if _ref_key(r)]
     if not ids or not (prefer or tags or refs):
         return {}, {}
-    rows = db.execute(select(KbChunk.id, KbItem.product, KbItem.tags, KbVersion.ref_document)
-                      .join(KbVersion, KbVersion.id == KbChunk.version_id)
-                      .join(KbItem, KbItem.id == KbVersion.item_id).where(KbChunk.id.in_(ids))).all()
+    rows = db.execute(select(KbChunk.id, KbVersion.item_id, KbVersion.ref_document)
+                      .join(KbVersion, KbVersion.id == KbChunk.version_id).where(KbChunk.id.in_(ids))).all()
+    have: dict[int, dict[str, set[str]]] = {}     # 产品、检索标签读标签表（B15）
+    for iid, kind, value in db.execute(select(KbItemLabel.item_id, KbItemLabel.kind, KbItemLabel.value)
+                                       .where(KbItemLabel.item_id.in_({r[1] for r in rows}),
+                                              KbItemLabel.kind.in_(("product", "tag")))):
+        have.setdefault(iid, {}).setdefault(kind, set()).add(value)
     group, weight = {}, {}
-    for cid, prod, item_tags, ref in rows:
-        group[cid] = 1 if prefer and prod == "GEN" else 0
+    for cid, iid, ref in rows:
+        lab = have.get(iid, {})
+        group[cid] = 1 if prefer and "GEN" in lab.get("product", ()) else 0
         rk = _ref_key(ref)
-        if (tags and tags & set(item_tags or [])) or (refs and rk and any(r in rk or rk in r for r in refs)):
+        if (tags and tags & lab.get("tag", set())) or (refs and rk and any(r in rk or rk in r for r in refs)):
             weight[cid] = BOOST
     return group, weight
 
