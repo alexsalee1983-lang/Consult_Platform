@@ -164,3 +164,13 @@ def test_cli_import_also_listed(batch_root, kb_admin):
     b = next(b for b in c.get("/api/kb/batches").json() if b["source"] == "cli" and b["created_by"] == username)
     assert (b["kind"], b["status"], b["path"], b["job_id"]) == ("import", "done", "2026-11-samples", None)
     assert b["counts"]["total"] == 10
+
+
+def test_compose_worker_mounts_kb_downloads_readonly():
+    """批次任务在 worker 里跑，worker 必须与 backend 一样只读挂上资料目录（PR #302 测试不通过项）。"""
+    import yaml
+
+    compose = yaml.safe_load((REPO / "docker-compose.yml").read_text(encoding="utf-8"))
+    mount = "${KB_DOWNLOADS_DIR:-./kb-downloads}:/srv/knowledge/downloads:ro"
+    for service in ("backend", "worker"):
+        assert mount in compose["services"][service].get("volumes", []), service

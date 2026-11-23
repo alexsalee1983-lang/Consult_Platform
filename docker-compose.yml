@@ -183,6 +183,9 @@ services:
       NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend,prometheus,grafana
       no_proxy: localhost,127.0.0.1,postgres,redis,minio,embed,rerank,mock-llm,backend,worker,frontend,prometheus,grafana
     command: ["python", "-m", "app.worker"]
+    volumes:
+      # 知识批次页（三期 B18①）发起的 kb.batch_import / kb.batch_eval 在 worker 里读资料目录，须与 backend 同一只读挂载
+      - ${KB_DOWNLOADS_DIR:-./kb-downloads}:/srv/knowledge/downloads:ro
     depends_on:
       backend:
         condition: service_healthy
