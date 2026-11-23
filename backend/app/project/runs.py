@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..agents import call, knowledge, registry, runtime, tools
+from ..agents import call, knowledge, registry, runtime, slots, tools
 from ..core import audit
 from ..core.config import get_settings
 from ..core.db import SessionLocal, utcnow
@@ -57,6 +57,44 @@ ACTIVE = ("queued", "running", "waiting")
 EVIDENCE_CHARS = 6000        # 每条证据最多交给模型的字数
 INPUT_CHARS = 24000          # 一步的输入材料总字数上限
 MAX_CONDENSE = 4             # 证据超过上限时最多分几批提炼（每批不超过 INPUT_CHARS）
+def _missing_title(step: Step, missing: list[str]) -> str:
+    return f"第 {step.number} 步{step.name}缺少必需知识：{'、'.join(missing)}"[:200]
+
+
+def _answered(db: Session, run: AgentRun, title: str) -> bool:
+    return db.scalar(select(Confirmation.id).where(Confirmation.id.in_(run.card_ids or [-1]),
+                                                   Confirmation.status == "resolved",
+                                                   Confirmation.title == title)) is not None
+
+
+def _ask_for_knowledge(db: Session, user: User, project: Project, run: AgentRun, step: Step,
+                       record: AgentRunStep, asm: slots.Assembly) -> None:
+    """必需知识槽位库里没有（三期 A12）：发“知识不足”卡，停在本步；处理卡后重跑本步，同一缺口本次运行不再问。"""
+    db.refresh(run)
+    if run.status != "running":
+        raise StepCancelled()
+    args = {"kind": "知识不足", "title": _missing_title(step, asm.missing_required),
+            "options": ["A 按现有知识起草，缺的部分标【依据待核实】", "B 暂停：取消本次运行，补齐知识后重新发起"],
+            "recommendation": "A", "reason": "本步知识清单里的必需槽位在知识库中没有已发布条目",
+            "impact": "选 A 后平台重新检索并起草，缺的部分不硬写；知识补齐后重新发起可装配进来"}
+    if step.deliverable:
+        args["deliverable"] = step.deliverable
+    r = tools.invoke(db, user, step.agent, "confirm.create", args, project.code)
+    record.status, record.finished_at = "waiting", utcnow()
+    record.refs = {**record.refs, "cards": [r["id"]], "slots": asm.report}
+    db.add(record)
+    if _lock(db, run) != "running":
+        record.status = "cancelled"
+        db.commit()
+        return
+    run.card_ids = [*run.card_ids, r["id"]]
+    run.status, run.waiting_cards, run.updated_at = "waiting", [r["id"]], utcnow()
+    audit.record(db, actor="worker", action="run.step", result="allowed", project_code=project.code, run_id=run.id,
+                 step=step.key, agent=step.agent, cards=1, missing=len(asm.missing_required), next="waiting",
+                 reason="knowledge_missing")
+    db.commit()
+
+
 CONDENSE_MARK = "【证据要点提炼】"
 CONDENSE_RULES = ("把下面的证据提炼成要点，供后续起草使用：只写与安全管理、运营、技术现状和问题有关的事实，"
                   "每条要点末尾保留来源编号（如 [D-01] [I-02] [O-03] [S-01]），不推断、不评价，"
@@ -74,12 +112,13 @@ class Step:
     inputs: tuple[str, ...] = ()
     query: str = ""          # 检索查询的固定部分
     instruction: str = ""    # 已填好变量的任务说明
+    slots: tuple[dict, ...] = ()   # 三期 A12：本步的知识槽位（agents/slots.py）
 
 
 def chain_of(snap: dict) -> tuple[Step, ...]:
     """快照里的交付链（任务说明、检索词已在 config.compose 里填好变量、拼好模块说明）。"""
     return tuple(Step(s["key"], s["number"], s["agent"], s["output"], s["name"], tuple(s["inputs"]), s["query"],
-                      s["instruction"]) for s in config.check_snapshot(snap)["chain"])
+                      s["instruction"], tuple(s.get("slots") or ())) for s in config.check_snapshot(snap)["chain"])
 
 
 def steps(db: Session, project: Project) -> tuple[Step, ...]:
@@ -507,6 +546,15 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
         else:
             inputs, query = _step_inputs(db, project, run, step)
         kb_block, refs = knowledge.retrieve(db, user, step.agent, project, query)
+        asm = slots.assemble(db, user, step.agent, project, step.slots) if step.slots else None
+        if asm is not None:
+            if asm.missing_required and not _answered(db, run, _missing_title(step, asm.missing_required)):
+                _ask_for_knowledge(db, user, project, run, step, record, asm)
+                return
+            kb_block = "\n\n".join(x for x in (kb_block, asm.block) if x)
+            known = {r["doc_id"] for r in refs}
+            refs = [*refs, *(r for r in asm.refs if r["doc_id"] not in known)]
+            record.refs["slots"] = asm.report
     except tools.ToolError as e:
         raise StepFailed(f"工具调用被拒绝（{e.status}）") from e
     except gateway.BlockedError as e:                   # 证据提炼

@@ -297,7 +297,7 @@ export const DELIV_STATUS = {
   drafting: { label: "起草中", cls: "c-c" },
   not_started: { label: "未开始", cls: "c-n" },
 };
-export const KIND_CLS = { 方案取舍: "c-a", 来源冲突: "c-v", 证据不足: "c-r", 入库确认: "c-g", 范围确认: "c-c" };
+export const KIND_CLS = { 方案取舍: "c-a", 来源冲突: "c-v", 证据不足: "c-r", 入库确认: "c-g", 范围确认: "c-c", 知识不足: "c-r" };
 export const CONCLUSION_CLS = { pass: "c-g", revise: "c-a", fail: "c-r" };
 export const SEVERITY_CLS = { 阻断: "c-r", 重要: "c-a", 建议: "c-n" };
 export const EVIDENCE_STATUS = {
