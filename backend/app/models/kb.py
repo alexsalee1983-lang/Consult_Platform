@@ -235,3 +235,74 @@ class KbDeidReport(KbBase):
     deid_key: Mapped[str] = mapped_column(String(512), default="")            # 去标识后正文（知识区）
     safe_filename: Mapped[str] = mapped_column(String(255), default="")       # 去标识后的文件名
     comment: Mapped[str] = mapped_column(String(1000), default="")            # 人工确认意见
+
+
+class KbFramework(KbBase):
+    """标准 / 框架的一个版本（三期 B19，知识区迁移 k0013）。换版时旧版 status=superseded、superseded_by 指新版。"""
+    __tablename__ = "kb_frameworks"
+    __table_args__ = (UniqueConstraint("code", "version", name="uq_kb_frameworks_code_version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(32))                             # ISO27001 / CSF / MLPS
+    version: Mapped[str] = mapped_column(String(32))                          # 2022 / 2.0 / 2019
+    name: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(12), default="current")        # current / superseded
+    superseded_by_id: Mapped[int | None] = mapped_column(ForeignKey("kb_frameworks.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class KbControl(KbBase):
+    """公司控制项（三期 B19）：编号全局唯一、只增不改，按目录版本记一行。
+
+    applicability：适用性规则 {industries, mlps_levels, jurisdictions, deployments}，缺省或空表示不限（参照 800-53B 基线、OSCAL Profile）；
+    params：组织定义参数 [{id, label, default}]（如日志保留月数）。差距分析的评估维度，不是测评或认证判定项。"""
+    __tablename__ = "kb_controls"
+    __table_args__ = (UniqueConstraint("code", "catalog_version", name="uq_kb_controls_code_version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(40), index=True)                 # SOC.ORG.01
+    catalog_version: Mapped[str] = mapped_column(String(16))                  # v0
+    name: Mapped[str] = mapped_column(String(200))
+    product: Mapped[str] = mapped_column(String(16), index=True)              # SOC / IRE
+    domain: Mapped[str] = mapped_column(String(60))
+    industries: Mapped[list] = mapped_column(JSON, default=list)
+    applicability: Mapped[dict] = mapped_column(JSON, default=dict)
+    params: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(12), default="draft")          # draft / active / retired
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class KbControlCheckpoint(KbBase):
+    """控制项下的检查点（参照 SP 800-53A 评估目标）：题库、评分锚定、发现初判挂到这里。methods ⊆ {examine, interview, test}。"""
+    __tablename__ = "kb_control_checkpoints"
+    __table_args__ = (UniqueConstraint("control_id", "code", name="uq_kb_control_checkpoints_control_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    control_id: Mapped[int] = mapped_column(ForeignKey("kb_controls.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(48), index=True)                 # SOC.ORG.01.a
+    seq: Mapped[int] = mapped_column(Integer)
+    objective: Mapped[str] = mapped_column(String(500))
+    methods: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(12), default="draft")
+
+
+class KbControlMapping(KbBase):
+    """控制项 ↔ 框架条款（三期 B19）：relation 等价 / 子集 / 超集 / 交集（NIST IR 8477、SCF STRM，与 C12 同一套取值），
+    strength 1～10，rationale 简短理由；只存条款号，不存标准原文。"""
+    __tablename__ = "kb_control_mappings"
+    __table_args__ = (UniqueConstraint("control_id", "framework_id", "clause", "mapping_version",
+                                       name="uq_kb_control_mappings_key"),
+                      Index("ix_kb_control_mappings_framework_clause", "framework_id", "clause"))
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    control_id: Mapped[int] = mapped_column(ForeignKey("kb_controls.id", ondelete="CASCADE"), index=True)
+    framework_id: Mapped[int] = mapped_column(ForeignKey("kb_frameworks.id"))
+    clause: Mapped[str] = mapped_column(String(40))
+    relation: Mapped[str] = mapped_column(String(8))
+    strength: Mapped[int] = mapped_column(Integer)
+    rationale: Mapped[str] = mapped_column(String(300), default="")
+    mapping_version: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(12), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
