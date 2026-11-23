@@ -1,9 +1,9 @@
 """三期 B29 最小版：知识使用反馈 knowledge_feedback（主库、项目区数据，不用知识区专用的 kb_ 前缀）（有用 / 过时 / 不对，附言只存库、不进日志）。
 
-down_revision 暂接 0038：0039～0046（F1、G2②、A13、A24、A15、F2 等）未合并，合并顺序定了再改链。
+down_revision 合并时接 main 链头（决策记录 2026-11-23）。
 
 Revision ID: 0047_kb_feedback
-Revises: 0038_judgment_events
+Revises: 0041_review_issues
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0047_kb_feedback"
-down_revision: str | None = "0038_judgment_events"
+down_revision: str | None = "0041_review_issues"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
