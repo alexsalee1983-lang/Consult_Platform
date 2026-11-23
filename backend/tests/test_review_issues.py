@@ -77,7 +77,7 @@ def test_codes_fixed_across_rounds_resolve_and_reopen(team, model):  # noqa: F81
 
     with SessionLocal() as db:
         logs = [x for x in db.scalars(select(AuditLog).where(AuditLog.project_code == code,
-                                                               AuditLog.action == "quality.review"))]
+                                                               AuditLog.action == "quality.review").order_by(AuditLog.id))]
         last = json.loads(logs[-1].detail)
         assert (last["issues_reopened"], last["issues_resolved"], last["issues_new"]) == (1, 2, 0)
         dump = json.dumps([x.detail for x in logs], ensure_ascii=False)
