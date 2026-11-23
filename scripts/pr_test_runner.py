@@ -58,19 +58,22 @@ DETACHED_MARKS = ("may still be running this turn", "Lost the connection")
 SETSID = os.environ.get("RUNNER_SETSID", "1") != "0"
 
 PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 PR #{pr}，测完即结束。
-环境 {env}：目录 {dir}，网页端口 {web}（冒烟：bash scripts/smoke_test.sh http://localhost:{web}）。
-先读 docs/测试交接规范.md（第 1～4 节）并照做：检出分支 {branch} 并确认 HEAD 为 {head}、git status 干净；按 PR 描述“怎么测”
-或最新一条标题为“复核说明”的评论逐项测；每次都做数据保护检查。
+环境 {env}：目录 {dir}，网页端口 {web}。日志目录 {logdir}。
+先读 docs/测试交接规范.md 第 3 节（结论格式）和第 6 节，不必读全文。
+第 1 步（只此一条命令，不要拆开手动重跑脚本已做的步骤）：
+  cd {dir} && bash scripts/pr_test.sh {pr} {env} {logdir} > {logdir}/run.log 2>&1; tail -15 {logdir}/run.log
+  脚本自动做：检出 PR 头提交、独立 compose 项目新库起整套、冒烟、迁移头核对、数据保护检查、执行 PR 描述里“测试机命令”代码块、写 summary.md。
+  PR 有人工核对项或真实模型评测、需要服务保持在线时，命令前加 KEEP_UP=1。
+第 2 步：只读 {logdir}/summary.md（失败项再 tail -50 对应的日志文件）。结论是“环境问题未测”则直接评论该 summary、不换标签、结束。
+第 3 步：仅补做 PR 描述里的“人工核对项”和真实模型评测（若有，多轮规则见规范第 5 节），把结果补进 summary.md（替换“待填”行，改写总结论）。
 规则：
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
-- 控制上下文：命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看需要的部分，不要整段打印日志、pytest 或 docker 输出。
-- 同一项试两次不达预期就记现象、测下一项。
-- 不用 tmux、screen、nohup、& 等后台方式：本会话一结束进程就退出，后台跑的东西没人接。长评测在本轮前台跑完（输出重定向到文件），等完再写结论。
-- 每单用独立 compose 项目和新库（docs/模块约定.md 迁移链合并规则）：先在本目录停掉上一单的项目（docker compose ls 找本环境的，
-  `docker compose -p <旧项目> down`，不带 -v），再 `export COMPOSE_PROJECT_NAME=cp{env_l}-pr{pr}` 后 up --build，端口不变。
-  库迁移版本比分支新这类问题属环境问题、不算 PR 缺陷；仍起不来就评论“环境问题未测”、标签保持 待测试。旧项目的数据卷不要删。
+- 控制上下文：命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看需要的部分。
+- 不用 tmux、screen、nohup、& 等后台方式：长评测在本轮前台跑完（输出重定向到文件）。
+- 不逐步手动重跑脚本已做的步骤；同一项试两次不达预期就记现象、测下一项。
+- 数据保护检查失败或冒烟有失败项，如实写入结论，不要为了通过而改动。
 - 结束前必须做两件事：
-  1. 按第 3 节格式写结论到文件，`gh pr comment {pr} --body-file <文件>`；评论首行写明“环境 {env}”。
+  1. `gh pr comment {pr} --body-file {logdir}/summary.md`（首行已含“环境 {env}”）。
   2. 换标签：`gh pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
 过程中不要把日志、报告全文回显到对话里，只读 tail/grep 结果；最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
 
