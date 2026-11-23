@@ -10,7 +10,7 @@
 1. 收尾：检查各环境上次启动的会话是否结束；结束了就核对 PR 上是否已有结论评论和新标签，
    发一行群通知（NOTIFY_CMD），没产出结论的记失败，连续两次失败留给人看。
 2. 派单：`gh pr list --label 待测试`，按环境空闲情况每个空闲环境领一单，
-   在该环境目录用 `claude -p` 起一个全新会话（后台运行，日志落文件），本脚本立即退出。
+   在该环境目录起一个全新的一次性会话（默认 `claude -p`，可用 RUNNER_AGENT_CMD 换成 OpenClaw 等）（后台运行，日志落文件），本脚本立即退出。
 
 群会话只收一行结论，不在群会话里跑测试；大输出只进日志文件。
 环境变量（都可不设）：
@@ -18,6 +18,10 @@
     RUNNER_MODEL    claude 模型，默认 sonnet
     RUNNER_TIMEOUT  单 PR 最长分钟数，默认 150
     RUNNER_ENVS     启用的环境，默认 A,B,C,D
+    RUNNER_AGENT_CMD 起一次性测试会话的命令模板，默认用 claude -p。可用占位符（按空格拆分后逐段替换，
+                    每个占位符保持为一个参数）：{prompt} 提示词全文、{prompt_file} 提示词文件、
+                    {session} 本单唯一会话名（如 pr339-1123-1215）、{model} RUNNER_MODEL。
+                    例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
     NOTIFY_CMD      发群通知的命令，消息作为最后一个参数追加；须“直接发群消息”而不是回复某条消息
 """
 from __future__ import annotations
@@ -164,9 +168,14 @@ def start(st: dict, env: str, pr: int, branch: str, head: str) -> None:
     prompt = PROMPT.format(pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], branch=branch,
                            head=head[:7], logdir=logdir)
     logf = logdir / "session.log"
+    pfile = logdir / "prompt.txt"
+    pfile.write_text(prompt, encoding="utf-8")
+    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": logdir.name, "model": MODEL}
+    tmpl = os.environ.get("RUNNER_AGENT_CMD") or "claude -p {prompt} --model {model} --dangerously-skip-permissions"
+    cmd = [part.format(**sub) for part in shlex.split(tmpl)]
     with logf.open("w", encoding="utf-8") as fh:
         proc = subprocess.Popen(
-            ["claude", "-p", prompt, "--model", MODEL, "--dangerously-skip-permissions"],
+            cmd,
             cwd=cfg["dir"], stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             start_new_session=True)
     st["running"][env] = {"pid": proc.pid, "pr": pr, "head": head, "start": time.time(), "log": str(logf)}
