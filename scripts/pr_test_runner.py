@@ -69,7 +69,7 @@ PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 P
 - 结束前必须做两件事：
   1. 按第 3 节格式写结论到文件，`gh pr comment {pr} --body-file <文件>`；评论首行写明“环境 {env}”。
   2. 换标签：`gh pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
-最后一行只输出：RESULT: 通过 或 RESULT: 不通过 —— 一句话原因。"""
+最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
 
 
 def sh(args: list[str], cwd: str | None = None, check: bool = True) -> str:
@@ -133,9 +133,13 @@ def finish(st: dict) -> None:
         except OSError:
             pass
         key = f"{pr}@{job['head']}"
-        if "待测试" not in labels and ("测试通过" in labels or "测试未通过" in labels):
+        reason = tail.split("——", 1)[-1].strip() if "——" in tail else ""
+        if tail.startswith("RESULT: 环境问题未测"):
+            # 环境问题不算 PR 缺陷：不重试本 HEAD，等人工修好环境后清 state.json 的 fails 再派
+            st["fails"][key] = MAX_FAILS
+            notify(f"#{pr} 环境问题未测（环境 {env}）{('：' + reason) if reason else ''}；标签留 待测试，修好环境后人工重派")
+        elif "待测试" not in labels and ("测试通过" in labels or "测试未通过" in labels):
             res = "通过" if "测试通过" in labels else "不通过"
-            reason = tail.split("——", 1)[-1].strip() if "——" in tail else ""
             notify(f"#{pr} 测试{res}（环境 {env}）{('：' + reason) if reason else ''}")
             st["fails"].pop(key, None)
         else:
