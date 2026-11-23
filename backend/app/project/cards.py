@@ -32,6 +32,7 @@ from ..core import audit
 from ..core.db import utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
 from ..kb import deid
+from ..kb import refs as kb_refs_svc
 from ..models import Project, User
 from ..models.consent import ProjectConsent, SummaryCard
 from ..products import config
@@ -434,7 +435,7 @@ def summary(card: SummaryCard) -> dict:
 
 _CITATION_RE = re.compile(r"【依据[：:][^】]*】|【依据待核实】|\[(?:S-\d{2,4}|推断|模型推断)\]|"
                           r"(?<![A-Za-z0-9])[DIOS]-\d{2,4}(?:-\d{2,3})?(?![\d-])|"
-                          r"[\[｜|]\s*L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5}\s*[\]】]")
+                          + kb_refs_svc.MARK_PATTERN)
 
 
 def placeholder_problems(text: str) -> list[str]:

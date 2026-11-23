@@ -7,7 +7,7 @@
 只存条款号与简短理由，不存标准原文。迁移号按三期开发计划第七节表；down 暂接 k0009（B15 链合并后由后合并的一方改接）。
 
 Revision ID: k0013_kb_control_hub
-Revises: k0009_kb_upload_project
+Revises: k0012_kb_doc_id
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0013_kb_control_hub"
-down_revision: str | None = "k0009_kb_upload_project"
+down_revision: str | None = "k0012_kb_doc_id"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
