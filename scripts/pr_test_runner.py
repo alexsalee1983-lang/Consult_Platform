@@ -181,6 +181,8 @@ def dispatch(st: dict) -> None:
         if pr in busy or st["fails"].get(f"{pr}@{head}", 0) >= MAX_FAILS:
             continue
         names = {lb["name"] for lb in p["labels"]}
+        if "攒批评测" in names:  # md/评测题类 PR 等批次候选分支统一评测，不单独派单
+            continue
         line2 = p["headRefName"].startswith("content/") or "线2" in names
         env = next(e for e in (LINE2_ORDER if line2 else LINE1_ORDER) + free if e in free)
         free.remove(env)
