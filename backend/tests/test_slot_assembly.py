@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.agents import slots as slot_asm
 from app.core.db import SessionLocal
+from app.models.kb import KbItem
 from app.models import AgentRunStep, AuditLog, Confirmation, Project, User
 from app.products import config
 from app.project import runs
@@ -51,6 +52,11 @@ def test_snapshot_without_slots_is_unchanged():
     assert all(s.slots == () for s in runs.chain_of(snap))
 
 
+def _doc_type(db, doc_id: str) -> str:
+    """按条目类型字段取类型（B15 起编号为 KB-000123，不再含类型段）。"""
+    return db.scalar(select(KbItem.doc_type).where(KbItem.doc_id == doc_id))
+
+
 def _ids():
     return {"tpl": _publish("槽位测试-设计说明模板", "## 模板\n\n" + "槽位模板正文。" * 120, doc_type="TPL"),
             "mtd": _publish("槽位测试-夜间值守做法", "## 夜间值守\n\n槽位夜间值守由托管方初筛。" * 40, doc_type="MTD")}
@@ -73,7 +79,9 @@ def test_assemble_groups_by_slot_and_budgets_by_type():
     assert asm is not None
     by = {r["id"]: r for r in asm.report}
     for sid, t in (("tpl", "TPL"), ("night", "MTD")):     # 全量测试库里同类条目多，只核类型和条数
-        assert len(by[sid]["got"]) == 1 and f"-{t}-" in by[sid]["got"][0] and by[sid]["ok"]
+        assert len(by[sid]["got"]) == 1 and by[sid]["ok"]
+        with SessionLocal() as kdb:
+            assert _doc_type(kdb, by[sid]["got"][0]) == t
     ids = {"tpl": by["tpl"]["got"][0], "mtd": by["night"]["got"][0]}
     assert by["pit"]["got"] == [] and not by["pit"]["ok"]
     assert asm.missing_required == ["pit"]
@@ -124,7 +132,7 @@ def test_missing_required_slot_sends_card_then_resumes(proj, model, monkeypatch)
                                                      AgentRunStep.status == "done")).one()
         got = [r["got"] for r in done.refs["slots"]]
         assert len(got[0]) == 1 and got[1] == [] and got[0][0] in system        # 只记编号
-        assert "-TPL-" in got[0][0]
+        assert _doc_type(db, got[0][0]) == "TPL"
         n = db.scalar(select(Confirmation.id).where(Confirmation.kind == "知识不足",
                                                     Confirmation.project_id == db.scalar(
                                                         select(Project.id).where(Project.code == code))))
