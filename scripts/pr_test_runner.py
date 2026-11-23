@@ -22,6 +22,7 @@
                     每个占位符保持为一个参数）：{prompt} 提示词全文、{prompt_file} 提示词文件、
                     {session} 本单唯一会话名（如 pr339-1123-1215）、{model} RUNNER_MODEL。
                     例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
+    RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
     NOTIFY_CMD      发群通知的命令，消息作为最后一个参数追加；须“直接发群消息”而不是回复某条消息
 """
 from __future__ import annotations
@@ -52,6 +53,7 @@ MODEL = os.environ.get("RUNNER_MODEL", "sonnet")
 TIMEOUT_MIN = int(os.environ.get("RUNNER_TIMEOUT", "150"))
 ENABLED = [e.strip() for e in os.environ.get("RUNNER_ENVS", "A,B,C,D").split(",") if e.strip() in ENVS]
 MAX_FAILS = 2
+SETSID = os.environ.get("RUNNER_SETSID", "1") != "0"
 
 PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 PR #{pr}，测完即结束。
 环境 {env}：目录 {dir}，网页端口 {web}（冒烟：bash scripts/smoke_test.sh http://localhost:{web}）。
@@ -61,6 +63,9 @@ PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 P
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
 - 控制上下文：命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看需要的部分，不要整段打印日志、pytest 或 docker 输出。
 - 同一项试两次不达预期就记现象、测下一项。
+- 每单用独立 compose 项目和新库（docs/模块约定.md 迁移链合并规则）：先在本目录停掉上一单的项目（docker compose ls 找本环境的，
+  `docker compose -p <旧项目> down`，不带 -v），再 `export COMPOSE_PROJECT_NAME=cp{env_l}-pr{pr}` 后 up --build，端口不变。
+  库迁移版本比分支新这类问题属环境问题、不算 PR 缺陷；仍起不来就评论“环境问题未测”、标签保持 待测试。旧项目的数据卷不要删。
 - 结束前必须做两件事：
   1. 按第 3 节格式写结论到文件，`gh pr comment {pr} --body-file <文件>`；评论首行写明“环境 {env}”。
   2. 换标签：`gh pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
@@ -115,7 +120,10 @@ def finish(st: dict) -> None:
         if alive(pid) and not over:
             continue
         if alive(pid):
-            os.killpg(pid, signal.SIGTERM)
+            try:
+                os.killpg(pid, signal.SIGTERM) if job.get("setsid", True) else os.kill(pid, signal.SIGTERM)
+            except OSError:
+                os.kill(pid, signal.SIGTERM)
             log(f"#{pr} 环境 {env} 超时 {TIMEOUT_MIN} 分钟，已停")
         labels = pr_labels(pr)
         tail = ""
@@ -165,7 +173,7 @@ def start(st: dict, env: str, pr: int, branch: str, head: str) -> None:
     cfg = ENVS[env]
     logdir = RUNNER_HOME / "logs" / f"pr{pr}-{time.strftime('%m%d-%H%M')}"
     logdir.mkdir(parents=True, exist_ok=True)
-    prompt = PROMPT.format(pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], branch=branch,
+    prompt = PROMPT.format(pr=pr, env=env, env_l=env.lower(), dir=cfg["dir"], web=cfg["web"], branch=branch,
                            head=head[:7], logdir=logdir)
     logf = logdir / "session.log"
     pfile = logdir / "prompt.txt"
@@ -177,8 +185,9 @@ def start(st: dict, env: str, pr: int, branch: str, head: str) -> None:
         proc = subprocess.Popen(
             cmd,
             cwd=cfg["dir"], stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-            start_new_session=True)
-    st["running"][env] = {"pid": proc.pid, "pr": pr, "head": head, "start": time.time(), "log": str(logf)}
+            start_new_session=SETSID)
+    st["running"][env] = {"pid": proc.pid, "pr": pr, "head": head, "start": time.time(), "log": str(logf),
+                         "setsid": SETSID}
     log(f"#{pr} 派到环境 {env}（pid {proc.pid}），日志 {logf}")
 
 
