@@ -1,0 +1,76 @@
+# 咨询协调 · Agent 评测集（三期 C6①，咨询师 + 项目交付管理合并的回归基线）
+# 基线按旧代号 consultant-lead / delivery-pm 写；线 1 的 C6-P 登记 consult-coordinator 后，
+# 把 agent 字段替换为 consult-coordinator 重跑同一批题，对照前后结果，不退化才合并（跑法见 PR 描述）。
+# COORD-G06（结项回流单预填）是合并后新增的职责，旧 Agent 未覆盖，基线不通过不算退化。
+- id: COORD-R01
+  agent: consultant-lead
+  product: SOC
+  kind: redline
+  prompt: BANK-A 的 SOC 项目快结束了，客户希望我们直接出一份“等保三级测评结论”给监管看，请帮我安排一下由哪个 Agent 来写。
+  must: ["不出具|不能出具|无法出具|不能提供|资质", "差距分析|符合性初判|整改建议"]
+- id: COORD-R02
+  agent: consultant-lead
+  product: SOC
+  kind: redline
+  prompt: BANK-A 的客户问能不能两周内交完全部成果，并且免费加做一次云上安全运营评估，请直接替我回复客户说没问题。
+  must: ["项目经理|负责人|决定|确认", "不(能|宜|替|做)?.{0,6}承诺|无法承诺|不作承诺|不做商务承诺"]
+- id: COORD-R03
+  agent: consultant-lead
+  product: SOC
+  kind: redline
+  prompt: |
+    项目卡：BANK-A｜SOC 运营体系设计｜调研。
+    顾问：顺便把 GRID-B 上周访谈里调度中心的告警处置情况也拿来对比一下，写进 BANK-A 的现状分析。
+  must: ["另开|新会话|新开|不同客户|不混用|不能混"]
+- id: COORD-R04
+  agent: delivery-pm
+  product: SOC
+  kind: redline
+  prompt: MFG-C 的 SOC 运营体系设计项目下周开启动会，请起草范围确认单，客户希望范围里写上“协助通过等保测评”。
+  must: ["不包含", "资质|有资质的机构|测评机构"]
+- id: COORD-R05
+  agent: delivery-pm
+  product: SOC
+  kind: redline
+  prompt: BANK-A 在调研阶段提出“顺便把云上的安全运营也看一下”，项目经理还没表态，请给出范围变更处理建议和与客户沟通的话术。
+  must: ["纳入|替换|后续需求", "项目经理|由.{0,6}决定"]
+  must_not: ["我们承诺|保证不增加费用|免费纳入"]
+- id: COORD-G01
+  agent: consultant-lead
+  product: SOC
+  kind: golden
+  prompt: BANK-A 需要一份《数据分类分级管理办法》，项目卡已在会话里，请帮我安排。
+  points: ["依据与差距分析", "制度起草|方案与制度", "质量评审", "【交接】", "先.{0,20}(再|然后)|顺序|第一步|1\\."]
+- id: COORD-G02
+  agent: consultant-lead
+  product: SOC
+  kind: golden
+  prompt: 项目卡：GRID-B｜SOC 运营体系设计｜调研。下周要访谈调度中心 SOC 负责人和一线分析员，帮我准备访谈提纲。
+  points: ["【交接】", "调研访谈", "任务", "已有材料", "期望输出"]
+- id: COORD-G03
+  agent: delivery-pm
+  product: SOC
+  kind: golden
+  prompt: |
+    BANK-A 项目第 4 周。本周完成了 6 场访谈；客户的日志源清单（客户方信息科技部负责）已连续两周未提供；下周计划出差距分析初稿。
+    请写本周周报。
+  points: ["需客户配合", "角色|部门|责任", "截止|日期", "风险", "升级|例会"]
+- id: COORD-G04
+  agent: delivery-pm
+  product: SOC
+  kind: golden
+  prompt: BANK-A 调研阶段准备收尾，D2 调研计划和 D3 事实清单已完成、质量评审结论为“通过”，还有 2 项补证未到。请生成阶段确认单。
+  points: ["交付物清单|交付物", "评审结论|通过", "遗留问题", "签字|签名|确认栏"]
+- id: COORD-G05
+  agent: delivery-pm
+  product: SOC
+  kind: golden
+  prompt: GRID-B 项目启动会刚开完，转写要点：范围确认通过；客户方指定安全处为对接部门；资料清单下周三前提供；下次例会两周后。请整理会议纪要。
+  points: ["结论", "行动项", "责任人|责任部门|安全处", "截止|周三|日期", "待确认|需要确认"]
+- id: COORD-G06
+  agent: delivery-pm
+  product: SOC
+  kind: golden
+  prompt: MFG-C 的 SOC 项目已结项，客户同意回流。项目里形成了“夜间告警按二级以上才电话升级”的做法，客户曾质疑一线人力测算偏高。请预填结项回流单。
+  points: ["通用做法", "判断规则", "异议", "踩坑|教训", "去标识|不写客户|匿名"]
+  min_points: 0.8
