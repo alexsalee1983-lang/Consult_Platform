@@ -64,6 +64,8 @@ def test_codes_fixed_across_rounds_resolve_and_reopen(team, model):  # noqa: F81
     # 第二轮：A 措辞变了但写了原编号，B 不再出现 → B 已解决；C 是新问题
     model.reply = HEAD.format(b=1, m=1) + ROW_A.replace("夜间差距结论没有证据编号", f"{qa} 仍缺证据编号") + ROW_C
     assert member.put(_url(code, "sections/2"), json={"body": BODY2 + "补充。"}).status_code == 201
+    assert member.put(_url(code, "sections/1"), json={"body": "两章都改过：全文评审（A13② 增量只在部分章节改动时）。"}
+                      ).status_code == 201
     c2 = _codes(_review(member, code))
     assert c2[f"{qa} 仍缺证据编号"] == qa and c2["人数与第 1 章不一致"] == "Q-003"
     assert _ledger(code) == {qa: "open", qb: "resolved", "Q-003": "open"}
