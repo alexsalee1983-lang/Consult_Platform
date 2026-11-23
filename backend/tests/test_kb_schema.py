@@ -37,12 +37,13 @@ def test_enumerations_match_common_spec():
 
 
 def test_doc_id_format_and_parse():
-    assert meta.format_doc_id("L2", "OPS", "SOC", "TPL", 7) == "L2-OPS-SOC-TPL-007"
-    assert meta.parse_doc_id("L2-OPS-SOC-TPL-007") == ("L2", "OPS", "SOC", "TPL", 7)
+    assert meta.format_doc_id(7) == "KB-000007"
+    assert meta.format_legacy_doc_id("L2", "OPS", "SOC", "TPL", 7) == "L2-OPS-SOC-TPL-007"
+    assert meta.parse_legacy_doc_id("L2-OPS-SOC-TPL-007") == ("L2", "OPS", "SOC", "TPL", 7)
     for bad in ("L6-OPS-SOC-TPL-001", "L2-XXX-SOC-TPL-001", "L2-OPS-ABC-TPL-001", "L2-OPS-SOC-ZZZ-001",
                 "L2-OPS-SOC-TPL-7", "l2-ops-soc-tpl-001"):
         with pytest.raises(meta.MetaError):
-            meta.parse_doc_id(bad)
+            meta.parse_legacy_doc_id(bad)
 
 
 def test_review_date_defaults():
@@ -91,12 +92,12 @@ def test_reference_layer_requires_document_version_status():
 def test_create_item_allocates_sequential_doc_ids_and_draft_v1():
     with SessionLocal() as db:
         m = _meta(doc_type="PIT", stage="通用", product="GEN", layer="L5")
-        before = next_doc_id(db, m)
+        before = next_doc_id(db)
         v1 = create_item(db, m, _content(title="踩坑：交接班记录缺失"), created_by="expert1")
         v2 = create_item(db, m, _content(title="踩坑：告警阈值照抄"), created_by="expert1")
         i1, i2 = db.get(KbItem, v1.item_id), db.get(KbItem, v2.item_id)
         assert i1.doc_id == before
-        assert meta.parse_doc_id(i2.doc_id)[4] == meta.parse_doc_id(i1.doc_id)[4] + 1
+        assert i2.seq == i1.seq + 1 and i2.doc_id == meta.format_doc_id(i2.seq)
         assert v1.version == 1 and v1.status == "draft" and i1.current_version_id is None
         assert v1.review_date == date(2027, 11, 9)
 
