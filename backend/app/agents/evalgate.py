@@ -23,7 +23,7 @@ from ..project import quality
 from ..services import guard
 from . import evalset
 
-URL = re.compile(r"https?://|www\.|\b[\w-]+\.(?:com|cn|net|org|gov|edu)(?:\.cn)?\b", re.I)
+URL = re.compile(r"https?://|www\.|\b[\w-]+\.(?:com|cn|net|org|gov|edu)(?:\.cn)?\b(?!\.\d)", re.I)  # 后接“.数字”的是控制项编号（如 SOC.ORG.01），不算网址
 # 像真实单位的全称：“××股份有限公司”“××有限责任公司”“××集团”“××银行股份”等；虚拟客户只写代号
 ENTITY = re.compile(r"[一-龥]{2,20}(?:股份有限公司|有限责任公司|有限公司|集团公司|集团有限|银行股份|农村商业银行|商业银行股份)")
 CUSTOMER_CODE = re.compile(r"\b[A-Z]{2,8}-[A-Z][0-9]?\b")
