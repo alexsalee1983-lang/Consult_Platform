@@ -27,6 +27,7 @@ from ..core.db import utcnow
 from ..models import KbItem, KbVersion
 from ..models.deliverable import DeliverableSection, SectionVersion
 from ..models.project import Deliverable
+from . import refs as kb_refs
 
 RECHECK_DAYS = 90
 MIN_REMOVALS = 3                 # 至少 3 个章节里被删掉
@@ -46,8 +47,13 @@ def _aware(t: datetime | None) -> datetime | None:
     return t.replace(tzinfo=UTC) if t is not None and t.tzinfo is None else t
 
 
-def _refs(sv: SectionVersion) -> set[str]:
-    return {k["ref"] for k in (sv.sources or {}).get("knowledge", []) if k.get("found")}
+def _raw_refs(sv: SectionVersion) -> set[str]:
+    return {k["ref"] for k in (sv.sources or {}).get("knowledge", []) if k.get("found") and k.get("ref")}
+
+
+def _refs(sv: SectionVersion, canon: dict[str, str]) -> set[str]:
+    """本版本引用的条目，换成现行编号（旧编号别名和现行编号算同一条，B15）。"""
+    return {canon.get(r, r) for r in _raw_refs(sv)}
 
 
 def usage(db: Session, since: datetime, cutoffs: dict[str, datetime] | None = None) -> dict[str, Usage]:
@@ -62,18 +68,19 @@ def usage(db: Session, since: datetime, cutoffs: dict[str, datetime] | None = No
     out: dict[str, Usage] = defaultdict(Usage)
     if not project_of:
         return {}
-    versions = db.scalars(select(SectionVersion).where(SectionVersion.section_id.in_(list(project_of)))
-                          .order_by(SectionVersion.section_id, SectionVersion.version))
+    versions = list(db.scalars(select(SectionVersion).where(SectionVersion.section_id.in_(list(project_of)))
+                               .order_by(SectionVersion.section_id, SectionVersion.version)))
+    canon = kb_refs.canonical(db, {r for sv in versions for r in _raw_refs(sv)})
     prev: SectionVersion | None = None
     for sv in versions:
         at = _aware(sv.created_at)
         if sv.agent_code and at >= since:
-            for ref in _refs(sv):
+            for ref in _refs(sv, canon):
                 if at >= cutoffs.get(ref, since):
                     out[ref].cited.add(sv.section_id)
         if prev is not None and prev.section_id == sv.section_id and prev.agent_code and not sv.agent_code \
                 and at >= since:
-            for ref in _refs(prev) - _refs(sv):
+            for ref in _refs(prev, canon) - _refs(sv, canon):
                 if at >= cutoffs.get(ref, since) and _aware(prev.created_at) >= cutoffs.get(ref, since):
                     out[ref].removed.add(sv.section_id)
                     out[ref].projects.add(project_of[sv.section_id])

@@ -36,16 +36,24 @@ def test_updated_and_retired_items_flag_sections_until_rewritten():
         publish(v1)
         doc_id = v1.item.doc_id
 
+    # 别处已有引用同号条目的章节（全量跑或知识区重建后的残留），计数不应影响本用例
+    stale = _new_project()
+    with logged_in_client(app, create_user(("consultant",), {stale: "member"})) as s:
+        s.put(f"{_base(stale)}/outline", json={"titles": ["现状"]})
+        assert s.put(f"{_base(stale)}/sections/1", json={"body": f"残留引用 [{doc_id}]。"}).status_code == 201
     code = _new_project()
     member = create_user(("consultant",), {code: "member"})
     with logged_in_client(app, member) as c, logged_in_client(app, expert) as k, \
             logged_in_client(app, create_user(("consultant",))) as other:
+        base = k.get(f"/api/kb/items/{doc_id}/usage").json()
+        assert base["sections"] >= 1
         c.put(f"{_base(code)}/outline", json={"titles": ["现状", "差距"]})
         assert c.put(f"{_base(code)}/sections/1", json={"body": f"日志应集中分析 [{doc_id}]。"}).status_code == 201
         c.put(f"{_base(code)}/sections/2", json={"body": "差距待定。[推断]"})
         url = f"/api/projects/{code}/knowledge-updates"
         assert c.get(url).json() == []
-        assert k.get(f"/api/kb/items/{doc_id}/usage").json() == {"projects": 1, "deliverables": 1, "sections": 1}
+        # 引用计数按增量断言：doc_id 是知识区内 max+1，知识区重建而主库保留时（测试机曾出现）旧章节会引用同号条目
+        assert k.get(f"/api/kb/items/{doc_id}/usage").json() == {k_: base[k_] + 1 for k_ in base}
         assert c.get(f"/api/kb/items/{doc_id}/usage").status_code == 403          # 顾问看不到引用计数
         assert other.get(url).status_code == 404                                  # 非成员
 

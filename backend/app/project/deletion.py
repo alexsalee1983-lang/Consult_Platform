@@ -48,6 +48,7 @@ from ..models import (
     ProjectDocument,
     ProjectMember,
     QualityReview,
+    ReviewIssue,
     ReviewWaiver,
     SectionVersion,
     SignOff,
@@ -275,6 +276,7 @@ def purge(db: Session, p: Project) -> dict:
     runs = select(AgentRun.id).where(AgentRun.project_id == pid)
     drop(AgentRunStep, AgentRunStep.run_id.in_(runs))
     counts["runs"] = drop(AgentRun, AgentRun.project_id == pid)
+    drop(ReviewIssue, ReviewIssue.project_id == pid)
     drop(ReviewWaiver, ReviewWaiver.project_id == pid)
     counts["sign_offs"] = drop(SignOff, SignOff.project_id == pid)
     counts["quality_reviews"] = drop(QualityReview, QualityReview.project_id == pid)

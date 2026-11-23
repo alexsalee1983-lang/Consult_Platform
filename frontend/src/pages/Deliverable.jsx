@@ -293,8 +293,11 @@ function Quality({ code, dcode, so, canReview, isManager, onChanged }) {
             return (
               <li key={i}>
                 <div className="row" style={{ flexWrap: "wrap" }}>
-                  <span className={`chip ${w ? "c-n" : SEVERITY_CLS[x.severity] || "c-n"}`}>{x.severity}</span>
+                  {x.code && <span className="sub mono">{x.code}</span>}
+                  <span className={`chip ${w || x.status === "已驳回" ? "c-n" : SEVERITY_CLS[x.severity] || "c-n"}`}>{x.severity}</span>
                   <span className="sub">{x.dimension}</span>
+                  {x.downgraded && <span className="chip c-n">不在五类阻断内，已降为重要</span>}
+                  {!w && x.status === "已驳回" && <span className="chip c-n">之前已驳回，不再计入</span>}
                   {x.by === "rule" && <span className="chip c-n">平台规则</span>}
                   {w && <span className="chip c-n">已驳回</span>}
                 </div>

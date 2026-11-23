@@ -257,6 +257,12 @@ export const api = {
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
   kbBasis: (q) => request(`/api/kb/basis?q=${encodeURIComponent(q)}`),
+  // 来源登记表（三期 B16）：列表、登记、状态流转、事件记录
+  kbSources: (status = "") => request(`/api/kb/sources${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  kbSourceCreate: (body) => request("/api/kb/sources", { method: "POST", body: JSON.stringify(body) }),
+  kbSourceStatus: (code, to, reason = "") =>
+    request(`/api/kb/sources/${encodeURIComponent(code)}/status`, { method: "POST", body: JSON.stringify({ to, reason }) }),
+  kbSourceEvents: (code) => request(`/api/kb/sources/${encodeURIComponent(code)}/events`),
   // ---- 交付件（M3）：章节与版本、质量评审、签署、导出 ----
   deliverable: (code, dcode) => request(dpath(code, dcode)),
   putOutline: (code, dcode, titles) =>
