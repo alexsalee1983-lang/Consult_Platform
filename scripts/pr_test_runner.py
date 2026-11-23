@@ -22,6 +22,7 @@
                     每个占位符保持为一个参数）：{prompt} 提示词全文、{prompt_file} 提示词文件、
                     {session} 本单唯一会话名（如 pr339-1123-1215）、{model} RUNNER_MODEL。
                     例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
+    RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
     NOTIFY_CMD      发群通知的命令，消息作为最后一个参数追加；须“直接发群消息”而不是回复某条消息
 """
 from __future__ import annotations
@@ -52,6 +53,9 @@ MODEL = os.environ.get("RUNNER_MODEL", "sonnet")
 TIMEOUT_MIN = int(os.environ.get("RUNNER_TIMEOUT", "150"))
 ENABLED = [e.strip() for e in os.environ.get("RUNNER_ENVS", "A,B,C,D").split(",") if e.strip() in ENVS]
 MAX_FAILS = 2
+# 会话进程退出但代理网关侧那一轮可能仍在跑（CLI 与网关断连），此时不能释放环境
+DETACHED_MARKS = ("may still be running this turn", "Lost the connection")
+SETSID = os.environ.get("RUNNER_SETSID", "1") != "0"
 
 PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 PR #{pr}，测完即结束。
 环境 {env}：目录 {dir}，网页端口 {web}（冒烟：bash scripts/smoke_test.sh http://localhost:{web}）。
@@ -61,10 +65,13 @@ PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 P
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
 - 控制上下文：命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看需要的部分，不要整段打印日志、pytest 或 docker 输出。
 - 同一项试两次不达预期就记现象、测下一项。
+- 每单用独立 compose 项目和新库（docs/模块约定.md 迁移链合并规则）：先在本目录停掉上一单的项目（docker compose ls 找本环境的，
+  `docker compose -p <旧项目> down`，不带 -v），再 `export COMPOSE_PROJECT_NAME=cp{env_l}-pr{pr}` 后 up --build，端口不变。
+  库迁移版本比分支新这类问题属环境问题、不算 PR 缺陷；仍起不来就评论“环境问题未测”、标签保持 待测试。旧项目的数据卷不要删。
 - 结束前必须做两件事：
   1. 按第 3 节格式写结论到文件，`gh pr comment {pr} --body-file <文件>`；评论首行写明“环境 {env}”。
   2. 换标签：`gh pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
-最后一行只输出：RESULT: 通过 或 RESULT: 不通过 —— 一句话原因。"""
+最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
 
 
 def sh(args: list[str], cwd: str | None = None, check: bool = True) -> str:
@@ -87,8 +94,10 @@ def notify(msg: str) -> None:
 
 def load() -> dict:
     if STATE.exists():
-        return json.loads(STATE.read_text(encoding="utf-8"))
-    return {"running": {}, "fails": {}}
+        st = json.loads(STATE.read_text(encoding="utf-8"))
+        st.setdefault("held", {})
+        return st
+    return {"running": {}, "fails": {}, "held": {}}
 
 
 def save(st: dict) -> None:
@@ -115,19 +124,35 @@ def finish(st: dict) -> None:
         if alive(pid) and not over:
             continue
         if alive(pid):
-            os.killpg(pid, signal.SIGTERM)
+            try:
+                os.killpg(pid, signal.SIGTERM) if job.get("setsid", True) else os.kill(pid, signal.SIGTERM)
+            except OSError:
+                os.kill(pid, signal.SIGTERM)
             log(f"#{pr} 环境 {env} 超时 {TIMEOUT_MIN} 分钟，已停")
         labels = pr_labels(pr)
         tail = ""
+        lines: list[str] = []
         try:
             lines = Path(job["log"]).read_text(encoding="utf-8", errors="replace").strip().splitlines()
             tail = next((ln for ln in reversed(lines) if ln.startswith("RESULT:")), "")
         except OSError:
             pass
         key = f"{pr}@{job['head']}"
-        if "待测试" not in labels and ("测试通过" in labels or "测试未通过" in labels):
+        concluded = "待测试" not in labels and ("测试通过" in labels or "测试未通过" in labels)
+        if not tail and not concluded and any(m in ln for ln in lines[-20:] for m in DETACHED_MARKS):
+            # 断连：网关侧可能还在跑，挂起本环境和本 PR，人工确认后从 state.json 的 held 删掉再派
+            st["held"][env] = job
+            del st["running"][env]
+            notify(f"#{pr} 环境 {env} 会话与网关断连、可能仍在跑，已挂起该环境和该 PR，"
+                   f"确认网关侧已停后删 state.json 的 held.{env} 再派，日志 {job['log']}")
+            continue
+        reason = tail.split("——", 1)[-1].strip() if "——" in tail else ""
+        if tail.startswith("RESULT: 环境问题未测"):
+            # 环境问题不算 PR 缺陷：不重试本 HEAD，等人工修好环境后清 state.json 的 fails 再派
+            st["fails"][key] = MAX_FAILS
+            notify(f"#{pr} 环境问题未测（环境 {env}）{('：' + reason) if reason else ''}；标签留 待测试，修好环境后人工重派")
+        elif "待测试" not in labels and ("测试通过" in labels or "测试未通过" in labels):
             res = "通过" if "测试通过" in labels else "不通过"
-            reason = tail.split("——", 1)[-1].strip() if "——" in tail else ""
             notify(f"#{pr} 测试{res}（环境 {env}）{('：' + reason) if reason else ''}")
             st["fails"].pop(key, None)
         else:
@@ -141,10 +166,11 @@ def finish(st: dict) -> None:
 
 
 def dispatch(st: dict) -> None:
-    free = [e for e in ENABLED if e not in st["running"]]
+    held = st.get("held", {})
+    free = [e for e in ENABLED if e not in st["running"] and e not in held]
     if not free:
         return
-    busy = {j["pr"] for j in st["running"].values()}
+    busy = {j["pr"] for j in st["running"].values()} | {j["pr"] for j in held.values()}
     out = sh(["gh", "pr", "list", "--label", "待测试", "--state", "open", "--limit", "50", "--json",
               "number,headRefName,headRefOid,labels,createdAt"])
     prs = sorted(json.loads(out or "[]"), key=lambda p: p["createdAt"])
@@ -165,7 +191,7 @@ def start(st: dict, env: str, pr: int, branch: str, head: str) -> None:
     cfg = ENVS[env]
     logdir = RUNNER_HOME / "logs" / f"pr{pr}-{time.strftime('%m%d-%H%M')}"
     logdir.mkdir(parents=True, exist_ok=True)
-    prompt = PROMPT.format(pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], branch=branch,
+    prompt = PROMPT.format(pr=pr, env=env, env_l=env.lower(), dir=cfg["dir"], web=cfg["web"], branch=branch,
                            head=head[:7], logdir=logdir)
     logf = logdir / "session.log"
     pfile = logdir / "prompt.txt"
@@ -177,8 +203,9 @@ def start(st: dict, env: str, pr: int, branch: str, head: str) -> None:
         proc = subprocess.Popen(
             cmd,
             cwd=cfg["dir"], stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-            start_new_session=True)
-    st["running"][env] = {"pid": proc.pid, "pr": pr, "head": head, "start": time.time(), "log": str(logf)}
+            start_new_session=SETSID)
+    st["running"][env] = {"pid": proc.pid, "pr": pr, "head": head, "start": time.time(), "log": str(logf),
+                         "setsid": SETSID}
     log(f"#{pr} 派到环境 {env}（pid {proc.pid}），日志 {logf}")
 
 
