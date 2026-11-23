@@ -47,7 +47,7 @@ class Target:
 
 
 def section_target(sv: SectionVersion) -> Target:
-    return Target("review", sv.id, recheck._refs(sv))
+    return Target("review", sv.id, recheck._raw_refs(sv))
 
 
 def message_target(db: Session, project: Project, user: User, message_id: int) -> Target:
