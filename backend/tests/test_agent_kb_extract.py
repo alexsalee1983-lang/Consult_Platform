@@ -1,4 +1,4 @@
-"""三期 C12①：kb-builder 模式 F（提炼与挂载）md 草稿与评测集最小样例。
+"""三期 C12①：kb-builder 模式 I（提炼与挂载）md 草稿与评测集最小样例。
 
 只查 md 与评测集本身；kb-builder 读 B19 控制项、OLIR / CTID 导入器等平台侧改动在 C12-P（线 1）。
 """
@@ -15,16 +15,16 @@ CODE = "kb-builder"
 RELATIONS = ("等价", "子集", "超集", "交集")          # 与 B19 app/kb/controls.RELATIONS 同一套（#288）
 
 
-def _mode_f() -> str:
+def _mode_i() -> str:
     doc = registry.load(CODE)
     assert doc is not None
     body = doc.body
-    assert "## 模式 F：提炼与挂载" in body
-    return body.split("## 模式 F：提炼与挂载", 1)[1].split("\n# ", 1)[0]
+    assert "## 模式 I：提炼与挂载" in body
+    return body.split("## 模式 I：提炼与挂载", 1)[1].split("\n# ", 1)[0]
 
 
-def test_mode_f_has_fixed_structure_and_four_merge_verdicts():
-    part = _mode_f()
+def test_mode_i_has_fixed_structure_and_four_merge_verdicts():
+    part = _mode_i()
     for t in ("REF", "MTD", "TPL", "MAP", "PIT", "OBJ"):
         assert f"| {t} " in part, f"固定结构表缺类型 {t}"
     for v in ("重复", "补充", "冲突", "替代"):
@@ -33,8 +33,8 @@ def test_mode_f_has_fixed_structure_and_four_merge_verdicts():
     assert "提炼与挂载单" in part
 
 
-def test_mode_f_mapping_uses_b19_relations_confidence_and_cross_check():
-    part = _mode_f()
+def test_mode_i_mapping_uses_b19_relations_confidence_and_cross_check():
+    part = _mode_i()
     for r in RELATIONS:
         assert f"**{r}**" in part
     for word in ("NIST IR 8477", "OLIR", "CTID", "置信度", "交叉验证", "强度"):
@@ -42,10 +42,10 @@ def test_mode_f_mapping_uses_b19_relations_confidence_and_cross_check():
     assert "部分覆盖" not in part, "不再用二期 kb_mappings 的旧取值"
 
 
-def test_mode_f_mounts_to_controls_without_inventing_codes_and_keeps_boundaries():
-    part = _mode_f()
+def test_mode_i_mounts_to_controls_without_inventing_codes_and_keeps_boundaries():
+    part = _mode_i()
     assert "控制项" in part and "缺控制项" in part and "不新造编号" in part
-    assert quality.qualification_hits(_mode_f()) == 0, "模式 F 不得出现未否定的测评、认证结论用语"
+    assert quality.qualification_hits(_mode_i()) == 0, "模式 I 不得出现未否定的测评、认证结论用语"
     doc = registry.load(CODE)
     assert doc is not None
     assert set(doc.md_tools) <= set(registry.TOOL_NAMES), "md 工具名须在注册表里"
@@ -56,7 +56,7 @@ def test_extract_eval_set_valid_virtual_and_covers_verdicts():
     assert {c["agent"] for c in cases} == {CODE}
     assert {c.get("kind", "redline") for c in cases} >= {"redline", "golden"}
     joined = "\n".join(c["prompt"] for c in cases)
-    for word in ("模式 F", "SOC.ORG.01", "SOC.PRC.02"):
+    for word in ("模式 I", "SOC.ORG.01", "SOC.PRC.02"):
         assert word in joined
     golden = "\n".join("|".join(c.get("points", [])) for c in cases)
     for v in ("补充", "替代", "重复"):

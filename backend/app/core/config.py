@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     minio_endpoint: str = ""
     minio_access_key: str = ""
     minio_secret_key: str = ""
+    # 对象存储根账号名（只用名字核对后端没有用根账号连接，口令不给后端；三期 G1 最小权限）
+    minio_root_user: str = ""
     minio_secure: bool = False
     minio_bucket_project: str = "project-area"
     minio_bucket_knowledge: str = "knowledge-area"
@@ -30,6 +32,9 @@ class Settings(BaseSettings):
     llm_model_reasoning: str = "deepseek-v4.1-flash"
     llm_model_standard: str = "deepseek-v4.1-flash"
     llm_model_light: str = "deepseek-v4.1-flash"
+    # 模型目录 v1（三期 G2）：留空 = 照旧按上面三个变量单模型调用；填 YAML/JSON 文件路径或一段 JSON 时
+    # 按目录选首选和备选模型，评审、知识审核、仲裁强制与生成方不同家族（app/services/model_catalog.py）
+    llm_model_catalog: str = ""
     llm_connect_timeout_seconds: float = 5        # 建立连接超时
     llm_timeout_seconds: int = 120                # 等待模型回复（非流式整体 / 流式两段输出之间）的超时
     llm_max_retries: int = 2                      # 连接失败、超时、429、5xx 时重试次数（流式只在开始输出前重试）
@@ -70,6 +75,8 @@ class Settings(BaseSettings):
     # 起草引用校验（二期 B8）：解读、映射、案例、异议应答引用的“文件 + 条款号”在库里找不到依据原文时不能提交审核。
     # 关掉只显示“待核”、不拦提交（例如依据原文还没切条入库的过渡期）。
     kb_citation_gate: bool = True
+    # 三期 F4 最小版：改稿差异转候选（app/project/revision_mining.py）。只在测试机、试用机虚拟数据上开；生产环境一律不生效
+    f4_revision_mining: bool = False
     # 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：kb-source-publish 核验通过的 SRC 由平台自动发布，
     # 每批按比例随机抽检；最近 20 次抽检不通过率超过上限时暂停自动发布、全部转人工审核，直到抽检恢复。
     kb_src_auto_publish: bool = True
@@ -81,6 +88,10 @@ class Settings(BaseSettings):
     # 最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX 时暂停；超过一半时抽检比例加倍。
     kb_agent_auto_publish: bool = True
     kb_sample_rate_agent: float = 0.2
+    # 候选影子期（三期 B24①）：B10、B11 自动发布通过的版本先落 candidate，只供评测和影子检索，交付侧检索仍用旧的已发布版本；
+    # 满 KB_CANDIDATE_DAYS 天且抽检没有判不通过的，每日计划任务自动晋级为 published。关掉回到自动发布直接 published。
+    kb_candidate_shadow: bool = True
+    kb_candidate_days: int = 7
     # 有无知识库对比评测（二期 B1 补充）：kb-eval --compare 用知识库的准确率达标线；开启门禁时最近一次对比评测
     # 未达标就暂停自动发布（B10、B11 两级），直到再跑一次达标
     kb_eval_min_accuracy: float = 0.9
