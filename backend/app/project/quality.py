@@ -37,6 +37,11 @@
 - 门禁用“未驳回的阻断”判断；驳回记录在签署流程里显示，提交、签署的审计记下驳回条数。
 
 审计只记交付件编号、修订号、各章版本号、评审编号、问题计数、结论和字数，不记正文、问题描述、审核意见和驳回理由。
+
+异构评审（三期 G2）：评审 Agent 以 role="review" 调网关，排除生成方的模型家族——生成方取交付链里写出所评版本的
+运行步骤记下的模型（generator_families）；顾问手写、对话写入等没有运行记录的，网关按生成首选的家族排除。
+模型目录里没有别的家族时同家族降级：问题清单加一条平台“建议”（提示提高人工抽检），审计记 degraded。
+审计只多记模型 ID、家族和是否降级（只在配置了模型目录时记）。
 """
 from __future__ import annotations
 
@@ -52,9 +57,10 @@ from ..core import audit
 from ..kb import refs as kb_refs_svc
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
-from ..models import Deliverable, KbVersion, Project, QualityReview, ReviewWaiver, SignOff, User
+from ..models import (AgentRun, AgentRunStep, Deliverable, KbVersion, Project, QualityReview, ReviewWaiver, SignOff,
+                      User)
 from ..products import config
-from ..services import gateway, guard, jobs
+from ..services import gateway, guard, jobs, model_catalog
 from . import cards, configs, deliverables, review_issues
 from . import evidence as evidence_svc
 
@@ -552,6 +558,17 @@ def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverab
     db.commit()
 
 
+def generator_families(db: Session, project: Project, d: Deliverable, versions: dict) -> set[str]:
+    """写出所评各章版本的交付链步骤用的模型家族（运行步骤 refs 里记着交付件和各章版本号）。"""
+    want = {str(k): str(v) for k, v in (versions or {}).items()}
+    steps = db.scalars(select(AgentRunStep).join(AgentRun, AgentRunStep.run_id == AgentRun.id)
+                       .where(AgentRun.project_id == project.id, AgentRunStep.model != "")).all()
+    models = {st.model for st in steps
+              if (st.refs or {}).get("deliverable") == d.code
+              and any(want.get(str(k)) == str(v) for k, v in ((st.refs or {}).get("versions") or {}).items())}
+    return model_catalog.families_of(models)
+
+
 def _execute(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview) -> None:
     issues, confidential = rule_issues(d, r.versions, evidence_svc.withdrawn_codes(db, project),
                                        strict=project.tier == "strict",
@@ -564,6 +581,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
         issues += gate_issues(d, r.versions, gates)
     report, counts, downgraded, capped, incremental = "", {s: 0 for s in SEVERITIES}, 0, 0, {}
     meta: dict = {}
+    hetero: dict = {}
     if confidential:
         report = "（交付件正文命中机密级检测，未发往模型评审。请先处理阻断项，再重新评审。）"
     else:
@@ -584,7 +602,8 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
         try:
             res = call.call(db, AGENT, message, actor=user.username, doc=doc, project=project,
                             system=runtime.system_prompt(doc, card, kb_block), level=doc.level,
-                            parse=_parse_review_strict)
+                            parse=_parse_review_strict, role="review",
+                            exclude_families=generator_families(db, project, d, r.versions))
         except gateway.BlockedError as e:
             raise ReviewFailed("输入命中机密级内容，未发往模型") from e
         except gateway.ExternalModelForbidden as e:
@@ -617,6 +636,12 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
                       f"复核上轮问题 {len(recheck)} 条，沿用未改章节的问题 {len(carried)} 条。）\n\n{report}")[:INPUT_CHARS]
         meta = {"prompt_version": doc.version, "model": c.model[:64],
                 "prompt_tokens": c.prompt_tokens, "completion_tokens": c.completion_tokens}
+        if c.family:                                   # 配置了模型目录（G2）
+            hetero = {"model": c.model[:64], "model_family": c.family, "degraded": c.degraded}
+            if c.degraded:
+                issues.append(_issue("建议", "全文", "评审模型", "评审与生成用了同一家族的模型（同家族降级），"
+                                     "评审独立性不足，请提高人工抽检", "模型目录接入其他家族的已评测模型后重新评审",
+                                     "rule"))
     if _lock(db, r) != "running":
         db.commit()
         return
@@ -635,7 +660,8 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
                  downgraded=downgraded, profile=profile, profile_capped=capped,
                  **{f"incremental_{k}": v for k, v in incremental.items()},
                  **{f"issues_{k}": v for k, v in ledger.items()},
-                 length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens)
+                 length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens,
+                 **hetero)
     db.commit()
     from . import autoflow                     # 门禁通过自动提交签署（C5 P10）；出错不影响评审结果
 
