@@ -164,7 +164,62 @@ else
   cat "$LOGDIR/migrate.log" >> "$LOGDIR/failed.txt"
 fi
 
-# 5. 数据保护检查：审计链完整；backend/worker 日志不得出现 .env 里的口令、密钥原文
+# 4b. 素材注入：用测试账号登录，在顾问对话里发一条含唯一标记的虚拟文本（只含标记，无客户信息）
+CANARY_TAG="PRTEST-CANARY-$(od -An -N6 -tx1 /dev/urandom | tr -d ' 
+')"
+cat > "$LOGDIR/canary_send.py" <<'PY'
+import base64, hashlib, hmac, http.cookiejar, json, struct, sys, time, urllib.request, urllib.error
+
+base, user, pw, secret, tag = sys.argv[1:6]
+jar = http.cookiejar.CookieJar()
+op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+
+def totp():
+    s = secret.strip().upper()
+    s += "=" * (-len(s) % 8)
+    h = hmac.new(base64.b32decode(s), struct.pack(">Q", int(time.time()) // 30), hashlib.sha1).digest()
+    o = h[-1] & 15
+    return "%06d" % ((struct.unpack(">I", h[o:o + 4])[0] & 0x7FFFFFFF) % 1000000)
+
+
+def call(path, body, csrf=""):
+    h = {"Content-Type": "application/json"}
+    if csrf:
+        h["X-CSRF-Token"] = csrf
+    req = urllib.request.Request(base + path, json.dumps(body).encode(), h, method="POST")
+    try:
+        with op.open(req, timeout=120) as r:
+            return r.status, r.read().decode("utf-8", "ignore")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", "ignore")
+
+
+login = {"username": user, "password": pw, "totp": totp()}
+st, txt = call("/api/auth/login", login)
+if st == 401:  # 动态码刚被冒烟用过，等下一个时间步
+    time.sleep(31 - int(time.time()) % 30)
+    login["totp"] = totp()
+    st, txt = call("/api/auth/login", login)
+if st != 200:
+    print(f"登录失败 {st}")
+    sys.exit(1)
+csrf = json.loads(txt).get("csrf_token", "")
+st, txt = call("/api/projects/BANK-A/conversations", {"agent_code": "consultant-lead"}, csrf)
+if st != 201:
+    print(f"建对话失败 {st}")
+    sys.exit(1)
+conv = json.loads(txt)["id"]
+st, _ = call(f"/api/conversations/{conv}/messages", {"message": f"虚拟测试文本 {tag}，请忽略。"}, csrf)
+print(f"发送标记 状态 {st}")
+sys.exit(0 if st == 200 else 1)
+PY
+cenv() { v="${!1:-}"; [ -n "$v" ] || v="$(grep -E "^$1=" .env | tail -1 | cut -d= -f2-)"; v="${v%\"}"; printf '%s' "${v#\"}"; }
+python3 "$LOGDIR/canary_send.py" "$BASE" "$(cenv TEST_ACCOUNT_USERNAME)" "$(cenv TEST_ACCOUNT_PASSWORD)" "$(cenv TEST_ACCOUNT_TOTP_SECRET)" "$CANARY_TAG" > "$LOGDIR/canary_send.log" 2>&1
+CSEND=$?
+sleep 3
+
+# 5. 数据保护检查：审计链完整；标记 PRTEST-CANARY-* 不得出现在日志和审计里；backend/worker 日志不得出现 .env 里的口令、密钥原文
 docker compose exec -T backend python -m app.cli verify-audit > "$LOGDIR/audit.log" 2>&1
 AR=$?
 docker compose logs --no-color backend worker > "$LOGDIR/app_logs.log" 2>&1
@@ -179,13 +234,23 @@ while IFS='=' read -r k v; do
     echo "日志含 $k 的值" >> "$LOGDIR/leak.txt"
   fi
 done < <(grep -E '^[A-Z_]*(PASSWORD|SECRET|API_KEY|TOKEN|KEY)[A-Z_]*=' .env)
-CANARY="$(grep -c -E 'PRTEST-CANARY' "$LOGDIR/app_logs.log")"
-if [ "$AR" = 0 ] && [ "$LEAK" = 0 ] && [ "$CANARY" = 0 ]; then
+CANARY_LOG="$(grep -c -F "$CANARY_TAG" "$LOGDIR/app_logs.log")"
+CANARY_AUDIT="$(docker compose exec -T backend python -c "
+import os, sys
+from sqlalchemy import create_engine, text
+with create_engine(os.environ['DATABASE_URL']).connect() as c:
+    print(c.execute(text('select count(*) from audit_logs where detail like :p or actor like :p or project_code like :p'), {'p': '%' + sys.argv[1] + '%'}).scalar())
+" "$CANARY_TAG" 2>"$LOGDIR/canary_audit.err" | tail -1)"
+CANARY_AUDIT="${CANARY_AUDIT:-ERR}"
+if [ "$CSEND" != 0 ] || ! [ "$CANARY_AUDIT" -ge 0 ] 2>/dev/null; then
+  DP="不通过"
+  row "数据保护检查" 失败 "标记没发进平台（发送退出码 $CSEND，审计查询 $CANARY_AUDIT，见 canary_send.log）；检查无效"
+elif [ "$AR" = 0 ] && [ "$LEAK" = 0 ] && [ "$CANARY_LOG" = 0 ] && [ "$CANARY_AUDIT" = 0 ]; then
   DP="通过"
-  row "数据保护检查" 通过 "审计链完整；日志无口令/密钥原文（泄露 0，素材命中 0）"
+  row "数据保护检查" 通过 "已发标记 $CANARY_TAG；审计链完整；日志与审计无标记原文、无口令/密钥原文（日志命中 0，审计命中 0，密钥泄露 0）"
 else
   DP="不通过"
-  row "数据保护检查" 失败 "审计链退出码 $AR；日志含密钥值 $LEAK 处；素材命中 $CANARY（只记个数，见 leak.txt）"
+  row "数据保护检查" 失败 "审计链退出码 $AR；日志含密钥值 $LEAK 处；标记命中：日志 $CANARY_LOG、审计 $CANARY_AUDIT（见 leak.txt）"
 fi
 
 # 6. PR 描述里的“测试机命令”代码块：块前一行含“测试机命令”；前 3 行注释含“宿主机”或 host 则在宿主机执行，否则进 backend 容器
