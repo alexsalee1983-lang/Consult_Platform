@@ -30,7 +30,7 @@ from ..core.config import get_settings
 from ..core.db import utcnow
 from ..core.permissions import KNOWLEDGE_EXPERT, roles_of
 from ..models import KbItem, KbReview, KbVersion, User
-from . import importer, parse, sources
+from . import candidate, importer, parse, sources
 from . import review as rv
 
 PLATFORM = "platform"
@@ -136,9 +136,13 @@ def _auto_publish(db: Session, user: User, v: KbVersion) -> None:
                     comment="平台核验：" + "、".join(sources.VERIFY_RULES.values())))
     v.auto_review = PLATFORM
     db.commit()
-    rv.publish(db, v)
+    shadow = candidate.enabled()
+    if shadow:                       # 候选影子期（三期 B24①）：先当候选，达标后晋级
+        candidate.stage(db, v, PLATFORM)
+    else:
+        rv.publish(db, v)
     audit.record(db, actor=PLATFORM, action="kb.auto_publish", result="allowed", doc_id=v.item.doc_id,
-                 version=v.version, operator=user.username, rules=list(sources.VERIFY_RULES))
+                 version=v.version, operator=user.username, rules=list(sources.VERIFY_RULES), candidate=shadow)
 
 
 def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport:
@@ -203,9 +207,11 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
 
 
 def sample_queue(db: Session) -> list[KbVersion]:
-    """待抽检和抽检不通过、还没处理（仍是现行版本）的自动发布版本，以及使用反馈待复查的现行版本（B13，app/kb/recheck.py）。"""
-    return list(db.scalars(select(KbVersion).join(KbItem, KbItem.current_version_id == KbVersion.id)
-                           .where(or_(KbVersion.sample_state.in_(("pending", "failed")),
+    """待抽检和抽检不通过、还没处理（仍是现行版本）的自动发布版本，以及使用反馈待复查的现行版本（B13，app/kb/recheck.py）。
+    候选影子期（三期 B24①）的候选版本不是现行版本，也在队列里（抽检判不通过即退回人工）。"""
+    return list(db.scalars(select(KbVersion).join(KbItem, KbItem.id == KbVersion.item_id)
+                           .where(or_(KbItem.current_version_id == KbVersion.id, KbVersion.status == candidate.STATUS),
+                                  or_(KbVersion.sample_state.in_(("pending", "failed")),
                                       KbVersion.recheck_state.in_(("pending", "failed"))),
                                   KbItem.retired.is_(False))
                            .order_by(KbVersion.sample_state.desc(), KbVersion.recheck_state.desc(), KbVersion.id)))
@@ -224,8 +230,9 @@ def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: 
         deny(403, "role_mismatch", "抽检须由知识专家进行")
     sample = v.auto_review in (PLATFORM, AGENT) and v.sample_state not in ("passed", "failed")
     recheck = v.recheck_state == "pending"           # 使用反馈待复查（B13）：人审版本也可以，不计入抽检不通过率
-    current = v.item.current_version_id == v.id and not v.item.retired
-    if v.status != "published" or not current or not (sample or recheck):
+    shadow = v.status == candidate.STATUS and not v.item.retired          # 候选（三期 B24①）
+    current = v.item.current_version_id == v.id and not v.item.retired and v.status == "published"
+    if not (current or shadow) or not (sample or recheck):
         if v.sample_state in ("passed", "failed") and v.recheck_state != "pending":
             raise rv.ReviewError(409, "这个版本已经抽检过")
         raise rv.ReviewError(409, "只有自动发布或待复查的现行版本需要抽检")
@@ -242,5 +249,7 @@ def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: 
         v.recheck_state, v.recheck_at = state, utcnow()
     db.commit()
     audit.record(db, actor=user.username, action="kb.sample", result="allowed", doc_id=v.item.doc_id,
-                 version=v.version, decision=decision, sample=sample, recheck=recheck)
+                 version=v.version, decision=decision, sample=sample, recheck=recheck, candidate=shadow)
+    if shadow and decision == "fail":                # 候选抽检不通过：不晋级，退回人工审核
+        candidate.return_to_review(db, v, user.username, "sample_failed")
     return v

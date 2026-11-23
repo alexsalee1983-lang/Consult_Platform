@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # 最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX 时暂停；超过一半时抽检比例加倍。
     kb_agent_auto_publish: bool = True
     kb_sample_rate_agent: float = 0.2
+    # 候选影子期（三期 B24①）：B10、B11 自动发布通过的版本先落 candidate，只供评测和影子检索，交付侧检索仍用旧的已发布版本；
+    # 满 KB_CANDIDATE_DAYS 天且抽检没有判不通过的，每日计划任务自动晋级为 published。关掉回到自动发布直接 published。
+    kb_candidate_shadow: bool = True
+    kb_candidate_days: int = 7
     # 有无知识库对比评测（二期 B1 补充）：kb-eval --compare 用知识库的准确率达标线；开启门禁时最近一次对比评测
     # 未达标就暂停自动发布（B10、B11 两级），直到再跑一次达标
     kb_eval_min_accuracy: float = 0.9
