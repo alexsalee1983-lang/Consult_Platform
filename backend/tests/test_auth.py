@@ -102,6 +102,11 @@ PROTECTED = [
     ("POST", "/api/admin/jobs/selfcheck"),
     ("POST", "/api/admin/jobs/1/retry"),
     ("POST", "/api/kb/intake"),
+    ("GET", "/api/kb/sources"),
+    ("POST", "/api/kb/sources"),
+    ("PATCH", "/api/kb/sources/BANK-A"),
+    ("POST", "/api/kb/sources/BANK-A/status"),
+    ("GET", "/api/kb/sources/BANK-A/events"),
     ("GET", "/api/kb/intake"),
     ("GET", "/api/kb/intake/1"),
     ("GET", "/api/kb/intake/1/deid"),
@@ -119,6 +124,9 @@ PROTECTED = [
     ("POST", "/api/kb/versions/1/submit"),
     ("POST", "/api/kb/versions/1/review"),
     ("GET", "/api/kb/review-queue"),
+    ("GET", "/api/kb/practice-queue"),
+    ("POST", "/api/kb/practice-queue/decide"),
+    ("GET", "/api/kb/practice-queue/stats"),
     ("GET", "/api/kb/review-due"),
     ("GET", "/api/kb/samples"),
     ("POST", "/api/kb/versions/1/sample"),
@@ -127,6 +135,9 @@ PROTECTED = [
     ("GET", "/api/kb/meta"),
     ("GET", "/api/kb/versions"),
     ("GET", "/api/kb/stats"),
+    ("GET", "/api/projects/BANK-A/kb-feedback"),
+    ("POST", "/api/projects/BANK-A/kb-feedback"),
+    ("GET", "/api/kb-usage"),
 ]
 
 
