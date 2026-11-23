@@ -20,6 +20,10 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements-dev.txt
       - run: ruff check app tests alembic alembic_kb
+      # 三期 C8 评测门：评测集格式、红线（guard、网址、真实单位名）、资质用语；不连模型、不联网。
+      # 模拟模型逐题跑通在 tests/test_eval_gate.py（随下面 pytest 跑）；真模型回归在测试机攒批跑（docs/测试交接规范.md 第 5 节）。
+      - name: Agent 评测门（格式、红线、资质用语）
+        run: python -m app.cli agent-eval-lint ../knowledge/eval/agents
       # 接口测试跑在平台数据库镜像上（PostgreSQL 16 + pgvector + zhparser），与生产一致
       - name: 构建并启动测试数据库
         working-directory: .
@@ -161,7 +165,7 @@ jobs:
         run: |
           q() { docker compose exec -T postgres psql -U consult -d "$1" -Atc "$2"; }
           test "$(q consult "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "0"
-          test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "16"   # 知识区表数：基线 6 张 + B3 kb_mappings + B15 kb_item_aliases、kb_item_labels + B19 控制项中枢 4 张；新增知识区表要同步这里和下面恢复演练
+          test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "17"   # 知识区表数：基线 6 张 + B3 kb_mappings + B15 kb_item_aliases、kb_item_labels + B19 控制项中枢 4 张；新增知识区表要同步这里和下面恢复演练
           test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename in ('projects','users','audit_logs')")" = "0"
           test "$(q consult "select rolsuper::text from pg_roles where rolname='consult_kb'")" = "false"
           kbpw=$(grep -E '^KB_POSTGRES_PASSWORD=' .env | cut -d= -f2)
@@ -287,7 +291,7 @@ jobs:
           test "$n" = "0"
           test "$(objects)" = "$before"
           test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename='drill_marker'")" = "0"
-          test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename like 'kb\_%'")" = "16"
+          test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename like 'kb\_%'")" = "17"
           docker compose exec -T postgres psql -U consult -d consult -tAc \
             "select count(*) from audit_logs where action in ('backup.create','backup.restore')" | grep -qx 1   # 恢复的是备份时的库，只有恢复这一条
           bash scripts/smoke_test.sh http://localhost:8080

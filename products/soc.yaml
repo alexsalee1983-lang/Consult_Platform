@@ -11,10 +11,12 @@ deliverables:
   title: 启动包
   stage: 启动
   client_facing: true
+  review_profile: light   # 过程材料：只查红线和专项（A13）
 - code: D2
   title: 调研包
   stage: 调研
   client_facing: true
+  review_profile: light   # 过程材料：只查红线和专项（A13）
 - code: D3
   title: 事实清单
   stage: 调研
@@ -163,3 +165,7 @@ gates:
   message: 设计方案缺少设计目标或目标运营模型章节
 strict:
   card_items: []
+# 三期 C13 最小版（草稿）：缺槽专题访谈上限，kb-builder 模式 H 读取；平台接入前仅作配置草稿
+interview:
+  weekly_limit_per_expert: 3
+  max_questions: 5

@@ -5,6 +5,8 @@ POST  /api/kb/sources                    登记候选来源（许可、权威类
 PATCH /api/kb/sources/{code}             修改字段
 POST  /api/kb/sources/{code}/status      状态流转 {to, reason}；转正式只限知识管理员、不能是登记人
 GET   /api/kb/sources/{code}/events      状态变更记录
+GET   /api/kb/sources/confirm-queue      知识审批队列“来源确认”类（B25②，按主机分组）
+POST  /api/kb/sources/confirm-queue/decide  批量确认 / 不做 {gap_ids, decision, source?}；只限知识管理员
 """
 from collections.abc import Callable
 from datetime import datetime
@@ -17,6 +19,7 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
+from ..kb import gap_pool
 from ..kb import review as rv
 from ..kb import source_registry as reg
 from ..models import KbSource, User
@@ -87,6 +90,26 @@ def _run(fn: Callable[..., Any], *args: Any, **kw: Any) -> Any:
         return fn(*args, **kw)
     except reg.SourceError as e:
         raise HTTPException(e.status, e.detail) from None
+
+
+class DecideIn(BaseModel):
+    gap_ids: list[int] = Field(min_length=1, max_length=100)
+    decision: str = Field(max_length=8)
+    source: SourceIn | None = None
+
+
+@router.get("/confirm-queue")
+def confirm_queue(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    _staff(db, user)
+    return gap_pool.confirm_queue(db)
+
+
+@router.post("/confirm-queue/decide")
+def confirm_decide(body: DecideIn, db: Session = Depends(get_db),
+                   user: User = Depends(current_user)) -> dict[str, Any]:
+    _staff(db, user)
+    src = body.source.model_dump() if body.source else None
+    return _run(gap_pool.decide_confirm, db, user, body.gap_ids, body.decision, src)
 
 
 @router.get("", response_model=list[SourceOut])

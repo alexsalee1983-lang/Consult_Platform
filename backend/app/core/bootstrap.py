@@ -16,6 +16,7 @@ from sqlalchemy import Engine, func, make_url, select, text
 from sqlalchemy.orm import Session
 
 from ..models import Project, ProjectMember, User
+from ..services import model_catalog
 from . import audit, secretbox
 from .auth import password_expired
 from .db import utcnow
@@ -47,6 +48,11 @@ def check_settings(s: Settings) -> None:
         raise BootstrapError("生产环境必须配置对象存储（MINIO_ENDPOINT）")
     if s.minio_endpoint and (not s.minio_access_key or len(s.minio_secret_key) < 20):
         raise BootstrapError("对象存储的访问密钥未配置或过短（MINIO_ACCESS_KEY、MINIO_SECRET_KEY 至少 20 位）")
+    if s.is_prod and s.minio_endpoint and not s.minio_root_user:
+        raise BootstrapError("生产环境要配置 MINIO_ROOT_USER（对象存储根账号名），用于核对后端没有用根账号连接")
+    if s.is_prod and s.minio_endpoint and s.minio_access_key == s.minio_root_user:
+        raise BootstrapError("生产环境后端不能用对象存储根账号连接：先执行 storage-provision 建应用账号，"
+                             "MINIO_ACCESS_KEY 改为应用账号（见 docs/部署手册.md）")
     try:
         if not secretbox.parse_keys(s.totp_keys) and s.is_prod:
             raise BootstrapError("生产环境必须配置 TOTP_KEYS（账号 TOTP 密钥加密存储，生成方法见 .env.example）")
@@ -60,6 +66,10 @@ def check_settings(s: Settings) -> None:
         if (kb.host, kb.port, kb.database) == (main.host, main.port, main.database) \
                 or (s.is_prod and kb.username == main.username):
             raise BootstrapError("知识区要用单独的数据库和单独的账号（KB_DATABASE_URL 的库名、用户名都要与主库不同）")
+    try:
+        model_catalog.load(s.llm_model_catalog)
+    except model_catalog.CatalogError as e:
+        raise BootstrapError(f"模型目录配置有误（LLM_MODEL_CATALOG）：{e}") from e
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
     if s.is_prod and s.rerank_external:
