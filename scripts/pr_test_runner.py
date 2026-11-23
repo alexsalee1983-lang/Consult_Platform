@@ -20,7 +20,7 @@
     RUNNER_ENVS     启用的环境，默认 A,B,C,D
     RUNNER_AGENT_CMD 起一次性测试会话的命令模板，默认用 claude -p。可用占位符（按空格拆分后逐段替换，
                     每个占位符保持为一个参数）：{prompt} 提示词全文、{prompt_file} 提示词文件、
-                    {session} 本单唯一会话名（如 pr339-1123-1215）、{model} RUNNER_MODEL。
+                    {session} 本单会话名 pr<号>-<提交前 7 位>（同一提交重试复用同一会话）、{model} RUNNER_MODEL。
                     例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
     RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
     NOTIFY_CMD      发群通知的命令，消息作为最后一个参数追加；须“直接发群消息”而不是回复某条消息
@@ -72,7 +72,7 @@ PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 P
 - 结束前必须做两件事：
   1. 按第 3 节格式写结论到文件，`gh pr comment {pr} --body-file <文件>`；评论首行写明“环境 {env}”。
   2. 换标签：`gh pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
-最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
+过程中不要把日志、报告全文回显到对话里，只读 tail/grep 结果；最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
 
 
 def sh(args: list[str], cwd: str | None = None, check: bool = True) -> str:
@@ -216,7 +216,8 @@ def start(st: dict, env: str, pr: int, branch: str, head: str) -> None:
     logf = logdir / "session.log"
     pfile = logdir / "prompt.txt"
     pfile.write_text(prompt, encoding="utf-8")
-    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": logdir.name, "model": MODEL}
+    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": f"pr{pr}-{head[:7]}",  # 同一提交重试复用同一会话，不重新载入上下文
+           "model": MODEL}
     tmpl = os.environ.get("RUNNER_AGENT_CMD") or "claude -p {prompt} --model {model} --dangerously-skip-permissions"
     cmd = [part.format(**sub) for part in shlex.split(tmpl)]
     with logf.open("w", encoding="utf-8") as fh:
