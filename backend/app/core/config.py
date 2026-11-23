@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     # 起草引用校验（二期 B8）：解读、映射、案例、异议应答引用的“文件 + 条款号”在库里找不到依据原文时不能提交审核。
     # 关掉只显示“待核”、不拦提交（例如依据原文还没切条入库的过渡期）。
     kb_citation_gate: bool = True
+    # 三期 F4 最小版：改稿差异转候选（app/project/revision_mining.py）。只在测试机、试用机虚拟数据上开；生产环境一律不生效
+    f4_revision_mining: bool = False
     # 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：kb-source-publish 核验通过的 SRC 由平台自动发布，
     # 每批按比例随机抽检；最近 20 次抽检不通过率超过上限时暂停自动发布、全部转人工审核，直到抽检恢复。
     kb_src_auto_publish: bool = True
