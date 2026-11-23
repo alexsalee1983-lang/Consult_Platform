@@ -12,6 +12,9 @@ PATCH /api/kb/versions/{id}              修改草稿
 POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
 GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
+GET  /api/kb/practice-queue              公司做法确认队列（三期 B17），按章节就绪度排（知识专家、知识管理员）
+POST /api/kb/practice-queue/decide       采纳 / 修改 / 驳回，可批量（只有知识专家能拍板）
+GET  /api/kb/practice-queue/stats        确认耗时与修改幅度汇总（知识专家、知识管理员）
 GET  /api/kb/review-due                  30 天内到期待复审、单人发布待补复审的条目（知识专家、知识管理员）
 GET  /api/kb/samples                     抽检队列：自动发布（平台核验的依据原文、知识审核 Agent 审过的）中待抽检、
                                          抽检不通过的，附两类各自的问题率（同上；B11）；另含使用反馈待复查的条目（B13）
@@ -34,13 +37,15 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
-from ..kb import autopublish, citations
+from ..kb import autopublish, citations, labels
 from ..kb import meta as kb_meta
+from ..kb import practice_queue as pq
+from ..kb import refs as kb_refs
 from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
 from ..project import kb_impact
-from ..models import KbItem, KbVersion, User
+from ..models import KbItem, KbItemAlias, KbItemLabel, KbVersion, User
 
 router = APIRouter(prefix="/api/kb", tags=["kb"], dependencies=[Depends(require_business)])
 
@@ -60,6 +65,9 @@ class ItemMetaIn(BaseModel):
     owner: str = ""
     tags: list[str] = Field(default_factory=list)
     control_ids: list[str] = Field(default_factory=list)
+    knowledge_kind: str = ""          # 三期 B35："" / practice / golden，留空按类型和来源推断
+    slot: str = ""
+    products: list[str] = Field(default_factory=list)   # 多个产品（B15），主产品 product 在前；空 = 只有主产品
 
 
 class ContentIn(BaseModel):
@@ -184,6 +192,8 @@ class ItemOut(BaseModel):
     owner: str
     tags: list[str] = []
     control_ids: list[str] = []
+    knowledge_kind: str = ""
+    slot: str = ""
     retired: bool
     title: str = ""
     current: VersionBrief | None = None
@@ -191,6 +201,8 @@ class ItemOut(BaseModel):
 
 class ItemDetail(ItemOut):
     versions: list[VersionBrief] = []
+    aliases: list[str] = []             # 旧编号等别名（B15）；doc_id 是现行编号
+    products: list[str] = []            # 全部服务产品（B15 标签表），主产品在前
 
 
 def _err(e: rv.ReviewError):
@@ -214,7 +226,9 @@ def _item_out(db: Session, item: KbItem, cls=ItemOut, versions: list[KbVersion] 
 
 
 def _item(db: Session, doc_id: str, user: User) -> KbItem:
-    item = db.scalar(select(KbItem).where(KbItem.doc_id == doc_id))
+    """路径参数可以是现行编号或别名（B15）：按别名访问直接返回该条目、不重定向；可见性与 404 语义不变。"""
+    r = kb_refs.resolve(db, [doc_id]).get(doc_id)
+    item = db.get(KbItem, r.item_id) if r else None
     if item is None or not rv.can_view(db, user, item):
         raise HTTPException(404, NOT_FOUND)
     return item
@@ -246,10 +260,12 @@ def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
 def list_items(layer: str = "", product: str = "", stage: str = "", doc_type: str = "", status: str = "",
                q: str = Query("", max_length=100), db: Session = Depends(get_db), user: User = Depends(current_user)):
     stmt = select(KbItem).order_by(KbItem.doc_id).limit(500)
-    for col, val in ((KbItem.layer, layer), (KbItem.product, product), (KbItem.stage, stage),
-                     (KbItem.doc_type, doc_type)):
+    for col, val in ((KbItem.layer, layer), (KbItem.stage, stage), (KbItem.doc_type, doc_type)):
         if val:
             stmt = stmt.where(col == val)
+    if product:                                   # 按产品标签（B15）：多产品条目在每个产品下都列出
+        stmt = stmt.where(KbItem.id.in_(select(KbItemLabel.item_id).where(KbItemLabel.kind == "product",
+                                                                          KbItemLabel.value == product)))
     if status == "retired":
         stmt = stmt.where(KbItem.retired.is_(True))
     elif status == "published":
@@ -257,8 +273,10 @@ def list_items(layer: str = "", product: str = "", stage: str = "", doc_type: st
     elif status == "unpublished":
         stmt = stmt.where(KbItem.current_version_id.is_(None))
     if q:
-        stmt = stmt.join(KbVersion, KbVersion.item_id == KbItem.id).where(
-            or_(KbItem.doc_id.contains(q), KbVersion.title.contains(q))).distinct()
+        # 用子查询不用 JOIN + DISTINCT：kb_items 有 json 列，PostgreSQL 的 DISTINCT 比较不了 json
+        stmt = stmt.where(or_(KbItem.doc_id.contains(q),
+                              KbItem.id.in_(select(KbVersion.item_id).where(KbVersion.title.contains(q))),
+                              KbItem.id.in_(select(KbItemAlias.item_id).where(KbItemAlias.alias.contains(q)))))
     return [_item_out(db, i) for i in db.scalars(stmt) if rv.can_view(db, user, i)]
 
 
@@ -277,7 +295,10 @@ def get_item(doc_id: str, db: Session = Depends(get_db), user: User = Depends(cu
     item = _item(db, doc_id, user)
     versions = item.versions if rv.is_knowledge_user(db, user) else [
         v for v in item.versions if v.id == item.current_version_id]
-    return _item_out(db, item, ItemDetail, versions)
+    out = _item_out(db, item, ItemDetail, versions)
+    out.products = labels.products_of(db, [item.id]).get(item.id, [item.product])
+    out.aliases = kb_refs.aliases_of(db, item.id)
+    return out
 
 
 class UsageOut(BaseModel):
@@ -364,6 +385,44 @@ def review_queue(db: Session = Depends(get_db), user: User = Depends(current_use
     return [_version_out(db, v, user) for v in rows]
 
 
+class PracticeDecisionIn(BaseModel):
+    version_id: int
+    decision: str = Field(pattern="^(adopt|modify|reject)$")
+    body: str = Field(default="", max_length=200_000)
+    comment: str = Field(default="", max_length=1000)
+    elapsed_ms: int = Field(default=0, ge=0)
+
+
+class PracticeBatchIn(BaseModel):
+    items: list[PracticeDecisionIn] = Field(min_length=1, max_length=50)
+
+
+@router.get("/practice-queue")
+def practice_queue(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+    _knowledge_only(db, user)
+    return pq.queue(db)
+
+
+@router.post("/practice-queue/decide")
+def practice_decide(body: PracticeBatchIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _knowledge_only(db, user)
+    results = []
+    for it in body.items:                           # 逐条独立处理：一条失败不影响其他条
+        try:
+            v = pq.decide(db, user, it.version_id, it.decision, it.body, it.comment, it.elapsed_ms)
+            results.append({"version_id": it.version_id, "ok": True, "version_status": v.status})
+        except rv.ReviewError as e:
+            db.rollback()
+            results.append({"version_id": it.version_id, "ok": False, "status": e.status, "error": str(e)})
+    return {"results": results}
+
+
+@router.get("/practice-queue/stats")
+def practice_stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _knowledge_only(db, user)
+    return pq.stats(db)
+
+
 @router.get("/review-due", response_model=list[VersionOut])
 def review_due(days: int = Query(30, ge=0, le=366), db: Session = Depends(get_db), user: User = Depends(current_user)):
     _knowledge_only(db, user)
@@ -413,7 +472,7 @@ def basis(q: str = Query("", max_length=500), ref_document: str = Query("", max_
 @router.get("/meta")
 def meta_options() -> dict:
     m = kb_meta
-    return {"layers": m.LAYERS, "domains": m.DOMAINS, "products": m.PRODUCTS, "stages": list(m.STAGES),
+    return {"layers": m.LAYERS, "domains": m.DOMAINS, "products": m.PRODUCTS, "industries": list(m.INDUSTRIES), "stages": list(m.STAGES),
             "doc_types": m.DOC_TYPES, "capabilities": list(m.CAPABILITIES), "classifications": m.CLASSIFICATIONS,
             "source_types": m.SOURCE_TYPES, "visible_roles": m.VISIBLE_ROLES, "ref_statuses": m.REF_STATUSES,
             "version_statuses": m.VERSION_STATUSES}
@@ -447,10 +506,12 @@ def stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> 
     rows = db.execute(live).all()
     by_source: dict[str, int] = {}
     coverage: dict[str, dict[str, int]] = {}
+    products = labels.products_of(db, [item.id for item, _ in rows])
     for item, v in rows:
         by_source[v.source_type] = by_source.get(v.source_type, 0) + 1
-        coverage.setdefault(item.product, {}).setdefault(item.stage, 0)
-        coverage[item.product][item.stage] += 1
+        for code in products.get(item.id, [item.product]):          # 按产品标签计数（B15）
+            coverage.setdefault(code, {}).setdefault(item.stage, 0)
+            coverage[code][item.stage] += 1
     month_ago = utcnow() - timedelta(days=30)
     searches = db.scalars(select(AuditLog.detail).where(AuditLog.action.in_(("kb.search", "kb.basis")),
                                                        AuditLog.result == "allowed", AuditLog.at >= month_ago)).all()
