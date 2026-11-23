@@ -70,7 +70,7 @@ def test_export_verify_and_import(tmp_path, monkeypatch):
             transfer.export(db, db.merge(op), out)
     assert rep.count == 4
     m = json.loads((out / transfer.MANIFEST).read_text(encoding="utf-8"))
-    assert [x["doc_id"].split("-")[3] for x in m["entries"]] == ["SRC", "SRC", "SRC", "REF"]   # 依据原文在前
+    assert [x["doc_type"] for x in m["entries"]] == ["SRC", "SRC", "SRC", "REF"]   # 依据原文在前
     assert "意见原文不导出" not in (out / transfer.MANIFEST).read_text(encoding="utf-8")
     assert {(r["reviewer"], r["review_role"]) for r in m["entries"][3]["reviews"]} == {
         (expert.username, "content"), (admin.username, "compliance")}

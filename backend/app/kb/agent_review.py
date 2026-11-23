@@ -29,7 +29,7 @@ from ..core import audit
 from ..core.config import get_settings
 from ..models import KbItem, KbReview, KbVersion
 from ..services import gateway, guard, jobs
-from . import autopublish, citations
+from . import autopublish, candidate, citations
 from . import review as rv
 
 AGENT = "kb-reviewer"
@@ -217,7 +217,10 @@ def run(db: Session, v: KbVersion) -> Outcome:
         if out.sampled:
             v.sample_state = "pending"
         db.commit()
-        rv.publish(db, v)
+        if candidate.enabled():      # 候选影子期（三期 B24①）：先当候选，达标后晋级
+            candidate.stage(db, v, AGENT)
+        else:
+            rv.publish(db, v)
     else:
         db.commit()
     db.refresh(v)
