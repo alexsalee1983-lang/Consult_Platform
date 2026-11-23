@@ -44,8 +44,9 @@ from ..core import audit
 from ..core.config import get_settings
 from ..core.db import utcnow
 from ..core.errors import BAD_CHARS
+from ..kb import refs as kb_refs_svc
 from ..kb.meta import LAYERS
-from ..models import Deliverable, Evidence, KbItem, KbVersion, Project, SummaryCard, User
+from ..models import Deliverable, Evidence, KbVersion, Project, SummaryCard, User
 from . import deliverables as dsvc
 
 TZ = ZoneInfo("Asia/Shanghai")
@@ -55,8 +56,7 @@ BODY_MARK = "{{正文}}"
 KIND_NAMES = {"document": "客户资料", "interview": "访谈纪要", "observation": "现场观察"}
 STATUS_NAMES = {"not_started": "未开始", "drafting": "起草中", "review": "待审核", "signed": "已签署"}
 
-_REF = re.compile(r"\[((?:I|D|O|S)-\d{2,4})(-\d{1,3})?\]"
-                  r"|[\[｜|]\s*(L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5})\s*[\]】]")
+_REF = re.compile(r"\[((?:I|D|O|S)-\d{2,4})(-\d{1,3})?\]|" + kb_refs_svc.MARK_PATTERN)   # 第 3 组是知识编号
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 _BULLET = re.compile(r"^\s*[-*+]\s+(.*)$")
@@ -311,11 +311,18 @@ def _source_labels(db: Session, project: Project, d: Deliverable) -> dict[str, s
                                                            SummaryCard.withdrawn.is_(False))):
                 labels[sc.code] = f"去标识摘要卡《{sc.item}》，客户审阅 {sc.client_reviewed_on.isoformat()}"
     if docs:
-        for doc_id, layer, title in db.execute(select(KbItem.doc_id, KbItem.layer, KbVersion.title).join(
-                KbVersion, KbVersion.id == KbItem.current_version_id).where(
-                KbItem.doc_id.in_(docs), KbItem.retired.is_(False), KbItem.current_version_id.is_not(None))).all():
-            labels[doc_id] = f"知识库 {layer} {LAYERS.get(layer, '')}《{title}》"
+        labels.update(kb_labels(db, docs))
     return {k: _xml_safe(v) for k, v in labels.items()}
+
+
+def kb_labels(db: Session, docs: set[str]) -> dict[str, str]:
+    """知识编号 → 脚注文字（现行版本标题）；解析不到、已下线、没有现行版本的不给（脚注写“未核对到”）。
+    kb-ref-check 也调用这里取导出标签的哈希（app/kb/refcheck.py）。"""
+    found = {ref: r for ref, r in kb_refs_svc.resolve(db, docs).items() if r.usable}
+    titles = dict(db.execute(select(KbVersion.id, KbVersion.title).where(
+        KbVersion.id.in_({r.current_version_id for r in found.values()}))).all()) if found else {}
+    return {ref: f"知识库 {r.layer} {LAYERS.get(r.layer, '')}《{titles[r.current_version_id]}》"
+            for ref, r in found.items() if r.current_version_id in titles}
 
 
 def _xml_safe(text: str) -> str:

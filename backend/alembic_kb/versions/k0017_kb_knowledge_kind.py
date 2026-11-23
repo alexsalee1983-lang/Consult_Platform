@@ -4,10 +4,10 @@
 - slot：C10 章节槽位键，选填。
 - 回填：GLD 条目为黄金样例；模板、方法、案例、常见坑、制度母版、异议应答、经验数值类条目，最新版本来源非公开的为公司做法
   （与 app/kb/meta.py 的 derive_kind 一致）。已发布的版本不动，只影响之后的发布。
-- down 暂接 k0009（三期知识区链 k0010～k0016 在其他未合并 PR 里，合并时按第七节顺序改接）。
+- down_revision 合并时接 main 链头（决策记录 2026-11-23）。
 
 Revision ID: k0017_kb_knowledge_kind
-Revises: k0009_kb_upload_project
+Revises: k0015_kb_candidate
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0017_kb_knowledge_kind"
-down_revision: str | None = "k0009_kb_upload_project"
+down_revision: str | None = "k0015_kb_candidate"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -37,7 +37,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    conn = op.get_bind()
+    views: list[str] = []
+    if conn.dialect.name == "sqlite":   # SQLite 删列要重建 kb_items，先摘下引用它的视图（B15 kb_v_item_facets），建完再挂回
+        views = [r[0] for r in conn.execute(sa.text("SELECT sql FROM sqlite_master WHERE type = 'view' AND sql LIKE '%kb_items%'"))]
+        op.execute("DROP VIEW IF EXISTS kb_v_item_facets")
     with op.batch_alter_table("kb_items") as batch:
         batch.drop_index("ix_kb_items_knowledge_kind")
         batch.drop_column("slot")
         batch.drop_column("knowledge_kind")
+    for sql in views:
+        op.execute(sql)

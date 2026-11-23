@@ -7,7 +7,7 @@ ItemMeta / VersionContent）：
 
 | 公共规范 | 代码 | 取值 |
 |---|---|---|
-| doc_id | KbItem.doc_id | 自动分配，格式见 DOC_ID_RE |
+| doc_id | KbItem.doc_id | 自动分配，KB-000123（B15 起，格式见 DOC_ID_RE；旧格式见 LEGACY_DOC_ID_RE，只做别名） |
 | 标题 | KbVersion.title / VersionContent.title | |
 | 层级 | KbItem.layer / ItemMeta.layer | LAYERS 的键：L1～L5 |
 | 一级目录 | domain | DOMAINS 的键：GOV / CMP / DAT / OPS / RES / ARC |
@@ -15,7 +15,7 @@ ItemMeta / VersionContent）：
 | 交付阶段 | stage | STAGES：启动……通用（中文） |
 | 交付物类型 | doc_type | DOC_TYPES 的键：TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT / SRC（依据原文，二期 B7）/ ENF / RAR / BMK / GLS（扩展分类，决策记录 2026-11-16） |
 | 能力域标签 | capabilities | CAPABILITIES：管理 / 运营 / 技术支撑（列表） |
-| 适用行业 | industries | 中文列表，通用的填 ["通用"] |
+| 适用行业 | industries | 中文列表，取值见 INDUSTRIES，通用的填 ["通用"] |
 | 密级 | classification | internal 内部 / restricted 受限 |
 | 脱敏状态 | KbVersion.deid_status | pending 未脱敏 / passed 已脱敏 / not_needed 无需脱敏 |
 | 来源 | source_type | expert 专家萃取 / project 项目沉淀 / public 公开资料 / internal 公司内部制度改造 |
@@ -52,6 +52,8 @@ PRODUCTS = {
     "NSG": "网络安全治理规划",
     "GEN": "通用（不限服务产品）",
 }
+# 适用行业（三期 B15 取值表，负责人 11-21 定）：多选；“通用”不和具体行业同时出现
+INDUSTRIES = ("通用", "银行", "证券", "保险", "电力", "制造", "政务", "医疗", "运营商")
 # 交付阶段
 STAGES = ("启动", "调研", "分析", "设计", "落地辅导", "验收", "通用")
 # 交付物类型（缩写 → 名称）
@@ -82,9 +84,10 @@ VISIBLE_ROLES = {"consultant": "交付顾问", "presales": "售前", "admin": "�
 REF_STATUSES = {"current": "现行", "upcoming": "即将实施", "repealed": "已废止", "superseded": "已被替代"}
 
 # 版本状态：草稿 → 待审 →（双人审核）→ 已发布；新版本发布后旧版本为“已替代”；下线后为“已下线”
+# 自动发布（B10、B11）在候选影子期开启时先为“候选”，达标后晋级为已发布（三期 B24①，app/kb/candidate.py）
 VERSION_STATUSES = {
     "draft": "草稿", "in_review": "待审", "rejected": "已退回", "published": "已发布",
-    "superseded": "已替代", "retired": "已下线",
+    "superseded": "已替代", "retired": "已下线", "candidate": "候选",
 }
 # 双人审核的两个角色（决策记录 2026-11-08）：知识专家审内容，知识管理员审合规；两人不能是同一人，提交人不能审核
 REVIEW_ROLES = {"content": "knowledge_expert", "compliance": "knowledge_admin"}
@@ -95,7 +98,10 @@ REVIEW_MONTHS_DEFAULT = 12
 REVIEW_MONTHS_REF = 6
 SHORT_REVIEW_TYPES = ("ENF", "BMK")
 
-DOC_ID_RE = re.compile(r"^(L[1-5])-([A-Z]{3})-([A-Z]{2,8})-([A-Z]{3})-(\d{3,})$")
+# 三期 B15 换号（知识区迁移 k0012）：现行编号是不带分类含义的稳定序号 KB-000123（kb_items.seq 补零 6 位）；
+# 旧格式 层级-目录-产品-类型-序号 只剩别名（kb_item_aliases，kind=legacy），由 refs 识别、k0012 回滚时分配
+DOC_ID_RE = re.compile(r"^KB-(\d{6})$")
+LEGACY_DOC_ID_RE = re.compile(r"^(L[1-5])-([A-Z]{3})-([A-Z]{2,8})-([A-Z]{3})-(\d{3,})$")
 
 
 class MetaError(ValueError):
@@ -116,19 +122,23 @@ def default_review_date(layer: str, effective: date, doc_type: str = "") -> date
     return add_months(effective, review_months(layer, doc_type))
 
 
-def doc_id_prefix(layer: str, domain: str, product: str, doc_type: str) -> str:
+def format_doc_id(seq: int) -> str:
+    return f"KB-{seq:06d}"
+
+
+def legacy_doc_id_prefix(layer: str, domain: str, product: str, doc_type: str) -> str:
     check_classification(layer, domain, product, doc_type)
     return f"{layer}-{domain}-{product}-{doc_type}-"
 
 
-def format_doc_id(layer: str, domain: str, product: str, doc_type: str, seq: int) -> str:
-    return f"{doc_id_prefix(layer, domain, product, doc_type)}{seq:03d}"
+def format_legacy_doc_id(layer: str, domain: str, product: str, doc_type: str, seq: int) -> str:
+    return f"{legacy_doc_id_prefix(layer, domain, product, doc_type)}{seq:03d}"
 
 
-def parse_doc_id(doc_id: str) -> tuple[str, str, str, str, int]:
-    m = DOC_ID_RE.match(doc_id)
+def parse_legacy_doc_id(doc_id: str) -> tuple[str, str, str, str, int]:
+    m = LEGACY_DOC_ID_RE.match(doc_id)
     if not m:
-        raise MetaError(f"doc_id 格式不对：{doc_id!r}，应为 层级-目录-产品-类型-序号，例如 L2-OPS-SOC-TPL-007")
+        raise MetaError(f"旧编号格式不对：{doc_id!r}，应为 层级-目录-产品-类型-序号，例如 L2-OPS-SOC-TPL-007")
     layer, domain, product, doc_type, seq = m.groups()
     check_classification(layer, domain, product, doc_type)
     return layer, domain, product, doc_type, int(seq)

@@ -23,7 +23,7 @@ import difflib
 import json
 from datetime import date
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import bindparam, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from ..core import audit
@@ -32,7 +32,7 @@ from ..core.db import KB_BIND, utcnow
 from ..core.permissions import KNOWLEDGE_ADMIN, KNOWLEDGE_EXPERT, roles_of
 from ..models import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion, User
 from ..services import guard, storage
-from . import meta, parse
+from . import labels, meta, parse
 from .items import ItemMeta, VersionContent, create_draft, create_item, replace_mapping_rows
 
 ROLE_OF = {"content": KNOWLEDGE_EXPERT, "compliance": KNOWLEDGE_ADMIN}
@@ -262,27 +262,43 @@ def expert_confirmed(v: KbVersion) -> bool:
                for r in v.reviews)
 
 
+def make_chunks(db: Session, v: KbVersion) -> int:
+    """把版本正文切成检索切片；已经切过（候选影子期先切好）的不重复切。返回切片数。"""
+    existing = db.scalar(select(func.count()).select_from(KbChunk).where(KbChunk.version_id == v.id)) or 0
+    if existing:
+        return existing
+    chunks = parse.chunk(parse.parse("body.md", v.body.encode()).sections)
+    for i, c in enumerate(chunks, 1):
+        db.add(KbChunk(version_id=v.id, seq=i, heading=c.heading[:300], text=c.text))
+    return len(chunks)
+
+
+def supersede_candidates(db: Session, v: KbVersion) -> None:
+    """同一条目里除 v 以外还在候选的版本（三期 B24①）改为已替代：v 发布或成为新候选后它们不再晋级。"""
+    for other in v.item.versions:
+        if other.id != v.id and other.status == "candidate":
+            other.status, other.candidate_result = "superseded", "superseded"
+
+
 def publish(db: Session, v: KbVersion) -> None:
     item = v.item
     if item.knowledge_kind in meta.EXPERT_ONLY_KINDS and not expert_confirmed(v):   # 三期 B35：守住所有发布入口
         audit.record(db, actor="platform", action="kb.publish", result="blocked", doc_id=item.doc_id,
                      version=v.version, reason="expert_required")
         raise ReviewError(409, f"{meta.KNOWLEDGE_KINDS[item.knowledge_kind]}必须由作者以外的知识专家确认后才能发布")
-    doc = parse.parse("body.md", v.body.encode())
-    chunks = parse.chunk(doc.sections)
-    for i, c in enumerate(chunks, 1):
-        db.add(KbChunk(version_id=v.id, seq=i, heading=c.heading[:300], text=c.text))
+    chunks = make_chunks(db, v)
     if item.current_version_id and item.current_version_id != v.id:
         old = db.get(KbVersion, item.current_version_id)
         if old is not None and old.status == "published":
             old.status = "superseded"
+    supersede_candidates(db, v)
     v.effective_date = v.effective_date or date.today()
     v.review_date = v.review_date or meta.default_review_date(item.layer, v.effective_date, item.doc_type)
     v.status, v.published_at = "published", utcnow()
     item.current_version_id, item.updated_at = v.id, utcnow()
     db.commit()
     audit.record(db, actor="kb-review", action="kb.publish", result="allowed", doc_id=item.doc_id, version=v.version,
-                 chunks=len(chunks), single_review=v.single_review,
+                 chunks=chunks, single_review=v.single_review,
                  single_reviewer_public=get_settings().kb_single_reviewer_public)
     from .search import enqueue_embedding          # 发布后后台向量化（未启用向量服务时跳过）
 
@@ -296,7 +312,7 @@ def retire(db: Session, user: User, item: KbItem, reason: str) -> KbItem:
         raise ReviewError(409, "条目已下线")
     item.retired, item.updated_at = True, utcnow()
     for v in item.versions:
-        if v.status in ("published", "draft", "in_review"):
+        if v.status in ("published", "draft", "in_review", "candidate"):
             v.status = "retired"
     db.commit()
     audit.record(db, actor=user.username, action="kb.retire", result="allowed", doc_id=item.doc_id,
@@ -347,7 +363,7 @@ def diff_with_current(db: Session, v: KbVersion, max_lines: int = 200) -> list[s
 
 
 def similar_items(db: Session, v: KbVersion, limit: int = 5) -> list[dict]:
-    """同服务产品下、正文与标题相近的已发布条目（可能重复或冲突），供审核人对照。只在 PostgreSQL 上可用。
+    """同服务产品下（按产品标签，B15：和本条目任一产品相同即算）、正文与标题相近的已发布条目（可能重复或冲突），供审核人对照。只在 PostgreSQL 上可用。
     标题分词后任一词命中即可（把 & 换成 |），按相关度排序。"""
     if db.get_bind(KbChunk).dialect.name != "postgresql":
         return []
@@ -357,9 +373,14 @@ def similar_items(db: Session, v: KbVersion, limit: int = 5) -> list[dict]:
         JOIN kb_versions cv ON cv.id = c.version_id AND cv.status = 'published'
         JOIN kb_items i ON i.current_version_id = cv.id AND NOT i.retired
         , CAST(replace(CAST(plainto_tsquery('zh', :q) AS text), '&', '|') AS tsquery) q
-        WHERE c.tsv @@ q AND i.id <> :item AND i.product = :product
+        WHERE c.tsv @@ q AND i.id <> :item
+          AND EXISTS (SELECT 1 FROM kb_item_labels l WHERE l.item_id = i.id AND l.kind = 'product'
+                      AND l.value IN :products)
         GROUP BY i.doc_id, cv.title ORDER BY score DESC LIMIT :limit
-    """), {"q": v.title, "item": v.item_id, "product": v.item.product, "limit": limit}, bind_arguments=KB_BIND).all()
+    """).bindparams(bindparam("products", expanding=True)),
+        {"q": v.title, "item": v.item_id, "limit": limit,
+         "products": labels.products_of(db, [v.item_id]).get(v.item_id, [v.item.product])},
+        bind_arguments=KB_BIND).all()
     return [{"doc_id": r.doc_id, "title": r.title, "score": round(float(r.score), 4)} for r in rows]
 
 

@@ -13,8 +13,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..core.db import utcnow
-from ..models import KbItem, KbMapping, KbVersion
-from . import mapping, meta
+from ..models import KbItem, KbItemAlias, KbMapping, KbVersion
+from . import labels, mapping, meta
 
 
 @dataclass
@@ -33,9 +33,14 @@ class ItemMeta:
     control_ids: list[str] = field(default_factory=list)   # 公司控制项编号（4A 埋点，k0008）
     knowledge_kind: str = ""   # 知识类型（三期 B35，k0017）：留空时 create_item 按交付物类型和来源推断
     slot: str = ""             # C10 章节槽位键（选填）
+    products: list[str] = field(default_factory=list)   # 全部服务产品（B15，主产品 product 在前）；空 = 只有主产品
 
     def check(self) -> None:
         meta.check_classification(self.layer, self.domain, self.product, self.doc_type)
+        if not self.product and self.products:
+            self.product = str(self.products[0]).strip()
+        self.products = labels.check_products(self.product, self.products)
+        self.industries = labels.check_industries(self.industries)
         meta.check_tags(self.stage, self.capabilities, self.industries)
         meta.check_visibility(self.classification, self.visible_roles)
         self.tags = check_search_tags(self.tags)
@@ -92,11 +97,12 @@ class VersionContent:
         meta.check_reference(layer, self.ref_document, self.ref_version, self.ref_status)
 
 
-def next_doc_id(db: Session, m: ItemMeta) -> str:
-    prefix = meta.doc_id_prefix(m.layer, m.domain, m.product, m.doc_type)
-    existing = db.scalars(select(KbItem.doc_id).where(KbItem.doc_id.like(prefix + "%"))).all()
-    seqs = [meta.parse_doc_id(d)[4] for d in existing]
-    return meta.format_doc_id(m.layer, m.domain, m.product, m.doc_type, max(seqs, default=0) + 1)
+def next_doc_id(db: Session) -> str:
+    """下一个现行编号 KB-000123：max(seq)+1，跳过已登记为别名的（B15：别名与现行编号互斥）。并发冲突由调用方重试。"""
+    seq = (db.scalar(select(func.max(KbItem.seq))) or 0) + 1
+    while db.get(KbItemAlias, meta.format_doc_id(seq)) is not None:
+        seq += 1
+    return meta.format_doc_id(seq)
 
 
 def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) -> KbVersion:
@@ -126,7 +132,8 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
     kind = m.knowledge_kind or meta.derive_kind(m.doc_type, c.source_type)
     meta.check_kind(kind, m.doc_type, m.slot)
     for attempt in range(retries):
-        item = KbItem(doc_id=next_doc_id(db, m), layer=m.layer, domain=m.domain, product=m.product,
+        doc_id = next_doc_id(db)
+        item = KbItem(doc_id=doc_id, seq=int(doc_id[3:]), layer=m.layer, domain=m.domain, product=m.product,
                       doc_type=m.doc_type, stage=m.stage, capabilities=list(m.capabilities),
                       industries=list(m.industries), classification=m.classification,
                       visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags), control_ids=list(m.control_ids),
@@ -139,6 +146,7 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
             if attempt == retries - 1:
                 raise
             continue
+        labels.sync(db, item, m.products)
         v = _new_version(db, item, c, created_by)
         db.commit()
         return v

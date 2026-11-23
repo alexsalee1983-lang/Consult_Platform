@@ -29,7 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
-from ..models import KbChunk, KbItem, User
+from ..models import KbChunk, KbItem, KbVersion, User
 from . import search
 
 TOP_K = 5
@@ -116,17 +116,25 @@ def _overall_rerank(states: list[str]) -> str:
     return bad[0] if bad else (states[-1] if states else "")
 
 
-def _recall(db: Session, user: User, q: dict, mode: str, expect: list[str], product: str) -> dict:
+def _recall(db: Session, user: User, q: dict, mode: str, expect: list[str], product: str,
+            include_candidates: bool = False) -> dict:
     """答错的题再查一次、带上 trace，看期望条目卡在哪一层：未发布、全文 / 向量没召回、融合后没进重排候选、重排排低。"""
     ids = set(db.scalars(select(KbChunk.id).join(KbItem, KbItem.current_version_id == KbChunk.version_id)
                          .where(KbItem.import_key.in_(expect), KbItem.retired.is_(False))))
+    if include_candidates:          # 候选（三期 B24①）不是现行版本，切片另取
+        ids |= set(db.scalars(select(KbChunk.id).join(KbVersion, KbVersion.id == KbChunk.version_id)
+                              .join(KbItem, KbItem.id == KbVersion.item_id)
+                              .where(KbItem.import_key.in_(expect), KbItem.retired.is_(False),
+                                     KbVersion.status == "candidate")))
     if not ids:
         return {"published": False}
     trace: dict = {}
     if mode == "basis":
-        search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0, product=product, trace=trace)
+        search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0, product=product, trace=trace,
+                     include_candidates=include_candidates)
     else:
-        search.search(db, user, q["question"], product=product, limit=TOP_K, trace=trace)
+        search.search(db, user, q["question"], product=product, limit=TOP_K, trace=trace,
+                      include_candidates=include_candidates)
 
     def pos(seq: list[int]) -> int | None:
         return next((i for i, cid in enumerate(seq, 1) if cid in ids), None)
@@ -146,7 +154,8 @@ def _recall_text(d: dict | None) -> str:
     return f"；全文 {f(d['fulltext'])}、向量 {f(d['vector'])}{lost}、融合 {f(d['fused'])}"
 
 
-def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
+def run(db: Session, user: User, questions: list[dict], include_candidates: bool = False) -> EvalReport:
+    """include_candidates：把候选影子期（三期 B24①）的候选版本也算进检索（影子评测）。"""
     keys = dict(db.execute(select(KbItem.doc_id, KbItem.import_key)).all())
     report = EvalReport(total=len(questions))
     rerank_states: list[str] = []
@@ -154,9 +163,11 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         mode, expect = q.get("mode", "basis"), [str(x) for x in q.get("expect", [])]
         product = str(q.get("product", "")).strip()
         if mode == "basis":
-            out = search.basis(db, user, q["question"], limit=TOP_K, product=product)
+            out = search.basis(db, user, q["question"], limit=TOP_K, product=product,
+                               include_candidates=include_candidates)
         else:
-            out = search.search(db, user, q["question"], product=product, limit=TOP_K)
+            out = search.search(db, user, q["question"], product=product, limit=TOP_K,
+                                include_candidates=include_candidates)
         report.vector = out.get("vector", "")
         rerank_states.append(out.get("rerank", ""))
         hits = out["items"]
@@ -170,7 +181,8 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
         # 重排分数：被门槛挡掉的依据查询以门槛 0 再查一次，只取分数
         scored, scored_keys = hits, got
         if mode == "basis" and rerank_states[-1] == "ok" and (not expect or rank is None):
-            scored = search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0, product=product)["items"]
+            scored = search.basis(db, user, q["question"], limit=TOP_K, min_rerank=0.0, product=product,
+                                  include_candidates=include_candidates)["items"]
             scored_keys = [keys.get(h["doc_id"]) or h["doc_id"] for h in scored]
         exp_hit = next((h for h, k in zip(scored, scored_keys, strict=True) if k in expect), None)
         if exp_hit:
@@ -179,7 +191,7 @@ def run(db: Session, user: User, questions: list[dict]) -> EvalReport:
                     if k not in expect and h.get("rerank_score") is not None]
         r.top_wrong_rerank = max(wrong_rr) if wrong_rr else None
         if expect and not correct:
-            r.recall = _recall(db, user, q, mode, expect, product)
+            r.recall = _recall(db, user, q, mode, expect, product, include_candidates)
         report.results.append(r)
 
     for mode in ("basis", "search"):
