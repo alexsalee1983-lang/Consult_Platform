@@ -288,7 +288,7 @@ def test_password_policy():
 # ---- 启动检查与初始账号 ----
 
 def _settings(**kw) -> Settings:
-    base = {"app_env": "prod", "session_backend": "redis", "cookie_secure": True,
+    base = {"app_env": "prod", "seed_demo_data": False, "session_backend": "redis", "cookie_secure": True,
             "test_account_username": "", "test_account_password": "", "test_account_totp_secret": "",
             "bootstrap_admin_username": "", "bootstrap_admin_password": "", "bootstrap_admin_totp_secret": "",
             "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24,
