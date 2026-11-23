@@ -416,6 +416,30 @@ def deletion_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def storage_provision(args: argparse.Namespace) -> int:
+    """三期 G1 最小权限：运维用对象存储根账号建桶、加密、建应用账号、挂只限两个桶的策略（可重复执行）。
+    根账号口令只从本次命令的环境变量 MINIO_ROOT_PASSWORD 读，不写进平台配置；审计不记口令。"""
+    from .services import storage
+
+    s = get_settings()
+    root_user, root_password = os.environ.get("MINIO_ROOT_USER", ""), os.environ.get("MINIO_ROOT_PASSWORD", "")
+    if not s.minio_endpoint or not root_user or not root_password:
+        print("要配置 MINIO_ENDPOINT，并在本次命令的环境变量里给出 MINIO_ROOT_USER、MINIO_ROOT_PASSWORD"
+              "（docker compose run --rm -e MINIO_ROOT_PASSWORD=... backend python -m app.cli storage-provision）",
+              file=sys.stderr)
+        return 1
+    try:
+        r = storage.provision(root_user, s.minio_access_key, s.minio_secret_key, root_password=root_password)
+    except storage.StorageError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        audit.record(db, actor="cli", action="storage.provision", result="allowed", account=r.account,
+                     policy=r.policy, created_buckets=len(r.created_buckets))
+    print(f"应用账号 {r.account} 已挂策略 {r.policy}；新建桶 {', '.join(r.created_buckets) or '无'}")
+    return 0
+
+
 def backup_record(args: argparse.Namespace) -> int:
     """备份、恢复脚本（scripts/backup.sh、restore.sh）完成后记一条审计：只有时间戳、链头编号和字节数。"""
     if not re.fullmatch(r"\d{8}T\d{6}Z", args.stamp):
@@ -1220,6 +1244,7 @@ def main(argv: list[str] | None = None) -> int:
     ks = sub.add_parser("kb-split", help="分库：把知识区数据从主库搬到知识区数据库并核对行数")
     ks.add_argument("--drop-source", action="store_true", help="核对一致后删掉主库里的知识区表（删数据，先经负责人同意）")
     ks.set_defaults(func=kb_split)
+    sub.add_parser("storage-provision", help="对象存储最小权限：用根账号建桶、建应用账号、挂只限两个桶的策略（可重复执行）")         .set_defaults(func=storage_provision)
     br = sub.add_parser("backup-record", help="备份 / 恢复脚本完成后记审计（由 scripts/backup.sh、restore.sh 调用）")
     br.add_argument("--op", choices=["create", "restore"], required=True)
     br.add_argument("--stamp", required=True)

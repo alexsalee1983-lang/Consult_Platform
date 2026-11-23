@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     minio_endpoint: str = ""
     minio_access_key: str = ""
     minio_secret_key: str = ""
+    # 对象存储根账号名（只用名字核对后端没有用根账号连接，口令不给后端；三期 G1 最小权限）
+    minio_root_user: str = ""
     minio_secure: bool = False
     minio_bucket_project: str = "project-area"
     minio_bucket_knowledge: str = "knowledge-area"
