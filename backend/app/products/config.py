@@ -730,6 +730,18 @@ def _gate_dict(g: Gate, source: str) -> dict[str, Any]:
             "source": source, **copy.deepcopy(g.params)}
 
 
+OUTLINE_HINT = "{code} 必须包含这些章节（按这个顺序，章节标题保留这些字样，可在章下细分）：{titles}。"
+
+
+def _module_section_gates(m: Module, product_code: str) -> list[dict[str, Any]]:
+    """模块给本产品追加的章节自动成为必备章节门禁（模块已自写同一交付件的 required_sections 时不重复）。"""
+    own = {g.deliverable for g in m.gates if g.kind == "required_sections"}
+    return [{"id": f"{m.code.lower()}-sections-{dcode.lower()}", "kind": "required_sections", "deliverable": dcode,
+             "level": "blocking", "message": f"勾选了{m.name}模块，{dcode} 缺少模块追加的章节", "source": m.code,
+             "sections": list(titles)}
+            for dcode, titles in m.sections.get(product_code, {}).items() if titles and dcode not in own]
+
+
 def resolve_industry(cat: Catalog, industry: str, product_code: str) -> Industry | None:
     """按立项填的行业文字找适用的行业包（ready、适用本产品）；“A/B”写法任一部分对上即可，找不到返回 None。"""
     text = (industry or "").strip()
@@ -767,6 +779,8 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
     names = tuple(m.name for m in mods)
     # hyjg 并入行业包（三期 A11）：勾了行业监管模块且行业包命中时，模块说明改按行业包依据查
     merges = [m.code for m in mods if m.code in INDUSTRY_MERGED_MODULES] if industry is not None else []
+    outlines = {d.code: _merged(d.outline, *(m.sections.get(prod.code, {}).get(d.code, ()) for m in mods))
+                for d in prod.deliverables}
     chain = []
     for s in prod.chain:
         adds = [m.instructions[s.key] for m in mods if m.instructions.get(s.key)]
@@ -780,14 +794,13 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
         text = render(s.instruction, merged, s.number, names, extra)
         if extra and "module_instructions" not in (_template_vars(s.instruction) or set()):
             text = f"{text}\n{extra}"
+        if outlines.get(s.output):
+            text = f"{text}\n{OUTLINE_HINT.format(code=s.output, titles='、'.join(outlines[s.output]))}"
         chain.append({"key": s.key, "number": s.number, "name": s.name, "agent": s.agent, "inputs": list(s.inputs),
                       "output": s.output, "query": render(s.query, merged, s.number, names, ""),
                       "instruction": text})
-    deliverables = []
-    for d in prod.deliverables:
-        outline = _merged(d.outline, *(m.sections.get(prod.code, {}).get(d.code, ()) for m in mods))
-        deliverables.append({"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
-                             "outline": outline})
+    deliverables = [{"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
+                     "outline": outlines[d.code]} for d in prod.deliverables]
     snap: dict[str, Any] = {
         "format": SNAPSHOT_FORMAT,
         "product": prod.code, "product_name": prod.name, "product_version": prod.version,
@@ -799,6 +812,7 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
         "chain": chain,
         "gates": [_gate_dict(g, prod.code) for g in prod.gates]
                  + [_gate_dict(g, m.code) for m in mods for g in m.gates]
+                 + [g for m in mods for g in _module_section_gates(m, prod.code)]
                  + [_gate_dict(g, industry.code) for g in (industry.gates if industry else ())],
         "card_items": _merged(prod.card_items, *(m.card_items for m in mods)),
         "kb_tags": _merged(*(m.kb_tags for m in mods), industry.kb_tags if industry else ()),
