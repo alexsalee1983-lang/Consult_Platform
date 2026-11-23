@@ -1,10 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api, CONCLUSION_CLS, DELIV_STATUS, SEVERITY_CLS, TIER } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
+import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
+
+// A15：新编辑器按需加载；新旧并存一个关口，新编辑器默认开启（决策记录 2026-11-21 ⑦），可一键切回文本框
+const DocEditor = lazy(() => import("../components/DocEditor.jsx"));
+const EDITOR_PREF = "cp.editor";   // localStorage："textarea" = 用旧文本框；其他 = 新编辑器
+function useNewEditor() {
+  const [on, setOn] = useState(() => {
+    try { return localStorage.getItem(EDITOR_PREF) !== "textarea"; } catch { return true; }
+  });
+  function toggle() {
+    const next = !on;
+    try { localStorage.setItem(EDITOR_PREF, next ? "new" : "textarea"); } catch { /* 无痕模式等：只本次生效 */ }
+    setOn(next);
+  }
+  return [on, toggle];
+}
 
 // 交付件审阅（设计稿 04）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
 // 右栏与本交付件有关的确认卡、签署流程。规则都在后端，界面只按接口返回显示和操作。
@@ -108,6 +124,7 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   const [edit, setEdit] = useState(null);             // {body, note}
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [newEditor, toggleEditor] = useNewEditor();
 
   const load = useCallback(() => {
     setError(null);
@@ -141,10 +158,14 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
     }
   }
 
+  // 知识使用反馈三键（三期 B29）：本版本里核对得上的知识引用
+  const fb = useKbFeedback(code, s?.version && (s.sources?.knowledge || []).some((r) => r.found)
+    ? { deliverable: dcode, seq, version: s.version } : null);
   if (!s) return <Loading error={error} />;
   const isCurrent = s.version === s.current_version;
   const unresolved = s.sources?.unresolved || [];
   const refs = [...(s.sources?.evidence || []), ...(s.sources?.knowledge || [])];
+  const kbCited = (s.sources?.knowledge || []).some((r) => r.found);
 
   return (
     <section className="pnl doc-pnl" aria-label="章节正文">
@@ -173,8 +194,18 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
         {diff && <Diff lines={diff} />}
         {edit ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <textarea className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
-              placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]" />
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <button className="btn sm" onClick={toggleEditor}>{newEditor ? "切回文本框" : "用新编辑器"}</button>
+            </div>
+            {newEditor ? (
+              <Suspense fallback={<div className="sub">编辑器加载中…</div>}>
+                <DocEditor value={edit.body} onChange={(body) => setEdit((e) => ({ ...e, body }))} unresolved={new Set(unresolved)}
+                  placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]，显示为标签，退格整体删除" />
+              </Suspense>
+            ) : (
+              <textarea className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
+                placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]" />
+            )}
             <input className="inp" maxLength={500} value={edit.note} placeholder="修改说明（可选）" onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
             <div className="sub">保存会新建一个版本，旧版本保留。正文先过机密级检测，命中不保存。{signed ? "" : "待签署时修改会退回起草中。"}</div>
             {saveError && <div className="err" role="alert">{saveError}</div>}
@@ -195,8 +226,10 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
                 <span className="mono" style={{ color: !r.found ? "var(--crim)" : r.ref.startsWith("L") ? "var(--cyan)" : "var(--ok)", minWidth: 120 }}>{r.ref}</span>
                 <span className="sub">{!r.found ? "核对不上：项目里没有这条证据或知识"
                   : r.layer_name || r.layer || EVIDENCE_KIND[r.ref[0]] || ""}</span>
+                {kbCited && r.found && r.ref.startsWith("L") && <FeedbackKeys docId={r.ref} fb={fb} />}
               </div>
             ))}
+            {fb.error && <div className="err" role="alert">{fb.error}</div>}
           </div>
         )}
       </div>

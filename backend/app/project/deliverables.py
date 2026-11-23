@@ -32,7 +32,7 @@ from ..core.db import utcnow
 from ..kb import refs as kb_refs_svc
 from ..kb.meta import LAYERS
 from ..models import Deliverable, DeliverableSection, Evidence, Project, SectionVersion, User
-from ..services import guard
+from ..services import gateway, guard
 from . import cards
 from . import evidence as evidence_svc
 from . import judgment
@@ -233,8 +233,13 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
                      deliverable=d.code, section=seq, reason=reason, evidence=local)
         listed = "、".join(f"{c}（{gone[c]}）" for c in local)
         raise DeliverableError(422, f"{listed} 不能在交付件里引用，请删去这些标注和据此写的内容")
+    if agent_code:                                 # 三期 G2：记生成模型；顾问手改沿用上一版
+        model, family = gateway.generation_model()
+    else:
+        model, family = (current.model, current.model_family) if current is not None else ("", "")
     v = SectionVersion(version=s.current_version + 1, body=body, char_count=len(body), body_sha=sha,
-                       sources=sources, note=note, author=user.username, agent_code=agent_code)
+                       sources=sources, note=note, author=user.username, agent_code=agent_code,
+                       model=model, model_family=family)
     s.versions.append(v)
     s.current_version, s.updated_at = v.version, utcnow()
     _touch(d, user)

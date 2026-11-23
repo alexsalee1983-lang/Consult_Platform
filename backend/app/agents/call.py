@@ -6,6 +6,8 @@
 - 模型档：md 写了 model_tier 以 md 为准，没写用调用方给的默认档；
 - 系统提示默认 = 公共规范 + 角色 md + 调用方附加的规则（交付侧由调用方传入带项目卡的 system）；
 - 只经网关 gateway.complete；每次调用记一条用量（不记内容），网关错误照原样抛出；
+- role / exclude_families 原样交给网关（三期 G2）：评审、知识审核传 role="review" 和生成方的模型家族，
+  仲裁传 role="arbitrate" 和两方家族；网关按模型目录选不同家族的模型，选不出时同家族降级并在 completion 上标记；
 - 给了 parse 时校验结构化输出：解析不了就带 RETRY_NOTE 重试一次，仍不行抛 OutputInvalid。演示模式不解析。
 以后公司模型支持工具调用（二期 A7），工具循环只加在这里，入口仍是 tools.invoke。
 """
@@ -13,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -71,15 +73,18 @@ def json_object(text: str) -> dict:
 
 def call(db: Session, code: str, message: str, *, actor: str, doc: registry.AgentDoc | None = None,
          system: str | None = None, extra: str = "", project: Project | None = None, level: str = "standard",
-         parse: Callable[[str], Any] | None = None) -> Result:
+         parse: Callable[[str], Any] | None = None, role: str = "generate",
+         exclude_families: Iterable[str] = ()) -> Result:
     doc = doc or load(db, code)
     lv = doc.level if doc.level_set else level
     sys_prompt = system if system is not None else system_for(doc, extra)
     tier, pcode = (project.tier, project.code) if project is not None else ("standard", "")
+    exclude = frozenset(exclude_families)
 
     def once(msg: str) -> gateway.Completion:
         try:
-            c = gateway.complete(msg, tier=tier, project_code=pcode, level=lv, system=sys_prompt)
+            c = gateway.complete(msg, tier=tier, project_code=pcode, level=lv, system=sys_prompt, role=role,
+                                 exclude_families=exclude)
         except gateway.GatewayError as e:
             usage.record(db, username=actor, project_code=pcode, level=lv, model=gateway.model_for(lv),
                          status="error", stream=False, attempts=e.attempts, agent_code=code)

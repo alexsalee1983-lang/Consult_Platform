@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import difflib
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
-from ..models import Confirmation, Deliverable, JudgmentEvent, Project, SectionVersion
+from ..models import Confirmation, Deliverable, Finding, JudgmentEvent, Project, SectionVersion
 
 EDIT_BUCKETS = {"light": 0.1, "moderate": 0.4, "heavy": 1.01}   # 幅度上限（不含）
 MAX_COMPARE = 20000                                           # 比较的字数上限，防止超长正文拖慢写入
@@ -55,6 +55,32 @@ def capture_card(db: Session, c: Confirmation, commented: bool) -> None:
                          attrs={"options": len(c.options or []), "chose": chose,
                                 "followed": chose and bool(c.recommendation) and c.choice == c.recommendation,
                                 "commented": commented}))
+
+
+def capture_finding(db: Session, project: Project, f: Finding) -> None:
+    """顾问确认发现时记一条训练三元组（三期 F1）：特征 + Agent 初判 + 顾问结论；不记现状、风险、建议等文字。"""
+    if not enabled() or f.source != "agent" or not f.agent_conclusion:
+        return
+    db.add(JudgmentEvent(project_id=project.id, kind="finding", deliverable_code="", section_seq=None,
+                         agent_code=f.agent_code[:32], category=f.conclusion[:32],
+                         attrs={"control": f.control_code[:32], "industry": (project.industry or "")[:16],
+                                "agent": f.agent_conclusion, "human": f.conclusion,
+                                "agreed": f.agent_conclusion == f.conclusion, "evidence": len(f.evidence_refs or []),
+                                "responsibility": f.responsibility, "priority": f.priority,
+                                "impact": f.impact, "likelihood": f.likelihood}))
+
+
+TRIPLE_FEATURES = ("control", "industry", "evidence", "responsibility", "priority", "impact", "likelihood")
+
+
+def triples(db: Session) -> list[dict]:
+    """训练三元组导出（四期训练本地抽取模型用）：（特征，Agent 初判，顾问结论）。"""
+    out: list[dict] = []
+    for e in db.scalars(select(JudgmentEvent).where(JudgmentEvent.kind == "finding").order_by(JudgmentEvent.id)):
+        a = e.attrs or {}
+        out.append({"features": {**{k: a.get(k) for k in TRIPLE_FEATURES}, "agent_code": e.agent_code},
+                    "agent": a.get("agent"), "human": a.get("human")})
+    return out
 
 
 def delete_for_project(db: Session, project_id: int) -> int:

@@ -5,8 +5,9 @@ from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import DataError
 
-from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health, portfolio, workbench,
-                  kb, kb_items, kb_sources, projects, quality, runs)
+from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health, indicators, portfolio, workbench,
+                  kb, kb_feedback, kb_items, kb_sources, projects, quality, runs)
+from .api import revision_mining as revision_mining_api   # 三期 F4
 from .core import audit as core_audit
 from .core.auth import authenticate
 from .core.bootstrap import check_db_accounts, check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
@@ -66,6 +67,7 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(portfolio.router)
+app.include_router(indicators.router)
 app.include_router(workbench.router)
 app.include_router(deletions.router)
 app.include_router(evidence.router)
@@ -73,6 +75,7 @@ app.include_router(cards.router)
 app.include_router(deliverables.router)
 app.include_router(runs.router)
 app.include_router(quality.router)
+app.include_router(revision_mining_api.router)
 app.include_router(chat.router)
 app.include_router(audit.router)
 app.include_router(admin.router)
@@ -81,4 +84,5 @@ app.include_router(conversations.router)
 app.include_router(directory.router)
 app.include_router(kb.router)
 app.include_router(kb_items.router)
+app.include_router(kb_feedback.router)
 app.include_router(kb_sources.router)

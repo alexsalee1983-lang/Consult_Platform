@@ -16,23 +16,24 @@ from app.models import Agent, AgentToolGrant, AuditLog, Conversation, Project, T
 from .conftest import create_user, logged_in_client
 
 ALL_TOOLS = ["kb.search", "basis.lookup", "project.read", "doc.generate", "quality.check", "kb.stage_write",
-             "project.evidence", "confirm.create", "agent.handoff", "kb.mapping"]
-#                      知识检索 依据查询 读项目区 文档生成 质量检查 写待入库区 查证据 发确认卡 转交 映射查询
+             "project.evidence", "confirm.create", "agent.handoff", "kb.mapping", "deid.check"]
+#                      知识检索 依据查询 读项目区 文档生成 质量检查 写待入库区 查证据 发确认卡 转交 映射查询 去标识检查
 # 查证据（M3，迁移 0017）与读项目区同列；发确认卡（M3，迁移 0019）授权全部 8 个交付侧 Agent（决策记录 2026-11-10）
 # 转交（二期 C2，迁移 0033）只授权咨询师 Agent（决策记录 2026-11-14）
 # 控制映射查询（二期 B3，迁移 0035）授权依据与差距分析、方案设计、制度起草和咨询师（docs/接口约定.md 第六节）
+# 去标识检查（三期 C7，迁移 0048）只授权知识库建设 kb-builder（负责人 2026-11-23，#342）
 EXPECTED = {
-    "consultant-lead":    (1, 0, 1, 0, 0, 0, 1, 1, 1, 1),
-    "delivery-pm":        (1, 0, 1, 1, 0, 0, 1, 1, 0, 0),
-    "research-interview": (1, 0, 1, 1, 0, 0, 1, 1, 0, 0),
-    "compliance-basis":   (1, 1, 1, 0, 0, 0, 1, 1, 0, 1),
-    "solution-designer":  (1, 1, 1, 0, 0, 0, 1, 1, 0, 1),
-    "policy-drafter":     (1, 1, 1, 1, 0, 0, 1, 1, 0, 1),
-    "report-writer":      (1, 0, 1, 1, 0, 0, 1, 1, 0, 0),
-    "qa-reviewer":        (1, 1, 1, 0, 1, 0, 1, 1, 0, 0),
-    "kb-builder":         (1, 1, 0, 0, 0, 1, 0, 0, 0, 0),
-    "sanitizer":          (0, 0, 0, 0, 0, 1, 0, 0, 0, 0),
-    "kb-reviewer":        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),   # 二期 B11（迁移 0036）：平台直接交材料，不授权工具
+    "consultant-lead":    (1, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0),
+    "delivery-pm":        (1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0),
+    "research-interview": (1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0),
+    "compliance-basis":   (1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0),
+    "solution-designer":  (1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0),
+    "policy-drafter":     (1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0),
+    "report-writer":      (1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0),
+    "qa-reviewer":        (1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0),
+    "kb-builder":         (1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+    "sanitizer":          (0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0),
+    "kb-reviewer":        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),   # 二期 B11（迁移 0036）：平台直接交材料，不授权工具
 }
 # 授权矩阵测试里每个工具的调用参数；发确认卡发到严格档 GRID-B（避免改变 BANK-A 演示数据的待确认数）
 MATRIX_CALLS = {"kb.mapping": ("BANK-A", {"source": "ISO 27001"}),
@@ -148,6 +149,24 @@ def test_project_read_standard_vs_strict(member):
 def test_quality_check_tool(member):
     r = _invoke(member, "qa-reviewer", "quality.check", args={"text": "交付件里写了管理口令：Abc@12345"})
     assert r["blocked"] and any(f["kind"] == "credential" for f in r["findings"])
+
+
+def test_deid_check_tool(member):
+    """三期 C7：去标识检查只检查不改数据；机密级五类命中一律退回，输出不含原文。"""
+    from .test_kb_deid_check import FAKE_CLOUD_KEY, GUARD_SAMPLES
+    for name, text in GUARD_SAMPLES.items():
+        r = _invoke(member, "kb-builder", "deid.check", project=None, args={"text": text})
+        assert (r["conclusion"], r["risk_level"]) == ("退回", "高"), name
+        dumped = json.dumps(r, ensure_ascii=False)
+        for secret in ("Xk9#mP2$vL7q", FAKE_CLOUD_KEY, "11010519491231002X", "13800138000", "MIIEow"):
+            assert secret not in dumped
+    r = _invoke(member, "kb-builder", "deid.check", project=None, args={"text": "江南农商行的告警分级，请王经理负责。"})
+    assert r["conclusion"] == "有条件通过" and r["identifiers"].get("人名") == 1
+    assert "江南" not in json.dumps(r, ensure_ascii=False) and "王经理" not in json.dumps(r, ensure_ascii=False)
+    r = _invoke(member, "kb-builder", "deid.check", project=None, args={"text": "告警分级按影响范围分三级。"})
+    assert r["conclusion"] == "通过"
+    with pytest.raises(tools.ToolDenied):
+        _invoke(member, "sanitizer", "deid.check", project=None, args={"text": "x"})
 
 
 def test_placeholders_say_so(member):

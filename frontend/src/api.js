@@ -200,6 +200,7 @@ export const api = {
     request(`/api/projects/${encodeURIComponent(code)}/flowback`, { method: "PUT", body: JSON.stringify({ allowed }) }),
   deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
   portfolio: () => request("/api/portfolio"),
+  indicators: (days) => request(`/api/indicators?days=${days}`),
   workbench: () => request("/api/workbench"),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
@@ -219,6 +220,11 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  // 知识使用反馈（三期 B29）：target 为 {message_id} 或 {deliverable, seq, version}
+  kbFeedback: (code, target) => request(`/api/projects/${encodeURIComponent(code)}/kb-feedback?${new URLSearchParams(target)}`),
+  sendKbFeedback: (code, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/kb-feedback`, { method: "POST", body: JSON.stringify(body) }),
+  kbUsage: (days = 90) => request(`/api/kb-usage?days=${days}`),
   kbUpload: (file, project = "") => {
     const fd = new FormData();
     fd.append("file", file);
@@ -248,6 +254,8 @@ export const api = {
     request(`/api/kb/versions/${id}/review`, { method: "POST", body: JSON.stringify({ role, decision, comment }) }),
   kbQueue: () => request("/api/kb/review-queue"),
   kbSamples: () => request("/api/kb/samples"),
+  kbConfirmQueue: () => request("/api/kb/sources/confirm-queue"),
+  kbConfirmDecide: (gapIds, decision, source = null) => request("/api/kb/sources/confirm-queue/decide", { method: "POST", body: JSON.stringify({ gap_ids: gapIds, decision, ...(source ? { source } : {}) }) }),
   kbSample: (versionId, decision, comment = "") => request(`/api/kb/versions/${versionId}/sample`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
@@ -292,7 +300,7 @@ export const DELIV_STATUS = {
   drafting: { label: "起草中", cls: "c-c" },
   not_started: { label: "未开始", cls: "c-n" },
 };
-export const KIND_CLS = { 方案取舍: "c-a", 来源冲突: "c-v", 证据不足: "c-r", 入库确认: "c-g", 范围确认: "c-c" };
+export const KIND_CLS = { 方案取舍: "c-a", 来源冲突: "c-v", 证据不足: "c-r", 入库确认: "c-g", 范围确认: "c-c", 知识不足: "c-r" };
 export const CONCLUSION_CLS = { pass: "c-g", revise: "c-a", fail: "c-r" };
 export const SEVERITY_CLS = { 阻断: "c-r", 重要: "c-a", 建议: "c-n" };
 export const EVIDENCE_STATUS = {

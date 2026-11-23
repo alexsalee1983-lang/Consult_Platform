@@ -81,6 +81,7 @@ export default function Sidebar() {
         { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
       ] : []),
       ...(lead ? [{ group: "项目负责人" }, { to: "/portfolio", icon: "map", label: "项目总览" },
+        { to: "/indicators", icon: "dash", label: "指标看板" },
         { to: "/deletions", icon: "trash", label: "资料删除" }] : []),
       { group: "知识" },
       { to: "/kb/search", icon: "search", label: "知识检索" },
@@ -88,6 +89,7 @@ export default function Sidebar() {
       ...(isKnowledge(user) ? [
         { to: "/kb/review", icon: "review", label: "审批队列" },
         { to: "/kb/map", icon: "map", label: "知识地图与健康" },
+        { to: "/kb/usage", icon: "dash", label: "知识使用统计" },
         { to: "/kb/sources", icon: "doc", label: "来源登记表" },
       ] : []),
     ] : []),
