@@ -158,7 +158,7 @@ jobs:
       - name: 知识区分库（知识区表只在 consult_kb；知识区账号不是超级用户、连不上主库；健康检查含知识区库）
         run: |
           q() { docker compose exec -T postgres psql -U consult -d "$1" -Atc "$2"; }
-          test "$(q consult "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "15"
+          test "$(q consult "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "0"
           test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "15"   # 知识区表数：基线 6 张 + B3 kb_mappings + B15 kb_item_aliases、kb_item_labels + B19 控制项中枢 4 张；新增知识区表要同步这里和下面恢复演练
           test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename in ('projects','users','audit_logs')")" = "0"
           test "$(q consult "select rolsuper::text from pg_roles where rolname='consult_kb'")" = "false"
