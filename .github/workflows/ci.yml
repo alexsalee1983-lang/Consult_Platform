@@ -70,6 +70,8 @@ jobs:
       - run: npm run build
       - name: 现场工具测试（离线页面的规则、加密、回填）
         run: node --test ../field-tool/test/core.test.mjs
+      - name: 交付件编辑器内核测试（往返无损、来源标签、整体删除）
+        run: npm test
 
   compose:
     runs-on: ubuntu-latest

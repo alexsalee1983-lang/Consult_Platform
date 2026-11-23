@@ -208,3 +208,36 @@ def test_level3_demo_does_not_block(lib):
         assert r.findings["agent"] == "skipped" and r.decision == "flag"
         rv.review(db, db.merge(expert), v, "content", "approve")
         assert v.status == "published"
+
+
+def test_same_family_degraded_review_is_always_sampled(lib, model, monkeypatch):
+    """三期 G2：模型目录只有一个家族时知识审核同家族降级，结果和审计都标记，并且一定进抽检。"""
+    (author, expert, admin), law = lib
+    m = model(PASS)
+    monkeypatch.setattr(get_settings(), "kb_sample_rate_agent", 0.0)
+    monkeypatch.setattr(get_settings(), "llm_model_catalog",
+                        json.dumps({"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"}]}))
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY)
+        out = agent_review.run(db, v)
+        assert out.status == "published" and out.sampled and v.sample_state == "pending"
+        assert m.requests[0]["model"] == "ds-s"
+        r = next(x for x in v.reviews if x.review_role == "agent")
+        assert r.findings["degraded"] is True and r.findings["model_family"] == "deepseek"
+        log = db.scalar(select(AuditLog).where(AuditLog.action == "kb.agent_review").order_by(AuditLog.id.desc()))
+        detail = json.loads(log.detail)
+        assert (detail["model_family"], detail["degraded"]) == ("deepseek", True)
+
+
+def test_kb_review_uses_other_family_than_generator(lib, model, monkeypatch):
+    (author, expert, admin), law = lib
+    m = model(PASS)
+    monkeypatch.setattr(get_settings(), "llm_model_catalog", json.dumps(
+        {"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"},
+                    {"id": "glm-s", "family": "glm", "tier": "standard"}]}))
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY)
+        agent_review.run(db, v)
+        assert m.requests[0]["model"] == "glm-s"
+        r = next(x for x in v.reviews if x.review_role == "agent")
+        assert r.findings["degraded"] is False

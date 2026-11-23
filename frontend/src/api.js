@@ -200,6 +200,7 @@ export const api = {
     request(`/api/projects/${encodeURIComponent(code)}/flowback`, { method: "PUT", body: JSON.stringify({ allowed }) }),
   deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
   portfolio: () => request("/api/portfolio"),
+  indicators: (days) => request(`/api/indicators?days=${days}`),
   workbench: () => request("/api/workbench"),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
@@ -254,6 +255,8 @@ export const api = {
     request(`/api/kb/versions/${id}/review`, { method: "POST", body: JSON.stringify({ role, decision, comment }) }),
   kbQueue: () => request("/api/kb/review-queue"),
   kbSamples: () => request("/api/kb/samples"),
+  kbConfirmQueue: () => request("/api/kb/sources/confirm-queue"),
+  kbConfirmDecide: (gapIds, decision, source = null) => request("/api/kb/sources/confirm-queue/decide", { method: "POST", body: JSON.stringify({ gap_ids: gapIds, decision, ...(source ? { source } : {}) }) }),
   kbSample: (versionId, decision, comment = "") => request(`/api/kb/versions/${versionId}/sample`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
