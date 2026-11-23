@@ -8,6 +8,7 @@ from app.main import app
 from app.models import Confirmation, Deliverable, Project, TaskReturn
 from app.models.job import Job
 from app.project import my_tasks as mt
+from app.services import jobs
 
 from .conftest import create_user, logged_in_client
 
@@ -144,6 +145,9 @@ def test_return_records_event_enqueues_rewrite_and_hides_task():
         assert ret is not None and ret.status == "queued"
         job = db.get(Job, body["job_id"])
         assert job.kind == mt.REWRITE_JOB and "依据不对" not in job.payload   # 任务参数只放编号
+        assert jobs.run(db, job) == jobs.DONE                         # 走派发约定 fn(payload, ctx)
+        db.refresh(ret)
+        assert ret.status == "waiting_agent"
 
 
 def test_return_reason_goes_through_guard():

@@ -240,11 +240,14 @@ def return_task(db: Session, user: User, kind: str, ref_id: int, reason: str) ->
 
 
 @jobs.handler(REWRITE_JOB)
-def _rewrite(db: Session, payload: dict) -> None:
+def _rewrite(payload: dict, ctx: jobs.JobContext) -> None:
     """排队入口：Agent 重写接上前只把状态推进到 waiting_agent（不改 Agent md，不调模型）。"""
-    ret = db.get(TaskReturn, int(payload.get("return_id", 0)))
-    if ret is not None and ret.status == "queued":
-        ret.status = "waiting_agent"
+    from ..core.db import SessionLocal
+
+    with SessionLocal() as db:
+        ret = db.get(TaskReturn, int(payload.get("return_id", 0)), with_for_update=True)
+        if ret is not None and ret.status == "queued":
+            ret.status = "waiting_agent"
         db.commit()
 
 
