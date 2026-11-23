@@ -12,8 +12,10 @@ import Workbench from "./pages/Workbench.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
 import KbMap from "./pages/KbMap.jsx";
+import KbUsage from "./pages/KbUsage.jsx";
 import KbReview from "./pages/KbReview.jsx";
 import KbSearch from "./pages/KbSearch.jsx";
+import KbSources from "./pages/KbSources.jsx";
 import Login from "./pages/Login.jsx";
 import Overview from "./pages/Overview.jsx";
 import Password from "./pages/Password.jsx";
@@ -87,6 +89,8 @@ export default function App() {
           <Route path="/kb/intake" element={<KbIntake />} />
           <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />
           <Route path="/kb/map" element={<RequireKnowledge><KbMap /></RequireKnowledge>} />
+          <Route path="/kb/usage" element={<RequireKnowledge><KbUsage /></RequireKnowledge>} />
+          <Route path="/kb/sources" element={<RequireKnowledge><KbSources /></RequireKnowledge>} />
         </Route>
         <Route path="/audit" element={<RequireAuditor><Audit /></RequireAuditor>} />
         <Route path="/admin/users" element={<RequireSysAdmin><Users /></RequireSysAdmin>} />
