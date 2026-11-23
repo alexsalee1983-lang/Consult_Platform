@@ -4,9 +4,10 @@ import { api } from "../api.js";
 import { hasRole, useAuth } from "../auth.jsx";
 import { TopBar } from "../components/common.jsx";
 import { Chip, EMPTY_META, fmtDate, MetaForm, useKbMeta, VERSION_STATUS } from "../components/kb.jsx";
+import SourceConfirm from "../components/SourceConfirm.jsx";
 
 const TABS = [
-  ["queue", "待审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"],
+  ["queue", "待审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"], ["confirm", "来源确认"],
 ];
 const ROLE_LABEL = { content: "内容", compliance: "合规", platform: "平台核验", sample: "抽检", agent: "知识审核 Agent" };
 const DECISION = { approve: ["c-g", "采纳"], reject: ["c-r", "退回"], flag: ["c-a", "存疑"] };
@@ -266,6 +267,7 @@ export default function KbReview() {
 
   const loadList = useCallback(async () => {
     setError("");
+    if (tab === "confirm") return;
     try {
       if (tab === "queue") setList(await api.kbQueue());
       else if (tab === "sample") { const s = await api.kbSamples(); setStats(s); setList(s.items); }
@@ -287,6 +289,14 @@ export default function KbReview() {
   useEffect(() => { loadList(); }, [loadList]);
   useEffect(() => { loadV(selected); }, [selected, loadV]);
 
+  const tabBar = (
+    <div className="tabs" role="tablist">
+      {TABS.map(([k, l]) => (
+        <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : undefined}
+          onClick={() => setTab(k)}>{l}</button>
+      ))}
+    </div>
+  );
   const select = (id) => { setSelected(id); setCreating(false); setParams(id ? { version: String(id) } : {}); };
   const refresh = async () => { await loadList(); await loadV(selected); };
 
@@ -295,14 +305,15 @@ export default function KbReview() {
       <TopBar cap="知识 · 双人审核（知识专家审内容，知识管理员审合规）" title="审批队列">
         <button type="button" className="btnp" onClick={() => { setCreating(true); setSelected(null); }}>＋ 新建公开资料条目</button>
       </TopBar>
-      <div className="kb3">
+      {tab === "confirm" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <section className="pnl pad" aria-label="版本列表">{tabBar}</section>
+          <SourceConfirm />
+        </div>
+      )}
+      {tab !== "confirm" && <div className="kb3">
         <section className="pnl pad" aria-label="版本列表">
-          <div className="tabs" role="tablist">
-            {TABS.map(([k, l]) => (
-              <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : undefined}
-                onClick={() => setTab(k)}>{l}</button>
-            ))}
-          </div>
+          {tabBar}
           {error && <div className="err">{error}</div>}
           {tab === "sample" && stats && (
             <div className={stats.suspended || !stats.enabled ? "err" : "sub"}>
@@ -424,7 +435,7 @@ export default function KbReview() {
           )}
           {!v && !creating && hasRole(user, "knowledge_admin") && <section className="pnl pad sub">知识管理员审合规；知识专家审内容。两人都采纳后自动发布。</section>}
         </div>
-      </div>
+      </div>}
     </>
   );
 }

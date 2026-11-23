@@ -23,6 +23,7 @@ COPY agents ./agents
 # 服务产品与模块配置（二期 A1，docs/接口约定.md），与 md 一样可只读挂载覆盖
 COPY products ./products
 COPY modules ./modules
+COPY industries ./industries
 # 知识条目文件、评测题（命令行 kb-import / kb-eval 用，如 /srv/knowledge/samples）
 COPY knowledge ./knowledge
 # 代码和 md 归 root 所有，应用用户只读

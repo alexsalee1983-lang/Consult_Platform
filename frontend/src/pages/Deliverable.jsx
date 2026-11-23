@@ -1,10 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api, CONCLUSION_CLS, DELIV_STATUS, SEVERITY_CLS, TIER } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
+import AssistPanel from "../components/AssistPanel.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
+import { noteAfterInsert, spliceText } from "../editor/assist.js";
+
+// A15：新编辑器按需加载；新旧并存一个关口，新编辑器默认开启（决策记录 2026-11-21 ⑦），可一键切回文本框
+const DocEditor = lazy(() => import("../components/DocEditor.jsx"));
+const EDITOR_PREF = "cp.editor";   // localStorage："textarea" = 用旧文本框；其他 = 新编辑器
+function useNewEditor() {
+  const [on, setOn] = useState(() => {
+    try { return localStorage.getItem(EDITOR_PREF) !== "textarea"; } catch { return true; }
+  });
+  function toggle() {
+    const next = !on;
+    try { localStorage.setItem(EDITOR_PREF, next ? "new" : "textarea"); } catch { /* 无痕模式等：只本次生效 */ }
+    setOn(next);
+  }
+  return [on, toggle];
+}
+import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
 
 // 交付件审阅（设计稿 04）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
 // 右栏与本交付件有关的确认卡、签署流程。规则都在后端，界面只按接口返回显示和操作。
@@ -108,6 +126,27 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   const [edit, setEdit] = useState(null);             // {body, note}
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [newEditor, toggleEditor] = useNewEditor();
+  const editorRef = useRef(null);     // 新编辑器：selection() / insert()
+  const areaRef = useRef(null);       // 文本框兜底
+  const bodyRef = useRef("");
+  bodyRef.current = edit?.body ?? "";
+
+  // 写稿助手（A15②）：取选中文字、插入回复（来源标注原样保留），修改说明记一笔“含写稿助手插入内容”
+  function selectionText() {
+    if (newEditor) return editorRef.current?.selection() || "";
+    const a = areaRef.current;
+    return a ? a.value.slice(a.selectionStart, a.selectionEnd) : "";
+  }
+  function insertReply(snippet) {
+    if (newEditor && editorRef.current) editorRef.current.insert(snippet);
+    else {
+      const a = areaRef.current;
+      const r = spliceText(bodyRef.current, a?.selectionStart, a?.selectionEnd, snippet);
+      setEdit((e) => ({ ...e, body: r.text }));
+    }
+    setEdit((e) => ({ ...e, note: noteAfterInsert(e.note) }));
+  }
 
   const load = useCallback(() => {
     setError(null);
@@ -141,10 +180,14 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
     }
   }
 
+  // 知识使用反馈三键（三期 B29）：本版本里核对得上的知识引用
+  const fb = useKbFeedback(code, s?.version && (s.sources?.knowledge || []).some((r) => r.found)
+    ? { deliverable: dcode, seq, version: s.version } : null);
   if (!s) return <Loading error={error} />;
   const isCurrent = s.version === s.current_version;
   const unresolved = s.sources?.unresolved || [];
   const refs = [...(s.sources?.evidence || []), ...(s.sources?.knowledge || [])];
+  const kbCited = (s.sources?.knowledge || []).some((r) => r.found);
 
   return (
     <section className="pnl doc-pnl" aria-label="章节正文">
@@ -172,9 +215,20 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
         {error && <div className="err">{error.message}</div>}
         {diff && <Diff lines={diff} />}
         {edit ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <textarea className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
-              placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]" />
+          <div className="assist-grid">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <button className="btn sm" onClick={toggleEditor}>{newEditor ? "切回文本框" : "用新编辑器"}</button>
+            </div>
+            {newEditor ? (
+              <Suspense fallback={<div className="sub">编辑器加载中…</div>}>
+                <DocEditor ref={editorRef} value={edit.body} onChange={(body) => setEdit((e) => ({ ...e, body }))} unresolved={new Set(unresolved)}
+                  placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]，显示为标签，退格整体删除" />
+              </Suspense>
+            ) : (
+              <textarea ref={areaRef} className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
+                placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]" />
+            )}
             <input className="inp" maxLength={500} value={edit.note} placeholder="修改说明（可选）" onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
             <div className="sub">保存会新建一个版本，旧版本保留。正文先过机密级检测，命中不保存。{signed ? "" : "待签署时修改会退回起草中。"}</div>
             {saveError && <div className="err" role="alert">{saveError}</div>}
@@ -182,6 +236,9 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
               <button className="btnp" disabled={busy || !edit.body.trim()} onClick={save}>{busy ? "保存中…" : "保存为新版本"}</button>
               <button className="btn" disabled={busy} onClick={() => setEdit(null)}>取消</button>
             </div>
+          </div>
+          <AssistPanel code={code} dcode={dcode} seq={seq} getContext={() => bodyRef.current}
+            getSelection={selectionText} onInsert={insertReply} />
           </div>
         ) : s.version ? (
           <DocBody body={s.body} unresolved={unresolved} />
@@ -195,8 +252,10 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
                 <span className="mono" style={{ color: !r.found ? "var(--crim)" : r.ref.startsWith("L") ? "var(--cyan)" : "var(--ok)", minWidth: 120 }}>{r.ref}</span>
                 <span className="sub">{!r.found ? "核对不上：项目里没有这条证据或知识"
                   : r.layer_name || r.layer || EVIDENCE_KIND[r.ref[0]] || ""}</span>
+                {kbCited && r.found && r.ref.startsWith("L") && <FeedbackKeys docId={r.ref} fb={fb} />}
               </div>
             ))}
+            {fb.error && <div className="err" role="alert">{fb.error}</div>}
           </div>
         )}
       </div>
@@ -286,8 +345,11 @@ function Quality({ code, dcode, so, canReview, isManager, onChanged }) {
             return (
               <li key={i}>
                 <div className="row" style={{ flexWrap: "wrap" }}>
-                  <span className={`chip ${w ? "c-n" : SEVERITY_CLS[x.severity] || "c-n"}`}>{x.severity}</span>
+                  {x.code && <span className="sub mono">{x.code}</span>}
+                  <span className={`chip ${w || x.status === "已驳回" ? "c-n" : SEVERITY_CLS[x.severity] || "c-n"}`}>{x.severity}</span>
                   <span className="sub">{x.dimension}</span>
+                  {x.downgraded && <span className="chip c-n">不在五类阻断内，已降为重要</span>}
+                  {!w && x.status === "已驳回" && <span className="chip c-n">之前已驳回，不再计入</span>}
                   {x.by === "rule" && <span className="chip c-n">平台规则</span>}
                   {w && <span className="chip c-n">已驳回</span>}
                 </div>

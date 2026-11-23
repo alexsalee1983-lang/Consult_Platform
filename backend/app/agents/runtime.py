@@ -88,6 +88,15 @@ def project_card(db: Session, user: User, agent_code: str, project_code: str) ->
     ]
     if p.get("modules"):
         lines.append(f"- 所选模块：{'、'.join(p['modules'])}")
+    pack = p.get("industry_pack")
+    if pack:   # 三期行业包（4A v4.0 §2.4）
+        mark = "，待专家复核" if pack.get("expert_pending") else ""
+        lines.append(f"- 行业包：{pack.get('name')}（{pack.get('level')}{mark}）")
+        for label, key in (("行业术语与系统名", "terms"), ("常见受访角色", "roles"), ("行业威胁画像", "threats")):
+            if pack.get(key):
+                lines.append(f"  - {label}：{'；'.join(pack[key])}")
+        if pack.get("tier_hint"):
+            lines.append(f"  - 立项提示：{pack['tier_hint']}")
     if "deliverables" in data:
         lines.append("- 交付件进度：" + "；".join(f"{d['code']} {d['title']}（{d['status']}）"
                                               for d in data["deliverables"]))

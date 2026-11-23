@@ -59,6 +59,7 @@ SPECS: dict[str, tuple[str, dict[str, Any]]] = {
 FUNC = {code: code.replace(".", "_") for code in SPECS}
 BY_FUNC = {f: code for code, f in FUNC.items()}
 REF_TOOLS = ("kb.search", "basis.lookup")
+RETRY_HINT = "这是临时性失败，可以稍后用相同参数重试一次；仍失败就如实告诉用户，不要编造结果。"
 
 
 def available(db: Session, agent_code: str) -> list[str]:
@@ -74,7 +75,7 @@ def schemas(codes: list[str]) -> list[dict[str, Any]]:
 
 
 def runner(user_id: int, agent_code: str, project_code: str, refs: list[dict],
-           used: list[str]) -> Callable[[str, str], dict]:
+           used: list[str], conversation_id: int | None = None) -> Callable[[str, str], dict]:
     """返回给网关的 run_tool(函数名, 参数 JSON) → 结果 dict。每次调用新开会话（流式输出时请求的会话可能已关）。
     检索命中追加到 refs（去重），调用过的工具代号追加到 used。"""
     seen = {r["doc_id"] for r in refs}
@@ -93,8 +94,10 @@ def runner(user_id: int, agent_code: str, project_code: str, refs: list[dict],
         with SessionLocal() as db:
             user = db.get(User, user_id)
             try:
-                result = tools.invoke(db, user, agent_code, code, args, project_code)
+                result = tools.invoke(db, user, agent_code, code, args, project_code, conversation_id)
             except tools.ToolError as e:
+                if e.retryable:
+                    return {"error": e.detail, "retryable": True, "hint": RETRY_HINT}
                 return {"error": e.detail}
         if code in REF_TOOLS:
             for h in result.get("items", []):

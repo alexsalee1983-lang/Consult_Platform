@@ -6,3 +6,8 @@
 
 # 本文件旧版本的注释里引用了上面那个虚构样例，已删除；历史提交中的这一处同样是误报
 abb47f10ff8fdb68a0a46895a1c268029f9d426f:.gitleaksignore:aws-access-token:4
+
+# 三期 C7（#344）：测试样例现已改为运行时拼接，当前代码不再依赖放行；以下三行只覆盖已在分支历史里的旧提交（merge 提交会保留这段历史），同为虚构样例误报
+93660864c981fc5f217376311dbe00650d639f3b:backend/tests/test_kb_deid_check.py:aws-access-token:24
+93660864c981fc5f217376311dbe00650d639f3b:backend/tests/test_kb_deid_check.py:aws-access-token:36
+1b14c479dca929df12affaa73ee6d112a5c120a1:.gitleaksignore:aws-access-token:10

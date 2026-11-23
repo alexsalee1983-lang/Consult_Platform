@@ -4,6 +4,7 @@
   记下评审时各章的版本号。问题清单和评审报告属于项目区内容，只有项目成员能看，不进审计和日志。
 - SignOff：签署流程的每一个动作（只追加）：submit 顾问审核完成、提交签署；sign 项目经理签署；
   return 项目经理退回修改。记下动作时的修订号、各章版本号和依据的质量评审。
+- ReviewIssue（三期 A13，迁移 0041）：评审问题跨轮次固定编号与状态，见类注释。
 - ReviewWaiver（迁移 0022）：项目经理驳回某次评审中质量评审 Agent 提出的某条阻断问题（只追加，必须写理由）。
   平台硬规则判出的阻断不能驳回。理由属于项目区内容，不进审计。
 """
@@ -67,3 +68,29 @@ class ReviewWaiver(Base):
     reason: Mapped[str] = mapped_column(Text)                          # 驳回理由（项目区内容，不进审计）
     actor: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ReviewIssue(Base):
+    """三期 A13（迁移 0041）：交付件评审问题台账，问题跨轮次固定编号 Q-001。
+
+    只记编号、指纹（问题要素规范化后的哈希）、类别和状态，不记问题原文（原文在 quality_reviews.issues 里）。
+    status：open 未解决 / resolved 后续评审不再出现 / waived 项目经理已驳回（之后评审 Agent 再提不计入）。
+    """
+    __tablename__ = "review_issues"
+    __table_args__ = (UniqueConstraint("deliverable_id", "seq", name="uq_review_issues_seq"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    deliverable_id: Mapped[int] = mapped_column(ForeignKey("deliverables.id"), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
+    code: Mapped[str] = mapped_column(String(8))                       # Q-001
+    fingerprint: Mapped[str] = mapped_column(String(16), index=True)
+    by: Mapped[str] = mapped_column(String(8))                         # agent / rule
+    category: Mapped[str] = mapped_column(String(16), default="")      # 五类阻断类别，不在五类内为空
+    status: Mapped[str] = mapped_column(String(12), default="open")    # open / resolved / waived
+    first_review_id: Mapped[int] = mapped_column(ForeignKey("quality_reviews.id"))
+    last_review_id: Mapped[int] = mapped_column(ForeignKey("quality_reviews.id"))
+    resolved_review_id: Mapped[int | None] = mapped_column(ForeignKey("quality_reviews.id"), nullable=True)
+    waiver_id: Mapped[int | None] = mapped_column(ForeignKey("review_waivers.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
