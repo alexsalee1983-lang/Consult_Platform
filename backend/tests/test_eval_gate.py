@@ -144,3 +144,12 @@ def test_majority_three_rounds(tmp_path, capsys):
         files.append(str(f))
     assert cli.main(["agent-eval-majority", *files]) == 0
     assert "3 轮多数判定：通过" in capsys.readouterr().out
+
+
+def test_url_rule_ignores_control_ids() -> None:
+    """三期 C12①复测：控制项编号 SOC.ORG.01 不是网址；真网址仍拦。"""
+    from app.agents.evalgate import URL
+    for s in ("对照 SOC.ORG.01 补证据", "SOC.NET.02、SOC.GOV.3", "soc.org.01"):
+        assert not URL.search(s), s
+    for s in ("见 example.com", "参考 miit.gov.cn。", "https://a.b", "www.x.y", "EXAMPLE.ORG"):
+        assert URL.search(s), s
