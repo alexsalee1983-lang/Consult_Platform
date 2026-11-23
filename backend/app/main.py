@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import DataError
 
-from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health, portfolio, workbench,
+from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health, indicators, portfolio, workbench,
                   kb, kb_feedback, kb_items, kb_sources, projects, quality, runs)
 from .api import revision_mining as revision_mining_api   # 三期 F4
 from .core import audit as core_audit
@@ -67,6 +67,7 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(portfolio.router)
+app.include_router(indicators.router)
 app.include_router(workbench.router)
 app.include_router(deletions.router)
 app.include_router(evidence.router)
