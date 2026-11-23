@@ -220,6 +220,7 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  kbReadiness: (days = 90) => request(`/api/kb/readiness?days=${days}`),   // 三期 F2②
   // 知识使用反馈（三期 B29）：target 为 {message_id} 或 {deliverable, seq, version}
   kbFeedback: (code, target) => request(`/api/projects/${encodeURIComponent(code)}/kb-feedback?${new URLSearchParams(target)}`),
   sendKbFeedback: (code, body) =>

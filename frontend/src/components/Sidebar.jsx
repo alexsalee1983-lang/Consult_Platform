@@ -92,6 +92,7 @@ export default function Sidebar() {
         { to: "/kb/usage", icon: "dash", label: "知识使用统计" },
         { to: "/kb/sources", icon: "doc", label: "来源登记表" },
       ] : []),
+      ...(isKnowledge(user) || lead ? [{ to: "/kb/readiness", icon: "dash", label: "就绪度看板" }] : []),
     ] : []),
     ...(isAuditor(user) ? [{ to: "/audit", icon: "audit", label: "审计日志" }] : []),
     ...(isSysAdmin(user) ? [
