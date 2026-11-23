@@ -25,6 +25,7 @@
     repeal_date: 2031-01-01          # 可选：废止日（到日自动转已废止 / 已被替代）
     ref_replaces: ……                 # 可选：本文件替代的旧文件名称或文号（本文件施行时旧文件自动转已被替代）
     ref_amends: ……                   # 可选：本文件部分修订的文件名称或文号（施行时只提示复核，不改状态）
+    model: deepseek-v4.1-flash       # Agent 起草时平台写入的起草模型（三期 G2③），知识审核据此换家族；专家修改不用动
     ---
     ## 章节标题（依据类用条款号，如“第二十一条 网络安全等级保护”）
 
@@ -49,7 +50,7 @@ META_KEYS = ("layer", "domain", "product", "doc_type", "stage", "capabilities", 
              "visible_roles", "owner", "tags", "control_ids")
 CONTENT_KEYS = ("title", "source_type", "source_detail", "summary", "applicability", "change_note", "ref_document",
                 "ref_version", "ref_status", "ref_code", "ref_replaced_by",
-                "ref_replaces", "ref_amends")
+                "ref_replaces", "ref_amends", "model")
 
 
 class EntryError(ValueError):

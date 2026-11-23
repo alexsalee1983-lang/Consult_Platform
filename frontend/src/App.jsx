@@ -14,6 +14,7 @@ import Deliverable from "./pages/Deliverable.jsx";
 import KbBatches from "./pages/KbBatches.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
 import KbMap from "./pages/KbMap.jsx";
+import KbReadiness from "./pages/KbReadiness.jsx";
 import KbUsage from "./pages/KbUsage.jsx";
 import KbReview from "./pages/KbReview.jsx";
 import KbSearch from "./pages/KbSearch.jsx";
@@ -93,6 +94,7 @@ export default function App() {
           <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />
           <Route path="/kb/map" element={<RequireKnowledge><KbMap /></RequireKnowledge>} />
           <Route path="/kb/batches" element={<KbBatches />} />
+          <Route path="/kb/readiness" element={<KbReadiness />} />
           <Route path="/kb/usage" element={<RequireKnowledge><KbUsage /></RequireKnowledge>} />
           <Route path="/kb/sources" element={<RequireKnowledge><KbSources /></RequireKnowledge>} />
         </Route>

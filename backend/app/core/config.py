@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     kb_eval_gate: bool = True
     # 知识批次页（三期 B18）发起 kb-import、kb-eval 时，资料目录和题目文件只能在这个目录下（后端容器里的只读挂载）
     kb_batch_dir: str = "/srv/knowledge/downloads"
+    # 就绪度看板（三期 F2②）读哪些章节级装配评测集（A24 格式，逗号分隔的文件或目录，目录取其中 *.yaml）；
+    # 留空用平台回归样例 knowledge/eval/assembly_samples.yaml。真实评测集在私有资料仓，部署机指到 /srv/knowledge/downloads 下
+    kb_readiness_evalsets: str = ""
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
 

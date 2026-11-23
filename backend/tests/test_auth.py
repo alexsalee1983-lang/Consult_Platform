@@ -142,6 +142,7 @@ PROTECTED = [
     ("GET", "/api/kb/batches"),
     ("GET", "/api/kb/batches/sources"),
     ("POST", "/api/kb/batches"),
+    ("GET", "/api/kb/readiness"),
     ("GET", "/api/projects/BANK-A/kb-feedback"),
     ("POST", "/api/projects/BANK-A/kb-feedback"),
     ("GET", "/api/kb-usage"),
