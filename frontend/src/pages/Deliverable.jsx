@@ -5,6 +5,7 @@ import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
+import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
 
 // A15：新编辑器按需加载；新旧并存一个关口，新编辑器默认开启（决策记录 2026-11-21 ⑦），可一键切回文本框
 const DocEditor = lazy(() => import("../components/DocEditor.jsx"));
@@ -157,10 +158,14 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
     }
   }
 
+  // 知识使用反馈三键（三期 B29）：本版本里核对得上的知识引用
+  const fb = useKbFeedback(code, s?.version && (s.sources?.knowledge || []).some((r) => r.found)
+    ? { deliverable: dcode, seq, version: s.version } : null);
   if (!s) return <Loading error={error} />;
   const isCurrent = s.version === s.current_version;
   const unresolved = s.sources?.unresolved || [];
   const refs = [...(s.sources?.evidence || []), ...(s.sources?.knowledge || [])];
+  const kbCited = (s.sources?.knowledge || []).some((r) => r.found);
 
   return (
     <section className="pnl doc-pnl" aria-label="章节正文">
@@ -221,8 +226,10 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
                 <span className="mono" style={{ color: !r.found ? "var(--crim)" : r.ref.startsWith("L") ? "var(--cyan)" : "var(--ok)", minWidth: 120 }}>{r.ref}</span>
                 <span className="sub">{!r.found ? "核对不上：项目里没有这条证据或知识"
                   : r.layer_name || r.layer || EVIDENCE_KIND[r.ref[0]] || ""}</span>
+                {kbCited && r.found && r.ref.startsWith("L") && <FeedbackKeys docId={r.ref} fb={fb} />}
               </div>
             ))}
+            {fb.error && <div className="err" role="alert">{fb.error}</div>}
           </div>
         )}
       </div>
@@ -312,8 +319,11 @@ function Quality({ code, dcode, so, canReview, isManager, onChanged }) {
             return (
               <li key={i}>
                 <div className="row" style={{ flexWrap: "wrap" }}>
-                  <span className={`chip ${w ? "c-n" : SEVERITY_CLS[x.severity] || "c-n"}`}>{x.severity}</span>
+                  {x.code && <span className="sub mono">{x.code}</span>}
+                  <span className={`chip ${w || x.status === "已驳回" ? "c-n" : SEVERITY_CLS[x.severity] || "c-n"}`}>{x.severity}</span>
                   <span className="sub">{x.dimension}</span>
+                  {x.downgraded && <span className="chip c-n">不在五类阻断内，已降为重要</span>}
+                  {!w && x.status === "已驳回" && <span className="chip c-n">之前已驳回，不再计入</span>}
                   {x.by === "rule" && <span className="chip c-n">平台规则</span>}
                   {w && <span className="chip c-n">已驳回</span>}
                 </div>

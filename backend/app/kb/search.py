@@ -34,9 +34,9 @@ from sqlalchemy.orm import Session
 from ..core import audit
 from ..core.config import get_settings
 from ..core.db import KB_BIND
-from ..models import KbChunk, KbItem, KbVersion, User
+from ..models import KbChunk, KbItem, KbItemLabel, KbVersion, User
 from ..services import gateway, guard, jobs, usage
-from . import review
+from . import authority, review
 
 RRF_K = 60
 # 向量化时片段文本的组织方式；改了组织方式就升版本号，kb-reembed 会把旧向量全部重算。
@@ -79,18 +79,36 @@ class Hit:
     rank_before_rerank: int | None = None   # 重排前在 RRF 候选里的名次，评测看正确条目有没有进前 N
     scope: str = "product"            # product 本产品 / general 通用（GEN）
     boosted: bool = False             # 命中 boost_tags 或 boost_refs 而加权
+    authority_level: int | None = None   # B27 来源权威等级：1 法律法规与监管文件 / 2 标准 / 3 参考资料；内部条目为空
+    authority_label: str = ""            # 等级名称；3 级为“参考资料”，Agent 不得据此写成合规要求
 
     def to_json(self) -> dict:
         return asdict(self)
 
 
-def _filters(layer: str, product: str, stage: str, doc_type: str, include_general: bool) -> tuple[str, dict]:
-    sql, params = [], {}
+# 交付侧只取已发布的现行版本；评测、影子检索（include_candidates）另取候选（三期 B24①），
+# 同一条目有候选时用候选替换它的旧现行版本，看候选晋级后的效果
+_LIVE = "v.status = 'published' AND i.current_version_id = v.id"
+_SHADOW = ("(v.status = 'candidate' OR (v.status = 'published' AND i.current_version_id = v.id AND NOT EXISTS "
+           "(SELECT 1 FROM kb_versions cv WHERE cv.item_id = i.id AND cv.status = 'candidate')))")
+_PRODUCT_LABEL = ("EXISTS (SELECT 1 FROM kb_item_labels pl WHERE pl.item_id = i.id AND pl.kind = 'product' "
+                  "AND pl.value = :product)")
+_PRODUCT_LABEL_WITH_GEN = ("EXISTS (SELECT 1 FROM kb_item_labels pl WHERE pl.item_id = i.id AND pl.kind = 'product' "
+                           "AND pl.value IN (:product, 'GEN'))")
+
+
+def _filters(layer: str, product: str, stage: str, doc_type: str, include_general: bool,
+             include_candidates: bool = False) -> tuple[str, dict]:
+    sql, params = [_SHADOW if include_candidates else _LIVE], {}
     if layer:
         sql.append("i.layer = :layer")
         params["layer"] = layer
     if product:
-        sql.append("i.product IN (:product, 'GEN')" if include_general and product != "GEN" else "i.product = :product")
+        # 按标签表过滤（B15）：多产品条目在每个产品下都能检到；GEN 与具体产品互斥，所以 GEN 条目只有一个产品标签
+        if include_general and product != "GEN":
+            sql.append(_PRODUCT_LABEL_WITH_GEN)
+        else:
+            sql.append(_PRODUCT_LABEL)
         params["product"] = product
     if stage:
         sql.append("i.stage IN (:stage, '通用')")
@@ -102,15 +120,15 @@ def _filters(layer: str, product: str, stage: str, doc_type: str, include_genera
 
 
 _BASE = """FROM kb_chunks c
-JOIN kb_versions v ON v.id = c.version_id AND v.status = 'published'
-JOIN kb_items i ON i.current_version_id = v.id AND NOT i.retired"""
+JOIN kb_versions v ON v.id = c.version_id
+JOIN kb_items i ON i.id = v.item_id AND NOT i.retired"""   # 版本状态条件在 _filters 里（_LIVE / _SHADOW）
 
 
-def _fulltext_pg(db: Session, q: str, where: str, params: dict) -> list[int]:
-    rows = db.execute(text(f"""SELECT c.id {_BASE},
+def _fulltext_pg(db: Session, q: str, where: str, params: dict) -> list[tuple[int, float]]:
+    rows = db.execute(text(f"""SELECT c.id, ts_rank_cd(c.tsv, tq) {_BASE},
         CAST(replace(CAST(plainto_tsquery('zh', :q) AS text), '&', '|') AS tsquery) tq
         WHERE c.tsv @@ tq {where} ORDER BY ts_rank_cd(c.tsv, tq) DESC, c.id LIMIT {POOL}"""), {**params, "q": q}, bind_arguments=KB_BIND)
-    return [r[0] for r in rows]
+    return [(r[0], float(r[1])) for r in rows]
 
 
 def embed_marker(model: str) -> str:
@@ -141,13 +159,29 @@ def _vector_pg(db: Session, vec: list[float], model: str, where: str, params: di
     return [(r[0], float(r[1])) for r in rows]
 
 
-def _fulltext_simple(db: Session, q: str, where: str, params: dict) -> list[int]:
+def _fulltext_simple(db: Session, q: str, where: str, params: dict) -> list[tuple[int, float]]:
     """SQLite 简化实现：查询切成二字词，按命中数排序。"""
     words = {m for w in re.findall(r"[一-龥]+|[A-Za-z0-9]{2,}", q)
              for m in ([w[i:i + 2] for i in range(len(w) - 1)] if re.match(r"[一-龥]", w) else [w.lower()])}
     rows = db.execute(text(f"SELECT c.id, c.heading, c.text {_BASE} WHERE 1=1 {where}"), params, bind_arguments=KB_BIND).all()
     scored = [(sum(1 for w in words if w in (h + t).lower()), cid) for cid, h, t in rows]
-    return [cid for s, cid in sorted(scored, key=lambda x: (-x[0], x[1])) if s > 0][:POOL]
+    return [(cid, float(s)) for s, cid in sorted(scored, key=lambda x: (-x[0], x[1])) if s > 0][:POOL]
+
+
+def _levels(db: Session, ids: set[int]) -> dict[int, int | None]:
+    """切片所属条目的来源权威等级（B27 最小版，按依据字段推断；不读正文）。"""
+    if not ids:
+        return {}
+    rows = db.execute(select(KbChunk.id, KbVersion.ref_document, KbVersion.ref_code, KbVersion.source_type, KbItem.layer)
+                      .join(KbVersion, KbChunk.version_id == KbVersion.id).join(KbItem, KbVersion.item_id == KbItem.id)
+                      .where(KbChunk.id.in_(ids))).all()
+    return {cid: authority.infer_level(ref_document=d, ref_code=c, source_type=t, layer=layer)
+            for cid, d, c, t, layer in rows}
+
+
+def _tiebreak(ranked: list[tuple[int, float]], levels: dict[int, int | None]) -> list[int]:
+    """全文同分的切片按来源等级排（高等级在前），不同分的次序不变。"""
+    return [cid for cid, raw in sorted(ranked, key=lambda x: (-x[1], authority.sort_rank(levels.get(x[0])), x[0]))]
 
 
 def _rrf(*rankings: list[int]) -> dict[int, float]:
@@ -243,14 +277,19 @@ def _priorities(db: Session, ids: set[int], prefer: str, boost_tags, boost_refs)
     tags, refs = set(boost_tags or ()), [_ref_key(r) for r in boost_refs or () if _ref_key(r)]
     if not ids or not (prefer or tags or refs):
         return {}, {}
-    rows = db.execute(select(KbChunk.id, KbItem.product, KbItem.tags, KbVersion.ref_document)
-                      .join(KbVersion, KbVersion.id == KbChunk.version_id)
-                      .join(KbItem, KbItem.id == KbVersion.item_id).where(KbChunk.id.in_(ids))).all()
+    rows = db.execute(select(KbChunk.id, KbVersion.item_id, KbVersion.ref_document)
+                      .join(KbVersion, KbVersion.id == KbChunk.version_id).where(KbChunk.id.in_(ids))).all()
+    have: dict[int, dict[str, set[str]]] = {}     # 产品、检索标签读标签表（B15）
+    for iid, kind, value in db.execute(select(KbItemLabel.item_id, KbItemLabel.kind, KbItemLabel.value)
+                                       .where(KbItemLabel.item_id.in_({r[1] for r in rows}),
+                                              KbItemLabel.kind.in_(("product", "tag")))):
+        have.setdefault(iid, {}).setdefault(kind, set()).add(value)
     group, weight = {}, {}
-    for cid, prod, item_tags, ref in rows:
-        group[cid] = 1 if prefer and prod == "GEN" else 0
+    for cid, iid, ref in rows:
+        lab = have.get(iid, {})
+        group[cid] = 1 if prefer and "GEN" in lab.get("product", ()) else 0
         rk = _ref_key(ref)
-        if (tags and tags & set(item_tags or [])) or (refs and rk and any(r in rk or rk in r for r in refs)):
+        if (tags and tags & lab.get("tag", set())) or (refs and rk and any(r in rk or rk in r for r in refs)):
             weight[cid] = BOOST
     return group, weight
 
@@ -259,8 +298,9 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
            doc_type: str = "", limit: int = 8, include_general: bool = True, purpose: str = "kb.search",
            min_similarity: float | None = None, strict: bool = False, min_rerank: float | None = None,
            boost_tags: tuple[str, ...] | list[str] = (), boost_refs: tuple[str, ...] | list[str] = (),
-           trace: dict | None = None) -> dict:
-    """trace：评测诊断用（kb-eval），传入空 dict 时填入两路检索和融合后的切片编号顺序，只含编号。"""
+           trace: dict | None = None, include_candidates: bool = False) -> dict:
+    """trace：评测诊断用（kb-eval），传入空 dict 时填入两路检索和融合后的切片编号顺序，只含编号。
+    include_candidates：评测、影子检索带上候选版本（三期 B24①）；交付侧（工具、对话、导出）不传，只取已发布。"""
     query = query.strip()
     if not query:
         raise SearchError(422, "检索词不能为空")
@@ -273,9 +313,11 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
                                              for f in result.findings[:10]]})
     s = get_settings()
     limit = max(1, min(limit, MAX_LIMIT))
-    where, params = _filters(layer, product, stage, doc_type, include_general)
+    where, params = _filters(layer, product, stage, doc_type, include_general, include_candidates)
     postgres = db.get_bind(KbChunk).dialect.name == "postgresql"
-    full = (_fulltext_pg if postgres else _fulltext_simple)(db, query, where, params)
+    ranked_full = (_fulltext_pg if postgres else _fulltext_simple)(db, query, where, params)
+    levels = _levels(db, {cid for cid, _ in ranked_full})
+    full = _tiebreak(ranked_full, levels)
 
     # 两套候选：*_loose 给重排用（依据查询不按余弦相似度预先过滤，够不够格由重排分数判断）；
     # *_strict 是不启用重排或重排不可用时的老办法（余弦相似度门槛）。普通检索两套相同。
@@ -348,6 +390,8 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
         except gateway.GatewayError as e:          # 重排不可用：退回 RRF 排序和余弦相似度门槛
             rerank_status = f"unavailable: {str(e)[:60]}"
 
+    levels.update(_levels(db, (set(scores) | pinned) - set(levels)))
+    rank_of = {cid: authority.sort_rank(lv) for cid, lv in levels.items()}
     group, weight = _priorities(db, set(scores) | pinned, product if include_general and product != "GEN" else "",
                                 boost_tags, boost_refs)
 
@@ -361,13 +405,14 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
             trace["floor_exempt_all"] = bool(strict and exact is not None and not pinned)
         keep += [cid for cid in pinned if cid not in rr]   # 点到的条款没进重排候选时也保留
         ordered = sorted(keep, key=lambda cid: (cid not in pinned, group.get(cid, 0),
-                                                -rr.get(cid, 0.0) * weight.get(cid, 1.0), -scores[cid], cid))
+                                                -rr.get(cid, 0.0) * weight.get(cid, 1.0), -scores[cid],
+                                                rank_of.get(cid, 4), cid))
         vec_shown = vec_loose
     else:
         if strict:
             scores = candidates(full_strict, vec_strict)
         ordered = sorted(scores, key=lambda cid: (cid not in pinned, group.get(cid, 0),
-                                                  -scores[cid] * weight.get(cid, 1.0), cid))
+                                                  -scores[cid] * weight.get(cid, 1.0), rank_of.get(cid, 4), cid))
         vec_shown = vec_strict if strict else vec_loose
 
     full_set, vec_set = set(full), set(vec_shown)
@@ -395,7 +440,8 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
                 similarity=round(sims[cid], 4) if cid in sims else None,
                 rerank_score=round(rr[cid], 4) if cid in rr else None,
                 rank_before_rerank=rank_before.get(cid),
-                scope="general" if item.product == "GEN" else "product", boosted=weight.get(cid, 1.0) > 1.0)
+                scope="general" if item.product == "GEN" else "product", boosted=weight.get(cid, 1.0) > 1.0,
+                authority_level=levels.get(cid), authority_label=authority.label(levels.get(cid)))
         if item.layer == "L4":
             h.ref_document, h.ref_version, h.ref_status = v.ref_document, v.ref_version, v.ref_status
             h.needs_update_check = bool(v.review_date and v.review_date < today)
@@ -416,13 +462,13 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
 
 def basis(db: Session, user: User, query: str, *, ref_document: str = "", limit: int = 5,
           min_rerank: float | None = None, product: str = "", boost_refs: tuple[str, ...] | list[str] = (),
-          trace: dict | None = None) -> dict:
+          trace: dict | None = None, include_candidates: bool = False) -> dict:
     """依据查询：只查 L4 依据库。查不到时提示按公共规范第 3 节标注【依据待核实】。
     product、boost_refs 由工具层按项目配置快照填（本产品优先、快照 basis 列出的标准加权）。"""
     q = f"{ref_document} {query}".strip() if ref_document else query
     out = search(db, user, q, layer="L4", product=product, limit=limit, include_general=True, purpose="kb.basis",
                  min_similarity=get_settings().kb_basis_min_similarity, strict=True, min_rerank=min_rerank,
-                 boost_refs=boost_refs, trace=trace)
+                 boost_refs=boost_refs, trace=trace, include_candidates=include_candidates)
     if ref_document:
         out["items"] = [h for h in out["items"] if ref_document in h["ref_document"]] or out["items"]
     if not out["items"]:
@@ -461,8 +507,9 @@ def enqueue_embedding(db: Session, version_id: int, created_by: str) -> int | No
 
 
 def reembed_all(db: Session, created_by: str) -> int:
-    ids = db.scalars(select(KbVersion.id).join(KbItem, KbItem.current_version_id == KbVersion.id)
-                     .where(KbVersion.status == "published", KbItem.retired.is_(False))).all()
+    live = select(KbVersion.id).join(KbItem, KbItem.current_version_id == KbVersion.id)         .where(KbVersion.status == "published", KbItem.retired.is_(False))
+    shadow = select(KbVersion.id).join(KbItem, KbItem.id == KbVersion.item_id)         .where(KbVersion.status == "candidate", KbItem.retired.is_(False))      # 候选（三期 B24①）也要向量化
+    ids = [*db.scalars(live).all(), *db.scalars(shadow).all()]
     return sum(1 for vid in ids if enqueue_embedding(db, vid, created_by))
 
 
@@ -472,7 +519,7 @@ def _embed_job(payload: dict, ctx: jobs.JobContext) -> None:
 
     with SessionLocal() as db:
         v = db.get(KbVersion, int(payload["version_id"]))
-        if v is None or v.status != "published":
+        if v is None or v.status not in ("published", "candidate"):
             return                                  # 已被替代或下线，不用再向量化
         try:
             embed_version(db, v.id)

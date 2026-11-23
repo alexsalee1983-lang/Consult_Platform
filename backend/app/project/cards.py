@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,6 +32,7 @@ from ..core import audit
 from ..core.db import utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
 from ..kb import deid
+from ..kb import refs as kb_refs_svc
 from ..models import Project, User
 from ..models.consent import ProjectConsent, SummaryCard
 from ..products import config
@@ -216,7 +217,8 @@ def clear_derived(db: Session, project: Project, username: str) -> dict:
     - 这些交付件的质量评审意见和问题清单清空；
     - 交付链：未结束的运行取消，各步产出（差距分析）清空。
     已签署的交付件是交给客户的占位符版本，保留，按保留期和删除流程处理。只返回计数。"""
-    from ..models import AgentRun, AgentRunStep, Deliverable, DeliverableSection, QualityReview, SectionVersion
+    from ..models import (AgentRun, AgentRunStep, Deliverable, DeliverableSection, QualityReview, ReviewIssue,
+                         SectionVersion)
 
     open_ids = list(db.scalars(select(Deliverable.id).where(Deliverable.project_id == project.id,
                                                            Deliverable.status != "signed")))
@@ -234,6 +236,8 @@ def clear_derived(db: Session, project: Project, username: str) -> dict:
         if open_ids else []
     for r in reviews:
         r.report, r.issues = "", []
+    if open_ids:                               # 问题台账的指纹由正文算出，一并清掉（A13）
+        db.execute(delete(ReviewIssue).where(ReviewIssue.deliverable_id.in_(open_ids)))
     run_ids = list(db.scalars(select(AgentRun.id).where(AgentRun.project_id == project.id)))
     cancelled = 0
     for run in db.scalars(select(AgentRun).where(AgentRun.project_id == project.id,
@@ -434,7 +438,7 @@ def summary(card: SummaryCard) -> dict:
 
 _CITATION_RE = re.compile(r"【依据[：:][^】]*】|【依据待核实】|\[(?:S-\d{2,4}|推断|模型推断)\]|"
                           r"(?<![A-Za-z0-9])[DIOS]-\d{2,4}(?:-\d{2,3})?(?![\d-])|"
-                          r"[\[｜|]\s*L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5}\s*[\]】]")
+                          + kb_refs_svc.MARK_PATTERN)
 
 
 def placeholder_problems(text: str) -> list[str]:
