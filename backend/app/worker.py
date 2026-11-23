@@ -5,7 +5,9 @@
   并更新本地文件 /tmp/worker.alive 的时间（容器健康检查用，不依赖 Redis）。
 - 收到 SIGTERM / SIGINT 时做完当前任务再退出。
 - 每 SCAN_SECONDS 秒扫描一次到期项目，自动发起删除申请（app/project/deletion.py）。
-- 每 DAILY_SECONDS 秒（启动时先做一次）排每日自检、停用长期未登录的账号（app/services/ops.py，二期 C5）。
+- 每 DAILY_SECONDS 秒（启动时先做一次）排每日自检、停用长期未登录的账号（app/services/ops.py，二期 C5）、
+  排候选影子期晋级任务 kb.candidate_promote（app/kb/candidate.py，三期 B24①）；
+  按日期切换依据现行状态（app/kb/reg_lifecycle.py，三期 B26）。
 - 每 RECHECK_SECONDS 秒扫描一次交付件里的知识引用，标记使用反馈待复查（app/kb/recheck.py，二期 B13）。
 - 每 WEEKLY_SECONDS 秒（启动时先做一次）排知识缺口池每周计划 kb.gap_week（app/kb/gap_pool.py，三期 B25②）。
 - 不做数据库迁移（由 backend 启动时完成），compose 里 worker 在 backend 健康后才启动。
@@ -22,7 +24,7 @@ from pathlib import Path
 from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
-from .kb import agent_review, deid_flow, gap_pool, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review 等任务处理器
+from .kb import agent_review, candidate, deid_flow, gap_pool, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review、kb.candidate_promote 等任务处理器
 from .project import autoflow, deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs, ops
 
@@ -150,7 +152,7 @@ def _verify_audit() -> None:
 
 
 def _daily() -> None:
-    """O5：排一个自检任务（已有没做完的不重复排）；O7：停用长期未登录的账号。"""
+    """O5：排一个自检任务（已有没做完的不重复排）；O7：停用长期未登录的账号；B24①：排候选晋级任务。"""
     from sqlalchemy import select
 
     from .models import Job
@@ -162,10 +164,27 @@ def _daily() -> None:
             if pending is None:
                 jobs.enqueue(db, "system.selfcheck", created_by="platform", max_attempts=1)
             made = ops.disable_inactive(db)
+            candidate.enqueue(db)          # 候选影子期晋级（三期 B24①），已有没做完的不重复排
         if made:
             log.info("停用长期未登录的账号 %d 个", len(made))
     except Exception as e:  # noqa: BLE001
         log.warning("每日运维任务出错：%s", type(e).__name__)
+    _reg_lifecycle()
+
+
+def _reg_lifecycle() -> None:
+    """三期 B26：按施行日、废止日切换依据现行状态，处理替代关系（可重复执行）。"""
+    from datetime import date
+
+    from .kb import reg_lifecycle
+
+    try:
+        with SessionLocal() as db:
+            r = reg_lifecycle.run(db, date.today())
+        if r.changes:
+            log.info("法规生命周期：状态变化 %d 条，已登记 %d 条", len(r.changes), r.counts()["applied"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("法规生命周期任务出错：%s", type(e).__name__)
 
 
 def _weekly() -> None:

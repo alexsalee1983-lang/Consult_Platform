@@ -126,6 +126,9 @@ PROTECTED = [
     ("POST", "/api/kb/versions/1/submit"),
     ("POST", "/api/kb/versions/1/review"),
     ("GET", "/api/kb/review-queue"),
+    ("GET", "/api/kb/practice-queue"),
+    ("POST", "/api/kb/practice-queue/decide"),
+    ("GET", "/api/kb/practice-queue/stats"),
     ("GET", "/api/kb/review-due"),
     ("GET", "/api/kb/samples"),
     ("POST", "/api/kb/versions/1/sample"),
@@ -134,6 +137,9 @@ PROTECTED = [
     ("GET", "/api/kb/meta"),
     ("GET", "/api/kb/versions"),
     ("GET", "/api/kb/stats"),
+    ("GET", "/api/projects/BANK-A/kb-feedback"),
+    ("POST", "/api/projects/BANK-A/kb-feedback"),
+    ("GET", "/api/kb-usage"),
 ]
 
 

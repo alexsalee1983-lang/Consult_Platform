@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.agents import tools
 from app.core.db import SessionLocal
-from app.kb import evaluate, importer, search
+from app.kb import evaluate, importer, labels, search
 from app.kb.files import format_entry, parse_entry
 from app.kb.items import ItemMeta, check_search_tags
 from app.models import AuditLog, KbItem, Project, User
@@ -27,7 +27,9 @@ def _corpus(people, tag: str):  # noqa: F811
     soc = _publish(people, f"SOC 演练-{tag}", "## 演练\n\n沙盘推演和复盘纪要按值班组整理。")
     tagged = _publish(people, f"SOC 等保演练-{tag}", "## 演练\n\n沙盘推演按等保要求留痕。")
     with SessionLocal() as db:
-        db.get(KbItem, tagged.item_id).tags = [f"等保{tag}"]
+        item = db.get(KbItem, tagged.item_id)
+        item.tags = [f"等保{tag}"]
+        labels.sync(db, item)                         # 检索标签以标签表为准（B15）
         db.commit()
     return gen, soc, tagged
 

@@ -5,7 +5,7 @@
 B15 链、B19、B17 等合并后由后合并的一方改接。
 
 Revision ID: k0019_kb_gaps
-Revises: k0014_kb_sources
+Revises: k0020_kb_reg_lifecycle
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0019_kb_gaps"
-down_revision: str | None = "k0014_kb_sources"
+down_revision: str | None = "k0020_kb_reg_lifecycle"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
