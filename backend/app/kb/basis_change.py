@@ -187,24 +187,34 @@ def compare(db: Session, rows: list[Row]) -> list[Finding]:
     return out
 
 
-def _apply_status(db: Session, user: User, row: Row, item: KbItem) -> KbVersion:
+def publish_status(db: Session, actor: str, item: KbItem, *, status: str, replaced_by: str, effective: date | None,
+                   note: str, reviewer: str = PLATFORM_REVIEWER) -> KbVersion:
+    """沿用现行版本的正文和来源建新版本，只改现行状态、替代文件（和施行日期），平台核对后直接发布，旧版本保留。
+    B26 法规生命周期（app/kb/reg_lifecycle.py）也用它。"""
     from . import review as rv
 
     cur = db.get(KbVersion, item.current_version_id)
-    note = f"依据变更登记（季度官网核对清单第 {row.line} 行）：现行状态改为{meta.REF_STATUSES[row.status]}"
     c = VersionContent(title=cur.title, body=cur.body, source_type=cur.source_type, source_detail=cur.source_detail,
                        summary=cur.summary, applicability=cur.applicability, change_note=note[:1000],
-                       ref_document=cur.ref_document, ref_version=cur.ref_version, ref_status=row.status,
-                       ref_code=cur.ref_code, ref_replaced_by=row.replaced_by if row.status == "superseded" else "",
-                       effective_date=row.effective or cur.effective_date, review_date=cur.review_date)
-    v = create_draft(db, item, c, created_by=user.username)
+                       ref_document=cur.ref_document, ref_version=cur.ref_version, ref_status=status,
+                       ref_code=cur.ref_code, ref_replaced_by=replaced_by if status == "superseded" else "",
+                       ref_replaces=cur.ref_replaces, ref_amends=cur.ref_amends,
+                       effective_date=effective or cur.effective_date, repeal_date=cur.repeal_date,
+                       review_date=cur.review_date)
+    v = create_draft(db, item, c, created_by=actor)
     v.deid_status, v.deid_report_id, v.upload_id = cur.deid_status, cur.deid_report_id, cur.upload_id
-    v.status, v.submitted_by, v.submitted_at = "in_review", user.username, utcnow()
-    db.add(KbReview(version_id=v.id, reviewer=PLATFORM_REVIEWER, review_role="platform", decision="approve",
+    v.status, v.submitted_by, v.submitted_at = "in_review", actor, utcnow()
+    db.add(KbReview(version_id=v.id, reviewer=reviewer, review_role="platform", decision="approve",
                     comment=note[:1000]))
     db.commit()
     rv.publish(db, v)
     return v
+
+
+def _apply_status(db: Session, user: User, row: Row, item: KbItem) -> KbVersion:
+    note = f"依据变更登记（季度官网核对清单第 {row.line} 行）：现行状态改为{meta.REF_STATUSES[row.status]}"
+    return publish_status(db, user.username, item, status=row.status, replaced_by=row.replaced_by,
+                          effective=row.effective, note=note)
 
 
 def check(db: Session, user: User, data: bytes, *, apply: bool = False) -> Report:

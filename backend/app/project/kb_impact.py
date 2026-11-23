@@ -18,7 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Deliverable, DeliverableSection, Project, SectionVersion
-from ..models.kb import KbItem, KbVersion
+from ..kb import refs as kb_refs
+from ..models.kb import KbVersion
 
 UPDATED, RETIRED = "updated", "retired"
 
@@ -37,27 +38,32 @@ def cited_doc_ids(v: SectionVersion | None) -> list[str]:
     return list(dict.fromkeys(x["ref"] for x in refs if isinstance(x, dict) and x.get("found") and x.get("ref")))
 
 
-def _kb_state(db: Session, doc_ids: set[str]) -> dict[str, tuple[bool, int | None, datetime | None]]:
-    """doc_id → (已下线, 现行版本号, 现行版本发布时间)。"""
+def _kb_state(db: Session, doc_ids: set[str]) -> dict[str, tuple[str, bool, int | None, datetime | None]]:
+    """引用编号（现行编号或别名，B15）→ (现行编号, 已下线, 现行版本号, 现行版本发布时间)。"""
     if not doc_ids:
         return {}
-    rows = db.execute(select(KbItem.doc_id, KbItem.retired, KbVersion.version, KbVersion.published_at)
-                      .outerjoin(KbVersion, KbVersion.id == KbItem.current_version_id)
-                      .where(KbItem.doc_id.in_(doc_ids))).all()
-    return {r[0]: (bool(r[1]), r[2], _utc(r[3])) for r in rows}
+    resolved = kb_refs.resolve(db, doc_ids)
+    vids = {r.current_version_id for r in resolved.values() if r.current_version_id is not None}
+    vers = {i: (n, p) for i, n, p in db.execute(select(KbVersion.id, KbVersion.version, KbVersion.published_at)
+                                                 .where(KbVersion.id.in_(vids))).all()} if vids else {}
+    out = {}
+    for ref, r in resolved.items():
+        n, p = vers.get(r.current_version_id, (None, None))
+        out[ref] = (r.doc_id, r.retired, n, _utc(p))
+    return out
 
 
 def _changes(v: SectionVersion, state: dict) -> list[dict]:
     out = []
     written = _utc(v.created_at)
-    for doc_id in cited_doc_ids(v):
-        if doc_id not in state:
+    for ref in cited_doc_ids(v):
+        if ref not in state:
             continue
-        retired, version, published = state[doc_id]
+        doc_id, retired, version, published = state[ref]       # doc_id 是现行编号，ref 是正文里写的
         if retired:
-            out.append({"doc_id": doc_id, "change": RETIRED, "current_version": version})
+            out.append({"doc_id": doc_id, "ref": ref, "change": RETIRED, "current_version": version})
         elif published is not None and written is not None and published > written:
-            out.append({"doc_id": doc_id, "change": UPDATED, "current_version": version})
+            out.append({"doc_id": doc_id, "ref": ref, "change": UPDATED, "current_version": version})
     return out
 
 
@@ -96,12 +102,14 @@ def project_updates(db: Session, project: Project) -> list[dict]:
 
 
 def usage_counts(db: Session, doc_id: str) -> dict:
-    """知识侧：引用该条目的章节当前版本计数。不返回项目代号和内容。"""
+    """知识侧：引用该条目的章节当前版本计数（按现行编号 + 全部别名匹配，B15）。不返回项目代号和内容。"""
+    r = kb_refs.resolve(db, [doc_id]).get(doc_id)
+    names = {doc_id} | ({r.doc_id, *kb_refs.aliases_of(db, r.item_id)} if r else set())
     rows = db.execute(select(Deliverable.project_id, Deliverable.id, SectionVersion.sources)
                       .join(DeliverableSection, DeliverableSection.deliverable_id == Deliverable.id)
                       .join(SectionVersion, (SectionVersion.section_id == DeliverableSection.id)
                             & (SectionVersion.version == DeliverableSection.current_version))).all()
     hits = [(p, d) for p, d, src in rows
-            if any(isinstance(x, dict) and x.get("found") and x.get("ref") == doc_id
+            if any(isinstance(x, dict) and x.get("found") and x.get("ref") in names
                    for x in (src or {}).get("knowledge", []))]
     return {"projects": len({p for p, _ in hits}), "deliverables": len({d for _, d in hits}), "sections": len(hits)}
