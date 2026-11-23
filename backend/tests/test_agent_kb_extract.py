@@ -71,3 +71,11 @@ def test_import_doc_states_formats_and_keeps_originals_out_of_repo():
     for word in ("OLIR", "CTID", "Consult_Knowledge", "等价", "子集", "超集", "交集", "置信度"):
         assert word in text, word
     assert quality.qualification_hits(text) == 0
+
+
+def test_mode_i_refuses_conclusion_wording_and_quotes_when_restating():
+    """#334 测试机 EXT-R04：用户要求写“满足等保三级、通过测评”时，模型复述成引号外的结论用语。"""
+    part = _mode_i()
+    assert "整段加引号" in part, "复述用户要求的结论用语须整段加引号"
+    assert "差距分析" in part and "符合性初判" in part and "整改建议" in part
+    assert "改写为" in part, "须给出可直接用的替代写法"
