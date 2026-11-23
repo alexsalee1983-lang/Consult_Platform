@@ -15,6 +15,7 @@ confirm.create（发确认卡：选项、推荐和理由、影响，规则见 ap
 agent.handoff（对话转交：为专业 Agent 新建对话，规则见 app/agents/handoff.py；二期 C2）、
 quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，只查 L4）、
 kb.mapping（控制映射查询，只读知识区映射矩阵；二期 B3，app/kb/mapping.py）；
+deid.check（去标识检查，只检查不改数据：机密级命中退回、残留直接标识有条件通过，输出不含原文；三期 C7，app/kb/deid_check.py）；
 kb.stage_write 在 M2 后续接入，目前是占位实现。
 kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用人的可见范围过滤（app/kb/search.py）。
 """
@@ -91,7 +92,13 @@ def _product_of(ctx: ToolContext) -> dict:
         snap = configs.snapshot(ctx.db, ctx.project)
     except config.CatalogError:
         return {"product": "", "modules": []}
-    return {"product": str(snap.get("product") or ""), "modules": [m["code"] for m in snap.get("modules") or []]}
+    out = {"product": str(snap.get("product") or ""), "modules": [m["code"] for m in snap.get("modules") or []]}
+    ind = snap.get("industry")
+    if isinstance(ind, dict):   # 三期行业包：术语、受访角色、威胁画像、立项提示进项目卡
+        out["industry_pack"] = {**{k: ind.get(k) for k in ("code", "name", "level", "terms", "roles", "threats",
+                                                            "tier_hint")},
+                                "expert_pending": ind.get("code") in (snap.get("expert_pending") or [])}
+    return out
 
 
 def _project_read(ctx: ToolContext, args: dict) -> dict:
@@ -134,6 +141,11 @@ def _quality_check(ctx: ToolContext, args: dict) -> dict:
             "findings": [{"kind": f.kind, "label": f.label, "excerpt": f.excerpt} for f in r.findings]}
 
 
+def _deid_check(ctx: ToolContext, args: dict) -> dict:
+    from ..kb import deid_check      # 延迟导入：kb 包依赖较多，工具层只在调用时加载
+    return deid_check.check(str(args.get("text", ""))).to_json()
+
+
 def _project_kb_prefs(ctx: ToolContext) -> dict:
     """项目上下文里检索的默认值（二期 B2）：快照的产品、所选模块的 kb_tags、basis 列出的标准
     （B2 补充：项目行业在快照 industry_basis 里有对应的，行业依据排在前面一并加权）。
@@ -150,7 +162,8 @@ def _project_kb_prefs(ctx: ToolContext) -> dict:
     industry = (ctx.project.industry or "").strip()
     ib = snap.get("industry_basis") or {}
     keys = dict.fromkeys([industry, *industry.split("/")]) if industry else {}   # 立项下拉的“银行/金融”任一部分对上
-    by_industry = [b for k in keys if k for b in (ib.get(k) or [])]
+    pack = snap.get("industry") if isinstance(snap.get("industry"), dict) else {}
+    by_industry = [*(pack.get("basis") or []), *(b for k in keys if k for b in (ib.get(k) or []))]   # 三期行业包在前
     basis = list(dict.fromkeys(by_industry + list(snap.get("basis") or [])))   # 行业依据在前（二期 B2 补充）
     return {"product": str(snap.get("product") or ""), "tags": list(snap.get("kb_tags") or []), "basis": basis}
 
@@ -232,6 +245,7 @@ IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "kb.search": _kb_search,
     "basis.lookup": _basis_lookup,
     "kb.mapping": _kb_mapping,
+    "deid.check": _deid_check,
     "doc.generate": _doc_generate,
     "confirm.create": _confirm_create,
     "agent.handoff": _agent_handoff,

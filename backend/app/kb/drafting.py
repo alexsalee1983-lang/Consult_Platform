@@ -154,6 +154,7 @@ def draft(db: Session, user: User, filename: str, data: bytes, *, source_detail:
                     if not getattr(e.meta, k, None):
                         setattr(e.meta, k, v)
                 e.content.source_type, e.content.source_detail = "public", source_detail
+                e.content.model = out.model           # 三期 G2③：记起草模型，知识审核换家族
                 reason = check_clauses(e, seg)
                 if reason:
                     report.rejected.append((chunk, reason))

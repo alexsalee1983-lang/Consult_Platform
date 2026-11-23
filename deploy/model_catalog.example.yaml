@@ -1,0 +1,29 @@
+# 模型目录 v1 示例（三期 G2，4A 架构 5.3）。复制一份按模型平台的实际模型 ID 改，
+# 在 .env 里设 LLM_MODEL_CATALOG=<容器内的文件路径>（或直接填一段 JSON）。留空则照旧单模型。
+# 所有模型走同一个 LLM_BASE_URL；下面的模型 ID 是占位值。
+models:
+  - id: deepseek-reasoning-model      # 模型平台上的模型 ID
+    family: deepseek                  # 家族：评审 / 仲裁据此强制与生成方不同
+    tier: reasoning                   # reasoning / standard / light，可写列表
+    evaluated: true                   # 未通过评测的写 false，不参与选择
+  - id: deepseek-standard-model
+    family: deepseek
+    tier: [standard, light]
+  - id: glm-standard-model
+    family: glm
+    tier: standard
+  - id: kimi-standard-model
+    family: kimi
+    tier: standard
+  - id: minimax-standard-model
+    family: minimax
+    tier: standard
+    evaluated: false
+# 角色绑定（可省略）：不写时按 4A 5.3 默认顺序——
+#   生成 DeepSeek→GLM→Kimi→MiniMax；评审、知识审核 GLM→Kimi→MiniMax→DeepSeek；仲裁 Kimi→MiniMax→GLM
+# roles:
+#   generate.reasoning: [deepseek-reasoning-model, glm-standard-model]
+#   generate.standard: [deepseek-standard-model, glm-standard-model]
+#   generate.light: [deepseek-standard-model]
+#   review: [glm-standard-model, kimi-standard-model, deepseek-standard-model]
+#   arbitrate: [kimi-standard-model, glm-standard-model]

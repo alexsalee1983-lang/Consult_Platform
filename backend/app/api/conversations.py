@@ -218,16 +218,18 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
                 if isinstance(item, Completion):
                     extra["kb_refs"], extra["tool_calls"] = len(refs), item.tool_calls
                     with SessionLocal() as s:
-                        s.add(Message(conversation_id=conv_id, role="assistant", content=item.text, model=item.model,
-                                      prompt_version=version, prompt_tokens=item.prompt_tokens,
-                                      completion_tokens=item.completion_tokens, kb_refs=refs))
+                        reply = Message(conversation_id=conv_id, role="assistant", content=item.text, model=item.model,
+                                        prompt_version=version, prompt_tokens=item.prompt_tokens,
+                                        completion_tokens=item.completion_tokens, kb_refs=refs)
+                        s.add(reply)
                         s.get(Conversation, conv_id).updated_at = utcnow()
                         s.commit()
+                        reply_id = reply.id
                         _succeeded(s, username, code, chat_in, item, stream=True, agent=agent_code, extra=extra)
                     yield _sse("done", {"model": item.model, "demo": item.demo, "prompt_version": version,
                                         "prompt_tokens": item.prompt_tokens,
                                         "completion_tokens": item.completion_tokens, "references": refs,
-                                        "tool_calls": item.tool_calls})
+                                        "tool_calls": item.tool_calls, "message_id": reply_id})
                     return
                 parts.append(item)
                 yield _sse("delta", {"text": item})
