@@ -49,9 +49,10 @@ from sqlalchemy.orm import Session
 
 from ..agents import call, knowledge, runtime, tools
 from ..core import audit
+from ..kb import refs as kb_refs_svc
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
-from ..models import Deliverable, KbItem, KbVersion, Project, QualityReview, ReviewWaiver, SignOff, User
+from ..models import Deliverable, KbVersion, Project, QualityReview, ReviewWaiver, SignOff, User
 from ..products import config
 from ..services import gateway, guard, jobs
 from . import cards, configs, deliverables, review_issues
@@ -151,13 +152,14 @@ def kb_ref_states(db: Session, refs: set[str], today: date | None = None) -> dic
     if not refs:
         return {}
     today = today or date.today()
-    rows = {doc_id: (retired, status, eff) for doc_id, retired, status, eff in db.execute(
-        select(KbItem.doc_id, KbItem.retired, KbVersion.ref_status, KbVersion.effective_date)
-        .outerjoin(KbVersion, KbVersion.id == KbItem.current_version_id)
-        .where(KbItem.doc_id.in_(refs))).all()}
+    resolved = kb_refs_svc.resolve(db, refs)          # 现行编号或别名（B15）
+    vids = {r.current_version_id for r in resolved.values() if r.current_version_id is not None}
+    vers = {i: (st, eff) for i, st, eff in db.execute(
+        select(KbVersion.id, KbVersion.ref_status, KbVersion.effective_date).where(KbVersion.id.in_(vids))).all()}
     out: dict[str, str] = {}
     for ref in refs:
-        row = rows.get(ref)
+        r = resolved.get(ref)
+        row = (r.retired, *vers[r.current_version_id]) if r is not None and r.current_version_id in vers else None
         if row is None or row[0] or row[1] is None:
             out[ref] = KB_GONE
         elif row[1] in ("repealed", "superseded"):
