@@ -136,3 +136,10 @@ def test_0007_fixes_old_solution_design_code(engine):
 
 def test_baseline_revision_exists():
     assert ScriptDirectory.from_config(alembic_config()).get_revision(BASELINE) is not None
+
+
+def test_each_chain_has_single_head():
+    """主链、知识区链各只有一个链头（负责人 2026-11-23：合并时接到 main 当前链头，不留分叉）。"""
+    for chain in ("main", "kb"):
+        heads = ScriptDirectory.from_config(alembic_config(chain=chain)).get_heads()
+        assert len(heads) == 1, f"{chain} 迁移链有多个链头 {heads}：把本 PR 新迁移的 down_revision 改接到 main 当前链头"
