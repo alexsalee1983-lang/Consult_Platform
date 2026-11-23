@@ -1,8 +1,13 @@
 // 交付件章节正文的只读渲染：标题、列表、表格、段落，以及来源标注上标。
 // 来源颜色是固定语义：绿 = 客户证据（D / I / O），青 = 知识库（L4-…），紫 = 模型推断；核对不上的标注用猩红。
-// 规则与后端 app/project/deliverables.py、export.py 的正则一致。
+// 规则与后端 app/project/deliverables.py、export.py 的正则一致；知识编号模式统一取自 ../kbRef.js。
 
-const TOKEN = /\[((?:I|D|O)-\d{2,4}(?:-\d{1,3})?)\]|[[｜|]\s*(L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5})\s*[\]】]|\[(?:推断|模型推断)\]|\*\*(.+?)\*\*/g;
+import { KB_REF_PATTERN } from "../kbRef.js";
+
+const TOKEN = new RegExp(
+  String.raw`\[((?:I|D|O)-\d{2,4}(?:-\d{1,3})?)\]|[[｜|]\s*(` + KB_REF_PATTERN + String.raw`)\s*[\]】]|\[(?:推断|模型推断)\]|\*\*(.+?)\*\*`,
+  "g",
+);
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const BULLET = /^\s*[-*+]\s+(.*)$/;
 const NUMBERED = /^\s*(\d{1,3})[.、)）]\s*(.*)$/;
