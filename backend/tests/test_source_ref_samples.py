@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from app.project.deliverables import _EVIDENCE_REF, _INFERRED, _KB_REF
+from app.kb.refs import MARK_RE as _KB_REF
+from app.project.deliverables import _EVIDENCE_REF, _INFERRED
 
 SAMPLES = Path(__file__).resolve().parents[2] / "frontend" / "src" / "editor" / "refSamples.json"
 
