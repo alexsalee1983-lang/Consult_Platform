@@ -23,6 +23,7 @@ HEAD = "文件名,名称,文号/标准号,现行状态,原网址,获取方式,sh
 @pytest.fixture(autouse=True)
 def _never_suspended(monkeypatch):
     monkeypatch.setattr(get_settings(), "kb_sample_fail_max", 1.0)     # 其他用例留下的抽检结果不影响
+    monkeypatch.setattr(get_settings(), "kb_sample_confidence", 0.3)   # 3 条的小批只抽 1 条（B20 统计抽样量另测）
 
 
 def _users():
