@@ -8,6 +8,13 @@
 - 统计：每条知识的引用次数（Agent 写入章节里核对得上的引用 + 对话回复附的参考知识）、采纳率（Agent 引用它的章节里，
   顾问随后没删掉的比例，与 B13 同一口径）、三键计数。只出编号、标题和计数，不出项目、正文和附言。
 - 审计 kb.feedback 只记条目编号、选项、入口、附言长度和摘要哈希，不记附言原文和项目内容。
+
+四期 A17（在本最小版上补齐）：
+- 使用可见：describe() 给出一处引用里每条知识的标题、现行版本、依据（文件、版本、文号）、来源权威等级（B27）、
+  待复查状态和是否因顾问反馈待复查；只给元数据不给正文，顾问看不到的受限条目只给编号。
+- 进缺口池：标“过时 / 不对”另作“使用信号”记进缺口池（B25②，gap_key 是知识编号，事件编号 kbfb-<反馈 id>，
+  同一处反馈改选不重复计），由每周计划排复核与补采。
+- 知识健康：health() 出近 30 天三键计数、因反馈待复查的条目数和被标最多的条目（只编号、标题、计数）。
 """
 from __future__ import annotations
 
@@ -23,13 +30,17 @@ from ..core import audit
 from ..core.db import utcnow
 from ..models import Conversation, KnowledgeFeedback, KbItem, KbVersion, Message, Project, SectionVersion, User
 from ..services import guard
-from . import recheck
+from . import authority, gap_pool, recheck
+from .acquisition import Signal
 
 RATINGS = {"useful": "有用", "outdated": "过时", "wrong": "不对"}
 FLAGS = ("outdated", "wrong")
 MIN_FLAGS = 1                  # 现行版本发布（或上次复查处理）后被标“过时 / 不对”达到几次就进待复查（可调）
 NOTE_MAX = 200
 STATS_DAYS = 90
+HEALTH_DAYS = 30
+HEALTH_TOP = 10
+FEEDBACK_REASON = "使用反馈："    # mark_flagged 写的 recheck_reason 前缀
 
 
 class FeedbackError(ValueError):
@@ -95,10 +106,79 @@ def submit(db: Session, project: Project, user: User, target: Target, doc_id: st
     fb.rating, fb.note, fb.updated_at = rating, note, now
     db.commit()
     marked = mark_flagged(db, doc_id, actor=user.username) if rating in FLAGS else False
+    if rating in FLAGS:
+        _gap_signal(db, fb, doc_id)
     audit.record(db, actor=user.username, action="kb.feedback", result="allowed", project_code=project.code,
                  doc_id=doc_id, surface=target.surface, rating=rating, note_length=len(note),
                  note_sha=audit.digest(note) if note else "", recheck_marked=marked)
     return fb, marked
+
+
+def _level(v: KbVersion, item: KbItem) -> int | None:
+    return authority.infer_level(ref_document=v.ref_document, ref_code=v.ref_code, source_type=v.source_type,
+                                 layer=item.layer)
+
+
+def _gap_signal(db: Session, fb: KnowledgeFeedback, doc_id: str) -> None:
+    """“过时 / 不对”作使用信号进缺口池；事件编号按反馈行，同一处反馈改选不重复计。"""
+    row = db.execute(select(KbItem, KbVersion).outerjoin(KbVersion, KbVersion.id == KbItem.current_version_id)
+                     .where(KbItem.doc_id == doc_id)).first()
+    level = _level(row[1], row[0]) if row is not None and row[1] is not None else None
+    gap_pool.record(db, [Signal(key=doc_id, kind="usage", event_ref=f"kbfb-{fb.id}", authority=level or 3)])
+
+
+def is_feedback_recheck(v: KbVersion | None) -> bool:
+    return bool(v is not None and v.recheck_state in recheck.OPEN_STATES
+                and (v.recheck_reason or "").startswith(FEEDBACK_REASON))
+
+
+def describe(db: Session, user: User, doc_ids: set[str]) -> list[dict[str, Any]]:
+    """一处引用里每条知识的元数据（A17 使用可见），按编号排序；不含正文。看不到的条目只给编号。"""
+    from . import review as rv
+
+    rows = {i.doc_id: (i, v) for i, v in db.execute(
+        select(KbItem, KbVersion).outerjoin(KbVersion, KbVersion.id == KbItem.current_version_id)
+        .where(KbItem.doc_id.in_(doc_ids))).tuples()} if doc_ids else {}
+    out: list[dict[str, Any]] = []
+    for d in sorted(doc_ids):
+        i, v = rows.get(d, (None, None))
+        if i is None or v is None or not rv.can_view(db, user, i, v):
+            out.append({"doc_id": d, "visible": False})
+            continue
+        level = _level(v, i)
+        out.append({"doc_id": d, "visible": True, "title": v.title, "version": v.version, "layer": i.layer,
+                    "source_type": v.source_type, "ref_document": v.ref_document, "ref_version": v.ref_version,
+                    "ref_code": v.ref_code, "ref_status": v.ref_status, "authority_level": level,
+                    "authority_label": authority.label(level), "recheck_state": v.recheck_state or "",
+                    "flagged": is_feedback_recheck(v),
+                    "review_date": v.review_date.isoformat() if v.review_date else None})
+    return out
+
+
+def health(db: Session, days: int = HEALTH_DAYS, now: datetime | None = None) -> dict[str, Any]:
+    """知识健康里的顾问反馈：近 days 天三键计数、因反馈待复查的现行条目数、被标“过时 / 不对”最多的条目。"""
+    since = (now or utcnow()) - timedelta(days=days)
+    counts = dict.fromkeys(RATINGS, 0)
+    flags: dict[str, dict[str, int]] = defaultdict(lambda: dict.fromkeys(FLAGS, 0))
+    for d, rating, n in db.execute(select(KnowledgeFeedback.doc_id, KnowledgeFeedback.rating, func.count())
+                                   .where(KnowledgeFeedback.updated_at >= since)
+                                   .group_by(KnowledgeFeedback.doc_id, KnowledgeFeedback.rating)).tuples():
+        if rating in RATINGS:
+            counts[rating] += n
+        if rating in FLAGS:
+            flags[d][rating] = n
+    open_versions = db.scalars(select(KbVersion).join(KbItem, KbItem.current_version_id == KbVersion.id)
+                               .where(KbItem.retired.is_(False), KbVersion.recheck_state.in_(recheck.OPEN_STATES)))
+    flagged = sum(1 for v in open_versions if is_feedback_recheck(v))
+    meta = {i.doc_id: v for i, v in db.execute(
+        select(KbItem, KbVersion).outerjoin(KbVersion, KbVersion.id == KbItem.current_version_id)
+        .where(KbItem.doc_id.in_(set(flags)))).tuples()} if flags else {}
+    top = sorted(flags.items(), key=lambda x: (-sum(x[1].values()), x[0]))[:HEALTH_TOP]
+    return {"days": days, "counts_30d": counts, "flagged_recheck": flagged,
+            "top_flagged": [{"doc_id": d, **c,
+                             "title": meta[d].title if meta.get(d) is not None else "",
+                             "recheck_state": (meta[d].recheck_state or "") if meta.get(d) is not None else ""}
+                            for d, c in top]}
 
 
 def _live(db: Session, doc_id: str) -> KbVersion | None:
