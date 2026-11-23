@@ -5,6 +5,7 @@ import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
+import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
 
 // 交付件审阅（设计稿 04）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
 // 右栏与本交付件有关的确认卡、签署流程。规则都在后端，界面只按接口返回显示和操作。
@@ -141,10 +142,14 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
     }
   }
 
+  // 知识使用反馈三键（三期 B29）：本版本里核对得上的知识引用
+  const fb = useKbFeedback(code, s?.version && (s.sources?.knowledge || []).some((r) => r.found)
+    ? { deliverable: dcode, seq, version: s.version } : null);
   if (!s) return <Loading error={error} />;
   const isCurrent = s.version === s.current_version;
   const unresolved = s.sources?.unresolved || [];
   const refs = [...(s.sources?.evidence || []), ...(s.sources?.knowledge || [])];
+  const kbCited = (s.sources?.knowledge || []).some((r) => r.found);
 
   return (
     <section className="pnl doc-pnl" aria-label="章节正文">
@@ -195,8 +200,10 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
                 <span className="mono" style={{ color: !r.found ? "var(--crim)" : r.ref.startsWith("L") ? "var(--cyan)" : "var(--ok)", minWidth: 120 }}>{r.ref}</span>
                 <span className="sub">{!r.found ? "核对不上：项目里没有这条证据或知识"
                   : r.layer_name || r.layer || EVIDENCE_KIND[r.ref[0]] || ""}</span>
+                {kbCited && r.found && r.ref.startsWith("L") && <FeedbackKeys docId={r.ref} fb={fb} />}
               </div>
             ))}
+            {fb.error && <div className="err" role="alert">{fb.error}</div>}
           </div>
         )}
       </div>

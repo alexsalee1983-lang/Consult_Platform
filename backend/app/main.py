@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import DataError
 
 from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health, portfolio, workbench,
-                  kb, kb_items, kb_sources, projects, quality, runs)
+                  kb, kb_feedback, kb_items, kb_sources, projects, quality, runs)
 from .core import audit as core_audit
 from .core.auth import authenticate
 from .core.bootstrap import check_db_accounts, check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
@@ -81,4 +81,5 @@ app.include_router(conversations.router)
 app.include_router(directory.router)
 app.include_router(kb.router)
 app.include_router(kb_items.router)
+app.include_router(kb_feedback.router)
 app.include_router(kb_sources.router)
