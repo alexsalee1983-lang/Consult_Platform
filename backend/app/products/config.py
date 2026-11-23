@@ -50,6 +50,19 @@ class Deliverable:
     stage: str
     client_facing: bool
     outline: tuple[str, ...] = ()
+    review_profile: str = "full"     # 评审档案（A13）：full 全面 / light 只查红线和专项
+
+
+REVIEW_PROFILES = ("full", "light")
+
+
+def parse_review_profile(v: object) -> tuple[str, str]:
+    """交付件的评审档案；返回（档案，问题说明），缺省 full。"""
+    if v is None or v == "":
+        return "full", ""
+    if v not in REVIEW_PROFILES:
+        return "full", f"review_profile {v!r} 应为 {'/'.join(REVIEW_PROFILES)} 之一"
+    return str(v), ""
 
 
 @dataclass(frozen=True)
@@ -343,7 +356,10 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
         outline = dp.texts(d, "outline")
         if any(len(t) > 60 for t in outline):
             dp.add("outline 的章节标题不超过 60 字")
-        deliverables.append(Deliverable(dcode, title, stage, cf, outline))
+        profile, why = parse_review_profile(d.get("review_profile"))
+        if why:
+            dp.add(why)
+        deliverables.append(Deliverable(dcode, title, stage, cf, outline, profile))
     dcodes = {d.code for d in deliverables}
 
     base_raw = data.get("baseline") or {}
@@ -679,7 +695,7 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = ()) -> d
                       "output": s.output, "query": render(s.query, merged, s.number, names, ""),
                       "instruction": text})
     deliverables = [{"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
-                     "outline": outlines[d.code]} for d in prod.deliverables]
+                     "outline": outlines[d.code], "review_profile": d.review_profile} for d in prod.deliverables]
     return {
         "format": SNAPSHOT_FORMAT,
         "product": prod.code, "product_name": prod.name, "product_version": prod.version,
