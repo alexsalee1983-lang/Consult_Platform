@@ -46,9 +46,15 @@ export function sendMessage(conversationId, message, onDelta, onTool) {
   return streamPost(`/api/conversations/${conversationId}/messages`, { message }, onDelta, onTool);
 }
 
-async function streamPost(url, body, onDelta, onTool) {
+// 写稿助手（三期 A15）：侧栏问 / 改，流式返回；signal 为 AbortController.signal，停止即断开连接
+export function assistSection(code, dcode, seq, body, onDelta, signal) {
+  return streamPost(`${dpath(code, dcode)}/sections/${seq}/assist`, body, onDelta, undefined, signal);
+}
+
+async function streamPost(url, body, onDelta, onTool, signal) {
   const res = await fetch(url, {
     method: "POST",
+    signal,
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
     body: JSON.stringify(body),
@@ -220,6 +226,7 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  kbReadiness: (days = 90) => request(`/api/kb/readiness?days=${days}`),   // 三期 F2②
   // 知识使用反馈（三期 B29）：target 为 {message_id} 或 {deliverable, seq, version}
   kbFeedback: (code, target) => request(`/api/projects/${encodeURIComponent(code)}/kb-feedback?${new URLSearchParams(target)}`),
   sendKbFeedback: (code, body) =>

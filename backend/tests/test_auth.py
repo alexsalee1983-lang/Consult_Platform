@@ -63,6 +63,7 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/sections/1"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/sections/1/assist"),   # 三期 A15 写稿助手
     ("GET", "/api/projects/BANK-A/deliverables/D4/export"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/export?format=pptx"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/reviews"),
@@ -139,6 +140,7 @@ PROTECTED = [
     ("GET", "/api/kb/meta"),
     ("GET", "/api/kb/versions"),
     ("GET", "/api/kb/stats"),
+    ("GET", "/api/kb/readiness"),
     ("GET", "/api/projects/BANK-A/kb-feedback"),
     ("POST", "/api/projects/BANK-A/kb-feedback"),
     ("GET", "/api/kb-usage"),
