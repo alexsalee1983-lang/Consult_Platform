@@ -4,7 +4,7 @@
 迁移号按三期开发计划第七节表；down 暂接 k0009（B15 链 k0010～k0012、B19 k0013 合并后由后合并的一方改接）。
 
 Revision ID: k0014_kb_sources
-Revises: k0009_kb_upload_project
+Revises: k0013_kb_control_hub
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0014_kb_sources"
-down_revision: str | None = "k0009_kb_upload_project"
+down_revision: str | None = "k0013_kb_control_hub"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

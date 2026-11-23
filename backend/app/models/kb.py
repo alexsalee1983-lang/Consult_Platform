@@ -1,6 +1,6 @@
 """知识区数据表（M2）。字段依据 agents/01_公共规范.md 第 7 节，取值和校验见 app/kb/meta.py。
 
-- kb_items：一个知识条目（doc_id 固定不变），放分类元数据；current_version_id 指向现行（已发布）版本。
+- kb_items：一个知识条目（doc_id 固定不变，B15 起为 KB-000123，旧编号见 kb_item_aliases），放分类元数据；current_version_id 指向现行（已发布）版本。
 - kb_versions：条目的每个版本，放标题、正文、来源、去标识、生效与复审日期；按状态流转，历史版本全部保留。
 - kb_chunks：已发布版本切分后的片段，供检索。PostgreSQL 上另有生成列 tsv（中文全文索引，迁移 0011 创建），
   向量列在确定向量模型后加入（S2 检索 PR）。
@@ -13,7 +13,7 @@
 """
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import false as sql_false
 
@@ -28,7 +28,9 @@ class KbItem(KbBase):
     __tablename__ = "kb_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    doc_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)   # L2-OPS-SOC-TPL-007
+    doc_id: Mapped[str] = mapped_column(String(40), unique=True, index=True)   # KB-000123（B15 起；旧编号进别名表）
+    # 现行编号的序号（三期 B15，知识区迁移 k0012）：doc_id = KB- + 6 位补零的 seq；迁移时按 id 回填
+    seq: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True)
     layer: Mapped[str] = mapped_column(String(2), index=True)                  # L1～L5
     domain: Mapped[str] = mapped_column(String(3), index=True)                 # GOV / OPS ……
     product: Mapped[str] = mapped_column(String(8), index=True)                # SOC / GEN
@@ -54,6 +56,31 @@ class KbItem(KbBase):
 
     versions: Mapped[list["KbVersion"]] = relationship(
         back_populates="item", foreign_keys="KbVersion.item_id", order_by="KbVersion.version")
+
+
+class KbItemAlias(KbBase):
+    """条目别名（三期 B15，知识区迁移 k0010）：旧编号（legacy，换号）、跨环境迁移时对方的编号（transfer）、
+    合并前的编号（merge）。别名永不删除，条目下线后照样能解析（结果为已下线）；与 kb_items.doc_id 互斥，
+    只经 app/kb/refs.add_alias 写入。"""
+    __tablename__ = "kb_item_aliases"
+
+    alias: Mapped[str] = mapped_column(String(40), primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("kb_items.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbItemLabel(KbBase):
+    """条目多值标签（三期 B15，知识区迁移 k0011）：kind 为 product / industry / control / capability / domain / tag，
+    一个条目可以挂多个产品、多个行业。只经 app/kb/labels.py 写入；读取以本表为准，kb_items 上的旧列只双写，
+    给回滚和旧报表用。source：manual（条目文件 / 界面）/ legacy（迁移回填）/ derived（B19 由控制项推出）。"""
+    __tablename__ = "kb_item_labels"
+    __table_args__ = (Index("ix_kb_item_labels_kind_value", "kind", "value", "item_id"),)
+
+    item_id: Mapped[int] = mapped_column(ForeignKey("kb_items.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    value: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source: Mapped[str] = mapped_column(String(16), default="manual")
 
 
 class KbVersion(KbBase):
@@ -208,6 +235,77 @@ class KbDeidReport(KbBase):
     deid_key: Mapped[str] = mapped_column(String(512), default="")            # 去标识后正文（知识区）
     safe_filename: Mapped[str] = mapped_column(String(255), default="")       # 去标识后的文件名
     comment: Mapped[str] = mapped_column(String(1000), default="")            # 人工确认意见
+
+
+class KbFramework(KbBase):
+    """标准 / 框架的一个版本（三期 B19，知识区迁移 k0013）。换版时旧版 status=superseded、superseded_by 指新版。"""
+    __tablename__ = "kb_frameworks"
+    __table_args__ = (UniqueConstraint("code", "version", name="uq_kb_frameworks_code_version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(32))                             # ISO27001 / CSF / MLPS
+    version: Mapped[str] = mapped_column(String(32))                          # 2022 / 2.0 / 2019
+    name: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(12), default="current")        # current / superseded
+    superseded_by_id: Mapped[int | None] = mapped_column(ForeignKey("kb_frameworks.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class KbControl(KbBase):
+    """公司控制项（三期 B19）：编号全局唯一、只增不改，按目录版本记一行。
+
+    applicability：适用性规则 {industries, mlps_levels, jurisdictions, deployments}，缺省或空表示不限（参照 800-53B 基线、OSCAL Profile）；
+    params：组织定义参数 [{id, label, default}]（如日志保留月数）。差距分析的评估维度，不是测评或认证判定项。"""
+    __tablename__ = "kb_controls"
+    __table_args__ = (UniqueConstraint("code", "catalog_version", name="uq_kb_controls_code_version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(40), index=True)                 # SOC.ORG.01
+    catalog_version: Mapped[str] = mapped_column(String(16))                  # v0
+    name: Mapped[str] = mapped_column(String(200))
+    product: Mapped[str] = mapped_column(String(16), index=True)              # SOC / IRE
+    domain: Mapped[str] = mapped_column(String(60))
+    industries: Mapped[list] = mapped_column(JSON, default=list)
+    applicability: Mapped[dict] = mapped_column(JSON, default=dict)
+    params: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(12), default="draft")          # draft / active / retired
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class KbControlCheckpoint(KbBase):
+    """控制项下的检查点（参照 SP 800-53A 评估目标）：题库、评分锚定、发现初判挂到这里。methods ⊆ {examine, interview, test}。"""
+    __tablename__ = "kb_control_checkpoints"
+    __table_args__ = (UniqueConstraint("control_id", "code", name="uq_kb_control_checkpoints_control_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    control_id: Mapped[int] = mapped_column(ForeignKey("kb_controls.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(48), index=True)                 # SOC.ORG.01.a
+    seq: Mapped[int] = mapped_column(Integer)
+    objective: Mapped[str] = mapped_column(String(500))
+    methods: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(12), default="draft")
+
+
+class KbControlMapping(KbBase):
+    """控制项 ↔ 框架条款（三期 B19）：relation 等价 / 子集 / 超集 / 交集（NIST IR 8477、SCF STRM，与 C12 同一套取值），
+    strength 1～10，rationale 简短理由；只存条款号，不存标准原文。"""
+    __tablename__ = "kb_control_mappings"
+    __table_args__ = (UniqueConstraint("control_id", "framework_id", "clause", "mapping_version",
+                                       name="uq_kb_control_mappings_key"),
+                      Index("ix_kb_control_mappings_framework_clause", "framework_id", "clause"))
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    control_id: Mapped[int] = mapped_column(ForeignKey("kb_controls.id", ondelete="CASCADE"), index=True)
+    framework_id: Mapped[int] = mapped_column(ForeignKey("kb_frameworks.id"))
+    clause: Mapped[str] = mapped_column(String(40))
+    relation: Mapped[str] = mapped_column(String(8))
+    strength: Mapped[int] = mapped_column(Integer)
+    rationale: Mapped[str] = mapped_column(String(300), default="")
+    mapping_version: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(12), default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class KbSource(KbBase):
