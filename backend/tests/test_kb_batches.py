@@ -108,8 +108,9 @@ def test_page_eval_is_queued_and_records_accuracy(batch_root, kb_admin):
     ({"kind": "import", "path": "C:/Windows"}, 400),
     ({"kind": "import", "path": "2026-11-samples/../../outside"}, 400),
     ({"kind": "import", "path": "no-such-batch"}, 404),
-    ({"kind": "import", "path": "eval/samples.yaml"}, 404),            # 导入要目录
-    ({"kind": "eval", "path": "2026-11-samples"}, 404),                # 评测要 .yaml 文件
+    ({"kind": "import", "path": "eval/samples.yaml"}, 400),            # 导入要目录（类型不对 400，#359）
+    ({"kind": "eval", "path": "2026-11-samples"}, 400),                # 评测要 .yaml 文件
+    ({"kind": "eval", "path": "eval/no-such.yaml"}, 404),
     ({"kind": "draft", "path": "2026-11-samples"}, 400),               # 页面只能发起导入、评测
 ])
 def test_bad_paths_and_kinds_rejected(batch_root, kb_admin, body, status):
@@ -174,3 +175,25 @@ def test_compose_worker_mounts_kb_downloads_readonly():
     mount = "${KB_DOWNLOADS_DIR:-./kb-downloads}:/srv/knowledge/downloads:ro"
     for service in ("backend", "worker"):
         assert mount in compose["services"][service].get("volumes", []), service
+
+
+def _break_one_entry(root: Path) -> None:
+    (root / "downloads" / "2026-11-samples" / "zz-broken.md").write_text("没有头部信息的条目" + chr(10), encoding="utf-8")
+
+
+def test_cli_and_page_import_judge_failed_entries_the_same(batch_root, kb_admin):
+    """#359：同一目录有条目失败时，命令行和页面发起的批次都判“失败”，计数一致。"""
+    root, _ = batch_root
+    c, username = kb_admin
+    _break_one_entry(root)
+    assert cli_main(["kb-import", str(root / "downloads" / "2026-11-samples"), "--as", username]) == 2
+    job_id = c.post("/api/kb/batches", json={"kind": "import", "path": "2026-11-samples"}).json()["job_id"]
+    _drain()
+    listed = [b for b in c.get("/api/kb/batches").json() if b["created_by"] == username]
+    cli_b = next(b for b in listed if b["source"] == "cli")
+    page_b = next(b for b in listed if b["job_id"] == job_id)
+    assert cli_b["status"] == page_b["status"] == "failed"
+    assert cli_b["counts"]["error"] == page_b["counts"]["error"] == 1
+    with SessionLocal() as db:
+        rows = db.scalars(select(AuditLog).where(AuditLog.action == batches.ACTION, AuditLog.actor == username))
+        assert {r.result for r in rows} == {"error"}

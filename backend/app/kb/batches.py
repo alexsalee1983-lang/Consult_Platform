@@ -53,7 +53,7 @@ def is_admin(db: Session, user: User) -> bool:
 
 
 def resolve(rel: str, *, want_dir: bool) -> Path:
-    """相对路径 → 根目录下的真实路径；不合法 400，不存在 404。"""
+    """相对路径 → 根目录下的真实路径；不合法或类型不对 400，不存在 404。"""
     rel = (rel or "").strip().replace("\\", "/")
     if not rel or rel.startswith("/") or ":" in rel or any(p in ("..", "") for p in rel.split("/")):
         raise BatchError(400, "路径只能写资料目录下的相对路径，例如 2026-11-law")
@@ -61,10 +61,13 @@ def resolve(rel: str, *, want_dir: bool) -> Path:
     path = (base / rel).resolve()
     if not path.is_relative_to(base):
         raise BatchError(400, "路径不在资料目录里")
+    if not path.exists():
+        raise BatchError(404, "资料目录不存在" if want_dir else "题目文件不存在")
+    # 存在但类型不对（导入选了文件、评测选了目录或非 .yaml）属请求不合法，400（#359）
     if want_dir and not path.is_dir():
-        raise BatchError(404, "资料目录不存在")
+        raise BatchError(400, "导入要选资料目录，不是文件")
     if not want_dir and not (path.is_file() and path.suffix.lower() in QUESTION_SUFFIXES):
-        raise BatchError(404, "题目文件不存在（只收 .yaml / .yml）")
+        raise BatchError(400, "评测要选题目文件（只收 .yaml / .yml）")
     return path
 
 
@@ -101,10 +104,15 @@ def start(db: Session, user: User, kind: str, rel: str, *, submit: bool = False,
     return job_id
 
 
+def result_of(counts: dict) -> str:
+    """批次结论：有条目失败即“失败”（error），命令行和页面发起同一规则（#359）。"""
+    return "error" if counts.get("error") else "allowed"
+
+
 def record(db: Session, *, actor: str, kind: str, counts: dict, path: str = "", source: str = "cli",
-           job_id: int | None = None, result: str = "allowed") -> None:
-    """一个批次跑完：写审计 kb.batch（只记种类、相对路径、计数）。命令行和后台任务共用。"""
-    audit.record(db, actor=actor, action=ACTION, result=result, kind=kind, source=source, job_id=job_id,
+           job_id: int | None = None) -> None:
+    """一个批次跑完：写审计 kb.batch（只记种类、相对路径、计数；结论按 result_of）。命令行和后台任务共用。"""
+    audit.record(db, actor=actor, action=ACTION, result=result_of(counts), kind=kind, source=source, job_id=job_id,
                  path=path[:200], counts=counts)
 
 
@@ -201,7 +209,7 @@ def _run_import(payload: dict, ctx: jobs.JobContext) -> None:
         counts["total"] = len(results)
         counts["submit"] = bool(payload.get("submit"))
         record(db, actor=user.username, kind="import", counts=counts, path=str(payload.get("path", "")),
-               source="page", job_id=ctx.job_id, result="error" if counts["error"] else "allowed")
+               source="page", job_id=ctx.job_id)
 
 
 @jobs.handler(EVAL_JOB)
