@@ -163,7 +163,7 @@ jobs:
         run: |
           q() { docker compose exec -T postgres psql -U consult -d "$1" -Atc "$2"; }
           test "$(q consult "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "0"
-          test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "7"   # 知识区表数：基线 6 张 + B3 kb_mappings；新增知识区表要同步这里和下面恢复演练
+          test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename like 'kb\_%'")" = "16"   # 知识区表数：基线 6 张 + B3 kb_mappings + B15 kb_item_aliases、kb_item_labels + B19 控制项中枢 4 张；新增知识区表要同步这里和下面恢复演练
           test "$(q consult_kb "select count(*) from pg_tables where schemaname='public' and tablename in ('projects','users','audit_logs')")" = "0"
           test "$(q consult "select rolsuper::text from pg_roles where rolname='consult_kb'")" = "false"
           kbpw=$(grep -E '^KB_POSTGRES_PASSWORD=' .env | cut -d= -f2)
@@ -270,7 +270,14 @@ jobs:
           d=$(ls -d /tmp/bk/20*Z | tail -1); s=$(basename "$d")
           test -f "$d/objects.tar.gpg" && test -f "$d/kb.dump.gpg" && grep -q '"alembic_kb": "k0' "$d/manifest.json"
           grep -q '"audit_head"' "$d/manifest.json" && test -s /tmp/bk/audit-heads.log
+          # 不停服务的恢复演练（G1②）：恢复到临时库核对通过、口令不对不通过、用完临时库删掉
+          bash -n scripts/restore_drill.sh
+          BACKUP_PASSPHRASE_FILE=/tmp/bk.pass bash scripts/restore_drill.sh "$d" | tee /tmp/drill.log
+          grep -q '^演练通过' /tmp/drill.log && grep -q 'consult.projects .*一致' /tmp/drill.log
+          ! BACKUP_PASSPHRASE_FILE=/tmp/wrong.pass bash scripts/restore_drill.sh "$d"
+          test "$(docker compose exec -T postgres psql -U consult -d postgres -tAc "select count(*) from pg_database where datname like '%drill'")" = "0"
           docker compose exec -T postgres psql -U consult -d consult_kb -qc "CREATE TABLE drill_marker (id int)"   # 备份后才有，恢复后应消失
+          ! BACKUP_PASSPHRASE_FILE=/tmp/bk.pass bash scripts/restore_drill.sh "$d"   # 表的集合与当前库不一致：演练不通过
           ! grep -aq "audit_logs" "$d/db.dump.gpg"                   # 备份文件是密文
           docker compose exec -T backend python -m app.cli create-project --code DRILL-A --tier standard \
             --manager "$(grep -E '^TEST_ACCOUNT_USERNAME=' .env | cut -d= -f2)"
@@ -282,7 +289,7 @@ jobs:
           test "$n" = "0"
           test "$(objects)" = "$before"
           test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename='drill_marker'")" = "0"
-          test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename like 'kb\_%'")" = "7"
+          test "$(docker compose exec -T postgres psql -U consult -d consult_kb -tAc "select count(*) from pg_tables where tablename like 'kb\_%'")" = "16"
           docker compose exec -T postgres psql -U consult -d consult -tAc \
             "select count(*) from audit_logs where action in ('backup.create','backup.restore')" | grep -qx 1   # 恢复的是备份时的库，只有恢复这一条
           bash scripts/smoke_test.sh http://localhost:8080
@@ -358,4 +365,6 @@ jobs:
           $dl "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt" -o checksums.txt
           grep " $tarball\$" checksums.txt | sha256sum -c -
           tar -xzf "$tarball" gitleaks
-          ./gitleaks git --redact --verbose .
+          # 只扫本次检出提交能到达的全部历史（PR 为合并后的提交，main 为 main），不扫其他未合并分支：
+          # 别的分支里的问题由它自己的 PR 检查拦住，不连累无关 PR（2026-11-23 #344 的测试样例曾让所有 PR 变红）。
+          ./gitleaks git --redact --verbose --log-opts="HEAD" .

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import urlsplit
 
 from sqlalchemy import Engine, func, make_url, select, text
 from sqlalchemy.orm import Session
@@ -27,6 +28,10 @@ log = logging.getLogger(__name__)
 
 class BootstrapError(RuntimeError):
     pass
+
+
+def _url_host(url: str) -> str:
+    return (urlsplit(url).hostname or "").lower()
 
 
 def check_settings(s: Settings) -> None:
@@ -59,6 +64,13 @@ def check_settings(s: Settings) -> None:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
     if s.is_prod and s.rerank_external:
         raise BootstrapError("生产环境不得使用外部重排服务（RERANK_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-14）")
+    if s.is_prod and s.seed_demo_data:
+        raise BootstrapError("生产环境不得写入演示数据（SEED_DEMO_DATA 要设为 false，见 docs/部署手册.md）")
+    if s.is_prod:
+        for name, url in (("LLM_BASE_URL", s.llm_base_url), ("EMBED_BASE_URL", s.embed_base_url),
+                          ("RERANK_BASE_URL", s.rerank_base_url)):
+            if url and _url_host(url) == "mock-llm":
+                raise BootstrapError(f"生产环境不得接模拟模型（{name} 指向 mock-llm，只用于测试机）")
 
 
 def check_db_accounts(s: Settings, engines: list[Engine]) -> None:
