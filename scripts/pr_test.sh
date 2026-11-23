@@ -165,8 +165,7 @@ else
 fi
 
 # 4b. 素材注入：用测试账号登录，在顾问对话里发一条含唯一标记的虚拟文本（只含标记，无客户信息）
-CANARY_TAG="PRTEST-CANARY-$(od -An -N6 -tx1 /dev/urandom | tr -d ' 
-')"
+CANARY_TAG="PRTEST-CANARY-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
 cat > "$LOGDIR/canary_send.py" <<'PY'
 import base64, hashlib, hmac, http.cookiejar, json, struct, sys, time, urllib.request, urllib.error
 
