@@ -65,6 +65,7 @@ PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 P
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
 - 控制上下文：命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看需要的部分，不要整段打印日志、pytest 或 docker 输出。
 - 同一项试两次不达预期就记现象、测下一项。
+- 不用 tmux、screen、nohup、& 等后台方式：本会话一结束进程就退出，后台跑的东西没人接。长评测在本轮前台跑完（输出重定向到文件），等完再写结论。
 - 每单用独立 compose 项目和新库（docs/模块约定.md 迁移链合并规则）：先在本目录停掉上一单的项目（docker compose ls 找本环境的，
   `docker compose -p <旧项目> down`，不带 -v），再 `export COMPOSE_PROJECT_NAME=cp{env_l}-pr{pr}` 后 up --build，端口不变。
   库迁移版本比分支新这类问题属环境问题、不算 PR 缺陷；仍起不来就评论“环境问题未测”、标签保持 待测试。旧项目的数据卷不要删。
@@ -102,6 +103,15 @@ def load() -> dict:
 
 def save(st: dict) -> None:
     STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def orphan_tmux(pr: int) -> str:
+    """会话退出后残留的 tmux 会话（名字含 pr<号>），有则返回名字。没装 tmux 或没有会话返回空。"""
+    try:
+        out = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return next((n for n in out.split() if f"pr{pr}" in n), "")
 
 
 def alive(pid: int) -> bool:
@@ -145,6 +155,14 @@ def finish(st: dict) -> None:
             del st["running"][env]
             notify(f"#{pr} 环境 {env} 会话与网关断连、可能仍在跑，已挂起该环境和该 PR，"
                    f"确认网关侧已停后删 state.json 的 held.{env} 再派，日志 {job['log']}")
+            continue
+        orphan = "" if (tail or concluded) else orphan_tmux(pr)
+        if orphan:
+            # 会话把活丢进 tmux 后自己退出：环境仍被占，挂起，人工处理孤儿后从 held 删掉再派
+            st["held"][env] = job
+            del st["running"][env]
+            notify(f"#{pr} 环境 {env} 会话已退出但留下 tmux 会话 {orphan}、环境仍被占，已挂起；"
+                   f"等它跑完人工写结论或停掉后删 state.json 的 held.{env} 再派，日志 {job['log']}")
             continue
         reason = tail.split("——", 1)[-1].strip() if "——" in tail else ""
         if tail.startswith("RESULT: 环境问题未测"):
