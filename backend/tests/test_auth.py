@@ -26,6 +26,7 @@ PROTECTED = [
     ("POST", "/api/confirmations/1/resolve"),
     ("GET", "/api/admin/usage"),
     ("GET", "/api/admin/models"),
+    ("GET", "/api/admin/config-registry"),
     ("GET", "/api/admin/agent-grants"),
     ("GET", "/api/agents"),
     ("POST", "/api/agents/x/tools/y"),

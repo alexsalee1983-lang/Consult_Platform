@@ -13,7 +13,7 @@ from app.core.db import SessionLocal, utcnow
 from app.main import app
 from app.models import AgentRun, AuditLog, Job, Project, QualityReview, SignOff
 from app.project import autoflow, deliverables, quality
-from app.services import gateway
+from app.services import config_registry, gateway
 
 from . import test_quality as tq
 from . import test_runs as tr
@@ -72,6 +72,9 @@ def test_auto_start_once_after_quiet_then_reviews_chain_output(chain_model):
             assert autoflow.scan_runs(db, p, now=utcnow() + timedelta(hours=9)) == []   # 只发起一次
             rid = run.id
         assert _triggers(code, "run.start") == [autoflow.RULE_RUN]
+        with SessionLocal() as db:                                                   # G3①：运行记生效配置哈希
+            log = db.scalar(select(AuditLog).where(AuditLog.project_code == code, AuditLog.action == "run.start"))
+            assert json.loads(log.detail)["config_registry_sha"] == config_registry.effective_sha()
         tr._work()
         assert tr._run(c, code, rid)["status"] == "done"
     with SessionLocal() as db:                                                       # 交付链写完：立即排评审
