@@ -11,6 +11,7 @@ import Portfolio from "./pages/Portfolio.jsx";
 import Indicators from "./pages/Indicators.jsx";
 import Workbench from "./pages/Workbench.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
+import KbBatches from "./pages/KbBatches.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
 import KbMap from "./pages/KbMap.jsx";
 import KbReadiness from "./pages/KbReadiness.jsx";
@@ -92,6 +93,7 @@ export default function App() {
           <Route path="/kb/intake" element={<KbIntake />} />
           <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />
           <Route path="/kb/map" element={<RequireKnowledge><KbMap /></RequireKnowledge>} />
+          <Route path="/kb/batches" element={<KbBatches />} />
           <Route path="/kb/readiness" element={<KbReadiness />} />
           <Route path="/kb/usage" element={<RequireKnowledge><KbUsage /></RequireKnowledge>} />
           <Route path="/kb/sources" element={<RequireKnowledge><KbSources /></RequireKnowledge>} />

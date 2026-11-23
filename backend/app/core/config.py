@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     # 未达标就暂停自动发布（B10、B11 两级），直到再跑一次达标
     kb_eval_min_accuracy: float = 0.9
     kb_eval_gate: bool = True
+    # 知识批次页（三期 B18）发起 kb-import、kb-eval 时，资料目录和题目文件只能在这个目录下（后端容器里的只读挂载）
+    kb_batch_dir: str = "/srv/knowledge/downloads"
     # 就绪度看板（三期 F2②）读哪些章节级装配评测集（A24 格式，逗号分隔的文件或目录，目录取其中 *.yaml）；
     # 留空用平台回归样例 knowledge/eval/assembly_samples.yaml。真实评测集在私有资料仓，部署机指到 /srv/knowledge/downloads 下
     kb_readiness_evalsets: str = ""

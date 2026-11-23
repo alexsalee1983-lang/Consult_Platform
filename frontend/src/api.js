@@ -226,6 +226,9 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  kbBatches: () => request("/api/kb/batches"),
+  kbBatchSources: () => request("/api/kb/batches/sources"),
+  kbBatchStart: (body) => request("/api/kb/batches", { method: "POST", body: JSON.stringify(body) }),
   kbReadiness: (days = 90) => request(`/api/kb/readiness?days=${days}`),   // 三期 F2②
   // 知识使用反馈（三期 B29）：target 为 {message_id} 或 {deliverable, seq, version}
   kbFeedback: (code, target) => request(`/api/projects/${encodeURIComponent(code)}/kb-feedback?${new URLSearchParams(target)}`),
