@@ -55,7 +55,7 @@ from ..core.permissions import PROJECT_MANAGER, membership
 from ..models import Deliverable, KbVersion, Project, QualityReview, ReviewWaiver, SignOff, User
 from ..products import config
 from ..services import gateway, guard, jobs
-from . import cards, configs, deliverables
+from . import cards, configs, deliverables, review_issues
 from . import evidence as evidence_svc
 
 AGENT = "qa-reviewer"
@@ -209,7 +209,8 @@ def list_waivers(db: Session, r: QualityReview) -> list[ReviewWaiver]:
 
 
 def waivable(issue: dict) -> bool:
-    return issue.get("by") == "agent" and issue.get("severity") == "阻断"
+    return (issue.get("by") == "agent" and issue.get("severity") == "阻断"
+            and issue.get("status") != review_issues.WAIVED_MARK)
 
 
 def blocking_of(db: Session, r: QualityReview) -> Blocking:
@@ -543,7 +544,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
                              "请系统管理员运行 catalog-check 修好配置后重新评审", "rule"))
     else:
         issues += gate_issues(d, r.versions, gates)
-    report, counts = "", {s: 0 for s in SEVERITIES}
+    report, counts, downgraded = "", {s: 0 for s in SEVERITIES}, 0
     if confidential:
         report = "（交付件正文命中机密级检测，未发往模型评审。请先处理阻断项，再重新评审。）"
     else:
@@ -578,21 +579,25 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
         if guard.check(c.text).blocked:
             raise ReviewFailed("模型输出命中机密级内容，未保存")
         agent_issues, counts = res.data
+        downgraded = review_issues.apply_closed_categories(agent_issues, counts)
         issues += agent_issues
         report = c.text[:INPUT_CHARS]
         r.prompt_version, r.model = doc.version, c.model[:64]
         r.prompt_tokens, r.completion_tokens = c.prompt_tokens, c.completion_tokens
-    rule_counts = {s: sum(1 for i in issues if i["by"] == "rule" and i["severity"] == s) for s in SEVERITIES}
-    blocking, major, minor = (rule_counts[s] + counts[s] for s in SEVERITIES)
     if _lock(db, r) != "running":
         db.commit()
         return
-    r.issues, r.report = issues[:MAX_ISSUES], report
+    issues = issues[:MAX_ISSUES]
+    ledger = review_issues.reconcile(db, d, r, issues, counts)    # 固定编号、已驳回不重提（A13）
+    rule_counts = {s: sum(1 for i in issues if i["by"] == "rule" and i["severity"] == s) for s in SEVERITIES}
+    blocking, major, minor = (rule_counts[s] + counts[s] for s in SEVERITIES)
+    r.issues, r.report = issues, report
     r.blocking, r.major, r.minor = blocking, major, minor
     r.conclusion, r.status, r.finished_at = conclude(blocking, major), "done", utcnow()
     audit.record(db, actor="worker", action="quality.review", result="allowed", project_code=project.code,
                  deliverable=d.code, review_id=r.id, revision=r.revision, conclusion=r.conclusion,
                  blocking=blocking, major=major, minor=minor, rule_issues=sum(rule_counts.values()),
+                 downgraded=downgraded, **{f"issues_{k}": v for k, v in ledger.items()},
                  length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens)
     db.commit()
     from . import autoflow                     # 门禁通过自动提交签署（C5 P10）；出错不影响评审结果
@@ -732,6 +737,7 @@ def waive(db: Session, user: User, project: Project, d: Deliverable, r: QualityR
     w = ReviewWaiver(project_id=project.id, review_id=r.id, issue_index=index, reason=reason, actor=user.username)
     db.add(w)
     db.flush()
+    review_issues.mark_waived(db, d, issues[index], w.id)
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, review_id=r.id, revision=r.revision, issue=index,
                  reason_length=len(reason))
