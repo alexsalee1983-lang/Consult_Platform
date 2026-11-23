@@ -5,7 +5,7 @@
     title: 无夜班客户的夜间值守做法
     layer: L2                        # 以下取值见 app/kb/meta.py（公共规范第 7 节）
     domain: OPS
-    product: SOC
+    product: SOC                     # 多个产品写列表 [SOC, ISO]，第一个是主产品；GEN 不和具体产品同时出现
     doc_type: MTD
     stage: 设计
     capabilities: [运营]
@@ -30,7 +30,7 @@
 
     正文……
 
-doc_id 由平台入库时按 layer、domain、product、doc_type 顺序分配（items.next_doc_id），文件名或正文里写的编号不算数；同一条目靠 key 对应。
+doc_id 由平台入库时按序号分配（items.next_doc_id，KB-000123，B15 起不带分类含义），文件名或正文里写的编号不算数；同一条目靠 key 对应。
 Agent 起草（app/kb/drafting.py）输出的也是这个格式，专家改好后再用 kb-import 导入。
 """
 from __future__ import annotations
@@ -87,6 +87,9 @@ def parse_entry(text: str) -> Entry:
         return v if isinstance(v, list) else [x.strip() for x in str(v).split(",") if x.strip()]
 
     meta_kw = {k: head[k] for k in META_KEYS if k in head}
+    if isinstance(meta_kw.get("product"), list):    # 多个产品（B15）：第一个是主产品
+        meta_kw["products"] = [str(x).strip() for x in meta_kw["product"] if str(x).strip()]
+        meta_kw["product"] = meta_kw["products"][0] if meta_kw["products"] else ""
     for k in ("capabilities", "industries", "visible_roles", "tags", "control_ids"):
         if k in meta_kw:
             meta_kw[k] = [str(x) for x in as_list(meta_kw[k])]
@@ -118,6 +121,8 @@ def format_entry(e: Entry) -> str:
     head: dict = {"key": e.key, "title": e.content.title}
     for k in META_KEYS:
         v = getattr(e.meta, k)
+        if k == "product" and len(e.meta.products) > 1:
+            v = list(e.meta.products)
         if v not in ("", None, []) and not (k == "classification" and v == "internal") \
                 and not (k == "visible_roles" and v == ["consultant", "admin"]):
             head[k] = v

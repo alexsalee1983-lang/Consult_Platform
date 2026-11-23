@@ -4,7 +4,7 @@
 编号按三期计划第七节顺序排在 k0019（#293）之后；本分支基于 main，先接 k0009，合并时由后合并的一方改接到链尾。
 
 Revision ID: k0020_kb_reg_lifecycle
-Revises: k0009_kb_upload_project
+Revises: k0018_kb_practice_decisions
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0020_kb_reg_lifecycle"
-down_revision: str | None = "k0009_kb_upload_project"
+down_revision: str | None = "k0018_kb_practice_decisions"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
