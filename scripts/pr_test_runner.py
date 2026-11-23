@@ -20,7 +20,7 @@
     RUNNER_ENVS     启用的环境，默认 A,B,C,D
     RUNNER_AGENT_CMD 起一次性测试会话的命令模板，默认用 claude -p。可用占位符（按空格拆分后逐段替换，
                     每个占位符保持为一个参数）：{prompt} 提示词全文、{prompt_file} 提示词文件、
-                    {session} 本单唯一会话名（如 pr339-1123-1215）、{model} RUNNER_MODEL。
+                    {session} 本单会话名 pr<号>-<提交前 7 位>（同一提交重试复用同一会话）、{model} RUNNER_MODEL。
                     例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
     RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
     NOTIFY_CMD      发群通知的命令，消息作为最后一个参数追加；须“直接发群消息”而不是回复某条消息
@@ -65,13 +65,14 @@ PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 P
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
 - 控制上下文：命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看需要的部分，不要整段打印日志、pytest 或 docker 输出。
 - 同一项试两次不达预期就记现象、测下一项。
+- 不用 tmux、screen、nohup、& 等后台方式：本会话一结束进程就退出，后台跑的东西没人接。长评测在本轮前台跑完（输出重定向到文件），等完再写结论。
 - 每单用独立 compose 项目和新库（docs/模块约定.md 迁移链合并规则）：先在本目录停掉上一单的项目（docker compose ls 找本环境的，
   `docker compose -p <旧项目> down`，不带 -v），再 `export COMPOSE_PROJECT_NAME=cp{env_l}-pr{pr}` 后 up --build，端口不变。
   库迁移版本比分支新这类问题属环境问题、不算 PR 缺陷；仍起不来就评论“环境问题未测”、标签保持 待测试。旧项目的数据卷不要删。
 - 结束前必须做两件事：
   1. 按第 3 节格式写结论到文件，`gh pr comment {pr} --body-file <文件>`；评论首行写明“环境 {env}”。
   2. 换标签：`gh pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
-最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
+过程中不要把日志、报告全文回显到对话里，只读 tail/grep 结果；最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
 
 
 def sh(args: list[str], cwd: str | None = None, check: bool = True) -> str:
@@ -102,6 +103,15 @@ def load() -> dict:
 
 def save(st: dict) -> None:
     STATE.write_text(json.dumps(st, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def orphan_tmux(pr: int) -> str:
+    """会话退出后残留的 tmux 会话（名字含 pr<号>），有则返回名字。没装 tmux 或没有会话返回空。"""
+    try:
+        out = subprocess.run(["tmux", "ls", "-F", "#S"], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return next((n for n in out.split() if f"pr{pr}" in n), "")
 
 
 def alive(pid: int) -> bool:
@@ -146,6 +156,14 @@ def finish(st: dict) -> None:
             notify(f"#{pr} 环境 {env} 会话与网关断连、可能仍在跑，已挂起该环境和该 PR，"
                    f"确认网关侧已停后删 state.json 的 held.{env} 再派，日志 {job['log']}")
             continue
+        orphan = "" if (tail or concluded) else orphan_tmux(pr)
+        if orphan:
+            # 会话把活丢进 tmux 后自己退出：环境仍被占，挂起，人工处理孤儿后从 held 删掉再派
+            st["held"][env] = job
+            del st["running"][env]
+            notify(f"#{pr} 环境 {env} 会话已退出但留下 tmux 会话 {orphan}、环境仍被占，已挂起；"
+                   f"等它跑完人工写结论或停掉后删 state.json 的 held.{env} 再派，日志 {job['log']}")
+            continue
         reason = tail.split("——", 1)[-1].strip() if "——" in tail else ""
         if tail.startswith("RESULT: 环境问题未测"):
             # 环境问题不算 PR 缺陷：不重试本 HEAD，等人工修好环境后清 state.json 的 fails 再派
@@ -181,6 +199,8 @@ def dispatch(st: dict) -> None:
         if pr in busy or st["fails"].get(f"{pr}@{head}", 0) >= MAX_FAILS:
             continue
         names = {lb["name"] for lb in p["labels"]}
+        if "攒批评测" in names:  # md/评测题类 PR 等批次候选分支统一评测，不单独派单
+            continue
         line2 = p["headRefName"].startswith("content/") or "线2" in names
         env = next(e for e in (LINE2_ORDER if line2 else LINE1_ORDER) + free if e in free)
         free.remove(env)
@@ -196,7 +216,8 @@ def start(st: dict, env: str, pr: int, branch: str, head: str) -> None:
     logf = logdir / "session.log"
     pfile = logdir / "prompt.txt"
     pfile.write_text(prompt, encoding="utf-8")
-    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": logdir.name, "model": MODEL}
+    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": f"pr{pr}-{head[:7]}",  # 同一提交重试复用同一会话，不重新载入上下文
+           "model": MODEL}
     tmpl = os.environ.get("RUNNER_AGENT_CMD") or "claude -p {prompt} --model {model} --dangerously-skip-permissions"
     cmd = [part.format(**sub) for part in shlex.split(tmpl)]
     with logf.open("w", encoding="utf-8") as fh:

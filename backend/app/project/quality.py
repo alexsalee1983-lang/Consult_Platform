@@ -267,6 +267,12 @@ def gate(db: Session, d: Deliverable) -> Gate:
 
 # ---- 质量评审：发起 ----
 
+def _previous_done(db: Session, r: QualityReview) -> QualityReview | None:
+    return db.scalar(select(QualityReview).where(QualityReview.deliverable_id == r.deliverable_id,
+                                                 QualityReview.status == "done", QualityReview.id < r.id)
+                     .order_by(QualityReview.id.desc()).limit(1))
+
+
 def request_review(db: Session, user: User, project: Project, d: Deliverable, trigger: str = "") -> QualityReview:
     """发起评审。trigger：平台规则自动发起时写规则名（app/project/autoflow.py），进审计。"""
     action = "quality.request"
@@ -432,6 +438,14 @@ def project_gates(db: Session, project: Project) -> list[dict] | None:
         return None
 
 
+def review_profile(db: Session, project: Project, d: Deliverable) -> str:
+    """本交付件的评审档案（A13）；快照读不出来按 full。"""
+    try:
+        return review_issues.profile_of(configs.snapshot(db, project), d.code)
+    except config.CatalogError:
+        return "full"
+
+
 # ---- 质量评审：解析 Agent 输出 ----
 
 def _cells(line: str) -> list[str]:
@@ -475,10 +489,14 @@ def conclude(blocking: int, major: int) -> str:
     return "revise" if major >= 3 else "pass"
 
 
-def _text_for_review(d: Deliverable, versions: dict) -> str:
+def _text_for_review(d: Deliverable, versions: dict, only: set[str] | None = None) -> str:
+    """only：增量评审时只给这些章节的正文，其余章节只留标题（A13②）。"""
     parts = []
     for s in d.sections:
         ver = int(versions.get(str(s.seq), 0) or 0)
+        if only is not None and str(s.seq) not in only:
+            parts.append(f"## 第 {s.seq} 章 {s.title}（v{ver}，自上轮评审以来未改，本轮不评，正文略）")
+            continue
         v = deliverables.get_version(s, ver) if ver else None
         parts.append(f"## 第 {s.seq} 章 {s.title}（v{ver}）\n{v.body if v else '（本章还没有正文）'}")
     return "\n\n".join(parts)[:INPUT_CHARS]
@@ -555,13 +573,14 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
     issues, confidential = rule_issues(d, r.versions, evidence_svc.withdrawn_codes(db, project),
                                        strict=project.tier == "strict",
                                        kb_states=kb_ref_states(db, cited_kb_refs(d, r.versions)))
-    gates = project_gates(db, project)
+    gates, profile = project_gates(db, project), review_profile(db, project, d)
     if gates is None:
         issues.append(_issue("阻断", "全文", "产品规则", "服务产品配置有问题，产品门禁规则无法核对",
                              "请系统管理员运行 catalog-check 修好配置后重新评审", "rule"))
     else:
         issues += gate_issues(d, r.versions, gates)
-    report, counts, downgraded = "", {s: 0 for s in SEVERITIES}, 0
+    report, counts, downgraded, capped, incremental = "", {s: 0 for s in SEVERITIES}, 0, 0, {}
+    meta: dict = {}
     hetero: dict = {}
     if confidential:
         report = "（交付件正文命中机密级检测，未发往模型评审。请先处理阻断项，再重新评审。）"
@@ -573,9 +592,13 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
             raise ReviewFailed("质量评审 Agent 暂不可用") from e
         except tools.ToolError as e:
             raise ReviewFailed(f"读项目卡被拒绝（{e.status}）") from e
-        text = _text_for_review(d, r.versions)
+        plan = review_issues.plan_incremental(_previous_done(db, r), r, doc.version,
+                                              {str(s.seq): s.title for s in d.sections})
+        text = _text_for_review(d, r.versions, plan[0] if plan else None)
         kb_block, _ = knowledge.retrieve(db, user, AGENT, project, f"{d.title} 质量评审 依据 {text[:200]}")
-        message = f"{INSTRUCTIONS}\n\n# 交付件 {d.code} {d.title}（修订 v{r.revision}）\n\n{text}"
+        message = f"{INSTRUCTIONS}{review_issues.profile_block(profile)}\n\n# 交付件 {d.code} {d.title}（修订 v{r.revision}）\n\n{text}"
+        if plan:
+            message += review_issues.recheck_block(plan[1])
         try:
             res = call.call(db, AGENT, message, actor=user.username, doc=doc, project=project,
                             system=runtime.system_prompt(doc, card, kb_block), level=doc.level,
@@ -599,19 +622,31 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
             raise ReviewFailed("模型输出命中机密级内容，未保存")
         agent_issues, counts = res.data
         downgraded = review_issues.apply_closed_categories(agent_issues, counts)
+        capped = review_issues.apply_profile(agent_issues, counts, profile)     # 按交付件评审档案（A13）
         issues += agent_issues
         report = c.text[:INPUT_CHARS]
-        r.prompt_version, r.model = doc.version, c.model[:64]
+        if plan:                                   # 增量评审：未改章节的上轮问题原样沿用（A13②）
+            changed, recheck, carried = plan
+            for i in carried:
+                if i.get("severity") in counts:
+                    counts[i["severity"]] += 1
+            issues += carried
+            incremental = {"changed": len(changed), "recheck": len(recheck), "carried": len(carried)}
+            report = (f"（增量评审：本轮只评改过的第 {'、'.join(sorted(changed, key=int))} 章，"
+                      f"复核上轮问题 {len(recheck)} 条，沿用未改章节的问题 {len(carried)} 条。）\n\n{report}")[:INPUT_CHARS]
+        meta = {"prompt_version": doc.version, "model": c.model[:64],
+                "prompt_tokens": c.prompt_tokens, "completion_tokens": c.completion_tokens}
         if c.family:                                   # 配置了模型目录（G2）
             hetero = {"model": c.model[:64], "model_family": c.family, "degraded": c.degraded}
             if c.degraded:
                 issues.append(_issue("建议", "全文", "评审模型", "评审与生成用了同一家族的模型（同家族降级），"
                                      "评审独立性不足，请提高人工抽检", "模型目录接入其他家族的已评测模型后重新评审",
                                      "rule"))
-        r.prompt_tokens, r.completion_tokens = c.prompt_tokens, c.completion_tokens
     if _lock(db, r) != "running":
         db.commit()
         return
+    for k, v in meta.items():                  # 加锁会 refresh，模型信息放在加锁之后写，否则被冲掉
+        setattr(r, k, v)
     issues = issues[:MAX_ISSUES]
     ledger = review_issues.reconcile(db, d, r, issues, counts)    # 固定编号、已驳回不重提（A13）
     rule_counts = {s: sum(1 for i in issues if i["by"] == "rule" and i["severity"] == s) for s in SEVERITIES}
@@ -622,7 +657,9 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
     audit.record(db, actor="worker", action="quality.review", result="allowed", project_code=project.code,
                  deliverable=d.code, review_id=r.id, revision=r.revision, conclusion=r.conclusion,
                  blocking=blocking, major=major, minor=minor, rule_issues=sum(rule_counts.values()),
-                 downgraded=downgraded, **{f"issues_{k}": v for k, v in ledger.items()},
+                 downgraded=downgraded, profile=profile, profile_capped=capped,
+                 **{f"incremental_{k}": v for k, v in incremental.items()},
+                 **{f"issues_{k}": v for k, v in ledger.items()},
                  length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens,
                  **hetero)
     db.commit()
