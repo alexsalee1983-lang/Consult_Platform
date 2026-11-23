@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import KbItem, KbVersion, User
+from . import labels
 from . import review as rv
 from .files import Entry, EntryError, parse_entry
 
@@ -33,9 +34,9 @@ def same(v: KbVersion, e: Entry) -> bool:
     c = e.content
     # 文件没写施行日期时不比（发布时平台按发布日补填）
     return (v.title, v.body.strip(), v.summary, v.applicability, v.source_detail, v.ref_document, v.ref_version,
-            v.ref_status, v.ref_code, v.ref_replaced_by) == (
+            v.ref_status, v.ref_code, v.ref_replaced_by, v.ref_replaces, v.ref_amends, v.repeal_date) == (
         c.title, c.body.strip(), c.summary, c.applicability, c.source_detail, c.ref_document, c.ref_version,
-        c.ref_status, c.ref_code, c.ref_replaced_by) and (c.effective_date is None or c.effective_date == v.effective_date)
+        c.ref_status, c.ref_code, c.ref_replaced_by, c.ref_replaces, c.ref_amends, c.repeal_date)         and (c.effective_date is None or c.effective_date == v.effective_date)
 
 
 def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> ImportResult:
@@ -53,15 +54,21 @@ def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> Imp
         r.doc_id = item.doc_id
         tags_changed = list(item.tags or []) != list(e.meta.tags)
         controls_changed = list(item.control_ids or []) != list(e.meta.control_ids)
-        if tags_changed or controls_changed:   # 检索标签、控制项是条目级字段，不进版本内容、不走审核，重复导入时直接更新
-            item.tags, item.control_ids = list(e.meta.tags), list(e.meta.control_ids)
-            db.commit()
+        industries_changed = list(item.industries or []) != list(e.meta.industries)
+        # 检索标签、控制项、产品、行业是条目级标签，不进版本内容、不走审核，重复导入时直接更新（产品、行业记审计）
+        item.tags, item.control_ids = list(e.meta.tags), list(e.meta.control_ids)
+        item.industries = list(e.meta.industries)
+        changed = labels.sync(db, item, e.meta.products or [e.meta.product], actor=user.username)
+        db.commit()
+        products_changed = "product" in changed
         latest = item.versions[-1] if item.versions else None
         if latest is not None and latest.status in ("draft", "in_review"):
             r.action, r.message = "skipped", f"已有未完成的 v{latest.version}（{latest.status}），先处理它"
             return r
-        if latest is not None and latest.status == "published" and same(latest, e):
-            r.action, r.message = "unchanged", "与现行版本相同" + ("，检索标签已更新" if tags_changed else "")                 + ("，控制项已更新" if controls_changed else "")
+        if latest is not None and latest.status in ("published", "candidate") and same(latest, e):
+            notes = (("，检索标签已更新", tags_changed), ("，控制项已更新", controls_changed),
+                     ("，产品已更新", products_changed), ("，行业已更新", industries_changed))
+            r.action, r.message = "unchanged", "与现行版本相同" + "".join(n for n, hit in notes if hit)
             return r
         v = rv.new_version(db, user, item, e.content)
         r.action = "revised"

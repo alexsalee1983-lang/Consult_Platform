@@ -29,8 +29,9 @@ from sqlalchemy.orm import Session
 
 from ..core import audit
 from ..core.db import utcnow
+from ..kb import refs as kb_refs_svc
 from ..kb.meta import LAYERS
-from ..models import Deliverable, DeliverableSection, Evidence, KbItem, Project, SectionVersion, User
+from ..models import Deliverable, DeliverableSection, Evidence, Project, SectionVersion, User
 from ..services import guard
 from . import cards
 from . import evidence as evidence_svc
@@ -44,7 +45,6 @@ READ_CHARS = 20_000                 # 工具一次最多返回的正文字数，
 PLACEHOLDER_HINT = "严格档交付件是占位符版本：用【客户】【人员1】【系统A】等占位符，不写真名、IP、系统名和原话"
 
 _EVIDENCE_REF = re.compile(r"\[((?:I|D|O|S)-\d{2,4})(-\d{1,3})?\]")
-_KB_REF = re.compile(r"[\[｜|]\s*(L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5})\s*[\]】]")
 _INFERRED = re.compile(r"\[(?:推断|模型推断)\]")
 
 
@@ -95,24 +95,24 @@ def get_version(s: DeliverableSection, version: int | None = None) -> SectionVer
 
 def parse_sources(db: Session, project: Project, body: str) -> dict:
     """解析正文里的来源标注并核对。返回：
-    {"evidence": [{"ref", "code", "found"}], "knowledge": [{"ref", "found", "layer", "layer_name"}],
+    {"evidence": [{"ref", "code", "found"}], "knowledge": [{"ref", "found", "layer", "layer_name", "doc_id"（可选）}],
      "inferred": 次数, "counts": {"evidence", "knowledge", "inferred"}, "unresolved": [标注]}"""
     ev_refs: dict[str, str] = {}
     for m in _EVIDENCE_REF.finditer(body):
         ev_refs.setdefault(m.group(1) + (m.group(2) or ""), m.group(1))
-    kb_refs = list(dict.fromkeys(m.group(1) for m in _KB_REF.finditer(body)))
+    kb_refs = kb_refs_svc.extract_refs(body)
     codes = set(ev_refs.values())
     existing = set(db.scalars(select(Evidence.code).where(Evidence.project_id == project.id,
                                                           Evidence.code.in_(codes)))) if codes else set()
     if any(c.startswith("S-") for c in codes):     # 严格档摘要卡（撤下的不算）
         existing |= cards.active_card_codes(db, project) & codes
-    layers: dict[str, str] = {}
-    if kb_refs:
-        layers = dict(db.execute(select(KbItem.doc_id, KbItem.layer).where(
-            KbItem.doc_id.in_(kb_refs), KbItem.retired.is_(False), KbItem.current_version_id.is_not(None))).all())
+    resolved = kb_refs_svc.resolve(db, kb_refs) if kb_refs else {}
+    layers = {ref: r.layer for ref, r in resolved.items() if r.usable}
     evidence = [{"ref": ref, "code": code, "found": code in existing} for ref, code in ev_refs.items()]
+    # ref 存正文里写的原样编号；doc_id（可选，B15）记解析到的现行编号，旧记录没有这个字段，读时现场解析
     knowledge = [{"ref": ref, "found": ref in layers, "layer": layers.get(ref, ""),
-                  "layer_name": LAYERS.get(layers.get(ref, ""), "")} for ref in kb_refs]
+                  "layer_name": LAYERS.get(layers.get(ref, ""), ""),
+                  **({"doc_id": resolved[ref].doc_id} if ref in resolved else {})} for ref in kb_refs]
     inferred = len(_INFERRED.findall(body))
     return {"evidence": evidence, "knowledge": knowledge, "inferred": inferred,
             "counts": {"evidence": len(evidence), "knowledge": len(knowledge), "inferred": inferred},
