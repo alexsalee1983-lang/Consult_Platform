@@ -292,6 +292,7 @@ def _settings(**kw) -> Settings:
             "test_account_username": "", "test_account_password": "", "test_account_totp_secret": "",
             "bootstrap_admin_username": "", "bootstrap_admin_password": "", "bootstrap_admin_totp_secret": "",
             "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24,
+            "minio_root_user": "root",
             "totp_keys": "p1:" + "A" * 43 + "=",
             "database_url": "postgresql+psycopg://consult:p@postgres:5432/consult",
             "kb_database_url": "postgresql+psycopg://consult_kb:q@postgres:5432/consult_kb"}

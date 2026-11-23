@@ -42,6 +42,11 @@ def check_settings(s: Settings) -> None:
         raise BootstrapError("生产环境必须配置对象存储（MINIO_ENDPOINT）")
     if s.minio_endpoint and (not s.minio_access_key or len(s.minio_secret_key) < 20):
         raise BootstrapError("对象存储的访问密钥未配置或过短（MINIO_ACCESS_KEY、MINIO_SECRET_KEY 至少 20 位）")
+    if s.is_prod and s.minio_endpoint and not s.minio_root_user:
+        raise BootstrapError("生产环境要配置 MINIO_ROOT_USER（对象存储根账号名），用于核对后端没有用根账号连接")
+    if s.is_prod and s.minio_endpoint and s.minio_access_key == s.minio_root_user:
+        raise BootstrapError("生产环境后端不能用对象存储根账号连接：先执行 storage-provision 建应用账号，"
+                             "MINIO_ACCESS_KEY 改为应用账号（见 docs/部署手册.md）")
     try:
         if not secretbox.parse_keys(s.totp_keys) and s.is_prod:
             raise BootstrapError("生产环境必须配置 TOTP_KEYS（账号 TOTP 密钥加密存储，生成方法见 .env.example）")
