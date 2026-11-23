@@ -22,6 +22,7 @@ from ..models import Deliverable, QualityReview, ReviewIssue
 
 BLOCKING = "阻断"
 MAJOR = "重要"
+MINOR = "建议"
 WAIVED_MARK = "已驳回"
 # 封闭五类（与 qa-reviewer.md 的阻断定义一致，C9 同日合并）：类别名 → 关键词
 CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -55,6 +56,42 @@ def apply_closed_categories(issues: list[dict], counts: dict[str, int]) -> int:
     if n:
         counts[BLOCKING] = max(counts.get(BLOCKING, 0) - n, 0)
         counts[MAJOR] = counts.get(MAJOR, 0) + n
+    return n
+
+
+# 按交付件的评审档案（A13，产品配置 deliverables[].review_profile）：名称 → (显示名, 发给评审 Agent 的说明)
+PROFILES: dict[str, tuple[str, str]] = {
+    "full": ("全面评审", "按全部评审维度评审。"),
+    "light": ("只查红线和专项", "本交付件是过程材料，只查封闭五类阻断（编造或用错依据、资质用语、机密与客户信息、"
+              "对客结论无证据、与已确认事项矛盾）和产品门禁专项；其他维度的意见最多标“建议”。"),
+}
+
+
+def profile_of(snap: dict, deliverable_code: str) -> str:
+    """项目配置快照里某交付件的评审档案；旧快照没有这个字段按 full。"""
+    for d in snap.get("deliverables", ()):
+        if d.get("code") == deliverable_code:
+            return d.get("review_profile") if d.get("review_profile") in PROFILES else "full"
+    return "full"
+
+
+def profile_block(name: str) -> str:
+    label, text = PROFILES.get(name, PROFILES["full"])
+    return f"\n\n# 评审档案：{label}\n{text}"
+
+
+def apply_profile(issues: list[dict], counts: dict[str, int], name: str) -> int:
+    """light 档：评审 Agent 判的五类以外的阻断、重要一律降为建议（在 apply_closed_categories 之后调用）；返回降级条数。"""
+    if name != "light":
+        return 0
+    n = 0
+    for i in issues:
+        if i.get("by") != "agent" or i.get("severity") not in (BLOCKING, MAJOR) or category(i):
+            continue
+        counts[i["severity"]] = max(counts.get(i["severity"], 0) - 1, 0)
+        counts[MINOR] = counts.get(MINOR, 0) + 1
+        i["severity"], i["profile_capped"] = MINOR, True
+        n += 1
     return n
 
 
@@ -130,3 +167,51 @@ def mark_waived(db: Session, d: Deliverable, issue: dict, waiver_id: int) -> Non
     row = db.scalar(select(ReviewIssue).where(ReviewIssue.deliverable_id == d.id, ReviewIssue.code == code))
     if row is not None:
         row.status, row.waiver_id, row.updated_at = "waived", waiver_id, utcnow()
+
+
+# ---- A13②：增量评审 ----
+
+_CHAPTER = re.compile(r"第\s*(\d+)\s*章")
+
+
+def sections_of(location: str, titles: dict[str, str]) -> set[str]:
+    """问题“位置”栏指向的章节序号：写了“第 N 章”或含章节标题的算；指不出章节（全文、跨章）返回空集。"""
+    found = set(_CHAPTER.findall(location or ""))
+    found |= {seq for seq, t in titles.items() if t and t in (location or "")}
+    return {s for s in found if s in titles}
+
+
+def plan_incremental(prev: QualityReview | None, r: QualityReview, prompt_version: str,
+                     titles: dict[str, str]) -> tuple[set[str], list[dict], list[dict]] | None:
+    """增量评审计划：返回（改过的章节序号、要 Agent 复核的上轮问题、原样沿用的上轮问题）；该全文评审时返回 None。
+
+    全文评审：没有上一轮完成的模型评审、评审提示词换了版本、章节结构变了、没改或全部章节都改了。
+    上轮问题只取评审 Agent 提的、未标已驳回的；平台规则问题每轮按全文重算，不沿用。
+    """
+    if prev is None or not prev.prompt_version or prev.prompt_version != prompt_version:
+        return None
+    old, new = prev.versions or {}, r.versions or {}
+    if set(old) != set(new) or set(new) != set(titles):
+        return None
+    changed = {k for k in new if new[k] != old[k]}
+    if not changed or changed == set(new):
+        return None
+    recheck, carried = [], []
+    for i in prev.issues or []:
+        if i.get("by") != "agent" or i.get("status") == WAIVED_MARK:
+            continue
+        secs = sections_of(i.get("location", ""), titles)
+        if secs and not secs & changed:
+            carried.append({**i, "carried": True})
+        else:
+            recheck.append(i)
+    return changed, recheck, carried
+
+
+def recheck_block(recheck: list[dict]) -> str:
+    if not recheck:
+        return ""
+    rows = "\n".join(f"| {i.get('code', '')} | {i.get('location', '')} | {i.get('dimension', '')} | "
+                     f"{i.get('severity', '')} | {i.get('problem', '')} |" for i in recheck)
+    return ("\n\n# 上轮未关闭的问题（请复核：已改正的不要再列；仍存在的照列，并在“问题”栏写原编号）\n"
+            "| 编号 | 位置 | 维度 | 严重度 | 问题 |\n|---|---|---|---|---|\n" + rows)

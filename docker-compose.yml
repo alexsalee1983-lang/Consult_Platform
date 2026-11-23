@@ -63,8 +63,10 @@ services:
     image: consult-platform-minio:2025-10-15
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?请在 .env 设置 MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?请在 .env 设置 MINIO_SECRET_KEY（生成方法见 .env.example）}
+      # 根账号（三期 G1 最小权限）：生产单独设 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD，后端用 storage-provision
+      # 建的应用账号（MINIO_ACCESS_KEY）；没设时沿用应用账号作根账号（开发、测试环境，生产启动检查会拒绝）
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-${MINIO_ACCESS_KEY:?请在 .env 设置 MINIO_ACCESS_KEY}}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-${MINIO_SECRET_KEY:?请在 .env 设置 MINIO_SECRET_KEY（生成方法见 .env.example）}}
       # 服务端加密主密钥，格式 <名称>:<32 字节 Base64>；丢失则数据无法解密，要与数据卷分开备份
       MINIO_KMS_SECRET_KEY: ${MINIO_KMS_SECRET_KEY:?请在 .env 设置 MINIO_KMS_SECRET_KEY（生成方法见 .env.example）}
       MINIO_KMS_AUTO_ENCRYPTION: "on"
@@ -134,6 +136,8 @@ services:
       KB_DATABASE_URL: postgresql+psycopg://consult_kb:${KB_POSTGRES_PASSWORD}@postgres:5432/consult_kb
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-${MINIO_ACCESS_KEY:-}}   # 只给名字，用于核对没有用根账号连接
+      MINIO_ROOT_PASSWORD: ""         # 根账号口令不进后端（env_file 里有也在这里清空）
       EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
       RERANK_BASE_URL: ${RERANK_BASE_URL-http://rerank:8000/v1}
       METRICS_PORT: 9100              # 运行指标（docs/监控.md），只在内部网络，不映射
@@ -175,6 +179,8 @@ services:
       KB_DATABASE_URL: postgresql+psycopg://consult_kb:${KB_POSTGRES_PASSWORD}@postgres:5432/consult_kb
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-${MINIO_ACCESS_KEY:-}}   # 只给名字，用于核对没有用根账号连接
+      MINIO_ROOT_PASSWORD: ""         # 根账号口令不进后端（env_file 里有也在这里清空）
       EMBED_BASE_URL: ${EMBED_BASE_URL-http://embed:8000/v1}
       RERANK_BASE_URL: ${RERANK_BASE_URL-http://rerank:8000/v1}
       METRICS_PORT: 9100              # 运行指标（docs/监控.md），只在内部网络，不映射

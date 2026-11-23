@@ -11,6 +11,7 @@ PROD_OK = {
     "session_backend": "redis", "cookie_secure": True,
     "test_account_username": "", "test_account_password": "",
     "minio_endpoint": "minio:9000", "minio_access_key": "consult-app", "minio_secret_key": "x" * 24,
+    "minio_root_user": "root",
     "totp_keys": "p1:" + "A" * 43 + "=",
     "llm_base_url": "https://llm.intra.example/v1",
     "llm_external": False, "rerank_external": False, "seed_demo_data": False,

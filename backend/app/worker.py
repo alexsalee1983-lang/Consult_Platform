@@ -9,6 +9,7 @@
   排候选影子期晋级任务 kb.candidate_promote（app/kb/candidate.py，三期 B24①）；
   按日期切换依据现行状态（app/kb/reg_lifecycle.py，三期 B26）。
 - 每 RECHECK_SECONDS 秒扫描一次交付件里的知识引用，标记使用反馈待复查（app/kb/recheck.py，二期 B13）。
+- 每 WEEKLY_SECONDS 秒（启动时先做一次）排知识缺口池每周计划 kb.gap_week（app/kb/gap_pool.py，三期 B25②）。
 - 不做数据库迁移（由 backend 启动时完成），compose 里 worker 在 backend 健康后才启动。
 """
 from __future__ import annotations
@@ -23,7 +24,7 @@ from pathlib import Path
 from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
-from .kb import agent_review, batches, candidate, deid_flow, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review、kb.candidate_promote、kb.batch_* 等任务处理器
+from .kb import agent_review, batches, candidate, deid_flow, gap_pool, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review、kb.candidate_promote、kb.batch_* 等任务处理器
 from .project import autoflow, deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs, ops
 
@@ -31,6 +32,7 @@ POLL_SECONDS = 5
 SCAN_SECONDS = 3600        # 到期删除扫描间隔（平台规则自动发起到期删除，M4 ②）
 DAILY_SECONDS = 86400      # 每日自检、长期未登录停用（二期 C5 O5、O7）
 RECHECK_SECONDS = 86400    # 使用反馈待复查扫描间隔（二期 B13，app/kb/recheck.py）
+WEEKLY_SECONDS = 7 * 86400  # 知识缺口池每周计划（三期 B25②）
 HEARTBEAT_TTL = 30
 HEARTBEAT_PREFIX = "worker:heartbeat:"
 ALIVE_FILE = Path(os.environ.get("WORKER_ALIVE_FILE", "/tmp/worker.alive"))  # nosec B108  容器内存活标记，不含数据
@@ -185,6 +187,22 @@ def _reg_lifecycle() -> None:
         log.warning("法规生命周期任务出错：%s", type(e).__name__)
 
 
+def _weekly() -> None:
+    """B25②：排一个缺口池每周计划任务（已有没做完的不重复排）。"""
+    from sqlalchemy import select
+
+    from .models import Job
+
+    try:
+        with SessionLocal() as db:
+            pending = db.scalar(select(Job.id).where(Job.kind == gap_pool.JOB_KIND,
+                                                     Job.status.in_((jobs.QUEUED, jobs.RUNNING))).limit(1))
+            if pending is None:
+                jobs.enqueue(db, gap_pool.JOB_KIND, created_by="platform", max_attempts=2)
+    except Exception as e:  # noqa: BLE001
+        log.warning("缺口池每周计划出错：%s", type(e).__name__)
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -193,7 +211,7 @@ def main() -> None:
     r = _redis()
     log.info("worker %s 启动，任务种类：%s", wid, ", ".join(jobs.registered()))
     metrics.start_server(get_settings().metrics_port)
-    last_scan = last_daily = last_recheck = None
+    last_scan = last_daily = last_recheck = last_weekly = None
     while not _stop:
         heartbeat(r, wid)
         if last_scan is None or time.monotonic() - last_scan >= SCAN_SECONDS:
@@ -205,6 +223,9 @@ def main() -> None:
         if last_daily is None or time.monotonic() - last_daily >= DAILY_SECONDS:
             last_daily = time.monotonic()
             _daily()
+        if last_weekly is None or time.monotonic() - last_weekly >= WEEKLY_SECONDS:
+            last_weekly = time.monotonic()
+            _weekly()
         if last_recheck is None or time.monotonic() - last_recheck >= RECHECK_SECONDS:
             last_recheck = time.monotonic()
             _scan_recheck()

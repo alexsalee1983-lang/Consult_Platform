@@ -1,4 +1,4 @@
-"""去标识流程：规则替换 → 脱敏审查 Agent 复查 → 人工确认。
+"""去标识流程：规则替换 → 脱敏审查 Agent 复查 + 工具层检测（C7，接 guard，只能更严）→ 人工确认。
 
 1. 解析完成后，后台任务 kb.deid 自动跑第一轮（规则 + Agent 复查），生成去标识报告（待确认）。
 2. 复核人（知识管理员）看报告和去标识后的预览；发现漏网的名称时，带补充词重跑（同步执行，补充词不保存、
@@ -21,7 +21,7 @@ from ..core.db import SessionLocal, utcnow
 from ..core.permissions import KNOWLEDGE_ADMIN, roles_of
 from ..models import KbDeidReport, KbUpload, User
 from ..services import jobs, storage
-from . import deid, deid_agent, parse
+from . import deid, deid_agent, deid_check, parse
 from .intake import AREA
 
 PENDING, PASSED, REJECTED, SUPERSEDED = "pending", "passed", "rejected", "superseded"
@@ -68,13 +68,16 @@ def run(db: Session, up: KbUpload, actor: str, extra_terms: list[deid.Term] | No
 
     db.execute(update(KbDeidReport).where(KbDeidReport.upload_id == up.id, KbDeidReport.status == PENDING)
                .values(status=SUPERSEDED))
+    # 工具层检测（C7）：对去标识后的全文做机密级检测和直接标识复查，结论与 Agent 取更严的一方
+    tool = deid_check.check("\n\n".join(f"{h}\n{b}" for h, b in result.sections) + "\n" + result.filename)
+    merged = deid_check.merge(agent, tool)
     risks = agent.combination_risks
-    descs = _scrub([r["description"] for r in risks] + [r["handling"] for r in risks] + agent.manual_items, terms)
+    descs = _scrub([r["description"] for r in risks] + [r["handling"] for r in risks] + merged.manual_items, terms)
     n = len(risks)
     report = KbDeidReport(
         upload_id=up.id, replacements=[r.to_json() for r in result.replacements], residual_findings=[],
         status=PENDING, created_by=actor, total=result.total, agent_status=agent.status, agent_note=agent.note,
-        conclusion=agent.conclusion, risk_level=agent.risk_level,
+        conclusion=merged.conclusion, risk_level=merged.risk_level,
         combination_risks=[{"description": descs[i], "handling": descs[n + i]} for i in range(n)],
         manual_items=descs[2 * n:], deid_key=key, safe_filename=result.filename[:255])
     db.add(report)
@@ -82,7 +85,9 @@ def run(db: Session, up: KbUpload, actor: str, extra_terms: list[deid.Term] | No
     db.commit()
     audit.record(db, actor=actor, action="kb.deid", result="allowed", upload_id=up.id, report_id=report.id,
                  replacements=result.total, extra_terms=len(human), agent_terms=len(agent.residual_terms),
-                 agent_status=agent.status, conclusion=agent.conclusion)
+                 agent_status=agent.status, conclusion=merged.conclusion,
+                 tool_conclusion=tool.conclusion, tool_guard=len(tool.guard_labels),
+                 tool_identifiers=sum(tool.identifiers.values()))
     return report
 
 
