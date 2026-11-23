@@ -34,13 +34,14 @@ from sqlalchemy.orm import Session
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
-from ..kb import autopublish, citations
+from ..kb import autopublish, citations, labels
 from ..kb import meta as kb_meta
+from ..kb import refs as kb_refs
 from ..kb import review as rv
 from ..kb import search as kb_search
 from ..kb.items import ItemMeta, VersionContent
 from ..project import kb_impact
-from ..models import KbItem, KbVersion, User
+from ..models import KbItem, KbItemAlias, KbItemLabel, KbVersion, User
 
 router = APIRouter(prefix="/api/kb", tags=["kb"], dependencies=[Depends(require_business)])
 
@@ -60,6 +61,7 @@ class ItemMetaIn(BaseModel):
     owner: str = ""
     tags: list[str] = Field(default_factory=list)
     control_ids: list[str] = Field(default_factory=list)
+    products: list[str] = Field(default_factory=list)   # 多个产品（B15），主产品 product 在前；空 = 只有主产品
 
 
 class ContentIn(BaseModel):
@@ -191,6 +193,8 @@ class ItemOut(BaseModel):
 
 class ItemDetail(ItemOut):
     versions: list[VersionBrief] = []
+    aliases: list[str] = []             # 旧编号等别名（B15）；doc_id 是现行编号
+    products: list[str] = []            # 全部服务产品（B15 标签表），主产品在前
 
 
 def _err(e: rv.ReviewError):
@@ -214,7 +218,9 @@ def _item_out(db: Session, item: KbItem, cls=ItemOut, versions: list[KbVersion] 
 
 
 def _item(db: Session, doc_id: str, user: User) -> KbItem:
-    item = db.scalar(select(KbItem).where(KbItem.doc_id == doc_id))
+    """路径参数可以是现行编号或别名（B15）：按别名访问直接返回该条目、不重定向；可见性与 404 语义不变。"""
+    r = kb_refs.resolve(db, [doc_id]).get(doc_id)
+    item = db.get(KbItem, r.item_id) if r else None
     if item is None or not rv.can_view(db, user, item):
         raise HTTPException(404, NOT_FOUND)
     return item
@@ -246,10 +252,12 @@ def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
 def list_items(layer: str = "", product: str = "", stage: str = "", doc_type: str = "", status: str = "",
                q: str = Query("", max_length=100), db: Session = Depends(get_db), user: User = Depends(current_user)):
     stmt = select(KbItem).order_by(KbItem.doc_id).limit(500)
-    for col, val in ((KbItem.layer, layer), (KbItem.product, product), (KbItem.stage, stage),
-                     (KbItem.doc_type, doc_type)):
+    for col, val in ((KbItem.layer, layer), (KbItem.stage, stage), (KbItem.doc_type, doc_type)):
         if val:
             stmt = stmt.where(col == val)
+    if product:                                   # 按产品标签（B15）：多产品条目在每个产品下都列出
+        stmt = stmt.where(KbItem.id.in_(select(KbItemLabel.item_id).where(KbItemLabel.kind == "product",
+                                                                          KbItemLabel.value == product)))
     if status == "retired":
         stmt = stmt.where(KbItem.retired.is_(True))
     elif status == "published":
@@ -257,8 +265,10 @@ def list_items(layer: str = "", product: str = "", stage: str = "", doc_type: st
     elif status == "unpublished":
         stmt = stmt.where(KbItem.current_version_id.is_(None))
     if q:
-        stmt = stmt.join(KbVersion, KbVersion.item_id == KbItem.id).where(
-            or_(KbItem.doc_id.contains(q), KbVersion.title.contains(q))).distinct()
+        # 用子查询不用 JOIN + DISTINCT：kb_items 有 json 列，PostgreSQL 的 DISTINCT 比较不了 json
+        stmt = stmt.where(or_(KbItem.doc_id.contains(q),
+                              KbItem.id.in_(select(KbVersion.item_id).where(KbVersion.title.contains(q))),
+                              KbItem.id.in_(select(KbItemAlias.item_id).where(KbItemAlias.alias.contains(q)))))
     return [_item_out(db, i) for i in db.scalars(stmt) if rv.can_view(db, user, i)]
 
 
@@ -277,7 +287,10 @@ def get_item(doc_id: str, db: Session = Depends(get_db), user: User = Depends(cu
     item = _item(db, doc_id, user)
     versions = item.versions if rv.is_knowledge_user(db, user) else [
         v for v in item.versions if v.id == item.current_version_id]
-    return _item_out(db, item, ItemDetail, versions)
+    out = _item_out(db, item, ItemDetail, versions)
+    out.products = labels.products_of(db, [item.id]).get(item.id, [item.product])
+    out.aliases = kb_refs.aliases_of(db, item.id)
+    return out
 
 
 class UsageOut(BaseModel):
@@ -413,7 +426,7 @@ def basis(q: str = Query("", max_length=500), ref_document: str = Query("", max_
 @router.get("/meta")
 def meta_options() -> dict:
     m = kb_meta
-    return {"layers": m.LAYERS, "domains": m.DOMAINS, "products": m.PRODUCTS, "stages": list(m.STAGES),
+    return {"layers": m.LAYERS, "domains": m.DOMAINS, "products": m.PRODUCTS, "industries": list(m.INDUSTRIES), "stages": list(m.STAGES),
             "doc_types": m.DOC_TYPES, "capabilities": list(m.CAPABILITIES), "classifications": m.CLASSIFICATIONS,
             "source_types": m.SOURCE_TYPES, "visible_roles": m.VISIBLE_ROLES, "ref_statuses": m.REF_STATUSES,
             "version_statuses": m.VERSION_STATUSES}
@@ -447,10 +460,12 @@ def stats(db: Session = Depends(get_db), user: User = Depends(current_user)) -> 
     rows = db.execute(live).all()
     by_source: dict[str, int] = {}
     coverage: dict[str, dict[str, int]] = {}
+    products = labels.products_of(db, [item.id for item, _ in rows])
     for item, v in rows:
         by_source[v.source_type] = by_source.get(v.source_type, 0) + 1
-        coverage.setdefault(item.product, {}).setdefault(item.stage, 0)
-        coverage[item.product][item.stage] += 1
+        for code in products.get(item.id, [item.product]):          # 按产品标签计数（B15）
+            coverage.setdefault(code, {}).setdefault(item.stage, 0)
+            coverage[code][item.stage] += 1
     month_ago = utcnow() - timedelta(days=30)
     searches = db.scalars(select(AuditLog.detail).where(AuditLog.action.in_(("kb.search", "kb.basis")),
                                                        AuditLog.result == "allowed", AuditLog.at >= month_ago)).all()

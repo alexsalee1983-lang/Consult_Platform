@@ -111,10 +111,13 @@ def test_unversioned_m0_database_is_stamped_and_keeps_data(engine):
 def test_downgrade_to_base_and_back(engine):
     upgrade_to_head(engine)
     with engine.begin() as conn:
+        # 同库时主链旧迁移（0016 等）会改 kb_items；知识区链 k0012 的视图引用 kb_items，SQLite 改表会校验视图，先退到 k0011
+        command.downgrade(alembic_config(conn, "kb"), "k0011_kb_labels")
         cfg = alembic_config(conn)
         command.downgrade(cfg, "base")
         assert "projects" not in inspect(conn).get_table_names()
         command.upgrade(cfg, "head")
+        command.upgrade(alembic_config(conn, "kb"), "head")
     assert _current(engine) == _head()
 
 
@@ -136,3 +139,10 @@ def test_0007_fixes_old_solution_design_code(engine):
 
 def test_baseline_revision_exists():
     assert ScriptDirectory.from_config(alembic_config()).get_revision(BASELINE) is not None
+
+
+def test_each_chain_has_single_head():
+    """主链、知识区链各只有一个链头（负责人 2026-11-23：合并时接到 main 当前链头，不留分叉）。"""
+    for chain in ("main", "kb"):
+        heads = ScriptDirectory.from_config(alembic_config(chain=chain)).get_heads()
+        assert len(heads) == 1, f"{chain} 迁移链有多个链头 {heads}：把本 PR 新迁移的 down_revision 改接到 main 当前链头"

@@ -6,7 +6,7 @@ B10、B11 自动发布通过的版本先落 status=candidate（status 是 String
 合并时按知识区迁移编号顺序改接 down_revision（k0010～k0014 在其他未合并的 PR 里）。
 
 Revision ID: k0015_kb_candidate
-Revises: k0009_kb_upload_project
+Revises: k0014_kb_sources
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0015_kb_candidate"
-down_revision: str | None = "k0009_kb_upload_project"
+down_revision: str | None = "k0014_kb_sources"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

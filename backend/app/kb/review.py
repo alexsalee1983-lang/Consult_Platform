@@ -23,7 +23,7 @@ import difflib
 import json
 from datetime import date
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import bindparam, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from ..core import audit
@@ -32,7 +32,7 @@ from ..core.db import KB_BIND, utcnow
 from ..core.permissions import KNOWLEDGE_ADMIN, KNOWLEDGE_EXPERT, roles_of
 from ..models import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion, User
 from ..services import guard, storage
-from . import meta, parse
+from . import labels, meta, parse
 from .items import ItemMeta, VersionContent, create_draft, create_item, replace_mapping_rows
 
 ROLE_OF = {"content": KNOWLEDGE_EXPERT, "compliance": KNOWLEDGE_ADMIN}
@@ -350,7 +350,7 @@ def diff_with_current(db: Session, v: KbVersion, max_lines: int = 200) -> list[s
 
 
 def similar_items(db: Session, v: KbVersion, limit: int = 5) -> list[dict]:
-    """同服务产品下、正文与标题相近的已发布条目（可能重复或冲突），供审核人对照。只在 PostgreSQL 上可用。
+    """同服务产品下（按产品标签，B15：和本条目任一产品相同即算）、正文与标题相近的已发布条目（可能重复或冲突），供审核人对照。只在 PostgreSQL 上可用。
     标题分词后任一词命中即可（把 & 换成 |），按相关度排序。"""
     if db.get_bind(KbChunk).dialect.name != "postgresql":
         return []
@@ -360,9 +360,14 @@ def similar_items(db: Session, v: KbVersion, limit: int = 5) -> list[dict]:
         JOIN kb_versions cv ON cv.id = c.version_id AND cv.status = 'published'
         JOIN kb_items i ON i.current_version_id = cv.id AND NOT i.retired
         , CAST(replace(CAST(plainto_tsquery('zh', :q) AS text), '&', '|') AS tsquery) q
-        WHERE c.tsv @@ q AND i.id <> :item AND i.product = :product
+        WHERE c.tsv @@ q AND i.id <> :item
+          AND EXISTS (SELECT 1 FROM kb_item_labels l WHERE l.item_id = i.id AND l.kind = 'product'
+                      AND l.value IN :products)
         GROUP BY i.doc_id, cv.title ORDER BY score DESC LIMIT :limit
-    """), {"q": v.title, "item": v.item_id, "product": v.item.product, "limit": limit}, bind_arguments=KB_BIND).all()
+    """).bindparams(bindparam("products", expanding=True)),
+        {"q": v.title, "item": v.item_id, "limit": limit,
+         "products": labels.products_of(db, [v.item_id]).get(v.item_id, [v.item.product])},
+        bind_arguments=KB_BIND).all()
     return [{"doc_id": r.doc_id, "title": r.title, "score": round(float(r.score), 4)} for r in rows]
 
 
