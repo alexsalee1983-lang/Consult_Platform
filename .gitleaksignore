@@ -6,3 +6,7 @@
 
 # 本文件旧版本的注释里引用了上面那个虚构样例，已删除；历史提交中的这一处同样是误报
 abb47f10ff8fdb68a0a46895a1c268029f9d426f:.gitleaksignore:aws-access-token:4
+
+# backend/tests/test_kb_deid_check.py 第 24、36 行：C7 脱敏审查工具的测试样例（虚构的云密钥格式，非真实密钥）
+93660864c981fc5f217376311dbe00650d639f3b:backend/tests/test_kb_deid_check.py:aws-access-token:24
+93660864c981fc5f217376311dbe00650d639f3b:backend/tests/test_kb_deid_check.py:aws-access-token:36
