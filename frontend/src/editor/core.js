@@ -4,9 +4,10 @@
 // 用户删除碰到半个标注时整体删除（决策记录 2026-11-21 ⑧），不加确认。
 import { Annotation, EditorSelection, EditorState, StateField } from "@codemirror/state";
 import { Decoration, EditorView } from "@codemirror/view";
+import { KB_REF_PATTERN } from "../kbRef.js";
 
 const EVIDENCE_REF = /\[((?:I|D|O|S)-\d{2,4})(-\d{1,3})?\]/g;
-const KB_REF = /[[｜|]\s*(L[1-5](?:-[A-Z0-9]{2,8}){3,4}-\d{3,5})\s*[\]】]/g;
+const KB_REF = new RegExp(String.raw`[\[｜|]\s*(` + KB_REF_PATTERN + String.raw`)\s*[\]】]`, "g");
 const INFERRED = /\[(?:推断|模型推断)\]/g;
 
 // 外部同步（父组件换了正文）带这个标记，不做整体删除扩展
