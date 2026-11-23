@@ -78,9 +78,10 @@ VISIBLE_ROLES = {"consultant": "交付顾问", "presales": "售前", "admin": "�
 REF_STATUSES = {"current": "现行", "upcoming": "即将实施", "repealed": "已废止", "superseded": "已被替代"}
 
 # 版本状态：草稿 → 待审 →（双人审核）→ 已发布；新版本发布后旧版本为“已替代”；下线后为“已下线”
+# 自动发布（B10、B11）在候选影子期开启时先为“候选”，达标后晋级为已发布（三期 B24①，app/kb/candidate.py）
 VERSION_STATUSES = {
     "draft": "草稿", "in_review": "待审", "rejected": "已退回", "published": "已发布",
-    "superseded": "已替代", "retired": "已下线",
+    "superseded": "已替代", "retired": "已下线", "candidate": "候选",
 }
 # 双人审核的两个角色（决策记录 2026-11-08）：知识专家审内容，知识管理员审合规；两人不能是同一人，提交人不能审核
 REVIEW_ROLES = {"content": "knowledge_expert", "compliance": "knowledge_admin"}

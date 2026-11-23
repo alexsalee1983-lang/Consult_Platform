@@ -23,7 +23,7 @@ import difflib
 import json
 from datetime import date
 
-from sqlalchemy import bindparam, or_, select, text
+from sqlalchemy import bindparam, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from ..core import audit
@@ -253,23 +253,39 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
 
 # ---- 发布、下线、复审 ----
 
-def publish(db: Session, v: KbVersion) -> None:
-    item = v.item
-    doc = parse.parse("body.md", v.body.encode())
-    chunks = parse.chunk(doc.sections)
+def make_chunks(db: Session, v: KbVersion) -> int:
+    """把版本正文切成检索切片；已经切过（候选影子期先切好）的不重复切。返回切片数。"""
+    existing = db.scalar(select(func.count()).select_from(KbChunk).where(KbChunk.version_id == v.id)) or 0
+    if existing:
+        return existing
+    chunks = parse.chunk(parse.parse("body.md", v.body.encode()).sections)
     for i, c in enumerate(chunks, 1):
         db.add(KbChunk(version_id=v.id, seq=i, heading=c.heading[:300], text=c.text))
+    return len(chunks)
+
+
+def supersede_candidates(db: Session, v: KbVersion) -> None:
+    """同一条目里除 v 以外还在候选的版本（三期 B24①）改为已替代：v 发布或成为新候选后它们不再晋级。"""
+    for other in v.item.versions:
+        if other.id != v.id and other.status == "candidate":
+            other.status, other.candidate_result = "superseded", "superseded"
+
+
+def publish(db: Session, v: KbVersion) -> None:
+    item = v.item
+    chunks = make_chunks(db, v)
     if item.current_version_id and item.current_version_id != v.id:
         old = db.get(KbVersion, item.current_version_id)
         if old is not None and old.status == "published":
             old.status = "superseded"
+    supersede_candidates(db, v)
     v.effective_date = v.effective_date or date.today()
     v.review_date = v.review_date or meta.default_review_date(item.layer, v.effective_date, item.doc_type)
     v.status, v.published_at = "published", utcnow()
     item.current_version_id, item.updated_at = v.id, utcnow()
     db.commit()
     audit.record(db, actor="kb-review", action="kb.publish", result="allowed", doc_id=item.doc_id, version=v.version,
-                 chunks=len(chunks), single_review=v.single_review,
+                 chunks=chunks, single_review=v.single_review,
                  single_reviewer_public=get_settings().kb_single_reviewer_public)
     from .search import enqueue_embedding          # 发布后后台向量化（未启用向量服务时跳过）
 
@@ -283,7 +299,7 @@ def retire(db: Session, user: User, item: KbItem, reason: str) -> KbItem:
         raise ReviewError(409, "条目已下线")
     item.retired, item.updated_at = True, utcnow()
     for v in item.versions:
-        if v.status in ("published", "draft", "in_review"):
+        if v.status in ("published", "draft", "in_review", "candidate"):
             v.status = "retired"
     db.commit()
     audit.record(db, actor=user.username, action="kb.retire", result="allowed", doc_id=item.doc_id,

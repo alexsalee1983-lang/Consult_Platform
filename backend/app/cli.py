@@ -364,6 +364,20 @@ def kb_recheck_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_candidate_promote(args: argparse.Namespace) -> int:
+    """候选影子期晋级（三期 B24①，worker 每天自动执行）：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，
+    抽检不通过的退回人工审核。--dry-run 只列出、不改。"""
+    from .kb import candidate
+    with SessionLocal() as db:
+        r = candidate.promote_due(db, actor="cli", dry_run=args.dry_run)
+    head = "（只列出，未改动）" if args.dry_run else ""
+    for key, label in (("promoted", "晋级"), ("returned", "退回人工审核"), ("superseded", "已被新版本替代"),
+                       ("waiting", "继续候选")):
+        items = getattr(r, key)
+        print(f"{label}{head} {len(items)} 条" + ("：" + "、".join(items[:50]) if items else ""))
+    return 0
+
+
 def deletion_scan(args: argparse.Namespace) -> int:
     """立即执行一次到期扫描（worker 每小时自动执行），为已到期的项目发起删除申请。"""
     from .project import deletion
@@ -879,7 +893,7 @@ def kb_eval(args: argparse.Namespace) -> int:
 
                 cmp = compare.run(db, user, questions)
             else:
-                report = evaluate.run(db, user, questions)
+                report = evaluate.run(db, user, questions, include_candidates=args.with_candidates)
         except (evaluate.EvalError, ValueError) as e:
             print(f"题目文件有问题：{e}", file=sys.stderr)
             return 1
@@ -1036,7 +1050,13 @@ def main(argv: list[str] | None = None) -> int:
     ke.add_argument("--b-url", default="", help="候选向量服务地址（OpenAI 兼容，如 http://embed-m3:8000/v1）；密钥放环境变量 EMBED_B_API_KEY")
     ke.add_argument("--b-model", default="", help="候选模型名，如 BAAI/bge-m3")
     ke.add_argument("--b-dim", type=int, default=0, help="候选模型向量维度，如 1024")
+    ke.add_argument("--with-candidates", action="store_true",
+                    help="影子评测（三期 B24①）：检索带上候选影子期的候选版本（同一条目用候选替换旧现行版本）；只对普通评测生效")
     ke.set_defaults(func=kb_eval)
+    kcp = sub.add_parser("kb-candidate-promote",
+                         help="候选影子期晋级：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，抽检不通过的退回人工（worker 每天自动执行）")
+    kcp.add_argument("--dry-run", action="store_true", help="只列出会晋级、退回的候选，不改动")
+    kcp.set_defaults(func=kb_candidate_promote)
     ae = sub.add_parser("agent-eval", help="Agent 评测（二期 C4）：红线用例、黄金样例要点、埋雷，全部通过时退出码 0")
     ae.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
     ae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份调用（记用量）")

@@ -65,7 +65,7 @@ def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> Imp
         if latest is not None and latest.status in ("draft", "in_review"):
             r.action, r.message = "skipped", f"已有未完成的 v{latest.version}（{latest.status}），先处理它"
             return r
-        if latest is not None and latest.status == "published" and same(latest, e):
+        if latest is not None and latest.status in ("published", "candidate") and same(latest, e):
             notes = (("，检索标签已更新", tags_changed), ("，控制项已更新", controls_changed),
                      ("，产品已更新", products_changed), ("，行业已更新", industries_changed))
             r.action, r.message = "unchanged", "与现行版本相同" + "".join(n for n, hit in notes if hit)
