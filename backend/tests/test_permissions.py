@@ -140,6 +140,8 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/assessment", None), (200, 404, 403, 403, 403)),        # A10：只给项目成员
     (("GET", "/api/projects/GRID-B/assessment", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/kb/search?q=值班", None),            (200, 200, 403, 403, 403)),
+    (("GET", "/api/kb/sources", None),                  (403, 403, 403, 403, 403)),   # 来源登记表只限知识专家、知识管理员（B16）
+    (("POST", "/api/kb/sources/SR-999999/status", {"to": "trial"}), (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
