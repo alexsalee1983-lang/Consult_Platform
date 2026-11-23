@@ -1,0 +1,26 @@
+# 章节级装配评测（三期 A24）平台回归样例：只用 knowledge/samples 的条目 key，验证评测框架本身。
+# 真实评测集（每章 3～5 条应命中知识，规划会话起草 v0、专家复核）放私有资料仓，不进代码仓。
+# soc-ransomware-playbook 故意不存在，用来验证“缺槽”报告。
+product: SOC
+modules: []
+chapters:
+  - id: SOC-D3-01
+    step: facts
+    title: 现状调研与事实清单
+    query: SOC 现状调研 访谈 四个维度
+    expect: [soc-current-state-survey, delivery-interview-guide, soc-shift-handover]
+  - id: SOC-GAP-01
+    step: gap
+    title: 能力差距与依据
+    query: 等级保护 安全保护义务 应急预案 差距
+    expect: [csl-art21-mlps, csl-art25-incident-plan, soc-metrics]
+  - id: SOC-D5-01
+    step: design_doc
+    title: 组织与人员、值班模式
+    query: SOC 夜间值守 交接班 值班
+    expect: [soc-night-duty, soc-shift-handover, soc-metrics]
+  - id: SOC-D5-02
+    step: design_doc
+    title: 告警分级与处置流程
+    query: SOC 告警分级 告警阈值 处置剧本 钓鱼邮件
+    expect: [soc-alert-grading, pit-default-alert-threshold, soc-phishing-playbook, soc-ransomware-playbook]
