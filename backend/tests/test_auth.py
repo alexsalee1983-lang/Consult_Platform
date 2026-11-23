@@ -59,6 +59,7 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/assessment"),
     ("GET", "/api/projects/BANK-A/confirmations"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/outline"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/export"),
@@ -305,6 +306,7 @@ def _settings(**kw) -> Settings:
             "test_account_username": "", "test_account_password": "", "test_account_totp_secret": "",
             "bootstrap_admin_username": "", "bootstrap_admin_password": "", "bootstrap_admin_totp_secret": "",
             "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24,
+            "minio_root_user": "root",
             "totp_keys": "p1:" + "A" * 43 + "=",
             "database_url": "postgresql+psycopg://consult:p@postgres:5432/consult",
             "kb_database_url": "postgresql+psycopg://consult_kb:q@postgres:5432/consult_kb"}

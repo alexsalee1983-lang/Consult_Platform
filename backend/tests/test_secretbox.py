@@ -104,7 +104,8 @@ def test_prod_requires_valid_keys():
             "kb_database_url": "postgresql+psycopg://consult_kb:x@db:5432/consult_kb",
             "app_env": "prod", "seed_demo_data": False, "session_backend": "redis", "cookie_secure": True,
             "test_account_username": "", "test_account_password": "", "test_account_totp_secret": "",
-            "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24}
+            "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24,
+            "minio_root_user": "root"}
     with pytest.raises(BootstrapError, match="TOTP_KEYS"):
         check_settings(Settings(_env_file=None, **base, totp_keys=""))
     for bad in ("nokid", "k1:not-base64!", "k1:" + base64.b64encode(b"short").decode(), _key("a") + "," + _key("a")):
