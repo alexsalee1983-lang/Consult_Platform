@@ -7,7 +7,7 @@ ItemMeta / VersionContent）：
 
 | 公共规范 | 代码 | 取值 |
 |---|---|---|
-| doc_id | KbItem.doc_id | 自动分配，格式见 DOC_ID_RE |
+| doc_id | KbItem.doc_id | 自动分配，KB-000123（B15 起，格式见 DOC_ID_RE；旧格式见 LEGACY_DOC_ID_RE，只做别名） |
 | 标题 | KbVersion.title / VersionContent.title | |
 | 层级 | KbItem.layer / ItemMeta.layer | LAYERS 的键：L1～L5 |
 | 一级目录 | domain | DOMAINS 的键：GOV / CMP / DAT / OPS / RES / ARC |
@@ -15,7 +15,7 @@ ItemMeta / VersionContent）：
 | 交付阶段 | stage | STAGES：启动……通用（中文） |
 | 交付物类型 | doc_type | DOC_TYPES 的键：TPL / GLD / POL / MTD / REF / MAP / CAS / OBJ / PIT / SRC（依据原文，二期 B7）/ ENF / RAR / BMK / GLS（扩展分类，决策记录 2026-11-16） |
 | 能力域标签 | capabilities | CAPABILITIES：管理 / 运营 / 技术支撑（列表） |
-| 适用行业 | industries | 中文列表，通用的填 ["通用"] |
+| 适用行业 | industries | 中文列表，取值见 INDUSTRIES，通用的填 ["通用"] |
 | 密级 | classification | internal 内部 / restricted 受限 |
 | 脱敏状态 | KbVersion.deid_status | pending 未脱敏 / passed 已脱敏 / not_needed 无需脱敏 |
 | 来源 | source_type | expert 专家萃取 / project 项目沉淀 / public 公开资料 / internal 公司内部制度改造 |
@@ -52,6 +52,8 @@ PRODUCTS = {
     "NSG": "网络安全治理规划",
     "GEN": "通用（不限服务产品）",
 }
+# 适用行业（三期 B15 取值表，负责人 11-21 定）：多选；“通用”不和具体行业同时出现
+INDUSTRIES = ("通用", "银行", "证券", "保险", "电力", "制造", "政务", "医疗", "运营商")
 # 交付阶段
 STAGES = ("启动", "调研", "分析", "设计", "落地辅导", "验收", "通用")
 # 交付物类型（缩写 → 名称）
@@ -60,6 +62,12 @@ DOC_TYPES = {
     "MAP": "映射矩阵", "CAS": "案例", "OBJ": "异议应答", "PIT": "踩坑记录", "SRC": "依据原文",
     "ENF": "执法案例", "RAR": "参考架构", "BMK": "基准数据", "GLS": "术语对照",
 }
+# 知识类型（三期 B35 最小版，知识区迁移 k0017）：公司做法、黄金样例只能靠人——Agent 或规划会话起草、专家确认；
+# 必须有作者以外的知识专家人工内容审核通过才能发布进检索（review.publish 守卫），不收公开资料。评分锚定与四格内容留四期 B35。
+KNOWLEDGE_KINDS = {"": "通用", "practice": "公司做法", "golden": "黄金样例"}
+PRACTICE_TYPES = ("TPL", "MTD", "CAS", "PIT", "POL", "OBJ", "BMK")   # 模板、方法、案例、常见坑、制度母版、异议应答、经验数值
+EXPERT_ONLY_KINDS = ("practice", "golden")
+SLOT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")             # C10 章节槽位键，例 SOC.D5.ch3；C10 落配置后再收紧
 # 能力域标签（可多选）
 CAPABILITIES = ("管理", "运营", "技术支撑")
 # 密级：受限条目只对 visible_roles 中的角色可见
@@ -76,9 +84,10 @@ VISIBLE_ROLES = {"consultant": "交付顾问", "presales": "售前", "admin": "�
 REF_STATUSES = {"current": "现行", "upcoming": "即将实施", "repealed": "已废止", "superseded": "已被替代"}
 
 # 版本状态：草稿 → 待审 →（双人审核）→ 已发布；新版本发布后旧版本为“已替代”；下线后为“已下线”
+# 自动发布（B10、B11）在候选影子期开启时先为“候选”，达标后晋级为已发布（三期 B24①，app/kb/candidate.py）
 VERSION_STATUSES = {
     "draft": "草稿", "in_review": "待审", "rejected": "已退回", "published": "已发布",
-    "superseded": "已替代", "retired": "已下线",
+    "superseded": "已替代", "retired": "已下线", "candidate": "候选",
 }
 # 双人审核的两个角色（决策记录 2026-11-08）：知识专家审内容，知识管理员审合规；两人不能是同一人，提交人不能审核
 REVIEW_ROLES = {"content": "knowledge_expert", "compliance": "knowledge_admin"}
@@ -89,7 +98,10 @@ REVIEW_MONTHS_DEFAULT = 12
 REVIEW_MONTHS_REF = 6
 SHORT_REVIEW_TYPES = ("ENF", "BMK")
 
-DOC_ID_RE = re.compile(r"^(L[1-5])-([A-Z]{3})-([A-Z]{2,8})-([A-Z]{3})-(\d{3,})$")
+# 三期 B15 换号（知识区迁移 k0012）：现行编号是不带分类含义的稳定序号 KB-000123（kb_items.seq 补零 6 位）；
+# 旧格式 层级-目录-产品-类型-序号 只剩别名（kb_item_aliases，kind=legacy），由 refs 识别、k0012 回滚时分配
+DOC_ID_RE = re.compile(r"^KB-(\d{6})$")
+LEGACY_DOC_ID_RE = re.compile(r"^(L[1-5])-([A-Z]{3})-([A-Z]{2,8})-([A-Z]{3})-(\d{3,})$")
 
 
 class MetaError(ValueError):
@@ -110,19 +122,23 @@ def default_review_date(layer: str, effective: date, doc_type: str = "") -> date
     return add_months(effective, review_months(layer, doc_type))
 
 
-def doc_id_prefix(layer: str, domain: str, product: str, doc_type: str) -> str:
+def format_doc_id(seq: int) -> str:
+    return f"KB-{seq:06d}"
+
+
+def legacy_doc_id_prefix(layer: str, domain: str, product: str, doc_type: str) -> str:
     check_classification(layer, domain, product, doc_type)
     return f"{layer}-{domain}-{product}-{doc_type}-"
 
 
-def format_doc_id(layer: str, domain: str, product: str, doc_type: str, seq: int) -> str:
-    return f"{doc_id_prefix(layer, domain, product, doc_type)}{seq:03d}"
+def format_legacy_doc_id(layer: str, domain: str, product: str, doc_type: str, seq: int) -> str:
+    return f"{legacy_doc_id_prefix(layer, domain, product, doc_type)}{seq:03d}"
 
 
-def parse_doc_id(doc_id: str) -> tuple[str, str, str, str, int]:
-    m = DOC_ID_RE.match(doc_id)
+def parse_legacy_doc_id(doc_id: str) -> tuple[str, str, str, str, int]:
+    m = LEGACY_DOC_ID_RE.match(doc_id)
     if not m:
-        raise MetaError(f"doc_id 格式不对：{doc_id!r}，应为 层级-目录-产品-类型-序号，例如 L2-OPS-SOC-TPL-007")
+        raise MetaError(f"旧编号格式不对：{doc_id!r}，应为 层级-目录-产品-类型-序号，例如 L2-OPS-SOC-TPL-007")
     layer, domain, product, doc_type, seq = m.groups()
     check_classification(layer, domain, product, doc_type)
     return layer, domain, product, doc_type, int(seq)
@@ -168,3 +184,23 @@ def check_visibility(classification: str, visible_roles: list[str]) -> None:
     bad = [r for r in visible_roles if r not in VISIBLE_ROLES]
     if bad or not visible_roles:
         raise MetaError(f"可见角色至少选一个，只能是 {', '.join(VISIBLE_ROLES)}")
+
+
+def derive_kind(doc_type: str, source_type: str) -> str:
+    """不填知识类型时的推断：GLD 一律黄金样例；PRACTICE_TYPES 且来源非公开为公司做法；其余通用。"""
+    if doc_type == "GLD":
+        return "golden"
+    if doc_type in PRACTICE_TYPES and source_type != "public":
+        return "practice"
+    return ""
+
+
+def check_kind(kind: str, doc_type: str, slot: str) -> None:
+    if kind not in KNOWLEDGE_KINDS:
+        raise MetaError(f"知识类型只能是 {'、'.join(k for k in KNOWLEDGE_KINDS if k)} 或留空")
+    if (kind == "golden") != (doc_type == "GLD"):
+        raise MetaError("黄金样例的交付物类型必须是 GLD，GLD 条目的知识类型必须是黄金样例")
+    if kind == "practice" and doc_type not in PRACTICE_TYPES:
+        raise MetaError(f"公司做法的交付物类型只能是 {' / '.join(PRACTICE_TYPES)}")
+    if slot and not SLOT_RE.match(slot):
+        raise MetaError("章节槽位只能是字母、数字、点、下划线、连字符，至多 64 位")

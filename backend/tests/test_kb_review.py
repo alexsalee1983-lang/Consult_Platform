@@ -49,7 +49,7 @@ def test_create_public_draft_and_rules(people):
     r = people["author"].post("/api/kb/items", json=_payload())
     assert r.status_code == 201
     v = r.json()
-    assert v["status"] == "draft" and v["deid_status"] == "not_needed" and v["doc_id"].startswith("L2-OPS-SOC-POL-")
+    assert v["status"] == "draft" and v["deid_status"] == "not_needed" and meta.DOC_ID_RE.match(v["doc_id"])
     assert people["consultant"].post("/api/kb/items", json=_payload()).status_code == 403
     r = people["author"].post("/api/kb/items", json=_payload(source_type="project"))
     assert r.status_code == 422 and "公开资料" in r.json()["detail"]                       # 非公开资料必须先投料
