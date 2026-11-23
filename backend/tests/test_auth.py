@@ -107,6 +107,8 @@ PROTECTED = [
     ("PATCH", "/api/kb/sources/BANK-A"),
     ("POST", "/api/kb/sources/BANK-A/status"),
     ("GET", "/api/kb/sources/BANK-A/events"),
+    ("GET", "/api/kb/sources/confirm-queue"),
+    ("POST", "/api/kb/sources/confirm-queue/decide"),
     ("GET", "/api/kb/intake"),
     ("GET", "/api/kb/intake/1"),
     ("GET", "/api/kb/intake/1/deid"),

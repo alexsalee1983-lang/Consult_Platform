@@ -48,7 +48,7 @@ from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMembe
 from ..products import config
 from ..services import gateway, guard, jobs, usage
 from . import cards as cards_svc
-from . import configs
+from . import assessment, configs, findings
 from . import deliverables
 
 JOB_KIND = "agent_run.step"
@@ -594,6 +594,8 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
             record.refs.update(_write_deliverable(db, user, project, step, sections))
         else:
             record.output = "\n\n".join(f"## {t}\n{b}" for t, b in sections)
+            if step.agent == assessment.GAP_AGENT:            # 三期 F1：差距分析表同步成发现
+                findings.sync_from_gap(db, project, record.output, step.agent, run.id)
         card_ids = _send_cards(db, user, project, run, step, cards)
     except tools.ToolError as e:
         raise StepFailed(f"写入被拒绝（{e.status}）") from e
