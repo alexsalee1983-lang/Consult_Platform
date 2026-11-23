@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     llm_model_reasoning: str = "deepseek-v4.1-flash"
     llm_model_standard: str = "deepseek-v4.1-flash"
     llm_model_light: str = "deepseek-v4.1-flash"
+    # 模型目录 v1（三期 G2）：留空 = 照旧按上面三个变量单模型调用；填 YAML/JSON 文件路径或一段 JSON 时
+    # 按目录选首选和备选模型，评审、知识审核、仲裁强制与生成方不同家族（app/services/model_catalog.py）
+    llm_model_catalog: str = ""
     llm_connect_timeout_seconds: float = 5        # 建立连接超时
     llm_timeout_seconds: int = 120                # 等待模型回复（非流式整体 / 流式两段输出之间）的超时
     llm_max_retries: int = 2                      # 连接失败、超时、429、5xx 时重试次数（流式只在开始输出前重试）

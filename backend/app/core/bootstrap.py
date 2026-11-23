@@ -16,6 +16,7 @@ from sqlalchemy import Engine, func, make_url, select, text
 from sqlalchemy.orm import Session
 
 from ..models import Project, ProjectMember, User
+from ..services import model_catalog
 from . import audit, secretbox
 from .auth import password_expired
 from .db import utcnow
@@ -65,6 +66,10 @@ def check_settings(s: Settings) -> None:
         if (kb.host, kb.port, kb.database) == (main.host, main.port, main.database) \
                 or (s.is_prod and kb.username == main.username):
             raise BootstrapError("知识区要用单独的数据库和单独的账号（KB_DATABASE_URL 的库名、用户名都要与主库不同）")
+    try:
+        model_catalog.load(s.llm_model_catalog)
+    except model_catalog.CatalogError as e:
+        raise BootstrapError(f"模型目录配置有误（LLM_MODEL_CATALOG）：{e}") from e
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
     if s.is_prod and s.rerank_external:
