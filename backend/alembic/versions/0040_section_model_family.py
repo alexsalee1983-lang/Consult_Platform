@@ -1,7 +1,7 @@
 """三期 G2：section_versions 记生成模型和家族（Agent 写入记当次生成模型，顾问手改沿用上一版），质量评审据此排除同家族。
 
 Revision ID: 0040_section_model_family
-Revises: 0038_judgment_events
+Revises: 0048_deid_check_tool
 Create Date: 2026-11-22
 
 0039 预分配给 F1（三期计划第七节），F1 先合并时把 down_revision 改成 0039。
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0040_section_model_family"
-down_revision: str | None = "0038_judgment_events"
+down_revision: str | None = "0048_deid_check_tool"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

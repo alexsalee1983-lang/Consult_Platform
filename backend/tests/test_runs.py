@@ -3,6 +3,7 @@
 模型输出命中机密级时不保存、运行失败，模型暂不可用时重试、到上限失败，成员隔离，审计不记原文。"""
 import json
 import secrets
+import time
 
 import httpx
 import pytest
@@ -11,7 +12,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.main import app
-from app.models import AuditLog, Confirmation, Deliverable, Job, LlmUsage, Project
+from app.models import AgentRunStep, AuditLog, Confirmation, Deliverable, Job, LlmUsage, Project
 from app.project import deliverables, runs
 from app.seed import DELIVERABLES
 from app.services import gateway, jobs
@@ -379,3 +380,24 @@ def test_long_evidence_is_condensed_not_dropped(proj, model):
     assert len(condense) >= 2
     prompt = model.prompt("交付链第 3 步")
     assert "夜间无人值守 [O-01]" in prompt and "按编号索取" not in prompt
+
+
+def test_step_started_at_is_taken_before_the_step_runs(proj, model, monkeypatch):
+    """步骤开始时间在执行前取：每步 started_at <= finished_at，且耗时不小于模型调用的延迟。"""
+    code, c = proj
+    _note(c, code)
+    orig = model.handler
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        time.sleep(0.03)
+        return orig(request)
+
+    gateway.set_transport(httpx.MockTransport(slow))
+    rid = c.post(f"/api/projects/{code}/runs").json()["id"]
+    _work()
+    with SessionLocal() as db:
+        steps = list(db.scalars(select(AgentRunStep).where(AgentRunStep.run_id == rid)))
+    assert steps
+    for s in steps:
+        assert s.finished_at is not None and s.started_at <= s.finished_at
+        assert (s.finished_at - s.started_at).total_seconds() >= 0.02

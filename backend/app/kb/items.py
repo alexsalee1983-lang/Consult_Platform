@@ -13,9 +13,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..core.db import utcnow
-from ..models import KbItem, KbMapping, KbVersion
+from ..models import KbItem, KbItemAlias, KbMapping, KbVersion
 from ..services import model_catalog
-from . import mapping, meta
+from . import labels, mapping, meta
 
 
 @dataclass
@@ -32,13 +32,21 @@ class ItemMeta:
     owner: str = ""
     tags: list[str] = field(default_factory=list)   # 检索加权标签（二期 B2），对应模块配置的 kb_tags
     control_ids: list[str] = field(default_factory=list)   # 公司控制项编号（4A 埋点，k0008）
+    knowledge_kind: str = ""   # 知识类型（三期 B35，k0017）：留空时 create_item 按交付物类型和来源推断
+    slot: str = ""             # C10 章节槽位键（选填）
+    products: list[str] = field(default_factory=list)   # 全部服务产品（B15，主产品 product 在前）；空 = 只有主产品
 
     def check(self) -> None:
         meta.check_classification(self.layer, self.domain, self.product, self.doc_type)
+        if not self.product and self.products:
+            self.product = str(self.products[0]).strip()
+        self.products = labels.check_products(self.product, self.products)
+        self.industries = labels.check_industries(self.industries)
         meta.check_tags(self.stage, self.capabilities, self.industries)
         meta.check_visibility(self.classification, self.visible_roles)
         self.tags = check_search_tags(self.tags)
         self.control_ids = check_control_ids(self.control_ids)
+        self.slot = self.slot.strip()
 
 
 SEARCH_TAGS_MAX, SEARCH_TAG_LEN = 10, 20
@@ -78,7 +86,10 @@ class VersionContent:
     ref_status: str = ""
     ref_code: str = ""
     ref_replaced_by: str = ""
+    ref_replaces: str = ""
+    ref_amends: str = ""
     effective_date: date | None = None
+    repeal_date: date | None = None
     review_date: date | None = None
     model: str = ""                  # 起草模型 ID（三期 G2③）；空 = 沿用上一版
 
@@ -91,11 +102,12 @@ class VersionContent:
         meta.check_reference(layer, self.ref_document, self.ref_version, self.ref_status)
 
 
-def next_doc_id(db: Session, m: ItemMeta) -> str:
-    prefix = meta.doc_id_prefix(m.layer, m.domain, m.product, m.doc_type)
-    existing = db.scalars(select(KbItem.doc_id).where(KbItem.doc_id.like(prefix + "%"))).all()
-    seqs = [meta.parse_doc_id(d)[4] for d in existing]
-    return meta.format_doc_id(m.layer, m.domain, m.product, m.doc_type, max(seqs, default=0) + 1)
+def next_doc_id(db: Session) -> str:
+    """下一个现行编号 KB-000123：max(seq)+1，跳过已登记为别名的（B15：别名与现行编号互斥）。并发冲突由调用方重试。"""
+    seq = (db.scalar(select(func.max(KbItem.seq))) or 0) + 1
+    while db.get(KbItemAlias, meta.format_doc_id(seq)) is not None:
+        seq += 1
+    return meta.format_doc_id(seq)
 
 
 def _generator(db: Session, item: KbItem, c: VersionContent) -> dict:
@@ -117,7 +129,8 @@ def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) 
                   body=c.body, applicability=c.applicability, change_note=c.change_note,
                   source_type=c.source_type, source_detail=c.source_detail, ref_document=c.ref_document,
                   ref_version=c.ref_version, ref_status=c.ref_status, ref_code=c.ref_code,
-                  ref_replaced_by=c.ref_replaced_by, effective_date=effective,
+                  ref_replaced_by=c.ref_replaced_by, ref_replaces=c.ref_replaces, ref_amends=c.ref_amends,
+                  effective_date=effective, repeal_date=c.repeal_date,
                   review_date=review, created_by=created_by, **_generator(db, item, c))
     db.add(v)
     if rows:
@@ -131,12 +144,15 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
     """新建条目并建第 1 版草稿，返回该版本（已提交）。doc_id 序号并发冲突时重试。"""
     m.check()
     c.check(m.layer)
+    kind = m.knowledge_kind or meta.derive_kind(m.doc_type, c.source_type)
+    meta.check_kind(kind, m.doc_type, m.slot)
     for attempt in range(retries):
-        item = KbItem(doc_id=next_doc_id(db, m), layer=m.layer, domain=m.domain, product=m.product,
+        doc_id = next_doc_id(db)
+        item = KbItem(doc_id=doc_id, seq=int(doc_id[3:]), layer=m.layer, domain=m.domain, product=m.product,
                       doc_type=m.doc_type, stage=m.stage, capabilities=list(m.capabilities),
                       industries=list(m.industries), classification=m.classification,
                       visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags), control_ids=list(m.control_ids),
-                      created_by=created_by)
+                      knowledge_kind=kind, slot=m.slot, created_by=created_by)
         db.add(item)
         try:
             db.flush()
@@ -145,6 +161,7 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
             if attempt == retries - 1:
                 raise
             continue
+        labels.sync(db, item, m.products)
         v = _new_version(db, item, c, created_by)
         db.commit()
         return v

@@ -96,6 +96,8 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B/deliverables/D2/export", None), (404, 404, 403, 403, 403)),
+    # 改稿差异转候选（三期 F4）：开关默认关，成员也 404；非成员 404、非业务角色 403（开关打开的行为在 test_revision_mining）
+    (("POST", "/api/projects/BANK-A/deliverables/D7/revision-candidates", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export?format=pptx", None), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/GRID-B/deliverables/D2/outline", OUTLINE), (404, 404, 403, 403, 403)),
     # 质量门禁与签署（M3 ⑤）：成员可看；发起评审在 test_quality 里测（这里发起会留下排队的评审）。
@@ -140,9 +142,17 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/assessment", None), (200, 404, 403, 403, 403)),        # A10：只给项目成员
     (("GET", "/api/projects/GRID-B/assessment", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/kb/search?q=值班", None),            (200, 200, 403, 403, 403)),
+    (("GET", "/api/kb/sources", None),                  (403, 403, 403, 403, 403)),   # 来源登记表只限知识专家、知识管理员（B16）
+    (("POST", "/api/kb/sources/SR-999999/status", {"to": "trial"}), (403, 403, 403, 403, 403)),
+    (("GET", "/api/kb/sources/confirm-queue", None),    (403, 403, 403, 403, 403)),   # 来源确认队列（B25②），同上
+    (("POST", "/api/kb/sources/confirm-queue/decide", {"gap_ids": [999999], "decision": "reject"}),
+     (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
+    (("GET", "/api/kb/practice-queue", None),           (403, 403, 403, 403, 403)),   # 公司做法确认队列（三期 B17），同上
+    (("GET", "/api/kb/practice-queue/stats", None),     (403, 403, 403, 403, 403)),
+    (("POST", "/api/kb/practice-queue/decide", {"items": [{"version_id": 999999, "decision": "adopt"}]}), (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/samples", None),                  (403, 403, 403, 403, 403)),   # 抽检队列（二期 B10），同上
     (("POST", "/api/kb/versions/999999/sample", {"decision": "pass"}), (404, 404, 403, 403, 403)),
     (("GET", "/api/admin/jobs", None),                  (403, 403, 200, 403, 403)),
@@ -161,6 +171,17 @@ MATRIX = [
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
                                                         (403, 403, 403, 403, 403)),
+    # 去标识检查（三期 C7，迁移 0048）：只授权 kb-builder，不涉及项目；交付侧 Agent 调用一律 403
+    (("POST", "/api/agents/kb-builder/tools/deid.check", {"args": {"text": "告警分级按影响范围分三级。"}}),
+                                                        (200, 200, 403, 403, 403)),
+    (("POST", "/api/agents/report-writer/tools/deid.check", {"args": {"text": "告警分级"}}),
+                                                        (403, 403, 403, 403, 403)),
+    # 知识使用反馈（三期 B29）：member 不给引用位置 → 422（不留数据）；非成员 404；看板只给知识专家、知识管理员
+    (("GET", "/api/projects/BANK-A/kb-feedback", None), (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/kb-feedback", {"doc_id": "L4-NOPE", "rating": "useful"}),
+                                                        (422, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/kb-feedback?message_id=1", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/kb-usage", None),                    (403, 403, 403, 403, 403)),
 ]
 
 
@@ -178,6 +199,37 @@ def test_permission_matrix(clients, request_, expected):
     method, path, body = request_
     got = tuple(clients[name].request(method, path, json=body).status_code for name in COLUMNS)
     assert got == expected, f"{method} {path}：{dict(zip(COLUMNS, got))}"
+
+
+def test_kb_item_alias_same_access_as_doc_id(clients):
+    """B15：按别名访问条目，403 / 404 与按现行编号访问完全一致（别名解析在可见性判断之前，不泄露别名存在）。"""
+    import secrets
+
+    from app.kb import refs
+    from app.models import KbItem
+
+    from .test_kb_refs import _publish
+
+    shown, hidden = _publish("权限矩阵：别名条目"), _publish("权限矩阵：别名下线条目", retire=True)
+    pairs = []
+    with SessionLocal() as db:
+        for doc_id in (shown, hidden):
+            alias = f"L5-ALI-MTX-OLD-{secrets.randbelow(90000) + 10000}"
+            refs.add_alias(db, alias, db.scalar(select(KbItem.id).where(KbItem.doc_id == doc_id)), "legacy")
+            pairs.append((doc_id, alias))
+        db.commit()
+    expert = logged_in_client(app, create_user(("knowledge_expert",)))
+    try:
+        cs = {**clients, "expert": expert}
+        for doc_id, alias in pairs:
+            for suffix in ("", "/usage"):
+                by_id = {n: c.get(f"/api/kb/items/{doc_id}{suffix}").status_code for n, c in cs.items()}
+                by_alias = {n: c.get(f"/api/kb/items/{alias}{suffix}").status_code for n, c in cs.items()}
+                assert by_alias == by_id, f"{suffix}：{by_id} vs {by_alias}"
+        assert expert.get(f"/api/kb/items/{pairs[0][1]}").json()["doc_id"] == shown
+        assert clients["member"].get(f"/api/kb/items/{pairs[1][1]}").status_code == 404   # 下线条目对顾问不可见
+    finally:
+        expert.__exit__(None, None, None)
 
 
 def test_non_member_cannot_resolve_confirmation(clients):

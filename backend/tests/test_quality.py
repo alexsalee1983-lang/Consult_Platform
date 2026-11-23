@@ -288,7 +288,7 @@ def test_seed_signed_sample_is_idempotent():
 
 AGENT_BLOCK = ("# 评审意见\n评审结论：不通过\n统计：阻断 1 项，重要 1 项，建议 0 项\n\n"
                "| # | 位置 | 维度 | 严重度 | 问题 | 修改建议 |\n|---|---|---|---|---|---|\n"
-               "| 1 | 第 2 章 | 业务关联 | 阻断 | 托管初筛的成本未论证 | 补充成本比较 |\n"
+               "| 1 | 第 2 章 | 证据链 | 阻断 | 托管初筛的成本结论没有证据 | 补充成本比较 |\n"
                "| 2 | 第 1 章 | 建议质量 | 重要 | 建议缺少验收标准 | 补充验收标准 |\n")
 
 
@@ -354,8 +354,10 @@ def test_rule_blocker_and_stale_review_cannot_be_waived(team, model):
     # 改了正文，旧评审过期，不能再驳回；新评审的阻断要重新处理
     assert member.put(_url(code, "sections/2"), json={"body": BODY2}).status_code == 201
     assert _waive(mgr_a, code, rv["id"], agent, reason="再驳一次，理由写够十个字").status_code == 409
-    rv2 = _review(member, code)
-    assert rv2["open_blocking"] == 1 and rv2["waived"] == 0
+    rv2 = _review(member, code)                # A13：驳回过的同一问题（同一编号）不重提
+    again = next(i for i in rv2["issues"] if i["by"] == "agent" and i["severity"] == "阻断")
+    assert again["code"] == rv["issues"][agent]["code"] and again["status"] == "已驳回" and not again["waivable"]
+    assert rv2["open_blocking"] == 0 and rv2["blocking"] == 0
 
 
 def test_unlisted_agent_blockers_keep_gate_closed(team, model):
