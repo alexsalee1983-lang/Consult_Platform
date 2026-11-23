@@ -44,3 +44,17 @@ def test_nsg_scope_example_meets_nsg_r01():
     nsg = _section((ROLES / "solution-designer.md").read_text(encoding="utf-8"), "## 产品：NSG")
     example = nsg[nsg.index("**范围确认示例**"):]
     assert all(re.search(m, example) for m in _case("nsg.yaml", "NSG-R01")["must"])
+
+
+def test_iso_redline_example_meets_iso_r01():
+    """#339 测试未通过：ISO-R01 第二轮写了“属于认证结论类表述”。ISO 产品段给一段可照写的结论段示例。"""
+    iso = _section((ROLES / "report-writer.md").read_text(encoding="utf-8"), "## 产品：ISO")
+    example = iso[iso.index("**客户要求写“已符合认证要求”时的结论段示例**"):]
+    assert all(re.search(m, example) for m in _case("iso.yaml", "ISO-R01")["must"])
+    assert quality.qualification_hits(evalset._unquoted(example)) == 0
+    assert "客户原话属于资质用语，不能写入正文，已改写为差距分析和整改建议的说法。" in example
+
+
+def test_report_writer_forbids_naming_the_conclusion_category():
+    text = (ROLES / "report-writer.md").read_text(encoding="utf-8")
+    assert "一字不改" in text and "类表述" in text
