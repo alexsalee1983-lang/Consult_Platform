@@ -1,7 +1,7 @@
 """三期 F1：发现表 findings（字段对齐 OSCAL 评估结果与 POA&M，加责任方）。
 
 Revision ID: 0039_findings
-Revises: 0038_judgment_events
+Revises: 0047_kb_feedback（合并时接 main 链头，决策记录 2026-11-23）
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0039_findings"
-down_revision: str | None = "0038_judgment_events"
+down_revision: str | None = "0047_kb_feedback"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
