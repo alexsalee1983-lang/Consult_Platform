@@ -384,3 +384,66 @@ def test_qualification_refusal_wording_not_counted():
     for text in ("虽然不能保证每项都满分，但该系统已通过等保三级测评。", "不是差距分析，是测评结论。",
                  "该系统已通过等保三级测评。", "并非初判：认证结论为合格。"):
         assert quality.qualification_hits(text) >= 1, text
+
+
+# ---- 三期 G2：异构评审（评审模型家族必须与生成方不同，只有一个家族时同家族降级并标记） ----
+
+TWO_FAMILIES = {"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"},
+                           {"id": "glm-s", "family": "glm", "tier": "standard"},
+                           {"id": "kimi-s", "family": "kimi", "tier": "standard"}]}
+
+
+def _last_review_audit() -> dict:
+    with SessionLocal() as db:
+        log = db.scalar(select(AuditLog).where(AuditLog.action == "quality.review", AuditLog.result == "allowed")
+                        .order_by(AuditLog.id.desc()))
+        return json.loads(log.detail)
+
+
+def test_review_model_family_differs_from_generator(team, model, monkeypatch):
+    from app.models import AgentRun, AgentRunStep
+
+    code, member, *_ = team
+    monkeypatch.setattr(get_settings(), "llm_model_catalog", json.dumps(TWO_FAMILIES))
+    _draft(member, code)
+    # 顾问手写的正文没有生成记录：按生成首选（DeepSeek）排除，评审用 GLM
+    _review(member, code)
+    assert model.requests[-1]["model"] == "glm-s"
+    detail = _last_review_audit()
+    assert (detail["model_family"], detail["degraded"]) == ("glm", False)
+    # 交付链用 GLM 写了第 1 章：评审不能再用 GLM，换 Kimi
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        run = AgentRun(project_id=p.id, created_by="t", status="done")
+        db.add(run)
+        db.flush()
+        db.add(AgentRunStep(run_id=run.id, step="draft", agent_code="report-writer", status="done", model="glm-s",
+                            refs={"deliverable": "D4", "versions": {"1": 1}}))
+        db.commit()
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        d = next(x for x in p.deliverables if x.code == "D4")
+        assert quality.generator_families(db, p, d, {"1": 1, "2": 1}) == {"glm"}
+    _review(member, code)
+    assert model.requests[-1]["model"] == "kimi-s"
+
+
+def test_single_family_review_is_marked_degraded(team, model, monkeypatch):
+    code, member, *_ = team
+    monkeypatch.setattr(get_settings(), "llm_model_catalog",
+                        json.dumps({"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"}]}))
+    _draft(member, code)
+    rv = _review(member, code)
+    assert rv["status"] == "done"
+    assert any("同家族降级" in i["problem"] and i["severity"] == "建议" for i in rv["issues"])
+    detail = _last_review_audit()
+    assert (detail["model_family"], detail["degraded"]) == ("deepseek", True)
+    assert BODY1 not in json.dumps(detail, ensure_ascii=False)
+
+
+def test_review_without_catalog_unchanged(team, model):
+    code, member, *_ = team
+    _draft(member, code)
+    rv = _review(member, code)
+    assert not any("同家族降级" in i["problem"] for i in rv["issues"])
+    assert "model_family" not in _last_review_audit()

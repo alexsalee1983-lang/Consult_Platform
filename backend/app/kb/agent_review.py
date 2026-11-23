@@ -154,14 +154,16 @@ def _clean(data: dict) -> tuple[dict, list[dict], str]:
 
 
 def _agent(db: Session, v: KbVersion, cites: list[citations.Citation]) -> tuple[str, str, dict, str, str]:
-    """返回 (状态 ok/skipped/failed, 说明, findings, 提示词版本, 模型)。"""
+    """返回 (状态 ok/skipped/failed, 说明, findings, 提示词版本, 模型)。
+    三期 G2：以 role="review" 调网关。知识条目没有记生成模型，网关按生成首选的家族排除；
+    配置了模型目录时 findings 记 model_family 和 degraded（同家族降级）。"""
     try:
         doc = call.load(db, AGENT)
     except call.AgentUnavailable:
         return "skipped", "知识审核 Agent 未登记、已停用或 md 缺失", {}, "", ""
     try:
         r = call.call(db, AGENT, _message(db, v, cites), actor=v.submitted_by or AGENT, doc=doc, extra=OUTPUT_RULES,
-                      level=LEVEL, parse=call.json_object)
+                      level=LEVEL, parse=call.json_object, role="review")
     except gateway.BlockedError:
         return "failed", "审查材料含机密级内容，未发送给模型", {}, doc.version, ""
     except gateway.GatewayError:
@@ -172,7 +174,15 @@ def _agent(db: Session, v: KbVersion, cites: list[citations.Citation]) -> tuple[
     if out.demo:
         return "skipped", "未接入模型（演示模式）", {}, doc.version, out.model
     checks, issues, conclusion = _clean(r.data)
-    return "ok", "", {"checks": checks, "issues": issues, "conclusion": conclusion}, doc.version, out.model
+    findings = {"checks": checks, "issues": issues, "conclusion": conclusion}
+    if out.family:
+        findings |= {"model_family": out.family, "degraded": out.degraded}
+    return "ok", "", findings, doc.version, out.model
+
+
+def _hetero(findings: dict) -> dict:
+    """审计只多记家族和是否降级（只在配置了模型目录时有）。"""
+    return {k: findings[k] for k in ("model_family", "degraded") if k in findings}
 
 
 def agent_passed(findings: dict) -> bool:
@@ -213,7 +223,8 @@ def run(db: Session, v: KbVersion) -> Outcome:
     out = Outcome("published" if ok else "manual", rules_failed=failed, agent=status, note=note)
     if ok:
         v.auto_review = KIND
-        out.sampled = secrets.SystemRandom().random() < sample_rate(db)
+        # 同家族降级（G2）的审核独立性不足，一律进抽检
+        out.sampled = bool(findings.get("degraded")) or secrets.SystemRandom().random() < sample_rate(db)
         if out.sampled:
             v.sample_state = "pending"
         db.commit()
@@ -227,7 +238,7 @@ def run(db: Session, v: KbVersion) -> Outcome:
     audit.record(db, actor=AGENT, action="kb.agent_review", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, outcome=out.status, rules_failed=failed, agent=AGENT, agent_status=status,
                  prompt_version=prompt_version, model=model, issues=len(findings.get("issues", [])),
-                 sampled=out.sampled, suspended=bool(suspended))
+                 sampled=out.sampled, suspended=bool(suspended), **_hetero(findings))
     return out
 
 
@@ -246,7 +257,7 @@ def _advise(db: Session, v: KbVersion, failed: list[str], status: str, findings:
     audit.record(db, actor=AGENT, action="kb.agent_review", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, outcome="advice", level=3, rules_failed=failed, agent=AGENT,
                  agent_status=status, prompt_version=prompt_version, model=model,
-                 issues=len(findings.get("issues", [])))
+                 issues=len(findings.get("issues", [])), **_hetero(findings))
     return Outcome("manual", rules_failed=failed, agent=status, note=findings.get("note", ""))
 
 

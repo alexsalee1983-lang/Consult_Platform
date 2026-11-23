@@ -8,6 +8,9 @@
 6. 可用性检查：GET /models，结果缓存一段时间，供健康检查和界面状态使用。
 7. 自动假名化：开关默认关闭（模型为公司私有化部署），见 services/pseudonym.py。
 8. 未配置模型地址时返回演示回复，便于先在本地跑通流程。
+9. 模型目录（三期 G2，services/model_catalog.py）：配置了 LLM_MODEL_CATALOG 时按角色（role：generate / review /
+   arbitrate）取首选和有序备选，首选调用失败（重试后仍失败）自动换下一个；评审、仲裁排除生成方家族
+   （exclude_families），目录里没有别的家族时同家族降级运行并在结果里标 degraded。未配置时与原来完全一致。
 
 用量（tokens、耗时、重试次数）随结果返回，由调用方写入 llm_usage 表；网关本身不记提问和回复内容。
 """
@@ -16,13 +19,14 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 
 import httpx
 
 from ..core import metrics
 from ..core.config import get_settings
+from . import model_catalog
 from .guard import GuardResult, check
 from .pseudonym import Pseudonymizer
 
@@ -73,6 +77,9 @@ class Completion:
     pseudonymized: bool = False
     external: bool = False      # 是否发给了公司外部的模型服务
     tool_calls: int = 0         # 本次答复中模型发起的工具调用次数（A7）
+    family: str = ""            # 模型家族（只在配置了模型目录时填，G2）
+    degraded: bool = False      # 评审 / 仲裁找不到不同家族，同家族降级运行（调用方提高抽检）
+    fallbacks: int = 0          # 首选不可用、换了几次备选
 
 
 @dataclass
@@ -100,6 +107,7 @@ def set_transport(transport: httpx.BaseTransport | None) -> None:
     _transport = transport
     _health_cache.clear()
     _rerank_last.clear()
+    _model_down.clear()
 
 
 def _client() -> httpx.Client:
@@ -115,6 +123,51 @@ def _headers() -> dict:
 
 def _url(path: str) -> str:
     return get_settings().llm_base_url.rstrip("/") + path
+
+
+_model_down: dict[str, float] = {}   # 目录里最近调用失败的模型 → 失败时刻；LLM_HEALTH_TTL_SECONDS 内排到最后再试
+ROLES = ("generate", "review", "arbitrate")
+
+
+def _plan(role: str, level: str, exclude_families: Iterable[str]) -> model_catalog.Plan | None:
+    """未配置模型目录（或目录里没有一个已评测的模型）返回 None：照旧按等级用单个模型。"""
+    if role not in ROLES:
+        raise ValueError(f"unknown role {role}")
+    try:
+        cat = model_catalog.load()
+    except model_catalog.CatalogError as e:
+        raise GatewayError(f"模型目录配置有误：{e}") from e
+    if cat is None:
+        return None
+    plan = model_catalog.plan(cat, role, level, exclude_families)
+    return plan if plan.models else None
+
+
+def _ordered(models: tuple[model_catalog.ModelEntry, ...]) -> list[model_catalog.ModelEntry]:
+    ttl, now = get_settings().llm_health_ttl_seconds, time.monotonic()
+    return sorted(models, key=lambda m: m.id in _model_down and now - _model_down[m.id] < ttl)
+
+
+def _send_planned(client: httpx.Client, p: _Prepared, plan: model_catalog.Plan | None,
+                  stream: bool) -> tuple[httpx.Response, int, model_catalog.ModelEntry | None, int]:
+    """按目录的顺序发请求：一个模型重试后仍失败就换下一个。返回 (响应, 总尝试次数, 用上的模型, 换了几次)。"""
+    if plan is None:
+        resp, attempts = _send(client, p.payload, stream=stream)
+        return resp, attempts, None, 0
+    total, last = 0, None
+    for i, entry in enumerate(_ordered(plan.models)):
+        p.model = p.payload["model"] = entry.id
+        try:
+            resp, attempts = _send(client, p.payload, stream=stream)
+        except GatewayError as e:
+            total, last = total + e.attempts, e
+            _model_down[entry.id] = time.monotonic()
+            continue
+        _model_down.pop(entry.id, None)
+        return resp, total + attempts, entry, i
+    assert last is not None
+    last.attempts = total
+    raise last
 
 
 def model_for(level: str) -> str:
@@ -232,17 +285,29 @@ def _elapsed_ms(p: _Prepared) -> int:
 
 def complete(message: str, *, tier: str, project_code: str, level: str = "standard",
              terms: dict[str, str] | None = None, system: str | None = None,
-             history: list[dict] | None = None) -> Completion:
+             history: list[dict] | None = None, role: str = "generate",
+             exclude_families: Iterable[str] = ()) -> Completion:
+    """role：generate（生成，默认）/ review（评审、知识审核）/ arbitrate（仲裁）；exclude_families 为生成方
+    （仲裁时为生成方和评审方）的模型家族。只在配置了模型目录时起作用。"""
     p = _prepare(message, tier, project_code, level, terms, stream=False, system=system, history=history)
+    plan = _plan(role, level, exclude_families)
+    if plan is not None:
+        p.model = p.payload["model"] = plan.models[0].id
     if not get_settings().llm_base_url:
-        return Completion(text=DEMO_TEXT, model=p.model, demo=True)
+        return Completion(text=DEMO_TEXT, model=p.model, demo=True, family=plan.models[0].family if plan else "",
+                          degraded=plan.degraded if plan else False)
     text = ""
     prompt_tokens = completion_tokens = 0
     attempts = 0
+    entry: model_catalog.ModelEntry | None = None
+    fallbacks = 0
     payload = p.payload
     with _client() as client:
         for rounds in range(get_settings().llm_max_continuations + 1):
-            resp, n = _send(client, payload, stream=False)
+            if rounds == 0:      # 首轮按模型目录选型，失败换备选（G2）；续写沿用选中的模型
+                resp, n, entry, fallbacks = _send_planned(client, p, plan, stream=False)
+            else:
+                resp, n = _send(client, payload, stream=False)
             attempts += n
             try:
                 data = resp.json()
@@ -264,7 +329,9 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
             raise GatewayError(f"模型输出被截断：达到输出上限，续写 {get_settings().llm_max_continuations} 次后仍未完成", attempts)
     return Completion(text=p.pseudo.restore(text) if p.pseudo else text, model=data.get("model", p.model),
                       demo=False, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
-                      latency_ms=_elapsed_ms(p), attempts=attempts, pseudonymized=p.pseudo is not None, external=uses_external_model())
+                      latency_ms=_elapsed_ms(p), attempts=attempts, pseudonymized=p.pseudo is not None,
+                      external=uses_external_model(), family=entry.family if entry else "",
+                      degraded=bool(plan and plan.degraded), fallbacks=fallbacks)
 
 
 def stream(message: str, *, tier: str, project_code: str, level: str = "standard",
@@ -283,21 +350,27 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
     p = _prepare(message, tier, project_code, level, terms, stream=True, system=system, history=history)
     use_tools = bool(tools and run_tool)
     s = get_settings()
+    plan = _plan("generate", level, ())
+    if plan is not None:
+        p.model = p.payload["model"] = plan.models[0].id
     if use_tools:
         p.payload["tools"] = tools
         p.payload["tool_choice"] = "auto"
-        if s.llm_model_tools:
+        if s.llm_model_tools:                       # 对话带工具时指定的模型优先于目录
             p.model = p.payload["model"] = s.llm_model_tools
+            plan = None
     if not get_settings().llm_base_url:
         for i in range(0, len(DEMO_TEXT), 12):
             yield DEMO_TEXT[i:i + 12]
-        yield Completion(text=DEMO_TEXT, model=p.model, demo=True)
+        yield Completion(text=DEMO_TEXT, model=p.model, demo=True, family=plan.models[0].family if plan else "")
         return
 
     restorer = p.pseudo.stream_restorer() if p.pseudo else None
     parts: list[str] = []
     model, prompt_tokens, completion_tokens = p.model, 0, 0
     calls, rounds, final = 0, 0, False
+    entry: model_catalog.ModelEntry | None = None
+    fallbacks, first = 0, True
 
     def emit(text: str) -> Iterator[str]:
         out = restorer.feed(text) if restorer else text
@@ -307,7 +380,11 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
 
     with _client() as client:
         while True:
-            resp, attempts = _send(client, p.payload, stream=True)
+            if first:                            # 只在开始输出前换备选模型；之后各轮沿用同一个模型
+                resp, attempts, entry, fallbacks = _send_planned(client, p, plan, stream=True)
+                model, first = p.model, False
+            else:
+                resp, attempts = _send(client, p.payload, stream=True)
             raw: list[str] = []                  # 本轮模型原样输出（假名化状态），交回模型时用
             pending: dict[int, dict] = {}        # 流式下发的工具调用，按 index 拼接
             markup = _MarkupFilter() if use_tools else None
@@ -389,7 +466,8 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
         yield NO_ANSWER
     yield Completion(text="".join(parts), model=model, demo=False, prompt_tokens=prompt_tokens,
                      completion_tokens=completion_tokens, latency_ms=_elapsed_ms(p), attempts=attempts,
-                     pseudonymized=p.pseudo is not None, external=uses_external_model(), tool_calls=calls)
+                     pseudonymized=p.pseudo is not None, external=uses_external_model(), tool_calls=calls,
+                     family=entry.family if entry else "", fallbacks=fallbacks)
 
 
 TOOL_RESULT_CHARS = 8000
@@ -656,8 +734,16 @@ def availability() -> str:
             status = f"down: HTTP {resp.status_code}"
         else:
             ids = {m.get("id") for m in (resp.json().get("data") or [])}
-            missing = {model_for(lv) for lv in ("reasoning", "standard", "light")} - ids
+            cat = model_catalog.load()
+            if cat is None:
+                missing = {model_for(lv) for lv in ("reasoning", "standard", "light")} - ids
+            else:   # 目录：每个生成档位至少有一个已评测的模型在平台上
+                missing = {c[0].id for c in (model_catalog.candidates(cat, "generate", lv)
+                                             for lv in model_catalog.LEVELS)
+                           if c and not any(m.id in ids for m in c)}
             status = "ok" if not missing else f"down: 模型平台上没有 {', '.join(sorted(missing))}"
+    except model_catalog.CatalogError:
+        status = "down: 模型目录配置有误"
     except (httpx.HTTPError, ValueError) as e:
         status = f"down: {type(e).__name__}"
     _health_cache[s.llm_base_url] = (time.monotonic(), status)

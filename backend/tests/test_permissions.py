@@ -98,6 +98,8 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B/deliverables/D2/export", None), (404, 404, 403, 403, 403)),
+    # 改稿差异转候选（三期 F4）：开关默认关，成员也 404；非成员 404、非业务角色 403（开关打开的行为在 test_revision_mining）
+    (("POST", "/api/projects/BANK-A/deliverables/D7/revision-candidates", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export?format=pptx", None), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/GRID-B/deliverables/D2/outline", OUTLINE), (404, 404, 403, 403, 403)),
     # 质量门禁与签署（M3 ⑤）：成员可看；发起评审在 test_quality 里测（这里发起会留下排队的评审）。
@@ -144,6 +146,9 @@ MATRIX = [
     (("GET", "/api/kb/search?q=值班", None),            (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/sources", None),                  (403, 403, 403, 403, 403)),   # 来源登记表只限知识专家、知识管理员（B16）
     (("POST", "/api/kb/sources/SR-999999/status", {"to": "trial"}), (403, 403, 403, 403, 403)),
+    (("GET", "/api/kb/sources/confirm-queue", None),    (403, 403, 403, 403, 403)),   # 来源确认队列（B25②），同上
+    (("POST", "/api/kb/sources/confirm-queue/decide", {"gap_ids": [999999], "decision": "reject"}),
+     (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
@@ -167,6 +172,11 @@ MATRIX = [
     (("POST", "/api/agents/consultant-lead/tools/project.read", {"project_code": "BANK-A"}),
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (403, 403, 403, 403, 403)),
+    # 去标识检查（三期 C7，迁移 0048）：只授权 kb-builder，不涉及项目；交付侧 Agent 调用一律 403
+    (("POST", "/api/agents/kb-builder/tools/deid.check", {"args": {"text": "告警分级按影响范围分三级。"}}),
+                                                        (200, 200, 403, 403, 403)),
+    (("POST", "/api/agents/report-writer/tools/deid.check", {"args": {"text": "告警分级"}}),
                                                         (403, 403, 403, 403, 403)),
     # 知识使用反馈（三期 B29）：member 不给引用位置 → 422（不留数据）；非成员 404；看板只给知识专家、知识管理员
     (("GET", "/api/projects/BANK-A/kb-feedback", None), (422, 404, 403, 403, 403)),
