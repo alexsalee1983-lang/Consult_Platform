@@ -171,6 +171,11 @@ MATRIX = [
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
                                                         (403, 403, 403, 403, 403)),
+    # 去标识检查（三期 C7，迁移 0048）：只授权 kb-builder，不涉及项目；交付侧 Agent 调用一律 403
+    (("POST", "/api/agents/kb-builder/tools/deid.check", {"args": {"text": "告警分级按影响范围分三级。"}}),
+                                                        (200, 200, 403, 403, 403)),
+    (("POST", "/api/agents/report-writer/tools/deid.check", {"args": {"text": "告警分级"}}),
+                                                        (403, 403, 403, 403, 403)),
     # 知识使用反馈（三期 B29）：member 不给引用位置 → 422（不留数据）；非成员 404；看板只给知识专家、知识管理员
     (("GET", "/api/projects/BANK-A/kb-feedback", None), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/kb-feedback", {"doc_id": "L4-NOPE", "rating": "useful"}),
