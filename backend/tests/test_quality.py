@@ -288,7 +288,7 @@ def test_seed_signed_sample_is_idempotent():
 
 AGENT_BLOCK = ("# 评审意见\n评审结论：不通过\n统计：阻断 1 项，重要 1 项，建议 0 项\n\n"
                "| # | 位置 | 维度 | 严重度 | 问题 | 修改建议 |\n|---|---|---|---|---|---|\n"
-               "| 1 | 第 2 章 | 业务关联 | 阻断 | 托管初筛的成本未论证 | 补充成本比较 |\n"
+               "| 1 | 第 2 章 | 证据链 | 阻断 | 托管初筛的成本结论没有证据 | 补充成本比较 |\n"
                "| 2 | 第 1 章 | 建议质量 | 重要 | 建议缺少验收标准 | 补充验收标准 |\n")
 
 
@@ -354,8 +354,10 @@ def test_rule_blocker_and_stale_review_cannot_be_waived(team, model):
     # 改了正文，旧评审过期，不能再驳回；新评审的阻断要重新处理
     assert member.put(_url(code, "sections/2"), json={"body": BODY2}).status_code == 201
     assert _waive(mgr_a, code, rv["id"], agent, reason="再驳一次，理由写够十个字").status_code == 409
-    rv2 = _review(member, code)
-    assert rv2["open_blocking"] == 1 and rv2["waived"] == 0
+    rv2 = _review(member, code)                # A13：驳回过的同一问题（同一编号）不重提
+    again = next(i for i in rv2["issues"] if i["by"] == "agent" and i["severity"] == "阻断")
+    assert again["code"] == rv["issues"][agent]["code"] and again["status"] == "已驳回" and not again["waivable"]
+    assert rv2["open_blocking"] == 0 and rv2["blocking"] == 0
 
 
 def test_unlisted_agent_blockers_keep_gate_closed(team, model):
@@ -382,3 +384,96 @@ def test_qualification_refusal_wording_not_counted():
     for text in ("虽然不能保证每项都满分，但该系统已通过等保三级测评。", "不是差距分析，是测评结论。",
                  "该系统已通过等保三级测评。", "并非初判：认证结论为合格。"):
         assert quality.qualification_hits(text) >= 1, text
+
+
+# ---- 三期 G2：异构评审（评审模型家族必须与生成方不同，只有一个家族时同家族降级并标记） ----
+
+TWO_FAMILIES = {"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"},
+                           {"id": "glm-s", "family": "glm", "tier": "standard"},
+                           {"id": "kimi-s", "family": "kimi", "tier": "standard"}]}
+
+
+def _last_review_audit() -> dict:
+    with SessionLocal() as db:
+        log = db.scalar(select(AuditLog).where(AuditLog.action == "quality.review", AuditLog.result == "allowed")
+                        .order_by(AuditLog.id.desc()))
+        return json.loads(log.detail)
+
+
+def test_review_model_family_differs_from_generator(team, model, monkeypatch):
+    from app.models import AgentRun, AgentRunStep
+
+    code, member, *_ = team
+    monkeypatch.setattr(get_settings(), "llm_model_catalog", json.dumps(TWO_FAMILIES))
+    _draft(member, code)
+    # 顾问手写的正文没有生成记录：按生成首选（DeepSeek）排除，评审用 GLM
+    _review(member, code)
+    assert model.requests[-1]["model"] == "glm-s"
+    detail = _last_review_audit()
+    assert (detail["model_family"], detail["degraded"]) == ("glm", False)
+    # 交付链用 GLM 写了第 1 章：评审不能再用 GLM，换 Kimi
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        run = AgentRun(project_id=p.id, created_by="t", status="done")
+        db.add(run)
+        db.flush()
+        db.add(AgentRunStep(run_id=run.id, step="draft", agent_code="report-writer", status="done", model="glm-s",
+                            refs={"deliverable": "D4", "versions": {"1": 1}}))
+        db.commit()
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        d = next(x for x in p.deliverables if x.code == "D4")
+        assert quality.generator_families(db, p, d, {"1": 1, "2": 1}) == {"glm"}
+    _review(member, code)
+    assert model.requests[-1]["model"] == "kimi-s"
+
+
+def test_single_family_review_is_marked_degraded(team, model, monkeypatch):
+    code, member, *_ = team
+    monkeypatch.setattr(get_settings(), "llm_model_catalog",
+                        json.dumps({"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"}]}))
+    _draft(member, code)
+    rv = _review(member, code)
+    assert rv["status"] == "done"
+    assert any("同家族降级" in i["problem"] and i["severity"] == "建议" for i in rv["issues"])
+    detail = _last_review_audit()
+    assert (detail["model_family"], detail["degraded"]) == ("deepseek", True)
+    assert BODY1 not in json.dumps(detail, ensure_ascii=False)
+
+
+def test_review_without_catalog_unchanged(team, model):
+    code, member, *_ = team
+    _draft(member, code)
+    rv = _review(member, code)
+    assert not any("同家族降级" in i["problem"] for i in rv["issues"])
+    assert "model_family" not in _last_review_audit()
+
+
+def test_section_versions_record_generator_family(team, model, monkeypatch):
+    """主链 0040：Agent 写入的章节版本记当次生成模型和家族；顾问手改沿用上一版的记录（内容仍出自该模型），
+    评审据此排除同家族；从没经过模型的章节不记。"""
+    from app.models import ProjectMember, User
+    from app.project import deliverables as svc
+
+    code, member, *_ = team
+    monkeypatch.setattr(get_settings(), "llm_model_catalog", json.dumps(TWO_FAMILIES))
+    _draft(member, code)                                    # 两章都是顾问手写 v1
+    gateway.complete("写第 1 章", tier="standard", project_code=code)          # 生成首选 ds-s（deepseek）
+    gateway.complete("评审", tier="standard", project_code=code, role="review")  # 评审调用不改写生成记录
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        d = next(x for x in p.deliverables if x.code == "D4")
+        user = db.scalar(select(User).join(ProjectMember, ProjectMember.user_id == User.id)
+                         .where(ProjectMember.project_id == p.id, ProjectMember.project_role == "member"))
+        svc.write_section(db, user, p, d, 1, BODY1 + "\n\n补充：值班交接改为电子记录。", agent_code="report-writer")
+    assert member.put(f"/api/projects/{code}/deliverables/D4/sections/1",
+                      json={"body": BODY1 + "\n\n补充：值班交接改为电子台账。"}).status_code == 201
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        d = next(x for x in p.deliverables if x.code == "D4")
+        rows = {(s.seq, v.version): (v.model, v.model_family) for s in d.sections for v in s.versions}
+        assert rows[(1, 1)] == ("", "") and rows[(2, 1)] == ("", "")
+        assert rows[(1, 2)] == ("ds-s", "deepseek")
+        assert rows[(1, 3)] == ("ds-s", "deepseek")            # 手改沿用
+        assert quality.generator_families(db, p, d, {"1": 3, "2": 1}) == {"deepseek"}
+        assert quality.generator_families(db, p, d, {"1": 1, "2": 1}) == set()

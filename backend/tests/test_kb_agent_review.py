@@ -10,7 +10,8 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.kb import agent_review, autopublish, importer, sources
 from app.kb import review as rv
-from app.kb.files import parse_entry
+from app.kb.files import Entry, format_entry, parse_entry
+from app.kb.items import ItemMeta, VersionContent
 from app.models import AuditLog, Job, KbItem, KbVersion, User
 from app.services import gateway
 
@@ -208,3 +209,67 @@ def test_level3_demo_does_not_block(lib):
         assert r.findings["agent"] == "skipped" and r.decision == "flag"
         rv.review(db, db.merge(expert), v, "content", "approve")
         assert v.status == "published"
+
+
+def test_same_family_degraded_review_is_always_sampled(lib, model, monkeypatch):
+    """三期 G2：模型目录只有一个家族时知识审核同家族降级，结果和审计都标记，并且一定进抽检。"""
+    (author, expert, admin), law = lib
+    m = model(PASS)
+    monkeypatch.setattr(get_settings(), "kb_sample_rate_agent", 0.0)
+    monkeypatch.setattr(get_settings(), "llm_model_catalog",
+                        json.dumps({"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"}]}))
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY)
+        out = agent_review.run(db, v)
+        assert out.status == "published" and out.sampled and v.sample_state == "pending"
+        assert m.requests[0]["model"] == "ds-s"
+        r = next(x for x in v.reviews if x.review_role == "agent")
+        assert r.findings["degraded"] is True and r.findings["model_family"] == "deepseek"
+        log = db.scalar(select(AuditLog).where(AuditLog.action == "kb.agent_review").order_by(AuditLog.id.desc()))
+        detail = json.loads(log.detail)
+        assert (detail["model_family"], detail["degraded"]) == ("deepseek", True)
+
+
+def test_kb_review_uses_other_family_than_generator(lib, model, monkeypatch):
+    (author, expert, admin), law = lib
+    m = model(PASS)
+    monkeypatch.setattr(get_settings(), "llm_model_catalog", json.dumps(
+        {"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"},
+                    {"id": "glm-s", "family": "glm", "tier": "standard"}]}))
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY)
+        agent_review.run(db, v)
+        assert m.requests[0]["model"] == "glm-s"
+        r = next(x for x in v.reviews if x.review_role == "agent")
+        assert r.findings["degraded"] is False
+
+
+def test_kb_version_records_generator_family_and_review_avoids_it(lib, model, monkeypatch):
+    """三期 G2③（知识区 k0016）：条目版本记起草模型和家族；知识审核避开该家族；修订没写模型的沿用上一版。"""
+    (author, expert, admin), law = lib
+    m = model(PASS)
+    monkeypatch.setattr(get_settings(), "llm_model_catalog", json.dumps(
+        {"models": [{"id": "ds-s", "family": "deepseek", "tier": "standard"},
+                    {"id": "glm-s", "family": "glm", "tier": "standard"}]}))
+    with SessionLocal() as db:
+        v = _submitted(db, db.merge(author), law, BODY, model="glm-s")
+        assert (v.model, v.model_family) == ("glm-s", "glm")
+        agent_review.run(db, v)
+        assert m.requests[0]["model"] == "ds-s"
+        item = v.item
+        c = parse_entry(format_entry(Entry(key=item.import_key, meta=ItemMeta(
+            layer=item.layer, domain=item.domain, product=item.product, doc_type=item.doc_type, stage=item.stage,
+            capabilities=list(item.capabilities)), content=VersionContent(
+            title=v.title, body=v.body + "\n补一句。", source_type=v.source_type, source_detail=v.source_detail,
+            ref_document=v.ref_document, ref_version=v.ref_version, ref_status=v.ref_status)))).content
+        assert c.model == ""
+        v2 = rv.new_version(db, db.merge(expert), item, c)
+        assert (v2.model, v2.model_family) == ("glm-s", "glm")
+
+
+def test_entry_file_round_trips_model():
+    e = parse_entry("---\nkey: t-model-rt\ntitle: 示范\nlayer: L2\ndomain: OPS\nproduct: SOC\ndoc_type: MTD\n"
+                    "stage: 设计\ncapabilities: [运营]\nsource_type: public\nsource_detail: 公开资料：示范\n"
+                    "model: ds-s\n---\n\n正文\n")
+    assert e.content.model == "ds-s"
+    assert "model: ds-s" in format_entry(e)

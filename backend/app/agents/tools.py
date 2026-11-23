@@ -15,6 +15,7 @@ confirm.create（发确认卡：选项、推荐和理由、影响，规则见 ap
 agent.handoff（对话转交：为专业 Agent 新建对话，规则见 app/agents/handoff.py；二期 C2）、
 quality.check（机密级检查）、kb.search（知识检索）、basis.lookup（依据查询，只查 L4）、
 kb.mapping（控制映射查询，只读知识区映射矩阵；二期 B3，app/kb/mapping.py）；
+deid.check（去标识检查，只检查不改数据：机密级命中退回、残留直接标识有条件通过，输出不含原文；三期 C7，app/kb/deid_check.py）；
 kb.stage_write 在 M2 后续接入，目前是占位实现。
 kb.search / basis.lookup 只查知识区已发布内容，受限条目按调用人的可见范围过滤（app/kb/search.py）。
 """
@@ -47,6 +48,11 @@ class ToolError(Exception):
         if status is not None:
             self.status = status
         super().__init__(detail if isinstance(detail, str) else detail.get("summary", "被拒绝"))
+
+    @property
+    def retryable(self) -> bool:
+        """临时性失败（限流、冲突、服务端暂时不可用）可以换个时机重试；参数、授权类错误重试无益。"""
+        return self.status in (408, 409, 425, 429) or self.status >= 500
 
 
 class ToolDenied(ToolError):
@@ -133,6 +139,11 @@ def _quality_check(ctx: ToolContext, args: dict) -> dict:
     r = check(str(args.get("text", "")))
     return {"blocked": r.blocked, "summary": r.summary(),
             "findings": [{"kind": f.kind, "label": f.label, "excerpt": f.excerpt} for f in r.findings]}
+
+
+def _deid_check(ctx: ToolContext, args: dict) -> dict:
+    from ..kb import deid_check      # 延迟导入：kb 包依赖较多，工具层只在调用时加载
+    return deid_check.check(str(args.get("text", ""))).to_json()
 
 
 def _project_kb_prefs(ctx: ToolContext) -> dict:
@@ -234,6 +245,7 @@ IMPLEMENTATIONS: dict[str, Callable[[ToolContext, dict], dict]] = {
     "kb.search": _kb_search,
     "basis.lookup": _basis_lookup,
     "kb.mapping": _kb_mapping,
+    "deid.check": _deid_check,
     "doc.generate": _doc_generate,
     "confirm.create": _confirm_create,
     "agent.handoff": _agent_handoff,
@@ -248,9 +260,12 @@ def granted_tools(db: Session, agent_code: str) -> list[str]:
 
 
 def invoke(db: Session, user: User, agent_code: str, tool_code: str, args: dict[str, Any] | None = None,
-           project_code: str | None = None) -> dict:
+           project_code: str | None = None, conversation_id: int | None = None) -> dict:
     args = args or {}
-    meta = {"agent": agent_code, "tool": tool_code, "args_length": len(json.dumps(args, ensure_ascii=False))}
+    meta: dict[str, Any] = {"agent": agent_code, "tool": tool_code,
+                            "args_length": len(json.dumps(args, ensure_ascii=False))}
+    if conversation_id is not None:
+        meta["conversation_id"] = conversation_id    # 对话里调用时带对话号，便于按对话追溯（只记编号，不记原文）
 
     def deny(exc: type[ToolError], reason: str, message: str):
         audit.record(db, actor=user.username, action="tool.call", result="blocked", project_code=project_code or "",

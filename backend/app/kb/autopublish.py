@@ -6,10 +6,14 @@ python -m app.cli kb-source-publish <清单.csv> --dir <资料目录> --as <知�
   官方来源白名单、原件 sha256、文号或标准号、切分完整、法规条号连续。
 - 全部通过的条款由平台自动发布：版本 auto_review=platform，审核记录写“平台核验”（reviewer=platform，
   review_role=platform），不是人；没通过的照常提交审核，走两项人工审核（app/kb/review.py）。
-- 每批（一次命令）按 KB_SAMPLE_RATE_SRC（默认 5%，至少 1 条）随机抽检，sample_state=pending，进抽检队列
-  （GET /api/kb/samples）；知识专家逐条对照原件判通过或不通过（不能是这批的导入人）。
-- 暂停：最近 20 次抽检里不通过的比例超过 KB_SAMPLE_FAIL_MAX（默认 10%），或 KB_SRC_AUTO_PUBLISH=false，
-  整批转人工审核；知识专家可以对任何自动发布的版本补抽检，问题率降下来后自动恢复。
+- 每批（一次命令）按统计抽样定抽样量（三期 B20）：批量 N、可接受缺陷率 KB_SAMPLE_DEFECT_MAX（默认 10%）、
+  置信度 KB_SAMPLE_CONFIDENCE（默认 80%），按超几何分布取最小的 n，使缺陷率达到上限时 n 条里一条问题都抽不到的概率
+  不超过 1-置信度（零接收抽样）；大批量不随 N 线性涨。KB_SAMPLE_RATE_SRC / _PARTIAL 是按比例的兜底下限（有条款被退回的份
+  按 40% 兜底，负责人 2026-11-16），取两者大者。抽中的 sample_state=pending，进抽检队列（GET /api/kb/samples）；
+  知识专家逐条对照原件判通过或不通过（不能是这批的导入人）。
+- 暂停（停止规则，三期 B20）：最近 20 次抽检攒满 20 个样本后，不通过比例超过 KB_SAMPLE_FAIL_MAX（默认 10%）即暂停；
+  不满 20 个时只在“凑满 20 个也必超上限”（不通过数已超过 上限 × 20）时提前暂停，免得一两次抽检就把自动发布停掉。
+  KB_SRC_AUTO_PUBLISH=false 也暂停。暂停时整批转人工审核；知识专家可以对任何自动发布的版本补抽检，问题率降下来后自动恢复。
 - 清单改了标题：条目编号由标题算出，标题一改就成了新编号；若这份的条款正文与库里另一份公开资料的现行条款逐条相同，
   判为改名，整份跳过并提示（把标题改回原样，或先下线旧条目），不重复入库。
 - 与现行版本相同的跳过；已有未完成的草稿或待审版本时，内容和原件一致的接着处理，不一致的提示先处理它。
@@ -30,7 +34,7 @@ from ..core.config import get_settings
 from ..core.db import utcnow
 from ..core.permissions import KNOWLEDGE_EXPERT, roles_of
 from ..models import KbItem, KbReview, KbVersion, User
-from . import importer, parse, sources
+from . import candidate, importer, parse, sources
 from . import review as rv
 
 PLATFORM = "platform"
@@ -70,6 +74,33 @@ def _enabled(kind: str) -> tuple[bool, str]:
     return get_settings().kb_src_auto_publish, "KB_SRC_AUTO_PUBLISH"
 
 
+def sample_size(population: int, defect_max: float, confidence: float) -> int:
+    """零接收抽样的最小样本量（超几何分布）：批里缺陷条数达到 ceil(N × defect_max) 时，n 条全无缺陷的概率 ≤ 1 - confidence。"""
+    if population <= 0 or confidence <= 0:
+        return 0
+    defects = max(1, math.ceil(population * defect_max))
+    miss, n = 1.0, 0                       # miss = P(n 条里一条缺陷都没有)
+    while n < population and miss > 1 - confidence:
+        miss *= (population - defects - n) / (population - n)
+        n += 1
+    return n
+
+
+def batch_sample_count(population: int, partial: bool) -> int:
+    """一批自动发布的版本要抽检几条：统计抽样量与按比例兜底取大者，不超过批量。"""
+    s = get_settings()
+    rate = s.kb_sample_rate_src_partial if partial else s.kb_sample_rate_src
+    n = max(sample_size(population, s.kb_sample_defect_max, s.kb_sample_confidence), math.ceil(population * rate))
+    return min(population, n)
+
+
+def stop_rule(checked: int, failed: int, fail_max: float) -> bool:
+    """停止规则：攒满 RECENT_SAMPLES 个样本才按比例判断；不满时只在凑满也必超上限时提前停。"""
+    if checked >= RECENT_SAMPLES:
+        return failed / checked > fail_max
+    return failed > fail_max * RECENT_SAMPLES
+
+
 def sample_stats(db: Session, kind: str = PLATFORM) -> dict:
     """某类自动发布（platform 平台核验 / agent 知识审核 Agent）最近 RECENT_SAMPLES 次抽检的结果和是否暂停。"""
     rows = db.scalars(select(KbVersion.sample_state)
@@ -79,8 +110,9 @@ def sample_stats(db: Session, kind: str = PLATFORM) -> dict:
     pending = db.scalar(select(KbVersion.id).where(KbVersion.auto_review == kind,
                                                    KbVersion.sample_state == "pending").limit(1)) is not None
     limit = get_settings().kb_sample_fail_max
-    over = bool(rows) and failed / len(rows) > limit
+    over = stop_rule(len(rows), failed, limit)
     return {"checked": len(rows), "failed": failed, "fail_max": limit, "suspended": over,
+            "armed": len(rows) >= RECENT_SAMPLES,
             "has_pending": pending, "enabled": _enabled(kind)[0]}
 
 
@@ -136,9 +168,13 @@ def _auto_publish(db: Session, user: User, v: KbVersion) -> None:
                     comment="平台核验：" + "、".join(sources.VERIFY_RULES.values())))
     v.auto_review = PLATFORM
     db.commit()
-    rv.publish(db, v)
+    shadow = candidate.enabled()
+    if shadow:                       # 候选影子期（三期 B24①）：先当候选，达标后晋级
+        candidate.stage(db, v, PLATFORM)
+    else:
+        rv.publish(db, v)
     audit.record(db, actor=PLATFORM, action="kb.auto_publish", result="allowed", doc_id=v.item.doc_id,
-                 version=v.version, operator=user.username, rules=list(sources.VERIFY_RULES))
+                 version=v.version, operator=user.username, rules=list(sources.VERIFY_RULES), candidate=shadow)
 
 
 def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport:
@@ -185,11 +221,10 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
                     rv.submit(db, user, v)
                 out.manual += 1
     pick: list[KbVersion] = []
-    for group, rate in ((published, get_settings().kb_sample_rate_src),
-                        (partial, get_settings().kb_sample_rate_src_partial)):
-        if group:
-            n = max(1, math.ceil(len(group) * rate))
-            pick += secrets.SystemRandom().sample(group, min(n, len(group)))
+    for group, is_partial in ((published, False), (partial, True)):
+        n = batch_sample_count(len(group), is_partial)
+        if n:
+            pick += secrets.SystemRandom().sample(group, n)
     if pick:
         for v in pick:
             v.sample_state = "pending"
@@ -203,9 +238,11 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
 
 
 def sample_queue(db: Session) -> list[KbVersion]:
-    """待抽检和抽检不通过、还没处理（仍是现行版本）的自动发布版本，以及使用反馈待复查的现行版本（B13，app/kb/recheck.py）。"""
-    return list(db.scalars(select(KbVersion).join(KbItem, KbItem.current_version_id == KbVersion.id)
-                           .where(or_(KbVersion.sample_state.in_(("pending", "failed")),
+    """待抽检和抽检不通过、还没处理（仍是现行版本）的自动发布版本，以及使用反馈待复查的现行版本（B13，app/kb/recheck.py）。
+    候选影子期（三期 B24①）的候选版本不是现行版本，也在队列里（抽检判不通过即退回人工）。"""
+    return list(db.scalars(select(KbVersion).join(KbItem, KbItem.id == KbVersion.item_id)
+                           .where(or_(KbItem.current_version_id == KbVersion.id, KbVersion.status == candidate.STATUS),
+                                  or_(KbVersion.sample_state.in_(("pending", "failed")),
                                       KbVersion.recheck_state.in_(("pending", "failed"))),
                                   KbItem.retired.is_(False))
                            .order_by(KbVersion.sample_state.desc(), KbVersion.recheck_state.desc(), KbVersion.id)))
@@ -224,8 +261,9 @@ def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: 
         deny(403, "role_mismatch", "抽检须由知识专家进行")
     sample = v.auto_review in (PLATFORM, AGENT) and v.sample_state not in ("passed", "failed")
     recheck = v.recheck_state == "pending"           # 使用反馈待复查（B13）：人审版本也可以，不计入抽检不通过率
-    current = v.item.current_version_id == v.id and not v.item.retired
-    if v.status != "published" or not current or not (sample or recheck):
+    shadow = v.status == candidate.STATUS and not v.item.retired          # 候选（三期 B24①）
+    current = v.item.current_version_id == v.id and not v.item.retired and v.status == "published"
+    if not (current or shadow) or not (sample or recheck):
         if v.sample_state in ("passed", "failed") and v.recheck_state != "pending":
             raise rv.ReviewError(409, "这个版本已经抽检过")
         raise rv.ReviewError(409, "只有自动发布或待复查的现行版本需要抽检")
@@ -242,5 +280,7 @@ def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: 
         v.recheck_state, v.recheck_at = state, utcnow()
     db.commit()
     audit.record(db, actor=user.username, action="kb.sample", result="allowed", doc_id=v.item.doc_id,
-                 version=v.version, decision=decision, sample=sample, recheck=recheck)
+                 version=v.version, decision=decision, sample=sample, recheck=recheck, candidate=shadow)
+    if shadow and decision == "fail":                # 候选抽检不通过：不晋级，退回人工审核
+        candidate.return_to_review(db, v, user.username, "sample_failed")
     return v

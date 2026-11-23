@@ -52,6 +52,19 @@ class Deliverable:
     stage: str
     client_facing: bool
     outline: tuple[str, ...] = ()
+    review_profile: str = "full"     # 评审档案（A13）：full 全面 / light 只查红线和专项
+
+
+REVIEW_PROFILES = ("full", "light")
+
+
+def parse_review_profile(v: object) -> tuple[str, str]:
+    """交付件的评审档案；返回（档案，问题说明），缺省 full。"""
+    if v is None or v == "":
+        return "full", ""
+    if v not in REVIEW_PROFILES:
+        return "full", f"review_profile {v!r} 应为 {'/'.join(REVIEW_PROFILES)} 之一"
+    return str(v), ""
 
 
 @dataclass(frozen=True)
@@ -64,6 +77,7 @@ class Step:
     output: str                 # 空 = 产出存运行记录
     query: str
     instruction: str
+    slots: tuple[dict[str, Any], ...] = ()   # 三期 A12：本步的知识槽位（parse_slots）
 
 
 @dataclass(frozen=True)
@@ -139,6 +153,7 @@ class Industry:
     version: str
     raw: dict[str, Any]
     expert_review: str = "pending"
+    kb_tags: tuple[str, ...] = ()     # 检索加权标签，并入快照 kb_tags（同模块）
 
 
 @dataclass
@@ -367,7 +382,10 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
         outline = dp.texts(d, "outline")
         if any(len(t) > 60 for t in outline):
             dp.add("outline 的章节标题不超过 60 字")
-        deliverables.append(Deliverable(dcode, title, stage, cf, outline))
+        profile, why = parse_review_profile(d.get("review_profile"))
+        if why:
+            dp.add(why)
+        deliverables.append(Deliverable(dcode, title, stage, cf, outline, profile))
     dcodes = {d.code for d in deliverables}
 
     base_raw = data.get("baseline") or {}
@@ -441,8 +459,9 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
         instruction = sp.text(s, "instruction", max_len=4000)
         _check_template(sp, "query", query)
         _check_template(sp, "instruction", instruction)
+        slots = parse_slots(sp, s.get("slots"))
         keys.append(key)
-        chain.append(Step(key, number, sname, agent, inputs, output, query, instruction))
+        chain.append(Step(key, number, sname, agent, inputs, output, query, instruction, slots))
     numbers = [s.number for s in chain]
     if numbers != sorted(numbers):
         p.add("chain 的 number 应按顺序递增")
@@ -459,6 +478,43 @@ def parse_product(path: Path, out: list[str], agents: set[str] | None = None) ->
     return Product(code, name, domain, status, modules, tuple(deliverables), domains, frameworks, basis,
                    tuple(chain), gates, card_items, content_version(data), data, industry_basis, maturity_scores,
                    expert_review)
+
+
+SLOT_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,39}$")
+MAX_SLOTS, MAX_SLOT_NEED = 12, 5
+
+
+def parse_slots(p: _P, raw: Any) -> tuple[dict[str, Any], ...]:
+    """步骤的知识槽位（三期 A12；C10 槽位规格写进产品配置前可不写）。每个槽位：
+    id（本步内唯一）、type（条目类型，meta.DOC_TYPES 的键）、query（检索词）、need（所需条数 1～5，默认 1）、
+    required（必需槽位库里没有时发“知识不足”卡，默认否）。"""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or len(raw) > MAX_SLOTS:
+        p.add(f"slots 应为不超过 {MAX_SLOTS} 个槽位的列表")
+        return ()
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for i, r in enumerate(raw):
+        sp = _P(f"{p.where} slots[{i}]", p.out)
+        if not isinstance(r, dict):
+            sp.add("应为对象")
+            continue
+        sid, typ, query = sp.text(r, "id", max_len=40), sp.text(r, "type", max_len=8), sp.text(r, "query")
+        need, req = r.get("need", 1), r.get("required", False)
+        bad = len(p.out)
+        if sid and (not SLOT_ID.match(sid) or sid in seen):
+            sp.add(f"id {sid!r} 只能用字母、数字、- 和 _，且本步内不重复")
+        if typ and typ not in meta.DOC_TYPES:
+            sp.add(f"type {typ!r} 不是条目类型（{'/'.join(meta.DOC_TYPES)}）")
+        if not isinstance(need, int) or isinstance(need, bool) or not 1 <= need <= MAX_SLOT_NEED:
+            sp.add(f"need 应为 1～{MAX_SLOT_NEED} 的整数")
+        if not isinstance(req, bool):
+            sp.add("required 应为 true 或 false")
+        seen.add(sid)
+        if sid and typ and query and len(p.out) == bad:
+            out.append({"id": sid, "type": typ, "query": query, "need": need, "required": req})
+    return tuple(out)
 
 
 def _expert_review(p: _P, data: dict[str, Any]) -> str:
@@ -515,6 +571,9 @@ def parse_module(path: Path, out: list[str]) -> Module | None:
                   content_version(data), data, expert_review)
 
 
+INDUSTRY_MERGED_MODULES = ("HYJG",)   # 已冻结、内容并入行业包的模块（负责人 2026-11-18）
+
+
 def parse_industry(path: Path, out: list[str]) -> Industry | None:
     data = _read_yaml(path, out)
     if data is None:
@@ -550,7 +609,7 @@ def parse_industry(path: Path, out: list[str]) -> Industry | None:
     return Industry(code, name, aliases, status, level, p.texts(data, "products"),
                     p.texts(data, "basis", required=True), p.texts(data, "terms"), p.texts(data, "roles"),
                     p.texts(data, "threats"), instructions, gates, p.text(data, "tier_hint", required=False),
-                    content_version(data), data, _expert_review(p, data))
+                    content_version(data), data, _expert_review(p, data), p.texts(data, "kb_tags"))
 
 
 def _known_agents() -> set[str] | None:
@@ -726,6 +785,18 @@ def _gate_dict(g: Gate, source: str) -> dict[str, Any]:
             "source": source, **copy.deepcopy(g.params)}
 
 
+OUTLINE_HINT = "{code} 必须包含这些章节（按这个顺序，章节标题保留这些字样，可在章下细分）：{titles}。"
+
+
+def _module_section_gates(m: Module, product_code: str) -> list[dict[str, Any]]:
+    """模块给本产品追加的章节自动成为必备章节门禁（模块已自写同一交付件的 required_sections 时不重复）。"""
+    own = {g.deliverable for g in m.gates if g.kind == "required_sections"}
+    return [{"id": f"{m.code.lower()}-sections-{dcode.lower()}", "kind": "required_sections", "deliverable": dcode,
+             "level": "blocking", "message": f"勾选了{m.name}模块，{dcode} 缺少模块追加的章节", "source": m.code,
+             "sections": list(titles)}
+            for dcode, titles in m.sections.get(product_code, {}).items() if titles and dcode not in own]
+
+
 def resolve_industry(cat: Catalog, industry: str, product_code: str) -> Industry | None:
     """按立项填的行业文字找适用的行业包（ready、适用本产品）；“A/B”写法任一部分对上即可，找不到返回 None。"""
     text = (industry or "").strip()
@@ -761,24 +832,30 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
     merged = replace(prod, frameworks=tuple(_merged(prod.frameworks, *(m.frameworks for m in mods))),
                      basis=tuple(_merged(prod.basis, *(m.basis for m in mods), industry.basis if industry else ())))
     names = tuple(m.name for m in mods)
+    # hyjg 并入行业包（三期 A11）：勾了行业监管模块且行业包命中时，模块说明改按行业包依据查
+    merges = [m.code for m in mods if m.code in INDUSTRY_MERGED_MODULES] if industry is not None else []
+    outlines = {d.code: _merged(d.outline, *(m.sections.get(prod.code, {}).get(d.code, ()) for m in mods))
+                for d in prod.deliverables}
     chain = []
     for s in prod.chain:
         adds = [m.instructions[s.key] for m in mods if m.instructions.get(s.key)]
         if industry is not None and industry.instructions.get(s.key):
             adds.append(industry.instructions[s.key])
+        if merges and any(m.code in merges and m.instructions.get(s.key) for m in mods):
+            adds.append(f"行业监管已并入行业包“{industry.name}”：适用的行业监管文件先查 {'、'.join(industry.basis)}"
+                        "（依据只来自知识库，未入库的标【依据待核实】）。")
         extra = "\n".join(adds)
         extra = render(extra, merged, s.number, names) if extra else ""
         text = render(s.instruction, merged, s.number, names, extra)
         if extra and "module_instructions" not in (_template_vars(s.instruction) or set()):
             text = f"{text}\n{extra}"
+        if outlines.get(s.output):
+            text = f"{text}\n{OUTLINE_HINT.format(code=s.output, titles='、'.join(outlines[s.output]))}"
         chain.append({"key": s.key, "number": s.number, "name": s.name, "agent": s.agent, "inputs": list(s.inputs),
                       "output": s.output, "query": render(s.query, merged, s.number, names, ""),
-                      "instruction": text})
-    deliverables = []
-    for d in prod.deliverables:
-        outline = _merged(d.outline, *(m.sections.get(prod.code, {}).get(d.code, ()) for m in mods))
-        deliverables.append({"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
-                             "outline": outline})
+                      "instruction": text, **({"slots": [dict(x) for x in s.slots]} if s.slots else {})})
+    deliverables = [{"code": d.code, "title": d.title, "stage": d.stage, "client_facing": d.client_facing,
+                     "outline": outlines[d.code], "review_profile": d.review_profile} for d in prod.deliverables]
     snap: dict[str, Any] = {
         "format": SNAPSHOT_FORMAT,
         "product": prod.code, "product_name": prod.name, "product_version": prod.version,
@@ -790,9 +867,10 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
         "chain": chain,
         "gates": [_gate_dict(g, prod.code) for g in prod.gates]
                  + [_gate_dict(g, m.code) for m in mods for g in m.gates]
+                 + [g for m in mods for g in _module_section_gates(m, prod.code)]
                  + [_gate_dict(g, industry.code) for g in (industry.gates if industry else ())],
         "card_items": _merged(prod.card_items, *(m.card_items for m in mods)),
-        "kb_tags": _merged(*(m.kb_tags for m in mods)),
+        "kb_tags": _merged(*(m.kb_tags for m in mods), industry.kb_tags if industry else ()),
         "expert_pending": [x.code for x in (prod, *mods, *([industry] if industry else []))
                            if x.expert_review != "done"],
     }
@@ -801,6 +879,8 @@ def compose(prod: Product, modules: tuple[Module, ...] | list[Module] = (),
                             "level": industry.level, "basis": list(industry.basis), "terms": list(industry.terms),
                             "roles": list(industry.roles), "threats": list(industry.threats),
                             "tier_hint": industry.tier_hint}
+        if merges:
+            snap["industry"]["merges"] = merges
     return snap
 
 

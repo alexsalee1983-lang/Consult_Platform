@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core import kb_split
 from app.core.db import Base, KbBase
 from app.core.migrate import KbSplitPending, upgrade_to_head
-from app.models import KbChunk, KbItem, KbUpload, KbVersion, Project
+from app.models import KbChunk, KbItem, KbItemAlias, KbUpload, KbVersion, Project
 
 
 def _engines(tmp_path: Path):
@@ -29,6 +29,7 @@ def _seed(main) -> None:
         db.flush()
         item.current_version_id = v.id
         db.add(KbChunk(version_id=v.id, seq=0, heading="一", text="切片"))
+        db.add(KbItemAlias(alias="L2-OPS-SOC-TPL-801", item_id=item.id, kind="legacy"))   # 别名表随分库一起搬（B15）
         db.commit()
 
 
@@ -39,11 +40,12 @@ def test_split_copies_verifies_and_drops(tmp_path):
         upgrade_to_head(main, kb)   # 数据还在主库：拒绝启动，但知识区库已建表
 
     r = kb_split.split(main, kb)
-    assert r.copied and not r.dropped and r.counts["kb_chunks"] == 1
+    assert r.copied and not r.dropped and r.counts["kb_chunks"] == 1 and r.counts["kb_item_aliases"] == 1
     S = sessionmaker(bind=main, binds={KbBase: kb})
     with S() as db:
         item = db.scalar(select(KbItem))
         assert item.current_version_id is not None and db.get(KbVersion, item.current_version_id).title == "样例"
+        assert db.get(KbItemAlias, "L2-OPS-SOC-TPL-801").item_id == item.id
     upgrade_to_head(main, kb)   # 两边都有：只告警，能启动
 
     again = kb_split.split(main, kb, drop_source=True)   # 重复执行不再复制，核对一致后删主库副本
