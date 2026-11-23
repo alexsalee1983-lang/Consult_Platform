@@ -63,4 +63,9 @@ def merge(agent: AgentReview, tool: DeidCheck) -> Merged:
     conclusion = strictest(agent.conclusion, tool.conclusion, CONCLUSIONS)
     risk = strictest(agent.risk_level, tool.risk_level, RISK_LEVELS)
     items = list(agent.manual_items) + [x for x in tool.manual_items if x not in agent.manual_items]
+    if agent.status != "ok":
+        # Agent 未复查（演示模式、模型出错）：只有程序规则把关，最多“有条件通过 / 中”，转人工确认
+        conclusion = strictest(conclusion, "有条件通过", CONCLUSIONS)
+        risk = strictest(risk, "中", RISK_LEVELS)
+        items.append("Agent 未复查（跳过或失败），组合推断风险需人工确认")
     return Merged(conclusion, risk, items)

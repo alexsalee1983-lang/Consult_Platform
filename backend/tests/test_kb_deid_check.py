@@ -17,11 +17,12 @@ from app.models import AuditLog
 from .conftest import on_s3
 from .test_kb_deid import _client, _upload_and_process
 
-# 全部是虚构样本
+# 全部是虚构样本；云密钥样例运行时拼接，源码里不出现完整的密钥格式，不靠 .gitleaksignore 放行
+FAKE_CLOUD_KEY = "AKIA" + "ABCDEFGHIJKLMNOP"
 GUARD_SAMPLES = {
     "口令": "运维账号 admin 的密码：Xk9#mP2$vL7q",
     "密钥": "-----BEGIN RSA PRIVATE KEY-----\nMIIEow\n-----END RSA PRIVATE KEY-----",
-    "云密钥": "访问密钥 AKIAABCDEFGHIJKLMNOP 已配置",
+    "云密钥": f"访问密钥 {FAKE_CLOUD_KEY} 已配置",
     "身份证": "联系人证件号 11010519491231002X",
     "手机号": "值班电话 13800138000",
 }
@@ -33,7 +34,7 @@ def test_guard_hit_forces_reject(name):
     assert r.conclusion == "退回" and r.risk_level == "高"
     assert r.guard_labels
     dumped = json.dumps(r.to_json(), ensure_ascii=False)
-    for secret in ("Xk9#mP2$vL7q", "AKIAABCDEFGHIJKLMNOP", "11010519491231002X", "13800138000", "MIIEow"):
+    for secret in ("Xk9#mP2$vL7q", FAKE_CLOUD_KEY, "11010519491231002X", "13800138000", "MIIEow"):
         assert secret not in dumped                      # 只给类别和计数，不回显原文
 
 
@@ -81,6 +82,19 @@ def test_merge_agent_skipped_still_uses_tool():
     agent = AgentReview("skipped", note="未接入模型", manual_items=["需人工逐段复核"])
     m = deid_check.merge(agent, deid_check.check("江南农商行的告警分级。"))
     assert m.conclusion == "有条件通过" and "需人工逐段复核" in m.manual_items
+
+
+@pytest.mark.parametrize("status", ["skipped", "failed"])
+def test_merge_agent_not_reviewed_caps_at_conditional(status):
+    """Agent 未复查（跳过或失败）时，即使工具“通过”，合并结论最多“有条件通过 / 中”，转人工确认。"""
+    m = deid_check.merge(AgentReview(status), deid_check.check("[客户A] 的告警分级。"))
+    assert m.conclusion == "有条件通过" and m.risk_level == "中"
+    assert any("未复查" in x for x in m.manual_items)
+
+
+def test_merge_agent_ok_tool_pass_stays_pass():
+    m = deid_check.merge(AgentReview("ok", conclusion="通过", risk_level="低"), deid_check.check("[客户A] 的告警分级。"))
+    assert m.conclusion == "通过" and m.risk_level == "低"
 
 
 # ---- 流程：工具结论并入去标识报告（接真实对象存储）----
