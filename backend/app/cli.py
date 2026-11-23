@@ -1140,7 +1140,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="汇总维度，逗号分隔：username / project_code / model")
     us.set_defaults(func=usage_report)
     sub.add_parser("jobs", help="后台任务状态").set_defaults(func=jobs_status)
-    sub.add_parser("catalog-check", help="校验服务产品与模块配置（products/、modules/）").set_defaults(func=catalog_check)
+    sub.add_parser("catalog-check", help="校验服务产品、模块与行业包配置（products/、modules/、industries/）").set_defaults(func=catalog_check)
     sc = sub.add_parser("selfcheck", help="排一个 worker 自检任务并等待结果（成功退出码 0）")
     sc.add_argument("--wait", type=int, default=60)
     sc.set_defaults(func=selfcheck)
