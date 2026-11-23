@@ -7,7 +7,7 @@ primary_users: 知识库专人；SOC、治理规划两个交付包的专家负�
 knowledge_access:
   read: [L1, L2, L3, L4, L5, 待入库区]
   write: [待入库区]          # 已发布区只能由专家审批后发布
-tools: [知识检索, 依据查询, 写待入库区]
+tools: [知识检索, 依据查询, 写待入库区, 去标识检查]
 depends_on: [01_公共规范.md]
 handoff_to: [sanitizer]
 ---
