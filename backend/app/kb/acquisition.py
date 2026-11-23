@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 KINDS = ("schedule", "external", "usage", "business", "lifecycle")
 KIND_LABELS = {"schedule": "定时巡检", "external": "外部变化", "usage": "使用信号",
@@ -119,9 +120,33 @@ def score(g: Gap, today: date, w: Weights | None = None) -> float:
                  + w.signals * signals, 6)
 
 
+def _url_parts(url: str) -> tuple[str, str, int | None, str] | None:
+    try:
+        s = urlsplit(url.strip())
+        port = s.port
+    except ValueError:
+        return None
+    if s.scheme not in ("https", "http") or not s.hostname or s.username is not None or s.password is not None:
+        return None
+    return s.scheme, s.hostname.lower(), port, s.path or "/"
+
+
 def in_whitelist(url: str, whitelist: tuple[str, ...] | list[str]) -> bool:
-    u = url.strip()
-    return bool(u) and u.startswith(("https://", "http://")) and any(u.startswith(p) for p in whitelist if p)
+    """协议、主机名、端口完全相同，路径在白名单前缀之下（按“/”边界），防主机名前缀、用户信息冒充。
+    与采集机侧 tools/collector/collector_gate.py 的 url_allowed 同一口径。"""
+    if not isinstance(url, str) or not url.strip() or len(url) > URL_MAX:
+        return False
+    u = _url_parts(url)
+    if u is None:
+        return False
+    for entry in whitelist:
+        w = _url_parts(entry) if entry else None
+        if w is None or u[:3] != w[:3]:
+            continue
+        prefix = w[3]
+        if u[3] == prefix or u[3].startswith(prefix if prefix.endswith("/") else prefix + "/"):
+            return True
+    return False
 
 
 def plan_week(gaps: list[Gap], today: date, *, thresholds: dict[str, int], whitelist: tuple[str, ...],

@@ -11,6 +11,7 @@ deliverables:
   title: 启动包
   stage: 启动
   client_facing: true
+  review_profile: light   # 过程材料：只查红线和专项（A13）
   outline:
   - 项目范围与目标
   - 评估方法与依据
@@ -20,6 +21,7 @@ deliverables:
   title: 调研包
   stage: 调研
   client_facing: true
+  review_profile: light   # 过程材料：只查红线和专项（A13）
   outline:
   - 调研范围与受访角色
   - 访谈提纲
