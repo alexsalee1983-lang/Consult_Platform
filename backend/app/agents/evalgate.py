@@ -96,8 +96,8 @@ def check_file(path: Path) -> list[Issue]:
     except evalset.EvalError as e:
         return [Issue(path.name, "-", "格式", str(e))]
     out = [i for c in cases for i in check_case(path.name, c)]
-    for extra in EXTRA_CHECKS:
-        out += extra(path.name, cases)
+    for hook in EXTRA_CHECKS:
+        out += hook(path.name, cases)
     return out
 
 
