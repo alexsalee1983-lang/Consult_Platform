@@ -35,6 +35,8 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
     # 项目总览（方案 A）：只给项目负责人；顾问 403（负责人 200 在 test_portfolio 里测）
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
+    # 指标看板（三期 F2）：只给项目负责人（负责人 200 在 test_indicators 里测）
+    (("GET", "/api/indicators", None),                  (403, 403, 403, 403, 403)),
     # 工作台：业务角色可用，只汇总本人能看到的待办
     (("GET", "/api/workbench", None),                   (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
@@ -172,6 +174,11 @@ MATRIX = [
     (("POST", "/api/agents/consultant-lead/tools/project.read", {"project_code": "BANK-A"}),
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (403, 403, 403, 403, 403)),
+    # 去标识检查（三期 C7，迁移 0048）：只授权 kb-builder，不涉及项目；交付侧 Agent 调用一律 403
+    (("POST", "/api/agents/kb-builder/tools/deid.check", {"args": {"text": "告警分级按影响范围分三级。"}}),
+                                                        (200, 200, 403, 403, 403)),
+    (("POST", "/api/agents/report-writer/tools/deid.check", {"args": {"text": "告警分级"}}),
                                                         (403, 403, 403, 403, 403)),
     # 知识使用反馈（三期 B29）：member 不给引用位置 → 422（不留数据）；非成员 404；看板只给知识专家、知识管理员
     (("GET", "/api/projects/BANK-A/kb-feedback", None), (422, 404, 403, 403, 403)),
