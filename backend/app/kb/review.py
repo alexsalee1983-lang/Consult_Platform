@@ -183,6 +183,9 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
         raise ReviewError(409, "去标识还没有通过，不能提交")
     if not v.body.strip():
         raise ReviewError(422, "正文不能为空")
+    if v.item.knowledge_kind in meta.EXPERT_ONLY_KINDS and v.source_type == "public":
+        raise ReviewError(422, f"{meta.KNOWLEDGE_KINDS[v.item.knowledge_kind]}不收公开资料：请经投料箱以专家萃取、项目沉淀"
+                               "或内部制度改造来源提交")
     if get_settings().kb_citation_gate:
         from . import citations
 
@@ -204,7 +207,7 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
 
 def self_review_allowed(v: KbVersion) -> bool:
     """公开资料单人发布：开关打开、来源为公开资料且无需去标识时，作者本人可以审核。"""
-    return (get_settings().kb_single_reviewer_public and v.source_type == "public"
+    return (get_settings().kb_single_reviewer_public and v.item.knowledge_kind not in meta.EXPERT_ONLY_KINDS and v.source_type == "public"
             and v.deid_status == "not_needed")
 
 
@@ -253,6 +256,12 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
 
 # ---- 发布、下线、复审 ----
 
+def expert_confirmed(v: KbVersion) -> bool:
+    """有作者以外的人以知识专家身份人工内容审核通过（Agent、平台记录的 review_role 不是 content，不算）。"""
+    return any(r.review_role == "content" and r.decision == "approve" and r.reviewer not in _authors(v)
+               for r in v.reviews)
+
+
 def make_chunks(db: Session, v: KbVersion) -> int:
     """把版本正文切成检索切片；已经切过（候选影子期先切好）的不重复切。返回切片数。"""
     existing = db.scalar(select(func.count()).select_from(KbChunk).where(KbChunk.version_id == v.id)) or 0
@@ -273,6 +282,10 @@ def supersede_candidates(db: Session, v: KbVersion) -> None:
 
 def publish(db: Session, v: KbVersion) -> None:
     item = v.item
+    if item.knowledge_kind in meta.EXPERT_ONLY_KINDS and not expert_confirmed(v):   # 三期 B35：守住所有发布入口
+        audit.record(db, actor="platform", action="kb.publish", result="blocked", doc_id=item.doc_id,
+                     version=v.version, reason="expert_required")
+        raise ReviewError(409, f"{meta.KNOWLEDGE_KINDS[item.knowledge_kind]}必须由作者以外的知识专家确认后才能发布")
     chunks = make_chunks(db, v)
     if item.current_version_id and item.current_version_id != v.id:
         old = db.get(KbVersion, item.current_version_id)

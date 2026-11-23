@@ -31,6 +31,8 @@ class ItemMeta:
     owner: str = ""
     tags: list[str] = field(default_factory=list)   # 检索加权标签（二期 B2），对应模块配置的 kb_tags
     control_ids: list[str] = field(default_factory=list)   # 公司控制项编号（4A 埋点，k0008）
+    knowledge_kind: str = ""   # 知识类型（三期 B35，k0017）：留空时 create_item 按交付物类型和来源推断
+    slot: str = ""             # C10 章节槽位键（选填）
     products: list[str] = field(default_factory=list)   # 全部服务产品（B15，主产品 product 在前）；空 = 只有主产品
 
     def check(self) -> None:
@@ -43,6 +45,7 @@ class ItemMeta:
         meta.check_visibility(self.classification, self.visible_roles)
         self.tags = check_search_tags(self.tags)
         self.control_ids = check_control_ids(self.control_ids)
+        self.slot = self.slot.strip()
 
 
 SEARCH_TAGS_MAX, SEARCH_TAG_LEN = 10, 20
@@ -126,13 +129,15 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
     """新建条目并建第 1 版草稿，返回该版本（已提交）。doc_id 序号并发冲突时重试。"""
     m.check()
     c.check(m.layer)
+    kind = m.knowledge_kind or meta.derive_kind(m.doc_type, c.source_type)
+    meta.check_kind(kind, m.doc_type, m.slot)
     for attempt in range(retries):
         doc_id = next_doc_id(db)
         item = KbItem(doc_id=doc_id, seq=int(doc_id[3:]), layer=m.layer, domain=m.domain, product=m.product,
                       doc_type=m.doc_type, stage=m.stage, capabilities=list(m.capabilities),
                       industries=list(m.industries), classification=m.classification,
                       visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags), control_ids=list(m.control_ids),
-                      created_by=created_by)
+                      knowledge_kind=kind, slot=m.slot, created_by=created_by)
         db.add(item)
         try:
             db.flush()
