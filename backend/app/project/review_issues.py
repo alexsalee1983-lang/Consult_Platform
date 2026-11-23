@@ -22,6 +22,7 @@ from ..models import Deliverable, QualityReview, ReviewIssue
 
 BLOCKING = "阻断"
 MAJOR = "重要"
+MINOR = "建议"
 WAIVED_MARK = "已驳回"
 # 封闭五类（与 qa-reviewer.md 的阻断定义一致，C9 同日合并）：类别名 → 关键词
 CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -55,6 +56,42 @@ def apply_closed_categories(issues: list[dict], counts: dict[str, int]) -> int:
     if n:
         counts[BLOCKING] = max(counts.get(BLOCKING, 0) - n, 0)
         counts[MAJOR] = counts.get(MAJOR, 0) + n
+    return n
+
+
+# 按交付件的评审档案（A13，产品配置 deliverables[].review_profile）：名称 → (显示名, 发给评审 Agent 的说明)
+PROFILES: dict[str, tuple[str, str]] = {
+    "full": ("全面评审", "按全部评审维度评审。"),
+    "light": ("只查红线和专项", "本交付件是过程材料，只查封闭五类阻断（编造或用错依据、资质用语、机密与客户信息、"
+              "对客结论无证据、与已确认事项矛盾）和产品门禁专项；其他维度的意见最多标“建议”。"),
+}
+
+
+def profile_of(snap: dict, deliverable_code: str) -> str:
+    """项目配置快照里某交付件的评审档案；旧快照没有这个字段按 full。"""
+    for d in snap.get("deliverables", ()):
+        if d.get("code") == deliverable_code:
+            return d.get("review_profile") if d.get("review_profile") in PROFILES else "full"
+    return "full"
+
+
+def profile_block(name: str) -> str:
+    label, text = PROFILES.get(name, PROFILES["full"])
+    return f"\n\n# 评审档案：{label}\n{text}"
+
+
+def apply_profile(issues: list[dict], counts: dict[str, int], name: str) -> int:
+    """light 档：评审 Agent 判的五类以外的阻断、重要一律降为建议（在 apply_closed_categories 之后调用）；返回降级条数。"""
+    if name != "light":
+        return 0
+    n = 0
+    for i in issues:
+        if i.get("by") != "agent" or i.get("severity") not in (BLOCKING, MAJOR) or category(i):
+            continue
+        counts[i["severity"]] = max(counts.get(i["severity"], 0) - 1, 0)
+        counts[MINOR] = counts.get(MINOR, 0) + 1
+        i["severity"], i["profile_capped"] = MINOR, True
+        n += 1
     return n
 
 

@@ -430,6 +430,14 @@ def project_gates(db: Session, project: Project) -> list[dict] | None:
         return None
 
 
+def review_profile(db: Session, project: Project, d: Deliverable) -> str:
+    """本交付件的评审档案（A13）；快照读不出来按 full。"""
+    try:
+        return review_issues.profile_of(configs.snapshot(db, project), d.code)
+    except config.CatalogError:
+        return "full"
+
+
 # ---- 质量评审：解析 Agent 输出 ----
 
 def _cells(line: str) -> list[str]:
@@ -546,13 +554,13 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
     issues, confidential = rule_issues(d, r.versions, evidence_svc.withdrawn_codes(db, project),
                                        strict=project.tier == "strict",
                                        kb_states=kb_ref_states(db, cited_kb_refs(d, r.versions)))
-    gates = project_gates(db, project)
+    gates, profile = project_gates(db, project), review_profile(db, project, d)
     if gates is None:
         issues.append(_issue("阻断", "全文", "产品规则", "服务产品配置有问题，产品门禁规则无法核对",
                              "请系统管理员运行 catalog-check 修好配置后重新评审", "rule"))
     else:
         issues += gate_issues(d, r.versions, gates)
-    report, counts, downgraded, incremental = "", {s: 0 for s in SEVERITIES}, 0, {}
+    report, counts, downgraded, capped, incremental = "", {s: 0 for s in SEVERITIES}, 0, 0, {}
     meta: dict = {}
     if confidential:
         report = "（交付件正文命中机密级检测，未发往模型评审。请先处理阻断项，再重新评审。）"
@@ -568,7 +576,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
                                               {str(s.seq): s.title for s in d.sections})
         text = _text_for_review(d, r.versions, plan[0] if plan else None)
         kb_block, _ = knowledge.retrieve(db, user, AGENT, project, f"{d.title} 质量评审 依据 {text[:200]}")
-        message = f"{INSTRUCTIONS}\n\n# 交付件 {d.code} {d.title}（修订 v{r.revision}）\n\n{text}"
+        message = f"{INSTRUCTIONS}{review_issues.profile_block(profile)}\n\n# 交付件 {d.code} {d.title}（修订 v{r.revision}）\n\n{text}"
         if plan:
             message += review_issues.recheck_block(plan[1])
         try:
@@ -593,6 +601,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
             raise ReviewFailed("模型输出命中机密级内容，未保存")
         agent_issues, counts = res.data
         downgraded = review_issues.apply_closed_categories(agent_issues, counts)
+        capped = review_issues.apply_profile(agent_issues, counts, profile)     # 按交付件评审档案（A13）
         issues += agent_issues
         report = c.text[:INPUT_CHARS]
         if plan:                                   # 增量评审：未改章节的上轮问题原样沿用（A13②）
@@ -621,7 +630,8 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
     audit.record(db, actor="worker", action="quality.review", result="allowed", project_code=project.code,
                  deliverable=d.code, review_id=r.id, revision=r.revision, conclusion=r.conclusion,
                  blocking=blocking, major=major, minor=minor, rule_issues=sum(rule_counts.values()),
-                 downgraded=downgraded, **{f"incremental_{k}": v for k, v in incremental.items()},
+                 downgraded=downgraded, profile=profile, profile_capped=capped,
+                 **{f"incremental_{k}": v for k, v in incremental.items()},
                  **{f"issues_{k}": v for k, v in ledger.items()},
                  length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens)
     db.commit()
