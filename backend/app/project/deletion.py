@@ -48,13 +48,15 @@ from ..models import (
     ProjectDocument,
     ProjectMember,
     QualityReview,
+    ReviewIssue,
     ReviewWaiver,
     SectionVersion,
     SignOff,
     User,
 )
+from ..kb import feedback as kb_feedback
 from ..services import guard, jobs, storage
-from . import judgment, retention
+from . import findings, judgment, retention
 
 JOB_KIND = "project.delete"
 PLATFORM = "platform"
@@ -271,14 +273,17 @@ def purge(db: Session, p: Project) -> dict:
     counts["messages"] = drop(Message, Message.conversation_id.in_(conv))
     db.execute(update(Conversation).where(Conversation.project_id == pid).values(handoff_from=None))  # 自引用先断开
     counts["conversations"] = drop(Conversation, Conversation.project_id == pid)
+    counts["findings"] = findings.delete_for_project(db, pid)        # 发现引用运行记录，先删
     runs = select(AgentRun.id).where(AgentRun.project_id == pid)
     drop(AgentRunStep, AgentRunStep.run_id.in_(runs))
     counts["runs"] = drop(AgentRun, AgentRun.project_id == pid)
+    drop(ReviewIssue, ReviewIssue.project_id == pid)
     drop(ReviewWaiver, ReviewWaiver.project_id == pid)
     counts["sign_offs"] = drop(SignOff, SignOff.project_id == pid)
     counts["quality_reviews"] = drop(QualityReview, QualityReview.project_id == pid)
     counts["confirmations"] = drop(Confirmation, Confirmation.project_id == pid)
     judgment.delete_for_project(db, pid)
+    kb_feedback.delete_for_project(db, pid)          # 知识使用反馈（三期 B29）
     dels = select(Deliverable.id).where(Deliverable.project_id == pid)
     secs = select(DeliverableSection.id).where(DeliverableSection.deliverable_id.in_(dels))
     counts["signed_deliverables"] = db.scalar(select(func.count()).select_from(Deliverable)

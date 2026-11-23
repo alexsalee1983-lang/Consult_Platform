@@ -59,6 +59,7 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/assessment"),
     ("GET", "/api/projects/BANK-A/confirmations"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/outline"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/export"),
@@ -102,6 +103,13 @@ PROTECTED = [
     ("POST", "/api/admin/jobs/selfcheck"),
     ("POST", "/api/admin/jobs/1/retry"),
     ("POST", "/api/kb/intake"),
+    ("GET", "/api/kb/sources"),
+    ("POST", "/api/kb/sources"),
+    ("PATCH", "/api/kb/sources/BANK-A"),
+    ("POST", "/api/kb/sources/BANK-A/status"),
+    ("GET", "/api/kb/sources/BANK-A/events"),
+    ("GET", "/api/kb/sources/confirm-queue"),
+    ("POST", "/api/kb/sources/confirm-queue/decide"),
     ("GET", "/api/kb/intake"),
     ("GET", "/api/kb/intake/1"),
     ("GET", "/api/kb/intake/1/deid"),
@@ -119,6 +127,9 @@ PROTECTED = [
     ("POST", "/api/kb/versions/1/submit"),
     ("POST", "/api/kb/versions/1/review"),
     ("GET", "/api/kb/review-queue"),
+    ("GET", "/api/kb/practice-queue"),
+    ("POST", "/api/kb/practice-queue/decide"),
+    ("GET", "/api/kb/practice-queue/stats"),
     ("GET", "/api/kb/review-due"),
     ("GET", "/api/kb/samples"),
     ("POST", "/api/kb/versions/1/sample"),
@@ -128,6 +139,9 @@ PROTECTED = [
     ("GET", "/api/kb/versions"),
     ("GET", "/api/kb/stats"),
     ("GET", "/api/kb/readiness"),
+    ("GET", "/api/projects/BANK-A/kb-feedback"),
+    ("POST", "/api/projects/BANK-A/kb-feedback"),
+    ("GET", "/api/kb-usage"),
 ]
 
 
@@ -289,10 +303,11 @@ def test_password_policy():
 # ---- 启动检查与初始账号 ----
 
 def _settings(**kw) -> Settings:
-    base = {"app_env": "prod", "session_backend": "redis", "cookie_secure": True,
+    base = {"app_env": "prod", "seed_demo_data": False, "session_backend": "redis", "cookie_secure": True,
             "test_account_username": "", "test_account_password": "", "test_account_totp_secret": "",
             "bootstrap_admin_username": "", "bootstrap_admin_password": "", "bootstrap_admin_totp_secret": "",
             "minio_endpoint": "minio:9000", "minio_access_key": "k", "minio_secret_key": "x" * 24,
+            "minio_root_user": "root",
             "totp_keys": "p1:" + "A" * 43 + "=",
             "database_url": "postgresql+psycopg://consult:p@postgres:5432/consult",
             "kb_database_url": "postgresql+psycopg://consult_kb:q@postgres:5432/consult_kb"}

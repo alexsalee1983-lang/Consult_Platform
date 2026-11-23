@@ -30,8 +30,8 @@ def test_unsafe_keys_rejected(key):
 def test_prod_requires_object_storage_and_strong_secret():
     base = {"database_url": "postgresql+psycopg://consult:x@db:5432/consult",
             "kb_database_url": "postgresql+psycopg://consult_kb:x@db:5432/consult_kb",
-            "app_env": "prod", "session_backend": "redis", "cookie_secure": True, "test_account_username": "",
-            "test_account_password": ""}
+            "app_env": "prod", "seed_demo_data": False, "session_backend": "redis", "cookie_secure": True, "test_account_username": "",
+            "test_account_password": "", "minio_root_user": "root"}
     with pytest.raises(BootstrapError, match="对象存储"):
         check_settings(Settings(_env_file=None, **base, minio_endpoint=""))   # 显式清空，不受环境变量影响
     with pytest.raises(BootstrapError, match="过短"):

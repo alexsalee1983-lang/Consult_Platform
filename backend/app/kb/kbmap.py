@@ -1,6 +1,6 @@
 """知识地图按产品（二期 B6，设计稿 06）：覆盖矩阵、缺口 TOP、贡献统计。
 
-- 覆盖矩阵：行是服务产品（products/*.yaml 的全部产品，含草稿状态的，按配置读，新产品加了配置就出现）、
+- 覆盖矩阵（三期 B15 起按产品标签计数，一个条目计入它的每个产品）：行是服务产品（products/*.yaml 的全部产品，含草稿状态的，按配置读，新产品加了配置就出现）、
   知识元数据里登记了但还没有配置的产品、通用知识 GEN，以及模块（modules/*.yaml，按模块声明的 kb_tags
   统计带这些标签的条目，不分产品）；列是交付阶段。只统计已发布、未下线的现行版本。
 - 缺口 TOP：产品（不含 GEN）× 阶段（不含“通用”）里条目不足 8 条的格子，按近 30 天零命中检索次数、条目数排序。
@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import AuditLog, KbItem, KbReview, KbVersion, User
-from . import meta
+from . import labels, meta
 
 GAP_LIMIT, CONTRIB_LIMIT = 5, 10
 OK_MIN = 8                                   # 充足 ≥ 8（设计稿 06）
@@ -40,10 +40,12 @@ def _catalog():
         return None
 
 
-def coverage_rows(live: list[tuple[KbItem, KbVersion]]) -> list[dict]:
+def coverage_rows(live: list[tuple[KbItem, KbVersion]], products: dict[int, list[str]] | None = None) -> list[dict]:
+    """products：条目 → 产品标签（B15，labels.products_of）；一个条目计入它的每个产品。不传时按主产品列。"""
     by_product: dict[str, Counter] = {}
     for item, _ in live:
-        by_product.setdefault(item.product, Counter())[item.stage] += 1
+        for code in (products or {}).get(getattr(item, "id", None), [item.product]):
+            by_product.setdefault(code, Counter())[item.stage] += 1
     cat = _catalog()
     rows: list[dict] = []
     seen: set[str] = set()
@@ -143,7 +145,7 @@ def _aware(t: datetime) -> datetime:
 
 
 def overview(db: Session, live: list[tuple[KbItem, KbVersion]], since: datetime) -> dict:
-    rows = coverage_rows(live)
+    rows = coverage_rows(live, labels.products_of(db, [item.id for item, _ in live]))
     zero_cells, zero_products, repeated = _zero_hits(db, since)
     return {"matrix": rows, "stages": list(STAGES), "gaps": gaps(rows, zero_cells),
             "product_zero_hits_30d": dict(zero_products), "repeated_zero_hit_questions_30d": repeated,
