@@ -34,9 +34,9 @@ def same(v: KbVersion, e: Entry) -> bool:
     c = e.content
     # 文件没写施行日期时不比（发布时平台按发布日补填）
     return (v.title, v.body.strip(), v.summary, v.applicability, v.source_detail, v.ref_document, v.ref_version,
-            v.ref_status, v.ref_code, v.ref_replaced_by) == (
+            v.ref_status, v.ref_code, v.ref_replaced_by, v.ref_replaces, v.ref_amends, v.repeal_date) == (
         c.title, c.body.strip(), c.summary, c.applicability, c.source_detail, c.ref_document, c.ref_version,
-        c.ref_status, c.ref_code, c.ref_replaced_by) and (c.effective_date is None or c.effective_date == v.effective_date)
+        c.ref_status, c.ref_code, c.ref_replaced_by, c.ref_replaces, c.ref_amends, c.repeal_date)         and (c.effective_date is None or c.effective_date == v.effective_date)
 
 
 def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> ImportResult:

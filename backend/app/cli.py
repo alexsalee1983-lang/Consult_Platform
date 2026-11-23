@@ -478,6 +478,23 @@ def kb_source_split(args: argparse.Namespace) -> int:
     return 0 if total else 1
 
 
+def kb_reg_lifecycle(args: argparse.Namespace) -> int:
+    """法规生命周期（三期 B26）：按日期切换依据现行状态、处理替代关系，列出受影响条目与交付件计数。"""
+    from datetime import date
+
+    from .kb import reg_lifecycle as rl
+
+    try:
+        day = date.fromisoformat(args.date) if args.date else date.today()
+    except ValueError:
+        print(f"日期格式应为 YYYY-MM-DD：{args.date}", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        r = rl.run(db, day, apply=not args.dry_run, actor="cli", only=set(args.doc) if args.doc else None)
+    print(rl.format_report(r))
+    return 0
+
+
 def kb_basis_check(args: argparse.Namespace) -> int:
     """依据变更登记（二期 B5）：季度官网核对清单与库内依据比对；--apply 自动登记时效变更。"""
     import json
@@ -1022,6 +1039,11 @@ def main(argv: list[str] | None = None) -> int:
     kbc.add_argument("--apply", action="store_true", help="自动登记时效变更：建新版本、平台核对后发布")
     kbc.add_argument("--out", default="", help="把比对结果写成 JSON 文件")
     kbc.set_defaults(func=kb_basis_check)
+    krl = sub.add_parser("kb-reg-lifecycle", help="法规生命周期：按施行日、废止日切换依据现行状态，处理替代关系（worker 每日自动执行）")
+    krl.add_argument("--date", default="", help="按哪一天判断（YYYY-MM-DD，默认今天）")
+    krl.add_argument("--dry-run", action="store_true", help="只列出到期变化和受影响清单，不登记")
+    krl.add_argument("--doc", action="append", default=[], help="只处理这个条目编号（可重复，排查用）")
+    krl.set_defaults(func=kb_reg_lifecycle)
     krc = sub.add_parser("kb-ref-check", help="知识引用校验基线：快照交付件、导出脚注、对话里的知识引用，--compare 退化时退出码 2")
     krc.add_argument("--snapshot", help="快照写入的文件（含项目 id，只留在本机）")
     krc.add_argument("--compare", help="与之对比的上一次快照文件")
