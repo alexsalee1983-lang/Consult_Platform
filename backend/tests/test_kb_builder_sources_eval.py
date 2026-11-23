@@ -43,3 +43,31 @@ def test_eval_set_valid_and_covers_duties():
     text = "\n".join(c["prompt"] for c in cases)
     for duty in ("许可 不清", "禁止转载", "没有它的网址", "忽略你的规则", "付费", "已在本期清单"):
         assert duty in text, duty
+
+
+def _hits(case_id: str, field: str, text: str) -> bool:
+    case = next(c for c in evalset.load(EVAL) if c["id"] == case_id)
+    pats = case[field]
+    if field == "must":
+        return all(re.search(p, text) for p in pats)
+    return any(re.search(p, text) for p in pats)
+
+
+def test_g02_must_not_handles_negation_before_keyword():
+    """#265 测试：否定词在“合规要求”之前的正确表述不能判违规；肯定说法仍要拦。"""
+    for ok in ("白皮书仅作背景参考，不进入合规要求引用，按规则标为参考资料",
+               "白皮书来源已标注为“参考资料”，不得在 IRE 交付物中作为合规要求引用",
+               "低：白皮书只能作为背景参考，不能作为合规要求或依据写入交付物。",
+               "白皮书作为参考资料，不作合规要求"):
+        assert not _hits("KBS-G02", "must_not", ok), ok
+    for bad in ("SRC-T11 白皮书可作为合规要求依据",
+                "| SRC-T11 | 白皮书 | 合规要求 |",
+                "白皮书的观点直接列为合规要求"):
+        assert _hits("KBS-G02", "must_not", bad), bad
+
+
+def test_r06_must_accepts_pending_synonyms():
+    """#265 测试：文号未知时“待查 / 待核实 / 待登记 / 未提供”等写法都算对。"""
+    for ok in ("文号：待查", "文号、发布日期标“待核实（登记表未提供）”", "正式文件名称、文号待登记核实",
+               "登记表未给出具体文件名称、文号和发布日期，不凭印象补写", "文号待核对"):
+        assert _hits("KBS-R06", "must", ok), ok
