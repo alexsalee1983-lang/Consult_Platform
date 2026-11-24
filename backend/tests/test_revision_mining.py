@@ -1,6 +1,6 @@
 """三期 F4 最小版：改稿差异转候选。差异分删除、改写、新增；删改归“候选常见坑”、新增归“候选评审项”；
 初稿取该章第一个 Agent 版本、签署稿取签署记录里的版本；开关默认关、生产不开；非成员 404、严格档 422、
-未签署和不同意回流 409；摘录换掉项目代号、机密级命中整条丢弃；审计不记正文；确认队列未合并前 available=False。"""
+未签署和不同意回流 409；摘录换掉项目代号、机密级命中整条丢弃；审计不记正文；四期 F4①候选以项目沉淀经投料箱投料，重复拒收、无存储只返回。"""
 import json
 import secrets
 
@@ -10,8 +10,9 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.main import app
-from app.models import AuditLog, Deliverable, DeliverableSection, Project, SectionVersion, SignOff
+from app.models import AuditLog, KbUpload, Deliverable, DeliverableSection, Project, SectionVersion, SignOff
 from app.project import revision_mining as rm
+from app.services import storage
 
 from .conftest import create_user, logged_in_client
 
@@ -57,6 +58,15 @@ def _project(tier: str = "standard", status: str = "signed", flowback: bool = Tr
 @pytest.fixture()
 def on(monkeypatch):
     monkeypatch.setattr(get_settings(), "f4_revision_mining", True)
+    monkeypatch.setattr(storage, "enabled", lambda: False)        # 默认无对象存储：只返回候选
+
+
+@pytest.fixture()
+def s3(monkeypatch):
+    saved: dict = {}
+    monkeypatch.setattr(storage, "enabled", lambda: True)
+    monkeypatch.setattr(storage, "put", lambda area, key, data, ct="": saved.__setitem__((area, key), data))
+    return saved
 
 
 def _client(code: str):
@@ -73,7 +83,7 @@ def test_member_gets_pitfall_and_review_item_candidates(on):
         r = c.post(_url(code))
     assert r.status_code == 200, r.text
     data = r.json()
-    assert data["available"] is False and data["queued"] == 0
+    assert data["available"] is True and data["queued"] == 0 and data["reason"] == "storage"
     assert data["counts"] == {"sections": 1, "delete": 1, "rewrite": 1, "add": 1, "blocked": 0}
     kinds = {x["kind"]: x for x in data["candidates"]}
     assert set(kinds) == {"pitfall", "review_item"}
@@ -119,3 +129,32 @@ def test_guard_hit_drops_candidate(on):
         data = c.post(_url(code)).json()
     assert data["counts"]["blocked"] == 1
     assert all(x["kind"] != "review_item" for x in data["candidates"])
+
+
+def test_candidates_go_to_intake_as_project_sediment(on, s3):
+    code = _project()
+    with _client(code) as c:
+        r = c.post(_url(code))
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["queued"] == 2 and data["reason"] == "" and data["upload_id"]
+        again = c.post(_url(code)).json()                              # 内容相同：投料箱按哈希拒收
+        assert again["queued"] == 0 and again["reason"] == "duplicate"
+    with SessionLocal() as db:
+        up = db.get(KbUpload, data["upload_id"])
+        assert up.source_project == code and up.kind == "markdown" and code not in up.filename
+        assert up.status == "received" and up.job_id                    # 照常排解析，之后去标识与审核
+    body = next(iter(s3.values())).decode("utf-8")
+    assert "候选常见坑" in body and "候选评审项" in body and "夜间无人值守" in body
+    assert code not in body                                            # 项目代号已换成【客户】
+    with SessionLocal() as db:
+        log = db.scalar(select(AuditLog).where(AuditLog.action == "f4.revision_mining", AuditLog.project_code == code)
+                        .order_by(AuditLog.id.desc()))
+        assert "夜间" not in log.detail and "duplicate" in log.detail
+
+
+def test_no_candidates_not_submitted(on, s3):
+    code = _project(body2=DRAFT)
+    with _client(code) as c:
+        data = c.post(_url(code)).json()
+    assert data["candidates"] == [] and data["queued"] == 0 and data["reason"] == "no_candidates" and not s3

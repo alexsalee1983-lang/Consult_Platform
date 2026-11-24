@@ -5,7 +5,9 @@
 删除 delete、改写 rewrite（相似度 ≥ REWRITE_MIN）、新增 add。
 
 归纳：每章的删除和改写 → 一条“候选常见坑”（Agent 写了、专家改掉的）；新增 → 一条“候选评审项”（Agent 漏写、专家补上的）。
-候选进公司做法确认队列（#283 B17 拆出，知识区 k0018）；该队列未合并前接口位 available=False，只返回候选不入库。
+候选入库（四期 F4①）：本次全部候选拼成一份 Markdown，以“项目沉淀”经知识投料箱投料（来源项目 = 本项目），
+之后照常走解析、去标识、起草（knowledge_kind=practice）、公司做法确认队列（B17）和专家拍板，不绕过任何一道。
+同一份候选再挖一次内容相同，投料箱按哈希拒收（reason=duplicate）；对象存储未启用时只返回候选（reason=storage）。
 
 边界：
 - 开关 settings.f4_revision_mining 默认关；生产环境（APP_ENV=prod）一律不开，只在测试机、试用机虚拟数据上跑。
@@ -24,13 +26,13 @@ from sqlalchemy.orm import Session
 from ..core import audit
 from ..core.config import get_settings
 from ..models import Deliverable, DeliverableSection, Project, SectionVersion, SignOff, User
+from ..kb import intake
 from ..services import guard
 
 REWRITE_MIN = 0.5          # 两行相似度不低于它算改写，否则拆成删除 + 新增
 EXCERPT_MAX = 200
 MAX_CHANGES_PER_CANDIDATE = 10
 KINDS = {"pitfall": "候选常见坑", "review_item": "候选评审项"}
-PRACTICE_QUEUE_AVAILABLE = False   # #283 合并后接入 app/kb/practice_queue（知识区 k0018）
 
 
 class MiningError(Exception):
@@ -120,10 +122,33 @@ def _clean(cand: dict) -> bool:
     return not guard.check(text).blocked
 
 
-def submit_to_practice_queue(db: Session, user: User, candidates: list[dict]) -> int:
-    """接口位：#283 合并前不入库，返回 0。接入时按 knowledge_kind=practice 建草稿并提交待审。"""
-    del db, user, candidates
-    return 0
+def candidates_markdown(d: Deliverable, candidates: list[dict]) -> str:
+    """投料用的 Markdown：每条候选一节，摘录已换掉项目代号、已过机密级检测。"""
+    lines = [f"# 改稿差异候选：{d.code} {d.title}", "",
+             "来源：项目沉淀（改稿差异转候选，三期 F4 最小版 / 四期 F4①），机器生成，待去标识与专家确认。", ""]
+    for cand in candidates:
+        lines += [f"## {cand['title']}", "", f"类型：{cand['kind_name']}；章节：第 {cand['section']} 章", ""]
+        for c in cand["changes"]:
+            if c["before"]:
+                lines.append(f"- 初稿：{c['before']}")
+            if c["after"]:
+                lines.append(f"- 签署稿：{c['after']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def submit_to_practice_queue(db: Session, user: User, project: Project, d: Deliverable,
+                             candidates: list[dict]) -> dict:
+    """候选经投料箱以项目沉淀投料。返回 {"queued": 候选条数, "upload_id": 投料编号, "reason": 未投料原因}。"""
+    if not candidates:
+        return {"queued": 0, "upload_id": None, "reason": "no_candidates"}
+    data = candidates_markdown(d, candidates).encode("utf-8")
+    try:
+        res = intake.submit(db, user, f"改稿候选-{d.code}.md", data, "text/markdown", project=project.code)
+    except intake.IntakeError as e:
+        reason = {409: "duplicate", 503: "storage"}.get(e.status, "rejected")
+        return {"queued": 0, "upload_id": None, "reason": reason}
+    return {"queued": len(candidates), "upload_id": res.upload.id, "reason": ""}
 
 
 def mine(db: Session, user: User, project: Project, d: Deliverable) -> dict:
@@ -157,7 +182,8 @@ def mine(db: Session, user: User, project: Project, d: Deliverable) -> dict:
                 candidates.append(cand)
             else:
                 counts["blocked"] += 1
-    queued = submit_to_practice_queue(db, user, candidates) if PRACTICE_QUEUE_AVAILABLE else 0
+    sub = submit_to_practice_queue(db, user, project, d, candidates)
     audit.record(db, actor=user.username, action="f4.revision_mining", result="allowed", project_code=project.code,
-                 deliverable=d.code, candidates=len(candidates), queued=queued, counts=counts)
-    return {"available": PRACTICE_QUEUE_AVAILABLE, "queued": queued, "counts": counts, "candidates": candidates}
+                 deliverable=d.code, candidates=len(candidates), queued=sub["queued"], upload_id=sub["upload_id"],
+                 reason=sub["reason"], counts=counts)
+    return {"available": True, **sub, "counts": counts, "candidates": candidates}
