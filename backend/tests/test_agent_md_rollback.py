@@ -139,3 +139,28 @@ def test_versions_api_permissions(agents_copy):
     lead = logged_in_client(app, create_user(("project_lead",)))
     assert lead.get("/api/agent-md/no-such-agent/versions").status_code == 404
     assert lead.get(f"/api/agent-md/{CODE}/versions/{'0' * 12}").status_code == 404
+
+
+def test_registry_method_layer_follows_pin(agents_copy):
+    """F3②f：有回滚指针时，配置登记方法层按指针版本计哈希，撤销后恢复。"""
+    from app.services import config_registry
+
+    v1, v2 = _two_versions(agents_copy)
+
+    def agent_item() -> dict:
+        reg = config_registry.build()
+        method = next(x for x in reg["layers"] if x["key"] == "method")
+        return next(i for i in method["items"] if i["key"] == f"agent:{CODE}")
+
+    before = config_registry.effective_sha()
+    assert agent_item()["value"] == v2 and not agent_item().get("pinned")
+    with SessionLocal() as db:
+        db.add(AgentMdPin(agent_code=CODE, version=v1, pinned_by="tester"))
+        db.commit()
+        assert config_registry.effective_sha(db) != before
+    item = agent_item()
+    assert item["value"] == v1 and item["pinned"] is True and item["repo_version"] == v2
+    with SessionLocal() as db:
+        db.delete(db.get(AgentMdPin, CODE))
+        db.commit()
+    assert config_registry.effective_sha() == before
