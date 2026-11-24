@@ -4,6 +4,8 @@
 - 分级 P1 / P2 / P3 与遏制时限（从登记起算）：P1 4 小时；P2 1 个工作日（跳过周六日）；P3 常规修复不设时限。
 - 八步处置只追加：分级可重做（以最后一次为准），复盘即关闭，关闭后不再追加（409）。
 - 处置人：项目负责人，或事件所属项目的项目经理；查看：再加登记人；其他人 404。
+- 遏制联动：冻结导出见 export_frozen()；下线条目（只用于挂知识条目的事件）当场把条目下线（同知识库“下线条目”，
+  审计 kb.retire），处置人须同时是知识管理员（不扩大下线权限），条目已下线时只记步骤。
 """
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit
-from ..core.permissions import PROJECT_LEAD, PROJECT_MANAGER, roles_of
+from ..core.permissions import KNOWLEDGE_ADMIN, PROJECT_LEAD, PROJECT_MANAGER, roles_of
 from ..models import Project, ProjectMember, QualityIncident, QualityIncidentEvent, User
 
 CATEGORIES = {
@@ -184,6 +186,8 @@ def add_event(db: Session, user: User, incident_id: int, *, step: str, level: st
         raise IncidentError(422, "根因类别不在清单内")
     if v.status == "closed":
         raise IncidentError(409, "事件已复盘关闭")
+    if step == "contain" and action == "offline_item":
+        _offline_item(db, user, v.incident)
     e = QualityIncidentEvent(incident_id=v.incident.id, step=step, level=level if step == "grade" else "",
                              action=action if step == "contain" else "",
                              root_cause=root_cause if step == "root_cause" else "",
@@ -194,6 +198,23 @@ def add_event(db: Session, user: User, incident_id: int, *, step: str, level: st
                  project_code=v.incident.project_code, incident=v.incident.id, step=step, level=e.level,
                  containment=e.action, root_cause=e.root_cause, note_len=e.note_len, note_sha=e.note_sha)
     return _view(db, v.incident)
+
+
+def _offline_item(db: Session, user: User, inc: QualityIncident) -> None:
+    from ..kb import refs as kb_refs
+    from ..kb import review
+    from ..models import KbItem
+
+    if inc.ref_kind != "kb_item":
+        raise IncidentError(422, "下线条目只用于挂知识条目的事件")
+    if KNOWLEDGE_ADMIN not in roles_of(db, user.id):
+        raise IncidentError(403, "下线条目须由知识管理员处置")
+    r = kb_refs.resolve(db, [inc.ref_id]).get(inc.ref_id)
+    item = db.get(KbItem, r.item_id) if r else None
+    if item is None:
+        raise IncidentError(422, "关联的知识条目不存在")
+    if not item.retired:
+        review.retire(db, user, item, f"质量事件 #{inc.id} 遏制")
 
 
 def all_views(db: Session) -> list[View]:

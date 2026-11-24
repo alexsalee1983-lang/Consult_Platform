@@ -156,3 +156,33 @@ def test_repeal_auto_registers_for_signed_deliverables_only():
         again = db.scalars(select(QualityIncident).where(QualityIncident.reported_by == "system:kb.basis",
                                                          QualityIncident.project_code == signed)).all()
         assert len(again) == 1                                          # 未关闭的同类事件不重复登记
+
+
+def test_contain_offline_item_retires_kb_item():
+    """遏制“下线条目”（F3②d）：事件挂知识条目时，处置人同时是知识管理员 → 条目立即下线，审计 kb.retire；
+    挂的不是知识条目 → 422；处置人不是知识管理员 → 403，条目不动、不记遏制步骤。"""
+    doc_id = _publish_kb("质量事件下线条目测试依据")
+    code = _new_project()
+    lead = logged_in_client(app, create_user(("project_lead",), {code: "manager"}))
+    iid = _incident(lead, code, ref_kind="kb_item", ref_id=doc_id, category="fabricated_citation")
+    r = lead.post(f"/api/quality-incidents/{iid}/events", json={"step": "contain", "action": "offline_item"})
+    assert r.status_code == 403, r.text
+    with SessionLocal() as db:
+        assert not db.scalar(select(KbItem).where(KbItem.doc_id == doc_id)).retired
+
+    other = _incident(lead, code)                                       # 挂交付件
+    ka = logged_in_client(app, create_user(("project_lead", "knowledge_admin"), {code: "manager"}))
+    r = ka.post(f"/api/quality-incidents/{other}/events", json={"step": "contain", "action": "offline_item"})
+    assert r.status_code == 422, r.text
+
+    _step(ka, iid, "contain", action="offline_item")
+    with SessionLocal() as db:
+        item = db.scalar(select(KbItem).where(KbItem.doc_id == doc_id))
+        assert item.retired
+        assert all(v.status not in ("published", "draft", "in_review", "candidate") for v in item.versions)
+        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.retire")
+                         .order_by(AuditLog.id.desc())).first()
+        assert log is not None and doc_id in str(log.detail)
+    steps = [e["step"] for e in ka.get(f"/api/quality-incidents/{iid}").json()["events"]]
+    assert steps.count("contain") == 1
+    _step(ka, iid, "contain", action="offline_item")                    # 已下线：再记一次不报错
