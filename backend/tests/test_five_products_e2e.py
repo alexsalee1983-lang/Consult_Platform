@@ -20,7 +20,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.config import get_settings
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, utcnow
 from app.core.permissions import CONSULTANT, PROJECT_LEAD
 from app.main import app
 from app.models import AuditLog, Deliverable, Job, LlmUsage, Project
@@ -102,13 +102,19 @@ class _Model:
 
 
 def _work() -> None:
+    kinds = [runs.JOB_KIND, quality.JOB_KIND]
     with SessionLocal() as db:
-        while jobs.run_once(db, "e2e-worker", kinds=[runs.JOB_KIND, quality.JOB_KIND]):
+        while jobs.run_once(db, "e2e-worker", kinds=kinds):
             pass
-        # 出错退回 queued 的任务带退避时间，循环领不到就停；把错误类型直接报出来，不让运行只显示“停在 queued”（#418）
-        stuck = db.scalars(select(Job).where(Job.status == jobs.QUEUED, Job.attempts > 0,
-                                             Job.kind.in_([runs.JOB_KIND, quality.JOB_KIND]))).all()
-        assert not stuck, [(j.kind, j.attempts, j.last_error) for j in stuck]
+        loop_end = utcnow()
+        # 循环停下后仍有 queued 任务就报现场（#418）：attempts>0 是出错退避；attempts=0 看 run_after/created_at
+        # 与 loop_end 的先后、再领一次能否领到，区分“循环结束后才入队”和“到期了却领不到”
+        stuck = db.scalars(select(Job).where(Job.status == jobs.QUEUED, Job.kind.in_(kinds))).all()
+        info = [(j.id, j.kind, j.attempts, j.last_error, str(j.run_after), str(j.created_at)) for j in stuck]
+        if stuck:
+            again = jobs.claim(db, "e2e-worker", kinds=kinds)
+            raise AssertionError({"loop_end": str(loop_end), "now": str(utcnow()), "stuck": info,
+                                  "reclaim": again.id if again else None})
 
 
 def _notes(product_dir: str | None) -> list[tuple[str, str, str]]:
