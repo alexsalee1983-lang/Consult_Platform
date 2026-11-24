@@ -212,6 +212,9 @@ export const api = {
   qualityIncident: (id) => request(`/api/quality-incidents/${id}`),
   addIncidentEvent: (id, body) =>
     request(`/api/quality-incidents/${id}/events`, { method: "POST", body: JSON.stringify(body) }),
+  agentMdVersions: (code) => request(`/api/agent-md/${encodeURIComponent(code)}/versions`),
+  agentMdUnpin: (code, reason) =>
+    request(`/api/agent-md/${encodeURIComponent(code)}/unpin`, { method: "POST", body: JSON.stringify({ reason }) }),
   workbench: () => request("/api/workbench"),
   myTasks: () => request("/api/my-tasks"),
   benchCards: () => request("/api/expert-bench/cards"),

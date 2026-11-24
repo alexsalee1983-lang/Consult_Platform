@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import { TopBar } from "../components/common.jsx";
 import {
   ACTIONS, CATEGORIES, LEVELS, LEVEL_CLS, NOTE_MAX, REF_KINDS, ROOT_CAUSES, STEPS, STEP_LABEL,
-  dueText, eventPayload, nextStep, statusLabel, validateEvent,
+  dueText, eventPayload, nextStep, rollbackVersions, statusLabel, validateEvent, versionLabel,
 } from "../qualityIncidents.js";
 
 // AI 质量事件台账与处置（四期 F3②）：只给项目负责人。描述与处置说明只记长度和摘要哈希，页面不回显原文。
@@ -26,9 +26,74 @@ function Summary({ s }) {
   );
 }
 
+// 遏制“回滚 Agent 版本”（四期 F3②g）：选 Agent 与版本库里的已合入版本；已回滚的可带理由撤销。
+function AgentRollback({ agent, version, onChange }) {
+  const [agents, setAgents] = useState([]);
+  const [h, setH] = useState(null);
+  const [reason, setReason] = useState("");
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.agents().then(setAgents).catch((e) => setMsg(e.message)); }, []);
+  const loadH = useCallback(() => {
+    setH(null);
+    if (agent) api.agentMdVersions(agent).then(setH).catch((e) => setMsg(e.message));
+  }, [agent]);
+  useEffect(() => { loadH(); }, [loadH]);
+  const unpin = async () => {
+    if (!window.confirm(`确定撤销 ${agent} 的回滚、恢复仓库当前版本？`)) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api.agentMdUnpin(agent, reason.trim());
+      setReason("");
+      setMsg("已撤销回滚");
+      loadH();
+    } catch (e) {
+      setMsg(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const targets = rollbackVersions(h);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <select className="inp" aria-label="回滚的 Agent" value={agent}
+          onChange={(e) => onChange({ agent: e.target.value, version: "" })}>
+          <option value="">选 Agent</option>
+          {agents.map((a) => <option key={a.code} value={a.code}>{a.code} {a.name}</option>)}
+        </select>
+        {agent && (
+          <select className="inp" aria-label="回滚到版本" value={version} onChange={(e) => onChange({ agent, version: e.target.value })}>
+            <option value="">{h ? (targets.length ? "选目标版本" : "版本库里没有可回滚的旧版本") : "加载中…"}</option>
+            {targets.map((x) => <option key={x.version} value={x.version}>{versionLabel(x, h)}</option>)}
+          </select>
+        )}
+      </div>
+      {h && (
+        <div className="sub">
+          仓库当前 <span className="mono">{h.current || "—"}</span>
+          {h.pinned
+            ? <> · 已回滚到 <span className="mono">{h.pinned}</span>{h.pinned_incident ? `（事件 #${h.pinned_incident}）` : ""}</>
+            : " · 未回滚"}
+          {" "}· 只能回滚到已合入的版本
+        </div>
+      )}
+      {h?.pinned && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input className="inp" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="撤销理由（只记长度）" aria-label="撤销理由" />
+          <button type="button" className="btn" disabled={busy || !reason.trim()} onClick={unpin}>撤销回滚</button>
+        </div>
+      )}
+      {msg && <span className="sub" role="status">{msg}</span>}
+    </div>
+  );
+}
+
 function EventForm({ inc, onDone }) {
   const suggested = nextStep(inc.events || []);
-  const [f, setF] = useState({ step: suggested || "assess", level: "", action: "", root_cause: "", note: "" });
+  const [f, setF] = useState({ step: suggested || "assess", level: "", action: "", root_cause: "", note: "", agent: "", version: "" });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -41,7 +106,7 @@ function EventForm({ inc, onDone }) {
     setError(null);
     try {
       await api.addIncidentEvent(inc.id, eventPayload(f));
-      setF({ step: "assess", level: "", action: "", root_cause: "", note: "" });
+      setF({ step: "assess", level: "", action: "", root_cause: "", note: "", agent: "", version: "" });
       onDone();
     } catch (e) {
       setError(e.message);
@@ -68,6 +133,9 @@ function EventForm({ inc, onDone }) {
             <option value="">选遏制措施</option>
             {Object.entries(ACTIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
+        )}
+        {f.step === "contain" && f.action === "rollback_agent" && (
+          <AgentRollback agent={f.agent} version={f.version} onChange={(x) => setF({ ...f, ...x })} />
         )}
         {f.step === "root_cause" && (
           <select className="inp" aria-label="根因类别" value={f.root_cause} onChange={set("root_cause")}>

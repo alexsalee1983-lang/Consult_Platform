@@ -1,7 +1,8 @@
 // node --test（不引入新依赖）：质量事件处置页的规则与后端 services/quality_incidents.py 一致（四期 F3②）
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { statusLabel, CATEGORIES, STEPS, ACTIONS, ROOT_CAUSES, LEVELS, validateEvent, eventPayload, nextStep, dueText } from "./qualityIncidents.js";
+import { statusLabel, CATEGORIES, STEPS, ACTIONS, ROOT_CAUSES, LEVELS, validateEvent, eventPayload, nextStep, dueText,
+  rollbackVersions, versionLabel } from "./qualityIncidents.js";
 
 test("清单与后端一致", () => {
   assert.deepEqual(Object.keys(CATEGORIES), ["fabricated_citation", "repealed_basis", "fact_mismatch",
@@ -52,4 +53,25 @@ test("进度文字按后端 status", () => {
   assert.equal(statusLabel("registered"), "已登记");
   assert.equal(statusLabel("contain"), "已遏制");
   assert.equal(statusLabel("closed"), "已关闭");
+});
+
+test("回滚 Agent 版本须选 Agent 和目标版本，payload 带 agent、version（四期 F3②g）", () => {
+  assert.match(validateEvent({ step: "contain", action: "rollback_agent" }), /Agent/);
+  assert.match(validateEvent({ step: "contain", action: "rollback_agent", agent: "D1" }), /版本/);
+  assert.equal(validateEvent({ step: "contain", action: "rollback_agent", agent: "D1", version: "abc123" }), null);
+  assert.deepEqual(eventPayload({ step: "contain", action: "rollback_agent", agent: "D1", version: "abc123", note: "" }),
+    { step: "contain", action: "rollback_agent", agent: "D1", version: "abc123", note: "" });
+  assert.deepEqual(eventPayload({ step: "contain", action: "freeze_export", agent: "D1", version: "abc123", note: "" }),
+    { step: "contain", action: "freeze_export", note: "" });
+});
+
+test("可回滚版本排除在用版本（有指针时在用的是指针版本）", () => {
+  const h = { current: "c1", pinned: "", items: [{ version: "c1" }, { version: "o1" }, { version: "o2" }] };
+  assert.deepEqual(rollbackVersions(h).map((x) => x.version), ["o1", "o2"]);
+  assert.deepEqual(rollbackVersions({ ...h, pinned: "o1" }).map((x) => x.version), ["c1", "o2"]);
+  assert.deepEqual(rollbackVersions(null), []);
+  assert.equal(versionLabel({ version: "o1", md_version: "v0.3", captured_at: "2026-11-20T08:00:00" }, h),
+    "o1 · v0.3 · 2026-11-20");
+  assert.equal(versionLabel({ version: "c1", md_version: "", captured_at: "2026-11-24T01:00:00" }, h),
+    "c1 · 2026-11-24 · 仓库当前");
 });
