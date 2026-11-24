@@ -63,6 +63,10 @@ PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 P
 第 1 步（只此一条命令，不要拆开手动重跑脚本已做的步骤）：
   cd {dir} && bash scripts/pr_test.sh {pr} {env} {logdir} > {logdir}/run.log 2>&1; tail -15 {logdir}/run.log
   脚本自动做：检出 PR 头提交、独立 compose 项目新库起整套、冒烟、迁移头核对、数据保护检查、执行 PR 描述里“测试机命令”代码块、写 summary.md。
+另外要额外跑 pytest（全量、分片 broad/broad2/broad_pg、单文件）时，一律走隔离脚本，不要在环境目录里直接跑 pytest（并发会互相清库）：
+  SQLite：bash scripts/pytest_iso.sh --repo {dir} --tag {env}-<标签> -- -q <pytest 参数>
+  PostgreSQL：bash scripts/pytest_iso.sh --repo {dir} --tag {env}-<标签> --pg -- -q <pytest 参数>
+  每次跑各自的 worktree（SQLite 各自 test.db）或各自 pt_* 库，结束自动清理。
   PR 有人工核对项或真实模型评测、需要服务保持在线时，命令前加 KEEP_UP=1。
 第 2 步：只读 {logdir}/summary.md（失败项再 tail -50 对应的日志文件）。结论是“环境问题未测”则直接评论该 summary、不换标签、结束。
 第 3 步：仅补做 PR 描述里的“人工核对项”和真实模型评测（若有，多轮规则见规范第 5 节），把结果补进 summary.md（替换“待填”行，改写总结论）。
