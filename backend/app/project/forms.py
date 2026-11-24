@@ -1,0 +1,177 @@
+"""四期 A14：D1、D2 表单与自动成稿。
+
+表单定义放在 `products/forms/<交付件编号>.yaml`（各产品通用）。顾问填表提交后，平台按模板**程序成稿**（不调模型）：
+设置大纲，再把有字段的章节逐章写成第 1 版；没有字段的章节只进大纲、留给 Agent 起草（如 D2 访谈提纲）。
+- 模板用 `{key}` 引用字段，按空行分段；一段里引用的字段全为空就整段去掉。list 字段每行一项，渲染为 Markdown 列表。
+- `fixed` 段落由平台固定写入（资质边界、资料红线），顾问不能改。
+- 只在交付件还没有任何正文时可用（避免覆盖顾问或 Agent 已写的内容）；之后在编辑器里改。
+- 写入前整份先过机密级检测和严格档占位符检查，任何一章不过都不写；之后走 deliverables.set_outline / write_section，
+  版本、审计（不记原文）、判断数据埋点与手写一致。
+"""
+import re
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+
+import yaml
+from sqlalchemy.orm import Session
+
+from ..models import Deliverable, Project, User
+from ..products.config import catalog_dir
+from . import deliverables as dsvc
+
+FIELD_TYPES = ("text", "textarea", "list")
+MAX_FIELD = {"text": 200, "textarea": 2000, "list": 4000}
+MAX_LIST_ITEMS = 50
+NOTE = "表单成稿"
+_REF = re.compile(r"\{([a-z_][a-z0-9_]*)\}")
+
+
+class FormError(ValueError):
+    def __init__(self, status: int, detail: str):
+        super().__init__(detail)
+        self.status, self.detail = status, detail
+
+
+@dataclass(frozen=True)
+class Field:
+    key: str
+    label: str
+    type: str
+    required: bool = False
+    hint: str = ""
+
+
+@dataclass(frozen=True)
+class Section:
+    title: str
+    fields: tuple[Field, ...] = ()
+    template: str = ""
+    fixed: str = ""
+
+
+@dataclass(frozen=True)
+class Form:
+    code: str
+    title: str
+    sections: tuple[Section, ...]
+
+    def fields(self) -> list[Field]:
+        return [f for s in self.sections for f in s.fields]
+
+
+def _parse(data: dict, code: str) -> Form:
+    """校验表单定义；写错直接报错（配置问题在测试和启动时暴露，不留到顾问提交时）。"""
+    if not isinstance(data, dict) or data.get("code") != code:
+        raise ValueError(f"forms/{code}.yaml 的 code 应为 {code}")
+    seen: set[str] = set()
+    sections = []
+    for s in data.get("sections") or []:
+        fields = []
+        for f in s.get("fields") or []:
+            key, ftype = str(f.get("key", "")), str(f.get("type", "text"))
+            if not _REF.fullmatch("{" + key + "}") or key in seen or ftype not in FIELD_TYPES:
+                raise ValueError(f"forms/{code}.yaml 字段 {key!r} 的 key 重复、不合法或 type 不在 {FIELD_TYPES}")
+            seen.add(key)
+            fields.append(Field(key, str(f.get("label") or key), ftype, bool(f.get("required")), str(f.get("hint") or "")))
+        template = str(s.get("template") or "")
+        unknown = set(_REF.findall(template)) - {f.key for f in fields}
+        if unknown or (fields and not template):
+            raise ValueError(f"forms/{code}.yaml 章节 {s.get('title')!r} 的模板缺失或引用了本章没有的字段 {sorted(unknown)}")
+        sections.append(Section(str(s.get("title") or "").strip(), tuple(fields), template, str(s.get("fixed") or "").strip()))
+    if not sections or any(not s.title for s in sections):
+        raise ValueError(f"forms/{code}.yaml 至少要有一章，且每章要有标题")
+    return Form(code, str(data.get("title") or code), tuple(sections))
+
+
+@lru_cache(maxsize=16)
+def _load(path: str, mtime: float, code: str) -> Form:
+    return _parse(yaml.safe_load(Path(path).read_text(encoding="utf-8")), code)
+
+
+def load_form(code: str) -> Form | None:
+    if not re.fullmatch(r"D\d", code or ""):
+        return None
+    path = catalog_dir() / "products" / "forms" / f"{code}.yaml"
+    if not path.is_file():
+        return None
+    return _load(str(path), path.stat().st_mtime, code)
+
+
+def schema(form: Form) -> dict:
+    return {"code": form.code, "title": form.title,
+            "sections": [{"title": s.title, "fixed": s.fixed, "drafted_by_agent": not s.fields,
+                          "fields": [{"key": f.key, "label": f.label, "type": f.type, "required": f.required,
+                                      "hint": f.hint, "max": MAX_FIELD[f.type]} for f in s.fields]}
+                         for s in form.sections]}
+
+
+def _clean(form: Form, values: dict) -> dict[str, str]:
+    if not isinstance(values, dict):
+        raise FormError(422, "values 应为 {字段: 内容}")
+    fields = {f.key: f for f in form.fields()}
+    unknown = sorted(set(values) - set(fields))
+    if unknown:
+        raise FormError(422, f"表单没有这些字段：{'、'.join(unknown)}")
+    out: dict[str, str] = {}
+    missing = []
+    for key, f in fields.items():
+        v = values.get(key, "")
+        if not isinstance(v, str):
+            raise FormError(422, f"“{f.label}”应为文本")
+        v = v.strip()
+        if len(v) > MAX_FIELD[f.type]:
+            raise FormError(422, f"“{f.label}”不超过 {MAX_FIELD[f.type]} 字")
+        if f.type == "list":
+            items = [x.strip().lstrip("-*•").strip() for x in v.splitlines()]
+            items = [x for x in items if x]
+            if len(items) > MAX_LIST_ITEMS:
+                raise FormError(422, f"“{f.label}”不超过 {MAX_LIST_ITEMS} 项")
+            v = "\n".join(f"- {x}" for x in items)
+        elif f.type == "text":
+            v = " ".join(v.split())
+        if f.required and not v:
+            missing.append(f.label)
+        out[key] = v
+    if missing:
+        raise FormError(422, f"请填写：{'、'.join(missing)}")
+    return out
+
+
+def _render_section(s: Section, vals: dict[str, str]) -> str:
+    paras = re.split(r"\n\s*\n", s.template.strip())
+    keep = []
+    for para in paras:                                 # 这一段引用的字段都没填：整段去掉
+        refs = _REF.findall(para)
+        keep.append(not refs or any(vals.get(k) for k in refs))
+    for i in range(len(paras) - 2, -1, -1):            # 不引用字段的小标题段跟着下一段去留
+        if not _REF.findall(paras[i]) and not keep[i + 1]:
+            keep[i] = False
+    parts = [_REF.sub(lambda m: vals.get(m.group(1), ""), p).strip() for p, k in zip(paras, keep) if k]
+    if s.fixed:
+        parts.append(s.fixed)
+    return "\n\n".join(p for p in parts if p)
+
+
+def render(form: Form, values: dict) -> list[tuple[str, str]]:
+    """返回 [(章节标题, 正文)]；只出大纲不写正文的章节正文为空串。"""
+    vals = _clean(form, values)
+    return [(s.title, _render_section(s, vals) if s.fields else "") for s in form.sections]
+
+
+def submit(db: Session, user: User, project: Project, d: Deliverable, form: Form, values: dict) -> Deliverable:
+    chapters = render(form, values)
+    action = "deliverable.form"
+    dsvc._check_writable(db, user, project, d, action)
+    written = [s.seq for s in d.sections if s.current_version]
+    if written:
+        raise FormError(409, f"{d.code} 第 {'、'.join(map(str, written))} 章已有正文，表单只用于首次成稿，请在编辑器里修改")
+    text = "\n".join(t + "\n" + b for t, b in chapters)
+    dsvc._guard(db, user, project, d, action, text)          # 整份先查，任何一章不过都不写
+    dsvc._placeholders(db, user, project, d, action, text)
+    d = dsvc.set_outline(db, user, project, d, [t for t, _ in chapters])
+    for seq, (_, body) in enumerate(chapters, 1):
+        if body:
+            dsvc.write_section(db, user, project, d, seq, body, note=NOTE)
+    db.refresh(d)
+    return d

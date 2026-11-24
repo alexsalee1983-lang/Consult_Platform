@@ -1,0 +1,37 @@
+# 四期 A14：D2 调研包表单（各产品通用；顾问填表，平台按模板程序成稿，不调模型）
+# 没有 fields 的章节只进大纲、不写正文（访谈提纲要逐题追溯到评估项，由调研访谈 Agent 起草）
+code: D2
+title: 调研包
+sections:
+- title: 调研范围与安排
+  fields:
+  - {key: departments, label: 调研对象部门（每行一项）, type: list, required: true}
+  - {key: schedule, label: 时间安排, type: textarea, required: true}
+  - {key: method, label: 调研方式, type: textarea, hint: 例如 访谈、资料审阅、现场观察}
+  template: |
+    **调研对象**
+
+    {departments}
+
+    **时间安排**
+
+    {schedule}
+
+    **调研方式**
+
+    {method}
+- title: 资料清单
+  fields:
+  - {key: documents, label: 请客户提供的资料（每行一项）, type: list, required: true}
+  - {key: deadline, label: 提供期限, type: text}
+  template: |
+    {documents}
+
+    **提供期限**：{deadline}
+  fixed: 资料中不得包含口令、密钥、可利用的漏洞细节、完整网络拓扑与 IP 规划、业务数据和个人信息样本；如需说明，请提供去标识后的摘要。
+- title: 访谈对象与日程
+  fields:
+  - {key: interviewees, label: 访谈角色与日程（每行一项：角色｜时间）, type: list, required: true}
+  template: |
+    {interviewees}
+- title: 访谈提纲
