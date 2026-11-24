@@ -194,7 +194,9 @@ def test_level3_flag_still_human(lib, model):
         v = _submitted(db, db.merge(author), law, BODY, level3=True)
         assert agent_review.run(db, v).status == "manual"
         r = next(x for x in v.reviews if x.review_role == "agent")
-        assert r.decision == "flag" and v.status == "in_review"
+        # 四期 B38①：专家输入时 no_addition 不在三类阻断里，降为建议；拍板仍由人
+        assert r.decision == "approve" and v.status == "in_review"
+        assert r.findings["issues"][0]["severity"] == "建议"
         rv.review(db, db.merge(expert), v, "content", "approve")               # 意见供参考，拍板仍由人
         assert v.status == "published"
 
