@@ -1,9 +1,9 @@
 """三期 B17②：我的任务的退回事件 task_returns（主库）。
 
-down_revision 暂接 0038：0039～0042（F1、G2②、A13、A12）未合并，合并顺序定了再改链。
+down_revision 接 main 链头 0051_quality_incidents（决策记录 2026-11-23；#374 的 0050 若先合并，再改接 0050）。
 
 Revision ID: 0043_task_returns
-Revises: 0038_judgment_events
+Revises: 0051_quality_incidents
 Create Date: 2026-11-22
 """
 from collections.abc import Sequence
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0043_task_returns"
-down_revision: str | None = "0038_judgment_events"
+down_revision: str | None = "0051_quality_incidents"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
