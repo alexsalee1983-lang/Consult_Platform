@@ -300,6 +300,10 @@ export const api = {
   kbSourceEvents: (code) => request(`/api/kb/sources/${encodeURIComponent(code)}/events`),
   // ---- 交付件（M3）：章节与版本、质量评审、签署、导出 ----
   deliverable: (code, dcode) => request(dpath(code, dcode)),
+  // 四期 A14②：D1、D2 按表单成稿（GET 404 表示该交付件没有表单）
+  deliverableForm: (code, dcode) => request(`${dpath(code, dcode)}/form`),
+  postDeliverableForm: (code, dcode, values) =>
+    request(`${dpath(code, dcode)}/form`, { method: "POST", body: JSON.stringify({ values }) }),
   putOutline: (code, dcode, titles) =>
     request(`${dpath(code, dcode)}/outline`, { method: "PUT", body: JSON.stringify({ titles }) }),
   section: (code, dcode, seq, version) =>
