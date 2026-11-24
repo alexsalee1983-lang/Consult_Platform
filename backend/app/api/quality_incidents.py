@@ -67,7 +67,8 @@ def list_incidents(status: str = Query(default="", pattern="^(|open|closed)$"),
 @router.get("/{incident_id}")
 def detail(incident_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     try:
-        return svc.get(db, user, incident_id).out(_now(), with_events=True)
+        v = svc.get(db, user, incident_id)
+        return {**v.out(_now(), with_events=True), "impact": svc.impact(db, user, v)}
     except svc.IncidentError as e:
         raise HTTPException(e.status, str(e)) from None
 

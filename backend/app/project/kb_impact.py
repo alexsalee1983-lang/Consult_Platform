@@ -101,15 +101,20 @@ def project_updates(db: Session, project: Project) -> list[dict]:
     return rows
 
 
-def usage_counts(db: Session, doc_id: str) -> dict:
-    """知识侧：引用该条目的章节当前版本计数（按现行编号 + 全部别名匹配，B15）。不返回项目代号和内容。"""
+def citing_sections(db: Session, doc_id: str) -> list[tuple[int, int]]:
+    """引用该条目的章节当前版本（按现行编号 + 全部别名匹配，B15）：[(项目 id, 交付件 id)]，每章一行。"""
     r = kb_refs.resolve(db, [doc_id]).get(doc_id)
     names = {doc_id} | ({r.doc_id, *kb_refs.aliases_of(db, r.item_id)} if r else set())
     rows = db.execute(select(Deliverable.project_id, Deliverable.id, SectionVersion.sources)
                       .join(DeliverableSection, DeliverableSection.deliverable_id == Deliverable.id)
                       .join(SectionVersion, (SectionVersion.section_id == DeliverableSection.id)
                             & (SectionVersion.version == DeliverableSection.current_version))).all()
-    hits = [(p, d) for p, d, src in rows
+    return [(p, d) for p, d, src in rows
             if any(isinstance(x, dict) and x.get("found") and x.get("ref") in names
                    for x in (src or {}).get("knowledge", []))]
+
+
+def usage_counts(db: Session, doc_id: str) -> dict:
+    """知识侧：引用该条目的章节当前版本计数。不返回项目代号和内容。"""
+    hits = citing_sections(db, doc_id)
     return {"projects": len({p for p, _ in hits}), "deliverables": len({d for _, d in hits}), "sections": len(hits)}

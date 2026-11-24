@@ -9,6 +9,7 @@ GET  /api/projects/{code}/assessment                                    成熟�
 GET  /api/projects/{code}/knowledge-updates                             引用的知识条目已更新或下线、需要复核的章节（二期 B4）
 GET  /api/projects/{code}/deliverables/{dcode}/export                   导出 Word（各章当前版本，套模板；规则见 app/project/export.py）
      ?format=pptx 导出 PowerPoint（二期 A9，规则见 app/project/export_pptx.py）
+     挂本交付件、未关闭且已“冻结导出”的质量事件存在时 409（四期 F3②）
 
 严格档项目只收占位符版本（真名、IP、系统名 422）；已签署的交付件写入 409；机密级命中 422（不保存）。规则见 app/project/deliverables.py。
 """
@@ -20,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..core import audit
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import project_for_member, require_business
@@ -29,6 +31,7 @@ from ..project import deliverables as svc
 from ..project import export as export_svc
 from ..project import export_pptx
 from ..project import kb_impact
+from ..services import quality_incidents
 
 router = APIRouter(prefix="/api/projects", tags=["deliverables"], dependencies=[Depends(require_business)])
 
@@ -228,6 +231,11 @@ def section_diff(code: str, dcode: str, seq: int, a: int = Query(ge=1), b: int =
 def export_deliverable(code: str, dcode: str, format: str = Query(default="docx", pattern="^(docx|pptx)$"),
                        db: Session = Depends(get_db), user: User = Depends(current_user)):
     p, d = _load(db, code, dcode, user)
+    frozen = quality_incidents.export_frozen(db, p.code, d.code)
+    if frozen is not None:                           # 四期 F3②：质量事件遏制“冻结导出”
+        audit.record(db, actor=user.username, action="deliverable.export", result="blocked", project_code=p.code,
+                     deliverable=d.code, reason="quality_incident_frozen", incident=frozen)
+        raise HTTPException(409, f"{d.code} 因质量事件 #{frozen} 冻结导出，事件复盘关闭后恢复")
     mod = export_pptx if format == "pptx" else export_svc
     try:
         r = mod.export_deliverable(db, user, p, d)

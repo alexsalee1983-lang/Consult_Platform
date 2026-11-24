@@ -283,4 +283,8 @@ def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: 
                  version=v.version, decision=decision, sample=sample, recheck=recheck, candidate=shadow)
     if shadow and decision == "fail":                # 候选抽检不通过：不晋级，退回人工审核
         candidate.return_to_review(db, v, user.username, "sample_failed")
+    if current and decision == "fail":               # 四期 F3②：现行版本抽检不通过，程序自动登记质量事件
+        from ..services import quality_incidents
+        quality_incidents.register_system(db, "kb.sample", category="fact_mismatch", ref_kind="kb_item",
+                                          ref_id=v.item.doc_id, description=comment)
     return v
