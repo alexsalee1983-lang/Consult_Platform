@@ -7,6 +7,7 @@ import { HighlightStyle, Language, defineLanguageFacet, syntaxHighlighting } fro
 import { GFM, parser as mdParser } from "@lezer/markdown";
 import { EditorView, keymap, placeholder as placeholderExt, drawSelection } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import { buildCandidates, mentionComplete, refreshMention } from "../editor/mention.js";
 import { External, createState, docText, insertWithSources, refDecorations, replaceRangeIfUnchanged, selectionAsk } from "../editor/core.js";
 
 // 只取 @lezer/markdown 语法树做高亮：@codemirror/lang-markdown 会静态拉入 lang-html/css/javascript（嵌套代码高亮用），
@@ -39,7 +40,7 @@ const highlight = HighlightStyle.define([
 ]);
 
 // ref 暴露给写稿侧栏（A15②）：selection() 取选中文字，insert(snippet) 在光标处插入或替换选区（来源标注原样保留）
-const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder = "", unresolved, ariaLabel = "章节正文编辑", onAsk }, ref) {
+const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder = "", unresolved, ariaLabel = "章节正文编辑", onAsk, refs, onMentionQuery }, ref) {
   const host = useRef(null);
   const view = useRef(null);
   useImperativeHandle(ref, () => ({
@@ -75,6 +76,14 @@ const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder =
   onAskRef.current = onAsk;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  // A16②：@ 引用 / [ 编号补全的候选（证据、知识、章节），props 变了就刷新弹层
+  const candRef = useRef([]);
+  const onQueryRef = useRef(onMentionQuery);
+  onQueryRef.current = onMentionQuery;
+  useEffect(() => {
+    candRef.current = buildCandidates(refs || {});
+    view.current?.dispatch({ effects: refreshMention.of(null) });
+  }, [refs]);
 
   useEffect(() => {
     const v = new EditorView({
@@ -90,6 +99,7 @@ const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder =
         placeholderExt(placeholder),
         refDecorations(unresolved || new Set()),
         selectionAsk((r) => onAskRef.current?.(r)),
+        mentionComplete(() => candRef.current, (kind, q) => onQueryRef.current?.(kind, q)),
         EditorView.contentAttributes.of({ "aria-label": ariaLabel, spellcheck: "false" }),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((t) => t.annotation(External))) onChangeRef.current(docText(u.state));

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api, CONCLUSION_CLS, DELIV_STATUS, SEVERITY_CLS, TIER } from "../api.js";
 import { useAuth } from "../auth.jsx";
@@ -120,7 +120,7 @@ function Diff({ lines }) {
   );
 }
 
-function Section({ code, dcode, seq, editable, onSaved, signed }) {
+function Section({ code, dcode, seq, editable, onSaved, signed, sections = [] }) {
   const [s, setS] = useState(null);
   const [error, setError] = useState(null);
   const [version, setVersion] = useState(null);       // null = 当前版本
@@ -169,6 +169,24 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   }, [code, dcode, seq, version]);
   useEffect(() => { setDiff(null); load(); }, [load]);
   useEffect(() => { setVersion(null); setEdit(null); }, [seq]);
+
+  // A16② @ 引用与 [ 补全：证据列表进编辑态时取一次（项目成员接口），知识按查询词走已有检索接口（用户可见范围），防抖 300ms
+  const [evs, setEvs] = useState(null);
+  const [kbHits, setKbHits] = useState([]);
+  const kbTimer = useRef(null);
+  const editing = !!edit;
+  useEffect(() => {
+    if (editing && evs === null) api.evidences(code).then(setEvs).catch(() => setEvs([]));
+  }, [editing, evs, code]);
+  useEffect(() => () => clearTimeout(kbTimer.current), []);
+  const onMentionQuery = useCallback((kind, q) => {
+    clearTimeout(kbTimer.current);
+    if (q.length < 2) return;
+    kbTimer.current = setTimeout(() => {
+      api.kbSearch({ q, limit: 8 }).then((r) => setKbHits(r.items || [])).catch(() => {});
+    }, 300);
+  }, []);
+  const mentionRefs = useMemo(() => ({ evidences: evs || [], kb: kbHits, sections, currentSeq: seq }), [evs, kbHits, sections, seq]);
 
   async function compare() {
     try {
@@ -238,7 +256,8 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
             {newEditor ? (
               <Suspense fallback={<div className="sub">编辑器加载中…</div>}>
                 <DocEditor ref={editorRef} onAsk={(r) => setAskReq({ ...r, at: Date.now() })} value={edit.body} onChange={(body) => setEdit((e) => ({ ...e, body }))} unresolved={new Set(unresolved)}
-                  placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]，显示为标签，退格整体删除" />
+                  refs={mentionRefs} onMentionQuery={onMentionQuery}
+                  placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]，显示为标签，退格整体删除；输入 @ 引用证据、知识、章节，输入 [ 补全编号" />
               </Suspense>
             ) : (
               <textarea ref={areaRef} className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
@@ -572,7 +591,7 @@ export default function Deliverable({ code, dcode }) {
           <Quality code={code} dcode={dcode} so={so} canReview={editable && d.sections.length > 0} isManager={isManager} onChanged={load} />
         </div>
         <div style={{ minWidth: 0 }}>
-          {cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} />
+          {cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
             : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : ""}</div>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
