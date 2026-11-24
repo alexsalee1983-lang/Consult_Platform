@@ -124,6 +124,14 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B/deliverables/D2/export", None), (404, 404, 403, 403, 403)),
     # 改稿差异转候选（三期 F4）：开关默认关，成员也 404；非成员 404、非业务角色 403（开关打开的行为在 test_revision_mining）
     (("POST", "/api/projects/BANK-A/deliverables/D7/revision-candidates", None), (404, 404, 403, 403, 403)),
+    # 改稿与驳回特征汇总（四期 F4②）：只给项目负责人、知识管理员，顾问 403（负责人与开关行为在 test_revision_features）
+    (("GET", "/api/revision-features/summary", None), (403, 403, 403, 403, 403)),
+    (("GET", "/api/revision-features/summary?project=BANK-A", None), (403, 403, 403, 403, 403)),
+    # 经验萃取问题（四期 F4③）：只给知识专家，其他角色 403（专家与开关行为在 test_extraction_trigger）
+    (("GET", "/api/extraction/questions", None), (403, 403, 403, 403, 403)),
+    (("POST", "/api/extraction/questions/1/answer", {"body": "x"}), (403, 403, 403, 403, 403)),
+    (("POST", "/api/extraction/questions/1/skip", None), (403, 403, 403, 403, 403)),
+    (("GET", "/api/extraction/stats", None), (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export?format=pptx", None), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/GRID-B/deliverables/D2/outline", OUTLINE), (404, 404, 403, 403, 403)),
     # 四期 A14 D1/D2 表单：成员可看；空表提交 422（必填未填，不写入）；非成员 404
@@ -208,6 +216,11 @@ MATRIX = [
     (("POST", "/api/agents/consultant-lead/tools/project.read", {"project_code": "BANK-A"}),
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (403, 403, 403, 403, 403)),
+    # 三期 C6-P（迁移 0045）：咨询协调与咨询师同权（非成员 404）；知识采集在采集机区，任何平台工具 403
+    (("POST", "/api/agents/consult-coordinator/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (200, 404, 403, 403, 403)),
+    (("POST", "/api/agents/kb-collector/tools/kb.search", {"args": {"query": "值班"}}),
                                                         (403, 403, 403, 403, 403)),
     # 去标识检查（三期 C7，迁移 0048）：只授权 kb-builder，不涉及项目；交付侧 Agent 调用一律 403
     (("POST", "/api/agents/kb-builder/tools/deid.check", {"args": {"text": "告警分级按影响范围分三级。"}}),

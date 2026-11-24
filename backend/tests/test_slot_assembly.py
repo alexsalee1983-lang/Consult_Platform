@@ -47,7 +47,7 @@ def test_slot_spec_validation():
 
 
 def test_snapshot_without_slots_is_unchanged():
-    snap = config.compose_codes("SOC")
+    snap = config.compose_codes("IRE")   # IRE 未写槽位（SOC 自 C10 起有槽位）
     assert all("slots" not in s for s in snap["chain"])
     assert all(s.slots == () for s in runs.chain_of(snap))
 

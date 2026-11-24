@@ -13,7 +13,8 @@
 - 开关 settings.f4_revision_mining 默认关；生产环境（APP_ENV=prod）一律不开，只在测试机、试用机虚拟数据上跑。
 - 只有项目成员能触发（非成员 404）；严格档 422（资料不出现场）；客户不同意回流（flowback_allowed=False）409。
 - 候选里的摘录先把项目代号换成【客户】，再过机密级检测，命中的整条候选丢弃只计数；摘录截断到 EXCERPT_MAX 字。
-- 审计只记交付件编号、章节数、各类差异计数和候选数，不记正文。
+- 审计只记交付件编号、章节数、各类差异计数、候选数和特征行数，不记正文。
+- 四期 F4②：跑完同时写改稿特征表 revision_features（app/project/revision_features.py），重挖幂等。
 """
 from __future__ import annotations
 
@@ -163,6 +164,7 @@ def mine(db: Session, user: User, project: Project, d: Deliverable) -> dict:
     signed = _signed_versions(db, d)
     counts = {"sections": 0, "delete": 0, "rewrite": 0, "add": 0, "blocked": 0}
     candidates: list[dict] = []
+    features: list[tuple[str, list[Change]]] = []
     for s in d.sections:
         draft = _agent_draft(s)
         final = _version(s, int(signed.get(str(s.seq), 0) or 0))
@@ -170,6 +172,7 @@ def mine(db: Session, user: User, project: Project, d: Deliverable) -> dict:
             continue
         counts["sections"] += 1
         changes = diff_lines(draft.body, final.body)
+        features.append((f"{d.code}.{s.seq}", changes))
         for c in changes:
             counts[c.kind] += 1
         groups = (("pitfall", [c for c in changes if c.kind in ("delete", "rewrite")]),
@@ -182,8 +185,11 @@ def mine(db: Session, user: User, project: Project, d: Deliverable) -> dict:
                 candidates.append(cand)
             else:
                 counts["blocked"] += 1
+    from . import revision_features          # 四期 F4②：改稿特征（不存正文），重挖先删后写
+    n_features = revision_features.record_revision(db, project, d, features)
+    db.commit()
     sub = submit_to_practice_queue(db, user, project, d, candidates)
     audit.record(db, actor=user.username, action="f4.revision_mining", result="allowed", project_code=project.code,
                  deliverable=d.code, candidates=len(candidates), queued=sub["queued"], upload_id=sub["upload_id"],
-                 reason=sub["reason"], counts=counts)
+                 reason=sub["reason"], counts=counts, features=n_features)
     return {"available": True, **sub, "counts": counts, "candidates": candidates}

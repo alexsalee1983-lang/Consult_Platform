@@ -153,3 +153,65 @@ def test_cli(published, tmp_path, capsys):
     bad = tmp_path / "bad.yaml"
     bad.write_text("chapters: []", encoding="utf-8")
     assert cli_main(["kb-assembly-eval", str(bad), "--as", name]) == 1
+
+
+# ---- A12 程序门（评测门 C8 的一部分，CI 跑，不连模型）----
+
+def test_slots_override_validated(tmp_path):
+    base = "product: SOC\nchapters:\n- {id: A, step: facts, title: t, expect: [a, b, c]}\n"
+    for extra, msg in (("slots: [1]", "步骤 key"), ("slots:\n  facts: []", "不能为空"),
+                       ("slots:\n  facts:\n  - {id: x, type: NOPE, query: q}", "条目类型")):
+        p = tmp_path / "e.yaml"
+        p.write_text(base + extra, encoding="utf-8")
+        with pytest.raises(ae.AssemblyEvalError, match=msg):
+            ae.load(p)
+    assert ae.load(EVALSET)["slots"]["design_doc"][0]["id"] == "duty"
+
+
+def test_slots_strategy_keeps_step_retrieval_as_floor(published):
+    with SessionLocal() as db:
+        base = ae.run(db, db.merge(published), _evalset())
+        slot = ae.run(db, db.merge(published), _evalset(), strategy="slots")
+    assert slot.strategy == "slots"
+    for b, s in zip(base.chapters, slot.chapters, strict=True):
+        assert set(b.got) <= set(s.got) and set(b.hit) <= set(s.hit)     # 步骤检索作底，只多不少
+
+
+def test_a12_gate_beats_fixed_query_baseline(published):
+    """A12 合并条件（总体规划 A12“A24 命中率高于基线才合并”）：按槽位装配命中率必须严格高于固定查询基线。"""
+    with SessionLocal() as db:
+        ok, line, base, slot = ae.gate(db, db.merge(published), _evalset())
+    assert ok, line
+    assert slot.hit_rate > base.hit_rate and "通过" in line
+
+
+def _no_product_slots(monkeypatch: pytest.MonkeyPatch) -> None:
+    """只看评测集覆盖的槽位，屏蔽产品配置（SOC 自 C10 起已配槽位），让门的判定逻辑可单独测。"""
+    monkeypatch.setattr(ae, "step_slots", lambda evalset, snap: dict(evalset.get("slots") or {}))
+
+
+def test_a12_gate_fails_without_slots_or_without_gain(published, monkeypatch):
+    _no_product_slots(monkeypatch)
+    with SessionLocal() as db:
+        ok, line, *_ = ae.gate(db, db.merge(published), {**_evalset(), "slots": {}})
+        assert not ok and "没有配置知识槽位" in line
+        same = {**_evalset(), "slots": {"facts": ({"id": "x", "type": "GLD", "query": "不存在的类型", "need": 1,
+                                                   "required": False},)}}
+        ok, line, base, slot = ae.gate(db, db.merge(published), same)
+    assert not ok and slot.hit_rate == base.hit_rate and "未通过" in line   # 持平不算高于
+
+
+def test_cli_gate(published, tmp_path, capsys, monkeypatch):
+    _no_product_slots(monkeypatch)
+    with SessionLocal() as db:
+        name = db.merge(published).username
+    p = tmp_path / "e.yaml"
+    p.write_text(yaml.safe_dump({**_evalset(), "slots": {k: [dict(s) for s in v]
+                                                         for k, v in _evalset()["slots"].items()}},
+                                allow_unicode=True), encoding="utf-8")
+    assert cli_main(["kb-assembly-eval", str(p), "--as", name, "--gate"]) == 0
+    assert "A12 门" in capsys.readouterr().out
+    q = tmp_path / "none.yaml"
+    q.write_text(yaml.safe_dump({k: v for k, v in _evalset().items() if k != "slots"}, allow_unicode=True),
+                 encoding="utf-8")
+    assert cli_main(["kb-assembly-eval", str(q), "--as", name, "--gate"]) == 3

@@ -50,6 +50,9 @@ class Result:
 
 
 def load(db: Session, code: str) -> registry.AgentDoc:
+    from . import roster
+
+    code = roster.resolve(db, code)        # C6-P：旧代号已停用时转到新代号
     agent = db.get(Agent, code)
     if agent is None or not agent.enabled:
         raise AgentUnavailable(f"Agent {code} 未登记或已停用")

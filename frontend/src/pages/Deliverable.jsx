@@ -6,6 +6,7 @@ import { Loading, TopBar } from "../components/common.jsx";
 import AssistPanel from "../components/AssistPanel.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
+import DeliverableForm from "../components/DeliverableForm.jsx";
 import { noteAfterInsert, spliceText } from "../editor/assist.js";
 import { applyReplace } from "../editor/selectEdit.js";
 
@@ -506,6 +507,12 @@ export default function Deliverable({ code, dcode }) {
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
+  const [form, setForm] = useState(null);        // A14②：D1、D2 表单定义，没有表单为 null
+  const [formOpen, setFormOpen] = useState(false);
+
+  const loadForm = useCallback(() => {
+    api.deliverableForm(code, dcode).then(setForm).catch(() => setForm(null));
+  }, [code, dcode]);
 
   const load = useCallback(async () => {
     try {
@@ -521,11 +528,12 @@ export default function Deliverable({ code, dcode }) {
   }, [code, dcode]);
 
   useEffect(() => {
-    setD(null); setSo(null); setSeq(1); setNotice("");
+    setD(null); setSo(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false);
+    loadForm();
     api.project(code).then(setP).catch(setError);
     api.members(code).then(setMembers).catch(() => setMembers([]));
     load();
-  }, [code, dcode, load]);
+  }, [code, dcode, load, loadForm]);
 
   // 评审在后台跑：排队或进行中时每 3 秒刷新一次
   const active = so?.latest_review && ["queued", "running"].includes(so.latest_review.status);
@@ -565,6 +573,7 @@ export default function Deliverable({ code, dcode }) {
         <select className="sm" aria-label="切换交付件" value={d.code} onChange={(e) => navigate(`/project/${encodeURIComponent(code)}/deliverables/${e.target.value}`)}>
           {p.deliverables.map((x) => <option key={x.code} value={x.code}>{x.code} {x.title}</option>)}
         </select>
+        {editable && form?.writable && !formOpen && <button className="btnp" onClick={() => setFormOpen(true)}>按表单成稿</button>}
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportWord)}>{exporting ? "导出中…" : "导出 Word"}</button>
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportPpt)}>导出 PPT</button>
       </TopBar>
@@ -591,8 +600,10 @@ export default function Deliverable({ code, dcode }) {
           <Quality code={code} dcode={dcode} so={so} canReview={editable && d.sections.length > 0} isManager={isManager} onChanged={load} />
         </div>
         <div style={{ minWidth: 0 }}>
-          {cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
-            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : ""}</div>}
+          {formOpen && form ? <DeliverableForm code={code} dcode={dcode} form={form} onCancel={() => setFormOpen(false)}
+            onDone={async () => { setFormOpen(false); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
+            : cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
+            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以点右上角“按表单成稿”，或先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
           <section className="pnl pad" aria-label="待你确认">

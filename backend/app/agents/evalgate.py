@@ -9,6 +9,10 @@
 用模拟模型逐题跑通（md 能裁剪、网关不拦、评分不报错）在 `tests/test_eval_gate.py`，随 pytest 进 CI。
 真模型回归不进 CI：测试机攒批跑，每题 3 轮多数判定（`docs/测试交接规范.md` 第 5 节）。
 
+A12 程序门（三期，`app/kb/assembly_eval.gate`）：按槽位装配的命中率必须严格高于 A24 固定查询基线，
+CI 随 pytest 用样例条目和 `knowledge/eval/assembly_samples.yaml` 跑（`tests/test_kb_assembly_eval.py`），
+测试机对真实评测集跑 `kb-assembly-eval <评测集> --as <用户> --gate`（退出码 3 为未通过）。
+
 A24（章节级装配评测）接入点：`EXTRA_CHECKS`。A24 合并后在它的模块里 `register(...)`，
 或在 `_load_extra()` 里按模块名导入；未合并时导入失败即跳过，本模块不依赖它。
 """

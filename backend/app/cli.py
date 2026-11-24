@@ -795,6 +795,34 @@ def kb_source_registry(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_acquire_sources(args: argparse.Namespace) -> int:
+    """知识源清单（三期 B25①）：来源确认队列的缺口经网关交 kb-builder 列清单，程序核对后写成 JSON 供来源确认。"""
+    import json
+    from pathlib import Path
+
+    from .kb import source_list
+    with SessionLocal() as db:
+        try:
+            rep = source_list.suggest(db, actor=args.as_user or "cli")
+        except source_list.SourceListError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+    Path(args.out).write_text(json.dumps(rep.to_json(), ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"知识源清单：{len(rep.rows)} 行，需登记来源 {len(rep.needs_registration)} 行，丢弃 {rep.problems or 0}"
+          + ("（演示模式，未接入模型）" if rep.demo else ""))
+    return 0
+
+
+def extraction_week(args: argparse.Namespace) -> int:
+    """经验萃取一轮（四期 F4③）：超时收尾 → 3 类信号 → 三道过滤 → 派题（每人每周 ≤ 3 题）；只打印计数。"""
+    from .project import extraction_trigger as et
+    with SessionLocal() as db:
+        r = et.run_week(db, actor="cli")
+        st = et.stats(db)
+    print("经验萃取：" + "，".join(f"{k}={v}" for k, v in r.items()) + f"；跳过率 {st['skip_rate']:.0%}")
+    return 0
+
+
 def kb_acquire_dispatch(args: argparse.Namespace) -> int:
     """采集下发包导出（三期 B25③）：本周“直接采集”的缺口，只含网址与采集规则，交采集机。"""
     import json
@@ -999,6 +1027,16 @@ def kb_assembly_eval(args: argparse.Namespace) -> int:
             print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
             return 1
         try:
+            if args.gate:
+                ok, line, base, report = ae.gate(db, user, ae.load(Path(args.evalset)))
+                print(ae.format_report(base))
+                print()
+                print(ae.format_report(report))
+                print(line)
+                if args.out:
+                    Path(args.out).write_text(json.dumps(report.to_json(), ensure_ascii=False, indent=2),
+                                              encoding="utf-8")
+                return 0 if ok else 3
             report = ae.run(db, user, ae.load(Path(args.evalset)), strategy=args.strategy)
             verdict = None
             if args.baseline:
@@ -1194,6 +1232,12 @@ def main(argv: list[str] | None = None) -> int:
     ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
     ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     ksp.set_defaults(func=kb_source_publish)
+    kas = sub.add_parser("kb-acquire-sources", help="知识源清单：来源确认队列的缺口经网关交 kb-builder 列清单，程序核对不编造网址")
+    kas.add_argument("--out", required=True, help="清单 JSON 文件")
+    kas.add_argument("--as", dest="as_user", default="", help="发起人（记用量与审计）")
+    kas.set_defaults(func=kb_acquire_sources)
+    ew = sub.add_parser("extraction-week", help="经验萃取一轮（四期 F4③）：收信号、先查后问过滤、派题、超时收尾")
+    ew.set_defaults(func=extraction_week)
     kad = sub.add_parser("kb-acquire-dispatch", help="导出采集下发包：本周直接采集的缺口网址与规则（白名单外拒绝）")
     kad.add_argument("--out", required=True, help="下发包 JSON 文件")
     kad.set_defaults(func=kb_acquire_dispatch)
@@ -1227,11 +1271,13 @@ def main(argv: list[str] | None = None) -> int:
                          "给 --baseline 时命中率不低于基线 + --min-gain 退出码 0，否则 3")
     kae.add_argument("evalset", help="评测集文件（YAML，每章 3～5 条应命中知识）")
     kae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
-    kae.add_argument("--strategy", default="baseline", choices=["baseline", "chapter"],
-                     help="baseline 交付链步骤固定查询（现行做法）；chapter 章节查询")
+    kae.add_argument("--strategy", default="baseline", choices=["baseline", "chapter", "slots"],
+                     help="baseline 交付链步骤固定查询（现行做法）；chapter 章节查询；slots A12 按知识槽位装配")
     kae.add_argument("--out", default="", help="把明细写成 JSON 文件（可作下次的 --baseline）")
     kae.add_argument("--baseline", default="", help="基线报告 JSON（--out 写出的）")
     kae.add_argument("--min-gain", type=float, default=0.0, help="要求比基线高出多少（如 0.01 = 1 个百分点）")
+    kae.add_argument("--gate", action="store_true",
+                     help="A12 程序门：同时跑 baseline 和 slots，按槽位装配命中率高于基线才返回 0（否则 3）")
     kae.set_defaults(func=kb_assembly_eval)
     kcp = sub.add_parser("kb-candidate-promote",
                          help="候选影子期晋级：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，抽检不通过的退回人工（worker 每天自动执行）")
