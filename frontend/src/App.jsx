@@ -9,6 +9,7 @@ import Chat from "./pages/Chat.jsx";
 import Deletions from "./pages/Deletions.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
 import Indicators from "./pages/Indicators.jsx";
+import QualityIncidents from "./pages/QualityIncidents.jsx";
 import Workbench from "./pages/Workbench.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
 import KbBatches from "./pages/KbBatches.jsx";
@@ -89,6 +90,7 @@ export default function App() {
           <Route path="/deletions" element={<RequireLead><Deletions /></RequireLead>} />
           <Route path="/portfolio" element={<RequireLead><Portfolio /></RequireLead>} />
           <Route path="/indicators" element={<RequireLead><Indicators /></RequireLead>} />
+          <Route path="/quality-incidents" element={<RequireLead><QualityIncidents /></RequireLead>} />
           <Route path="/kb/search" element={<KbSearch />} />
           <Route path="/kb/intake" element={<KbIntake />} />
           <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />
