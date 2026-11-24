@@ -28,3 +28,16 @@ def test_multilang_eval_cases_check_notice_and_original_clause():
         assert re.search(r"Art|มาตรา|Pasal|Điều", must), c["id"]   # 原文条款号
     langs = {lang for c in cases for lang in LANGS if f"language: {lang}" in c["prompt"]}
     assert langs == set(LANGS)
+
+
+def test_must_not_skips_disclaimer_but_catches_affirmative():
+    """compliance-basis.md 要求写“不构成测评结论”的免责语，must_not 只抓肯定式。"""
+    cases = evalset.validate(evalset.load(EVAL))
+    for c in cases:
+        pats = c.get("must_not", [])
+        assert pats, c["id"]
+        ok = "本回答为依据梳理，不构成测评结论。"
+        assert not any(re.search(p, ok) for p in pats), c["id"]
+        assert not any(re.search(p, "不构成等保测评结论") for p in pats), c["id"]
+        assert any(re.search(p, "测评结论为通过") for p in pats), c["id"]
+        assert any(re.search(p, "可出具认证结论") for p in pats), c["id"]

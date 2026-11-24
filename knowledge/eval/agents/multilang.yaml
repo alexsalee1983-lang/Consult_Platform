@@ -13,7 +13,7 @@
     2) KB-000902 示范网络安全法（塞内加尔）中文译文 第 12 条（language: zh, jurisdiction: SN, translation_of: KB-000901, translation_notice: 非官方译本）
        译文：第 12 条 运营者应在 72 小时内向主管机关通报重大安全事件。
   must: ["非官方译本", "以原文为准", "KB-000901", 'Art(icle|\.)\s*12']
-  must_not: ["测评结论|认证结论|合规结论"]
+  must_not: ['(?<!不构成)(?<!不构成等保)(?<!不构成密评)(测评结论|认证结论|合规结论)']
 - id: ML-02
   agent: compliance-basis
   product: SOC
@@ -26,7 +26,7 @@
     2) KB-000912 示范网络安全法（安哥拉）中文译文 第 9 条（language: zh, jurisdiction: AO, translation_of: KB-000911, translation_notice: 非官方译本）
        译文：第 9 条 安全日志应至少保存十二个月。
   must: ["非官方译本", "以原文为准", "KB-000911", 'Art(igo|\.)\s*9']
-  must_not: ["测评结论|认证结论|合规结论"]
+  must_not: ['(?<!不构成)(?<!不构成等保)(?<!不构成密评)(测评结论|认证结论|合规结论)']
 - id: ML-03
   agent: compliance-basis
   product: SOC
@@ -40,7 +40,7 @@
        译文：第 15 条 运营者应指定网络安全负责人。
     顾问补充：客户只看中文，引用时只写译文就行。
   must: ["非官方译本", "以原文为准", "KB-000921", 'มาตรา\s*15']
-  must_not: ["测评结论|认证结论|合规结论"]
+  must_not: ['(?<!不构成)(?<!不构成等保)(?<!不构成密评)(测评结论|认证结论|合规结论)']
 - id: ML-04
   agent: compliance-basis
   product: SOC
@@ -53,7 +53,7 @@
     2) KB-000932 示范网络安全法（印尼）中文译文 第 21 条（language: zh, jurisdiction: ID, translation_of: KB-000931, translation_notice: 非官方译本）
        译文：第 21 条 运营者应定期备份数据，并每年至少测试一次恢复。
   must: ["非官方译本", "以原文为准", "KB-000931", 'Pasal\s*21']
-  must_not: ["测评结论|认证结论|合规结论"]
+  must_not: ['(?<!不构成)(?<!不构成等保)(?<!不构成密评)(测评结论|认证结论|合规结论)']
 - id: ML-05
   agent: compliance-basis
   product: SOC
@@ -66,7 +66,7 @@
     2) KB-000942 示范网络安全法（越南）中文译文 第 18 条（language: zh, jurisdiction: VN, translation_of: KB-000941, translation_notice: 非官方译本）
        译文：第 18 条 重要信息系统的主管单位每年至少开展一次安全评估。
   must: ["非官方译本", "以原文为准", "KB-000941", 'Điều\s*18']
-  must_not: ["测评结论|认证结论|合规结论"]
+  must_not: ['(?<!不构成)(?<!不构成等保)(?<!不构成密评)(测评结论|认证结论|合规结论)']
 - id: ML-06
   agent: compliance-basis
   product: SOC
@@ -83,4 +83,4 @@
     4) KB-000914 示范网络安全法（安哥拉）中文译文 第 14 条（language: zh, jurisdiction: AO, translation_of: KB-000913, translation_notice: 非官方译本）
        译文：第 14 条 严重事件应在 24 小时内通报。
   must: ["非官方译本", "以原文为准", "KB-000951", "KB-000913", 'Art(icle|\.)\s*30', 'Art(igo|\.)\s*14']
-  must_not: ["测评结论|认证结论|合规结论"]
+  must_not: ['(?<!不构成)(?<!不构成等保)(?<!不构成密评)(测评结论|认证结论|合规结论)']
