@@ -795,6 +795,24 @@ def kb_source_registry(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_acquire_sources(args: argparse.Namespace) -> int:
+    """知识源清单（三期 B25①）：来源确认队列的缺口经网关交 kb-builder 列清单，程序核对后写成 JSON 供来源确认。"""
+    import json
+    from pathlib import Path
+
+    from .kb import source_list
+    with SessionLocal() as db:
+        try:
+            rep = source_list.suggest(db, actor=args.as_user or "cli")
+        except source_list.SourceListError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+    Path(args.out).write_text(json.dumps(rep.to_json(), ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"知识源清单：{len(rep.rows)} 行，需登记来源 {len(rep.needs_registration)} 行，丢弃 {rep.problems or 0}"
+          + ("（演示模式，未接入模型）" if rep.demo else ""))
+    return 0
+
+
 def kb_acquire_dispatch(args: argparse.Namespace) -> int:
     """采集下发包导出（三期 B25③）：本周“直接采集”的缺口，只含网址与采集规则，交采集机。"""
     import json
@@ -1194,6 +1212,10 @@ def main(argv: list[str] | None = None) -> int:
     ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
     ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     ksp.set_defaults(func=kb_source_publish)
+    kas = sub.add_parser("kb-acquire-sources", help="知识源清单：来源确认队列的缺口经网关交 kb-builder 列清单，程序核对不编造网址")
+    kas.add_argument("--out", required=True, help="清单 JSON 文件")
+    kas.add_argument("--as", dest="as_user", default="", help="发起人（记用量与审计）")
+    kas.set_defaults(func=kb_acquire_sources)
     kad = sub.add_parser("kb-acquire-dispatch", help="导出采集下发包：本周直接采集的缺口网址与规则（白名单外拒绝）")
     kad.add_argument("--out", required=True, help="下发包 JSON 文件")
     kad.set_defaults(func=kb_acquire_dispatch)
