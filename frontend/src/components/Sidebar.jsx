@@ -90,6 +90,7 @@ export default function Sidebar() {
       { to: "/kb/intake", icon: "inbox", label: "投料箱" },
       ...(isKnowledge(user) ? [
         { to: "/kb/review", icon: "review", label: "审批队列" },
+        ...(hasRole(user, "knowledge_expert") ? [{ to: "/kb/bench", icon: "review", label: "专家工作台" }] : []),
         { to: "/kb/map", icon: "map", label: "知识地图与健康" },
         ...(hasRole(user, "knowledge_admin") ? [{ to: "/kb/batches", icon: "dash", label: "知识批次" }] : []),
         { to: "/kb/usage", icon: "dash", label: "知识使用统计" },
