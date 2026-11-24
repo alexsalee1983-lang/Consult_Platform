@@ -1,0 +1,224 @@
+# 题库样例（三期 E1）：每个控制域取一题，供格式自检与开发用。正文在资料仓 Consult_Knowledge/question_bank/。
+product: SOC
+version: v1
+status: draft
+expert_review: pending
+note: 公开方法版；评分锚点为内部使用，不进客户调研包与自评包；对客只说“提前了解情况”。
+domains:
+- 组织与人员
+- 流程
+- 技术平台与数据源
+- 度量与改进
+catalog: v0
+scope: sample
+questions:
+- id: SOC-ORG-001
+  product: SOC
+  domain: 组织与人员
+  control_ids:
+  - SOC.ORG.01
+  checkpoints:
+  - SOC.ORG.01.a
+  kind: closed
+  stem: 目前安全监控与运营工作由哪些岗位或团队承担？各自的分工写在哪里？
+  options:
+  - key: A
+    level: 1
+    text: 没有明确岗位，谁有空谁处理
+  - key: B
+    level: 2
+    text: 有人负责，但分工没有书面说明
+  - key: C
+    level: 3
+    text: 岗位和分工有书面说明，个别职责有交叉或空白
+  - key: D
+    level: 4
+    text: 岗位、分工、接口均有书面说明，并按年度核对
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有明确岗位，谁有空谁处理
+  - level: 2
+    state: 有人负责，但分工没有书面说明
+  - level: 3
+    state: 岗位和分工有书面说明，个别职责有交叉或空白
+  - level: 4
+    state: 岗位、分工、接口均有书面说明，并按年度核对
+  followups:
+  - 这些岗位是专职还是兼职？
+  - 分工说明最近一次更新是什么时候？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: org_chart
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 安全监控与运营工作在信息科技部和运行维护中心之间如何分工？
+    followups:
+    - 风险合规部在其中承担什么角色？
+  - industry: POWER
+    stem: 安全监控工作在信通、调控中心和各厂站之间如何分工？
+    followups:
+    - 生产控制区的监控由谁负责？
+  problem: false
+- id: SOC-PRC-001
+  product: SOC
+  domain: 流程
+  control_ids:
+  - SOC.PRC.01
+  checkpoints:
+  - SOC.PRC.01.a
+  kind: closed
+  stem: 告警产生后，值班人员判断它是否需要处理的依据是什么？
+  options:
+  - key: A
+    level: 1
+    text: 凭个人经验
+  - key: B
+    level: 2
+    text: 有一些经验总结，没有成文
+  - key: C
+    level: 3
+    text: 有告警分级标准和研判指引，覆盖主要告警类型
+  - key: D
+    level: 4
+    text: 分级标准、研判指引覆盖主要场景，并根据反馈定期调整
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 凭个人经验
+  - level: 2
+    state: 有一些经验总结，没有成文
+  - level: 3
+    state: 有告警分级标准和研判指引，覆盖主要告警类型
+  - level: 4
+    state: 分级标准、研判指引覆盖主要场景，并根据反馈定期调整
+  followups:
+  - 高危和低危告警的处理时限分别是多少？
+  - 误报多的告警怎么处理？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - 运营值班
+  prefill:
+  - source: runbooks
+  - source: siem_stats
+  problem: false
+- id: SOC-TEC-001
+  product: SOC
+  domain: 技术平台与数据源
+  control_ids:
+  - SOC.TEC.01
+  checkpoints:
+  - SOC.TEC.01.a
+  kind: closed
+  stem: 目前接入监控的系统和设备类别有哪些？（请按类别说明，不需要提供具体地址）
+  options:
+  - key: A
+    level: 1
+    text: 只有少数安全设备
+  - key: B
+    level: 2
+    text: 安全设备和部分主机
+  - key: C
+    level: 3
+    text: 安全设备、主机、网络、重要应用基本接入
+  - key: D
+    level: 4
+    text: 按资产重要性分级接入，并定期核对覆盖率
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 只有少数安全设备
+  - level: 2
+    state: 安全设备和部分主机
+  - level: 3
+    state: 安全设备、主机、网络、重要应用基本接入
+  - level: 4
+    state: 按资产重要性分级接入，并定期核对覆盖率
+  followups:
+  - 接入范围是怎么确定的？
+  - 哪些重要系统目前还没有接入？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: asset_list
+  - source: siem_stats
+  industry_variants:
+  - industry: BANK
+    stem: 核心系统、网银和手机银行、柜面系统的日志是否已接入监控？
+    followups:
+    - 外联和第三方接口的日志是否接入？
+  - industry: POWER
+    stem: 生产控制区、管理信息区的监控数据分别如何接入？是否有单向传输或隔离要求？
+    followups:
+    - 厂站侧设备的数据采集有什么限制？
+  problem: false
+- id: SOC-MET-001
+  product: SOC
+  domain: 度量与改进
+  control_ids:
+  - SOC.MET.01
+  checkpoints:
+  - SOC.MET.01.a
+  kind: closed
+  stem: 团队目前用哪些指标衡量安全运营的效果？
+  options:
+  - key: A
+    level: 1
+    text: 没有指标
+  - key: B
+    level: 2
+    text: 有工作量统计（如告警数）
+  - key: C
+    level: 3
+    text: 有响应时间、处置时间等过程指标
+  - key: D
+    level: 4
+    text: 过程与结果指标齐全，有目标值并定期对照
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有指标
+  - level: 2
+    state: 有工作量统计（如告警数）
+  - level: 3
+    state: 有响应时间、处置时间等过程指标
+  - level: 4
+    state: 过程与结果指标齐全，有目标值并定期对照
+  followups:
+  - 这些指标的数据是怎么取得的？
+  - 指标有没有推动过实际改变？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: siem_stats
+  - source: prior_report
+  problem: false

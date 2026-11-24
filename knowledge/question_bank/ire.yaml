@@ -1,0 +1,378 @@
+# 题库样例（三期 E1）：每个控制域取一题，供格式自检与开发用。正文在资料仓 Consult_Knowledge/question_bank/。
+product: IRE
+version: v1
+status: draft
+expert_review: pending
+note: 公开方法版；评分锚点为内部使用，不进客户调研包与自评包；对客只说“提前了解情况”；题目只问状态与类别，不索取口令、漏洞细节、IP 规划等机密级内容。
+domains:
+- 事件经过与影响
+- 防护
+- 检测与监测
+- 响应与处置
+- 恢复与业务连续性
+- 通报与报告
+- 治理与改进
+catalog: v0
+scope: sample
+questions:
+- id: IRE-INC-001
+  product: IRE
+  domain: 事件经过与影响
+  control_ids:
+  - IRE.INC.01
+  checkpoints:
+  - IRE.INC.01.a
+  kind: closed
+  stem: 请按时间顺序介绍这次事件：什么时候出现了第一个异常迹象，什么时候确认是安全事件？
+  options:
+  - key: A
+    level: 1
+    text: 说不清时间节点
+  - key: B
+    level: 2
+    text: 能说出大致日期，缺少关键时间点
+  - key: C
+    level: 3
+    text: 能说出主要节点，个别环节时间不确定
+  - key: D
+    level: 4
+    text: 有按时间排列的记录，关键节点时间有记录可核对
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 说不清时间节点
+  - level: 2
+    state: 能说出大致日期，缺少关键时间点
+  - level: 3
+    state: 能说出主要节点，个别环节时间不确定
+  - level: 4
+    state: 有按时间排列的记录，关键节点时间有记录可核对
+  followups:
+  - 这些时间依据的是哪份记录？
+  - 第一次异常迹象出现前后，系统有没有做过变更？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  - IT运维
+  prefill:
+  - source: incident_record
+  problem: false
+- id: IRE-PRO-001
+  product: IRE
+  domain: 防护
+  control_ids:
+  - IRE.PRO.01
+  checkpoints:
+  - IRE.PRO.01.b
+  kind: closed
+  stem: 事件发生时，外部访问入口有哪些？这些入口平时是怎么管理的？
+  options:
+  - key: A
+    level: 1
+    text: 没有清单
+  - key: B
+    level: 2
+    text: 知道主要入口，没有书面清单
+  - key: C
+    level: 3
+    text: 有入口清单，管理不定期复核
+  - key: D
+    level: 4
+    text: 有入口清单，定期复核并关闭不必要的入口
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有清单
+  - level: 2
+    state: 知道主要入口，没有书面清单
+  - level: 3
+    state: 有入口清单，管理不定期复核
+  - level: 4
+    state: 有入口清单，定期复核并关闭不必要的入口
+  followups:
+  - 这次事件是否与某个入口有关？
+  - 新增入口需要谁批准？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: asset_list
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 网银、手机银行及合作方接口等对外入口是否有清单？变更如何审批？
+    followups:
+    - 合作机构的接入如何管理？
+  - industry: POWER
+    stem: 生产控制区与管理信息区之间的互联通道是否有清单？变更如何审批？
+    followups:
+    - 运维人员的远程接入通道如何管理？
+  problem: false
+- id: IRE-DET-001
+  product: IRE
+  domain: 检测与监测
+  control_ids:
+  - IRE.DET.01
+  checkpoints:
+  - IRE.DET.01.a
+  kind: closed
+  stem: 这次事件是通过什么方式发现的？
+  options:
+  - key: A
+    level: 1
+    text: 外部通知或业务投诉才知道
+  - key: B
+    level: 2
+    text: 运维人员偶然发现
+  - key: C
+    level: 3
+    text: 安全设备告警后发现，延迟较长
+  - key: D
+    level: 4
+    text: 监控系统及时告警，并在规定时间内确认
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 外部通知或业务投诉才知道
+  - level: 2
+    state: 运维人员偶然发现
+  - level: 3
+    state: 安全设备告警后发现，延迟较长
+  - level: 4
+    state: 监控系统及时告警，并在规定时间内确认
+  followups:
+  - 从第一次异常到被发现，大概间隔多久？
+  - 如果没有这个发现途径，还有没有别的方式能发现？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  - 安全分析
+  prefill:
+  - source: incident_record
+  industry_variants:
+  - industry: BANK
+    stem: 事件是由内部监控、反欺诈系统、客户反馈还是监管或同业通报发现的？
+    followups:
+    - 客户或渠道侧最早是什么时候出现反馈？
+  problem: false
+- id: IRE-RSP-001
+  product: IRE
+  domain: 响应与处置
+  control_ids:
+  - IRE.RSP.01
+  checkpoints:
+  - IRE.RSP.01.a
+  kind: closed
+  stem: 事发时有没有事件响应预案？预案规定了哪些角色和步骤？
+  options:
+  - key: A
+    level: 1
+    text: 没有预案
+  - key: B
+    level: 2
+    text: 有预案，但没有人熟悉
+  - key: C
+    level: 3
+    text: 有预案，大致按其执行
+  - key: D
+    level: 4
+    text: 有预案、角色清晰，按预案执行并留有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有预案
+  - level: 2
+    state: 有预案，但没有人熟悉
+  - level: 3
+    state: 有预案，大致按其执行
+  - level: 4
+    state: 有预案、角色清晰，按预案执行并留有记录
+  followups:
+  - 实际处置与预案有哪些出入？
+  - 预案最近一次更新是什么时候？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: runbooks
+  - source: policy_docs
+  industry_variants:
+  - industry: BANK
+    stem: 预案是否与业务连续性、信息科技突发事件的要求相衔接？
+    followups:
+    - 预案是否经过上级或监管部门要求的备案？
+  - industry: POWER
+    stem: 预案是否与调度、生产运行的应急预案衔接？
+    followups:
+    - 与主管单位的上报流程是否写入预案？
+  problem: false
+- id: IRE-REC-001
+  product: IRE
+  domain: 恢复与业务连续性
+  control_ids:
+  - IRE.REC.01
+  checkpoints:
+  - IRE.REC.01.a
+  - IRE.REC.01.c
+  kind: closed
+  stem: 系统恢复是怎么进行的？有没有预先验证过恢复流程？
+  options:
+  - key: A
+    level: 1
+    text: 没有流程
+  - key: B
+    level: 2
+    text: 临时处理
+  - key: C
+    level: 3
+    text: 有流程，没有演练过
+  - key: D
+    level: 4
+    text: 有流程并定期演练，恢复时间目标有依据
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有流程
+  - level: 2
+    state: 临时处理
+  - level: 3
+    state: 有流程，没有演练过
+  - level: 4
+    state: 有流程并定期演练，恢复时间目标有依据
+  followups:
+  - 这次恢复实际用了多久？与目标相比如何？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 业务负责人
+  prefill:
+  - source: runbooks
+  - source: incident_record
+  problem: false
+- id: IRE-RPT-001
+  product: IRE
+  domain: 通报与报告
+  control_ids:
+  - IRE.RPT.01
+  checkpoints:
+  - IRE.RPT.01.a
+  - IRE.RPT.01.b
+  kind: closed
+  stem: 事件发现后，内部是怎么逐级上报的？
+  options:
+  - key: A
+    level: 1
+    text: 没有规则
+  - key: B
+    level: 2
+    text: 有习惯，没有成文
+  - key: C
+    level: 3
+    text: 有规则，实际执行有延迟
+  - key: D
+    level: 4
+    text: 有分级上报标准和时限，并有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有规则
+  - level: 2
+    state: 有习惯，没有成文
+  - level: 3
+    state: 有规则，实际执行有延迟
+  - level: 4
+    state: 有分级上报标准和时限，并有记录
+  followups:
+  - 本次事件何时报告到管理层？
+  - 上报是否有延误？原因是什么？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: incident_record
+  - source: policy_docs
+  problem: false
+- id: IRE-GOV-001
+  product: IRE
+  domain: 治理与改进
+  control_ids:
+  - IRE.GOV.01
+  checkpoints:
+  - IRE.GOV.01.a
+  - IRE.GOV.01.c
+  kind: closed
+  stem: 这次事件之后，有没有做复盘？形成了哪些结论？
+  options:
+  - key: A
+    level: 1
+    text: 没有
+  - key: B
+    level: 2
+    text: 做了讨论，没有记录
+  - key: C
+    level: 3
+    text: 有复盘报告，结论比较笼统
+  - key: D
+    level: 4
+    text: 有复盘报告，包含根因、教训和整改项，并经管理层确认
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有
+  - level: 2
+    state: 做了讨论，没有记录
+  - level: 3
+    state: 有复盘报告，结论比较笼统
+  - level: 4
+    state: 有复盘报告，包含根因、教训和整改项，并经管理层确认
+  followups:
+  - 复盘是在事件后多久做的？
+  - 哪些人参与了？
+  depth:
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: prior_report
+  - source: incident_record
+  problem: false
