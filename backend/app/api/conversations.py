@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..agents import chat_tools, handoff, knowledge, runtime, tools
+from ..agents import chat_tools, handoff, knowledge, roster, runtime, tools
 from ..core import audit
 from ..core.auth import current_user
 from ..core.config import get_settings
@@ -99,16 +99,17 @@ def _mine(db: Session, cid: int, user: User) -> tuple[Conversation, Project]:
 @router.post("/projects/{code}/conversations", response_model=ConversationOut, status_code=201)
 def create(code: str, body: ConversationIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     project = project_for_member(db, code, user)
+    agent_code = roster.resolve(db, body.agent_code)      # C6-P：旧代号已停用时新对话记新代号
     try:
-        doc = runtime.ready_doc(db, body.agent_code)
+        doc = runtime.ready_doc(db, agent_code)
     except runtime.AgentNotReady as e:
         raise HTTPException(409, str(e)) from e
-    c = Conversation(project_id=project.id, user_id=user.id, agent_code=body.agent_code, title="",
+    c = Conversation(project_id=project.id, user_id=user.id, agent_code=agent_code, title="",
                      prompt_version=doc.version)
     db.add(c)
     db.commit()
     audit.record(db, actor=user.username, action="conversation.create", result="allowed", project_code=project.code,
-                 agent=body.agent_code, conversation_id=c.id, prompt_version=doc.version)
+                 agent=agent_code, conversation_id=c.id, prompt_version=doc.version)
     return _out(db, c, project.code)
 
 

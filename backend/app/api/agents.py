@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..agents import runtime, tools
+from ..agents import roster, runtime, tools
 from ..core import audit
 from ..core.auth import current_user
 from ..core.db import get_db
@@ -31,6 +31,7 @@ class AgentOut(BaseModel):
     reason: str = ""             # 不可用的原因
     level: str = "standard"      # 模型能力档（md 的 model_tier）
     prompt_version: str = ""     # 当前提示词版本（公共规范 + 角色 md 的内容哈希）
+    replaced_by: str | None = None   # 三期 C6-P：将由哪个收敛后的 Agent 取代（旧代号才有）
 
 
 class ToolCallIn(BaseModel):
@@ -45,7 +46,8 @@ def list_agents(db: Session = Depends(get_db)):
     for a in agents:
         i = runtime.agent_info(db, a)
         out.append(AgentOut(code=i.code, name=i.name, side=i.side, tools=i.tools, ready=i.ready, reason=i.reason,
-                            level=i.level, prompt_version=i.prompt_version))
+                            level=i.level, prompt_version=i.prompt_version,
+                            replaced_by=roster.replaced_by(i.code)))
     return out
 
 
