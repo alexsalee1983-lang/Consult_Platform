@@ -209,6 +209,11 @@ MATRIX = [
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
                                                         (403, 403, 403, 403, 403)),
+    # 三期 C6-P（迁移 0045）：咨询协调与咨询师同权（非成员 404）；知识采集在采集机区，任何平台工具 403
+    (("POST", "/api/agents/consult-coordinator/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (200, 404, 403, 403, 403)),
+    (("POST", "/api/agents/kb-collector/tools/kb.search", {"args": {"query": "值班"}}),
+                                                        (403, 403, 403, 403, 403)),
     # 去标识检查（三期 C7，迁移 0048）：只授权 kb-builder，不涉及项目；交付侧 Agent 调用一律 403
     (("POST", "/api/agents/kb-builder/tools/deid.check", {"args": {"text": "告警分级按影响范围分三级。"}}),
                                                         (200, 200, 403, 403, 403)),

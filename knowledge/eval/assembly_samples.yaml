@@ -3,6 +3,17 @@
 # soc-ransomware-playbook 故意不存在，用来验证“缺槽”报告。
 product: SOC
 modules: []
+# A12 程序门用的槽位草稿（格式同产品配置的 slots；C10 槽位规格写进 products/soc.yaml 后可删掉这段，改用配置）
+slots:
+  facts:
+    - {id: survey, type: MTD, query: SOC 现状调研 访谈提纲, need: 2}
+  gap:
+    - {id: basis, type: REF, query: 网络安全等级保护 应急预案, need: 2, required: true}
+    - {id: metrics, type: MTD, query: SOC 度量指标, need: 1}
+  design_doc:
+    - {id: duty, type: MTD, query: 夜间值守 告警分级, need: 2}
+    - {id: handover, type: TPL, query: 交接班 处置剧本, need: 2}
+    - {id: pit, type: PIT, query: 告警阈值 默认值, need: 1}
 chapters:
   - id: SOC-D3-01
     step: facts

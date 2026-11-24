@@ -1017,6 +1017,16 @@ def kb_assembly_eval(args: argparse.Namespace) -> int:
             print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
             return 1
         try:
+            if args.gate:
+                ok, line, base, report = ae.gate(db, user, ae.load(Path(args.evalset)))
+                print(ae.format_report(base))
+                print()
+                print(ae.format_report(report))
+                print(line)
+                if args.out:
+                    Path(args.out).write_text(json.dumps(report.to_json(), ensure_ascii=False, indent=2),
+                                              encoding="utf-8")
+                return 0 if ok else 3
             report = ae.run(db, user, ae.load(Path(args.evalset)), strategy=args.strategy)
             verdict = None
             if args.baseline:
@@ -1249,11 +1259,13 @@ def main(argv: list[str] | None = None) -> int:
                          "给 --baseline 时命中率不低于基线 + --min-gain 退出码 0，否则 3")
     kae.add_argument("evalset", help="评测集文件（YAML，每章 3～5 条应命中知识）")
     kae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
-    kae.add_argument("--strategy", default="baseline", choices=["baseline", "chapter"],
-                     help="baseline 交付链步骤固定查询（现行做法）；chapter 章节查询")
+    kae.add_argument("--strategy", default="baseline", choices=["baseline", "chapter", "slots"],
+                     help="baseline 交付链步骤固定查询（现行做法）；chapter 章节查询；slots A12 按知识槽位装配")
     kae.add_argument("--out", default="", help="把明细写成 JSON 文件（可作下次的 --baseline）")
     kae.add_argument("--baseline", default="", help="基线报告 JSON（--out 写出的）")
     kae.add_argument("--min-gain", type=float, default=0.0, help="要求比基线高出多少（如 0.01 = 1 个百分点）")
+    kae.add_argument("--gate", action="store_true",
+                     help="A12 程序门：同时跑 baseline 和 slots，按槽位装配命中率高于基线才返回 0（否则 3）")
     kae.set_defaults(func=kb_assembly_eval)
     kcp = sub.add_parser("kb-candidate-promote",
                          help="候选影子期晋级：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，抽检不通过的退回人工（worker 每天自动执行）")

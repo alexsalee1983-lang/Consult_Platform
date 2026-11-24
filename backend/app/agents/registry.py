@@ -1,6 +1,6 @@
 """Agent md 注册表：读取 agents/01_公共规范.md 和 agents/roles/*.md，组装系统提示。
 
-- md 正文就是系统提示，frontmatter 只读取 name、display_name、version、model_tier、tools、service_modules。
+- md 正文就是系统提示，frontmatter 只读取 name、display_name、version、model_tier、tools、service_modules、replaces。
 - 版本：公共规范 + 角色 md 内容的 SHA-256（前 12 位），每条对话和消息都记下，结果可追溯到提示词版本。
 - 热加载：每次取用时比较文件修改时间，md 改了自动重新读取（测试机挂载 agents/ 时不用重启）。
 - 就绪：数据库 agents 表里启用、有对应 md、md 的 name 与代号一致，三者都满足才可用。
@@ -48,6 +48,7 @@ class AgentDoc:
     service_modules: list[str] = field(default_factory=list)
     level_set: bool = False    # md 写了 model_tier（没写时调用方可指定默认档，app/agents/call.py）
     role_text: str = ""        # 角色 md 全文（含 frontmatter），存版本库用（四期 F3②e）
+    replaces: list[str] = field(default_factory=list)   # md 写的被它取代的旧代号（三期 C6；以 roster.ALIASES 为准）
 
 
 def agents_dir() -> Path:
@@ -111,6 +112,7 @@ def parse(code: str, common: str, role_text: str, name: str = "") -> AgentDoc | 
         version=version, md_tools=[str(t) for t in (meta.get("tools") or [])],
         service_modules=[str(m) for m in (meta.get("service_modules") or [])],
         level_set=str(meta.get("model_tier") or "").strip() in TIER_LEVEL, role_text=role_text,
+        replaces=[str(r) for r in (meta.get("replaces") or [])],
     )
 
 
