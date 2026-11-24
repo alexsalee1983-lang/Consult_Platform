@@ -37,6 +37,13 @@ MATRIX = [
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
     # 指标看板（三期 F2）：只给项目负责人（负责人 200 在 test_indicators 里测）
     (("GET", "/api/indicators", None),                  (403, 403, 403, 403, 403)),
+    # AI 质量事件台账（四期 F3）：台账只给项目负责人；登记挂 BANK-A 须是成员（非成员 404）；
+    # 他人事件详情和处置 404（负责人、项目经理、登记人在 test_quality_incidents 里测）
+    (("GET", "/api/quality-incidents", None),           (403, 403, 403, 403, 403)),
+    (("POST", "/api/quality-incidents", {"category": "bogus", "ref_kind": "run", "ref_id": "1", "project": "BANK-A"}),
+     (422, 422, 403, 403, 403)),
+    (("GET", "/api/quality-incidents/999999", None),    (404, 404, 403, 403, 403)),
+    (("POST", "/api/quality-incidents/999999/events", {"step": "assess"}), (404, 404, 403, 403, 403)),
     # 工作台：业务角色可用，只汇总本人能看到的待办
     (("GET", "/api/workbench", None),                   (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
