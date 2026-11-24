@@ -46,9 +46,15 @@ export function sendMessage(conversationId, message, onDelta, onTool) {
   return streamPost(`/api/conversations/${conversationId}/messages`, { message }, onDelta, onTool);
 }
 
-async function streamPost(url, body, onDelta, onTool) {
+// 写稿助手（三期 A15）：侧栏问 / 改，流式返回；signal 为 AbortController.signal，停止即断开连接
+export function assistSection(code, dcode, seq, body, onDelta, signal) {
+  return streamPost(`${dpath(code, dcode)}/sections/${seq}/assist`, body, onDelta, undefined, signal);
+}
+
+async function streamPost(url, body, onDelta, onTool, signal) {
   const res = await fetch(url, {
     method: "POST",
+    signal,
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
     body: JSON.stringify(body),
@@ -200,7 +206,22 @@ export const api = {
     request(`/api/projects/${encodeURIComponent(code)}/flowback`, { method: "PUT", body: JSON.stringify({ allowed }) }),
   deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
   portfolio: () => request("/api/portfolio"),
+  indicators: (days) => request(`/api/indicators?days=${days}`),
+  qualityIncidents: (status = "", level = "") =>
+    request(`/api/quality-incidents?status=${encodeURIComponent(status)}&level=${encodeURIComponent(level)}`),
+  qualityIncident: (id) => request(`/api/quality-incidents/${id}`),
+  addIncidentEvent: (id, body) =>
+    request(`/api/quality-incidents/${id}/events`, { method: "POST", body: JSON.stringify(body) }),
+  agentMdVersions: (code) => request(`/api/agent-md/${encodeURIComponent(code)}/versions`),
+  agentMdUnpin: (code, reason) =>
+    request(`/api/agent-md/${encodeURIComponent(code)}/unpin`, { method: "POST", body: JSON.stringify({ reason }) }),
   workbench: () => request("/api/workbench"),
+  myTasks: () => request("/api/my-tasks"),
+  benchCards: () => request("/api/expert-bench/cards"),
+  benchAnswer: (versionId, body) =>
+    request(`/api/expert-bench/cards/${versionId}/answer`, { method: "POST", body: JSON.stringify(body) }),
+  returnTask: (kind, ref_id, reason) =>
+    request("/api/my-tasks/return", { method: "POST", body: JSON.stringify({ kind, ref_id, reason }) }),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
     request(`/api/deletions/${id}/confirm`, { method: "POST", body: JSON.stringify({ flowback, flowback_refs }) }),
@@ -210,6 +231,14 @@ export const api = {
   // 系统管理员：账号与角色
   adminUsers: () => request("/api/admin/users"),
   adminModels: () => request("/api/admin/models"),
+  configRegistry: () => request("/api/admin/config-registry"),   // 四期 G3
+  runtimeVersions: () => request("/api/admin/config-registry/runtime/versions"),
+  runtimeChange: (reason, values) =>
+    request("/api/admin/config-registry/runtime", { method: "POST", body: JSON.stringify({ reason, values }) }),
+  runtimeRollback: (reason, to_version) =>
+    request("/api/admin/config-registry/runtime/rollback", { method: "POST", body: JSON.stringify({ reason, to_version }) }),
+  runtimeDecide: (id, approve) =>
+    request(`/api/admin/config-registry/runtime/versions/${id}/${approve ? "confirm" : "reject"}`, { method: "POST" }),
   createUser: (username, display_name, roles) =>
     request("/api/admin/users", { method: "POST", body: JSON.stringify({ username, display_name, roles }) }),
   setRoles: (username, roles) =>
@@ -219,6 +248,10 @@ export const api = {
   // ---- 知识服务 ----
   kbMeta: () => request("/api/kb/meta"),
   kbStats: () => request("/api/kb/stats"),
+  kbBatches: () => request("/api/kb/batches"),
+  kbBatchSources: () => request("/api/kb/batches/sources"),
+  kbBatchStart: (body) => request("/api/kb/batches", { method: "POST", body: JSON.stringify(body) }),
+  kbReadiness: (days = 90) => request(`/api/kb/readiness?days=${days}`),   // 三期 F2②
   // 知识使用反馈（三期 B29）：target 为 {message_id} 或 {deliverable, seq, version}
   kbFeedback: (code, target) => request(`/api/projects/${encodeURIComponent(code)}/kb-feedback?${new URLSearchParams(target)}`),
   sendKbFeedback: (code, body) =>

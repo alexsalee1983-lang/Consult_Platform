@@ -125,6 +125,7 @@ export default function KbMap() {
               {due.length === 0 && <li className="sub">30 天内没有到期的条目</li>}
             </ul>
           </section>
+          <FeedbackHealth f={s.feedback} />
           <section className="pnl pad" aria-label="本月知识运营">
             <h2 className="h2">本月知识运营</h2>
             <div className="sb"><span className="sub">新发布</span><span className="mono">{s.published_30d}</span></div>
@@ -137,5 +138,30 @@ export default function KbMap() {
         </div>
       </div>
     </>
+  );
+}
+
+// 四期 A17：顾问反馈进知识健康——近 30 天三键计数、因反馈待复查的条目、被标“过时 / 不对”最多的条目（不含附言原文）
+function FeedbackHealth({ f }) {
+  if (!f) return null;
+  const c = f.counts_30d || {};
+  return (
+    <section className="pnl pad" aria-label="顾问反馈">
+      <div className="sb"><h2 className="h2">顾问反馈 · 近 {f.days} 天</h2>
+        <span className="sub">因反馈待复查 <span className="mono" style={{ color: f.flagged_recheck ? "var(--amber)" : "var(--ok)" }}>{f.flagged_recheck}</span></span></div>
+      <div className="sb"><span className="sub">有用</span><span className="mono" style={{ color: "var(--ok)" }}>{c.useful || 0}</span></div>
+      <div className="sb"><span className="sub">过时</span><span className="mono" style={{ color: "var(--amber)" }}>{c.outdated || 0}</span></div>
+      <div className="sb"><span className="sub">不对</span><span className="mono" style={{ color: "var(--crim)" }}>{c.wrong || 0}</span></div>
+      <ul className="lst">
+        {(f.top_flagged || []).map((t) => (
+          <li key={t.doc_id} className="sb">
+            <span><span className="mono sub">{t.doc_id}</span> {t.title}</span>
+            <span className="mono sub">过时 {t.outdated} · 不对 {t.wrong}{t.recheck_state === "pending" ? " · 待复查" : ""}</span>
+          </li>
+        ))}
+        {(f.top_flagged || []).length === 0 && <li className="sub">近期没有被标过时或不对的条目</li>}
+      </ul>
+      <div className="sub">被标“过时 / 不对”的条目进待复查（复查通过前不计入就绪度），同时作为使用信号进缺口池。附言原文不在这里显示。</div>
+    </section>
   );
 }

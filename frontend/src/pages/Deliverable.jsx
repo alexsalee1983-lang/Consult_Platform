@@ -1,11 +1,30 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api, CONCLUSION_CLS, DELIV_STATUS, SEVERITY_CLS, TIER } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
+import AssistPanel from "../components/AssistPanel.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
+import { noteAfterInsert, spliceText } from "../editor/assist.js";
+import { applyReplace } from "../editor/selectEdit.js";
+
+// A15：新编辑器按需加载；新旧并存一个关口，新编辑器默认开启（决策记录 2026-11-21 ⑦），可一键切回文本框
+const DocEditor = lazy(() => import("../components/DocEditor.jsx"));
+const EDITOR_PREF = "cp.editor";   // localStorage："textarea" = 用旧文本框；其他 = 新编辑器
+function useNewEditor() {
+  const [on, setOn] = useState(() => {
+    try { return localStorage.getItem(EDITOR_PREF) !== "textarea"; } catch { return true; }
+  });
+  function toggle() {
+    const next = !on;
+    try { localStorage.setItem(EDITOR_PREF, next ? "new" : "textarea"); } catch { /* 无痕模式等：只本次生效 */ }
+    setOn(next);
+  }
+  return [on, toggle];
+}
 import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
+import { knowledgeLine } from "../kbUsage.js";
 
 // 交付件审阅（设计稿 04）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
 // 右栏与本交付件有关的确认卡、签署流程。规则都在后端，界面只按接口返回显示和操作。
@@ -101,7 +120,7 @@ function Diff({ lines }) {
   );
 }
 
-function Section({ code, dcode, seq, editable, onSaved, signed }) {
+function Section({ code, dcode, seq, editable, onSaved, signed, sections = [] }) {
   const [s, setS] = useState(null);
   const [error, setError] = useState(null);
   const [version, setVersion] = useState(null);       // null = 当前版本
@@ -109,6 +128,40 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   const [edit, setEdit] = useState(null);             // {body, note}
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [newEditor, toggleEditor] = useNewEditor();
+  const [askReq, setAskReq] = useState(null);   // A16① 选区浮层“让助手改”
+  const editorRef = useRef(null);     // 新编辑器：selection() / insert()
+  const areaRef = useRef(null);       // 文本框兜底
+  const bodyRef = useRef("");
+  bodyRef.current = edit?.body ?? "";
+
+  // 写稿助手（A15②）：取选中文字、插入回复（来源标注原样保留），修改说明记一笔“含写稿助手插入内容”
+  function selectionRange() {
+    if (newEditor) return editorRef.current?.range() || null;
+    const a = areaRef.current;
+    return a ? { from: a.selectionStart, to: a.selectionEnd, text: a.value.slice(a.selectionStart, a.selectionEnd) } : null;
+  }
+  // A16① 接受 / 回退改写：原区间文字没变才替换
+  function replaceReply(range, snippet) {
+    let ok;
+    if (newEditor && editorRef.current) ok = editorRef.current.replaceRange(range.from, range.to, range.text, snippet);
+    else {
+      const r = applyReplace(bodyRef.current, range, snippet);
+      ok = r.ok;
+      if (ok) setEdit((e) => ({ ...e, body: r.text }));
+    }
+    if (ok) setEdit((e) => ({ ...e, note: noteAfterInsert(e.note) }));
+    return ok;
+  }
+  function insertReply(snippet) {
+    if (newEditor && editorRef.current) editorRef.current.insert(snippet);
+    else {
+      const a = areaRef.current;
+      const r = spliceText(bodyRef.current, a?.selectionStart, a?.selectionEnd, snippet);
+      setEdit((e) => ({ ...e, body: r.text }));
+    }
+    setEdit((e) => ({ ...e, note: noteAfterInsert(e.note) }));
+  }
 
   const load = useCallback(() => {
     setError(null);
@@ -116,6 +169,24 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   }, [code, dcode, seq, version]);
   useEffect(() => { setDiff(null); load(); }, [load]);
   useEffect(() => { setVersion(null); setEdit(null); }, [seq]);
+
+  // A16② @ 引用与 [ 补全：证据列表进编辑态时取一次（项目成员接口），知识按查询词走已有检索接口（用户可见范围），防抖 300ms
+  const [evs, setEvs] = useState(null);
+  const [kbHits, setKbHits] = useState([]);
+  const kbTimer = useRef(null);
+  const editing = !!edit;
+  useEffect(() => {
+    if (editing && evs === null) api.evidences(code).then(setEvs).catch(() => setEvs([]));
+  }, [editing, evs, code]);
+  useEffect(() => () => clearTimeout(kbTimer.current), []);
+  const onMentionQuery = useCallback((kind, q) => {
+    clearTimeout(kbTimer.current);
+    if (q.length < 2) return;
+    kbTimer.current = setTimeout(() => {
+      api.kbSearch({ q, limit: 8 }).then((r) => setKbHits(r.items || [])).catch(() => {});
+    }, 300);
+  }, []);
+  const mentionRefs = useMemo(() => ({ evidences: evs || [], kb: kbHits, sections, currentSeq: seq }), [evs, kbHits, sections, seq]);
 
   async function compare() {
     try {
@@ -177,9 +248,21 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
         {error && <div className="err">{error.message}</div>}
         {diff && <Diff lines={diff} />}
         {edit ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <textarea className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
-              placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]" />
+          <div className="assist-grid">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <button className="btn sm" onClick={toggleEditor}>{newEditor ? "切回文本框" : "用新编辑器"}</button>
+            </div>
+            {newEditor ? (
+              <Suspense fallback={<div className="sub">编辑器加载中…</div>}>
+                <DocEditor ref={editorRef} onAsk={(r) => setAskReq({ ...r, at: Date.now() })} value={edit.body} onChange={(body) => setEdit((e) => ({ ...e, body }))} unresolved={new Set(unresolved)}
+                  refs={mentionRefs} onMentionQuery={onMentionQuery}
+                  placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]，显示为标签，退格整体删除；输入 @ 引用证据、知识、章节，输入 [ 补全编号" />
+              </Suspense>
+            ) : (
+              <textarea ref={areaRef} className="inp mono" rows={22} value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })}
+                placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]" />
+            )}
             <input className="inp" maxLength={500} value={edit.note} placeholder="修改说明（可选）" onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
             <div className="sub">保存会新建一个版本，旧版本保留。正文先过机密级检测，命中不保存。{signed ? "" : "待签署时修改会退回起草中。"}</div>
             {saveError && <div className="err" role="alert">{saveError}</div>}
@@ -188,21 +271,30 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
               <button className="btn" disabled={busy} onClick={() => setEdit(null)}>取消</button>
             </div>
           </div>
+          <AssistPanel code={code} dcode={dcode} seq={seq} getContext={() => bodyRef.current}
+            getRange={selectionRange} onInsert={insertReply} onReplace={replaceReply} request={askReq} />
+          </div>
         ) : s.version ? (
           <DocBody body={s.body} unresolved={unresolved} />
         ) : (
           <div className="sub">本章还没有正文。</div>
         )}
-        {!edit && (refs.length > 0 || unresolved.length > 0) && (
+        {(refs.length > 0 || unresolved.length > 0) && (
           <div className="doc-refs" aria-label="本章来源">
-            {refs.map((r) => (
-              <div key={r.ref} className="row">
+            {edit && <div className="cap">当前保存版本用到的来源与知识（保存后更新）</div>}
+            {refs.map((r) => {
+              const kb = r.found && r.ref.startsWith("L") ? fb.items[r.ref] || fb.items[r.doc_id] : null;
+              return (
+              <div key={r.ref} className="row" style={{ flexWrap: "wrap" }}>
                 <span className="mono" style={{ color: !r.found ? "var(--crim)" : r.ref.startsWith("L") ? "var(--cyan)" : "var(--ok)", minWidth: 120 }}>{r.ref}</span>
                 <span className="sub">{!r.found ? "核对不上：项目里没有这条证据或知识"
                   : r.layer_name || r.layer || EVIDENCE_KIND[r.ref[0]] || ""}</span>
-                {kbCited && r.found && r.ref.startsWith("L") && <FeedbackKeys docId={r.ref} fb={fb} />}
+                {kb && kb.visible && <span>{kb.title}</span>}
+                {kb && <span className="sub" style={kb.recheck_state ? { color: "var(--amber)" } : undefined}>{knowledgeLine(kb)}</span>}
+                {!edit && kbCited && r.found && r.ref.startsWith("L") && <FeedbackKeys docId={r.ref} fb={fb} />}
               </div>
-            ))}
+              );
+            })}
             {fb.error && <div className="err" role="alert">{fb.error}</div>}
           </div>
         )}
@@ -499,7 +591,7 @@ export default function Deliverable({ code, dcode }) {
           <Quality code={code} dcode={dcode} so={so} canReview={editable && d.sections.length > 0} isManager={isManager} onChanged={load} />
         </div>
         <div style={{ minWidth: 0 }}>
-          {cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} />
+          {cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
             : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : ""}</div>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>

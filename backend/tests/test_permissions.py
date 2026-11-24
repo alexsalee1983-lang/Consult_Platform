@@ -35,8 +35,32 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
     # 项目总览（方案 A）：只给项目负责人；顾问 403（负责人 200 在 test_portfolio 里测）
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
+    # 指标看板（三期 F2）：只给项目负责人（负责人 200 在 test_indicators 里测）
+    (("GET", "/api/indicators", None),                  (403, 403, 403, 403, 403)),
+    # AI 质量事件台账（四期 F3）：台账只给项目负责人；登记挂 BANK-A 须是成员（非成员 404）；
+    # 他人事件详情和处置 404（负责人、项目经理、登记人在 test_quality_incidents 里测）
+    (("GET", "/api/quality-incidents", None),           (403, 403, 403, 403, 403)),
+    (("POST", "/api/quality-incidents", {"category": "bogus", "ref_kind": "run", "ref_id": "1", "project": "BANK-A"}),
+     (422, 422, 403, 403, 403)),
+    (("GET", "/api/quality-incidents/999999", None),    (404, 404, 403, 403, 403)),
+    (("POST", "/api/quality-incidents/999999/events", {"step": "assess"}), (404, 404, 403, 403, 403)),
+    # Agent md 版本库与撤销回滚（四期 F3②e）：项目负责人、系统管理员（负责人 200 在 test_agent_md_rollback 里测）
+    (("GET", "/api/agent-md/report-writer/versions", None), (403, 403, 200, 403, 403)),
+    (("GET", "/api/agent-md/report-writer/versions/000000000000", None), (403, 403, 404, 403, 403)),
+    (("POST", "/api/agent-md/report-writer/unpin", {"reason": "权限矩阵"}), (403, 403, 404, 403, 403)),
     # 工作台：业务角色可用，只汇总本人能看到的待办
     (("GET", "/api/workbench", None),                   (200, 200, 403, 403, 403)),
+    # 我的任务（三期 B17②）：业务角色可用；退回不在本人待办里的对象 404，无业务角色 403
+    (("GET", "/api/my-tasks", None),                    (200, 200, 403, 403, 403)),
+    (("POST", "/api/my-tasks/return", {"kind": "confirmation", "ref_id": 999999, "reason": "依据不对"}),
+                                                        (404, 404, 403, 403, 403)),
+    # 专家工作台（四期 B23①）：只给知识专家（200 在 test_expert_bench 里测），矩阵里的角色全部 403
+    (("GET", "/api/expert-bench/cards", None),          (403, 403, 403, 403, 403)),
+    (("GET", "/api/expert-bench/templates", None),      (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/fill", {"template": "practice", "fill": {"how": "示范"}}),
+                                                        (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/cards/999999/answer", {"answers": [{"id": "keep", "choice": "yes"}]}),
+                                                        (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
@@ -94,6 +118,8 @@ MATRIX = [
     (("PUT", "/api/projects/BANK-A/deliverables/D7/sections/1", SECTION), (201, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
+    # 三期 A15 写稿助手：项目成员可用（演示模式流式返回），非成员 404
+    (("POST", "/api/projects/BANK-A/deliverables/D7/sections/1/assist", {"prompt": "这一章怎么写？"}), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B/deliverables/D2/export", None), (404, 404, 403, 403, 403)),
     # 改稿差异转候选（三期 F4）：开关默认关，成员也 404；非成员 404、非业务角色 403（开关打开的行为在 test_revision_mining）
@@ -130,6 +156,10 @@ MATRIX = [
     (("GET", "/api/admin/roles", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/usage", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/models", None),                (403, 403, 200, 403, 403)),
+    (("GET", "/api/admin/config-registry", None),       (403, 403, 200, 403, 403)),   # G3①：只给系统管理员
+    (("GET", "/api/admin/config-registry/runtime/versions", None), (403, 403, 200, 403, 403)),   # G3②
+    (("POST", "/api/admin/config-registry/runtime/versions/999999/confirm", None), (403, 403, 404, 403, 403)),
+    (("POST", "/api/admin/config-registry/runtime/versions/999999/reject", None), (403, 403, 404, 403, 403)),
     (("GET", "/api/admin/agent-grants", None),          (403, 403, 200, 403, 403)),
     (("POST", "/api/admin/users", {"username": "matrix_new"}), (403, 403, 201, 403, 403)),
     (("POST", "/api/admin/users/matrix_target/reset-password", None), (403, 403, 200, 403, 403)),
@@ -149,11 +179,15 @@ MATRIX = [
      (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
+    (("GET", "/api/kb/readiness", None),                (403, 403, 403, 403, 403)),   # F2②：知识专家、知识管理员、项目负责人
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/practice-queue", None),           (403, 403, 403, 403, 403)),   # 公司做法确认队列（三期 B17），同上
     (("GET", "/api/kb/practice-queue/stats", None),     (403, 403, 403, 403, 403)),
     (("POST", "/api/kb/practice-queue/decide", {"items": [{"version_id": 999999, "decision": "adopt"}]}), (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/samples", None),                  (403, 403, 403, 403, 403)),   # 抽检队列（二期 B10），同上
+    (("GET", "/api/kb/batches", None),                  (403, 403, 403, 403, 403)),   # 知识批次（三期 B18），只限知识管理员
+    (("GET", "/api/kb/batches/sources", None),          (403, 403, 403, 403, 403)),
+    (("POST", "/api/kb/batches", {"kind": "import", "path": "x"}), (403, 403, 403, 403, 403)),
     (("POST", "/api/kb/versions/999999/sample", {"decision": "pass"}), (404, 404, 403, 403, 403)),
     (("GET", "/api/admin/jobs", None),                  (403, 403, 200, 403, 403)),
     (("POST", "/api/admin/jobs/selfcheck", None),       (403, 403, 202, 403, 403)),

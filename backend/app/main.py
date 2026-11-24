@@ -5,9 +5,10 @@ from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import DataError
 
-from .api import (admin, agents, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health, portfolio, workbench,
-                  kb, kb_feedback, kb_items, kb_sources, projects, quality, runs)
+from .api import (admin, agents, assist, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, expert_bench, health, indicators, portfolio,
+                  tasks, workbench, kb, kb_batches, kb_feedback, kb_items, kb_sources, projects, quality, quality_incidents, readiness, runs)
 from .api import revision_mining as revision_mining_api   # 三期 F4
+from .api import agent_md as agent_md_api   # 四期 F3②e
 from .core import audit as core_audit
 from .core.auth import authenticate
 from .core.bootstrap import check_db_accounts, check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
@@ -16,7 +17,7 @@ from .core.db import SessionLocal, engine, kb_engine
 from .core.errors import out_of_range_handler, reject_control_chars, validation_error_handler
 from .core.metrics import MetricsMiddleware, register_state_collector, start_server
 from .core.migrate import upgrade_to_head
-from .services import storage
+from .services import runtime_config, storage
 from .project import configs as project_configs
 from .seed import seed, seed_signed_sample
 
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
             seed_signed_sample(db)
         ensure_test_memberships(db, _settings)
         project_configs.backfill(db)
+        runtime_config.sync(db)   # 四期 G3②：页面改过的运行层配置覆盖 .env
     if storage.enabled():
         try:
             storage.ensure_buckets()
@@ -67,11 +69,13 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(portfolio.router)
+app.include_router(indicators.router)
 app.include_router(workbench.router)
 app.include_router(deletions.router)
 app.include_router(evidence.router)
 app.include_router(cards.router)
 app.include_router(deliverables.router)
+app.include_router(assist.router)
 app.include_router(runs.router)
 app.include_router(quality.router)
 app.include_router(revision_mining_api.router)
@@ -83,5 +87,11 @@ app.include_router(conversations.router)
 app.include_router(directory.router)
 app.include_router(kb.router)
 app.include_router(kb_items.router)
+app.include_router(kb_batches.router)
+app.include_router(readiness.router)
 app.include_router(kb_feedback.router)
+app.include_router(quality_incidents.router)
+app.include_router(agent_md_api.router)
 app.include_router(kb_sources.router)
+app.include_router(tasks.router)
+app.include_router(expert_bench.router)

@@ -10,17 +10,20 @@
   仲裁传 role="arbitrate" 和两方家族；网关按模型目录选不同家族的模型，选不出时同家族降级并在 completion 上标记；
 - 给了 parse 时校验结构化输出：解析不了就带 RETRY_NOTE 重试一次，仍不行抛 OutputInvalid。演示模式不解析。
 以后公司模型支持工具调用（二期 A7），工具循环只加在这里，入口仍是 tools.invoke。
+stream()（三期 A15 写稿助手）：同样的公共部分，经 gateway.stream 逐段返回；level_override 为顾问显式选的快慢档，
+优先于 md 的 model_tier；拦截与开始前失败照原样抛出，调用方负责审计。
 """
 from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from ..core.db import SessionLocal
 from ..models import Agent, Project
 from ..services import gateway, usage
 from . import registry
@@ -50,7 +53,9 @@ def load(db: Session, code: str) -> registry.AgentDoc:
     agent = db.get(Agent, code)
     if agent is None or not agent.enabled:
         raise AgentUnavailable(f"Agent {code} 未登记或已停用")
-    doc = registry.load(code)
+    from ..services import agent_md   # 四期 F3②e：有回滚指针时按指针取版本库里的 md
+
+    doc = agent_md.effective(db, code)
     if doc is None:
         raise AgentUnavailable(f"Agent {code} 的 md 缺失或 name 不一致")
     return doc
@@ -104,3 +109,25 @@ def call(db: Session, code: str, message: str, *, actor: str, doc: registry.Agen
         except ValueError:
             continue
     raise OutputInvalid(c)
+
+
+def stream(db: Session, code: str, message: str, *, actor: str, system: str, project: Project,
+           doc: registry.AgentDoc | None = None, level: str = "standard",
+           level_override: bool = False) -> Iterator[str | gateway.Completion]:
+    """逐段产出回复文本，最后产出 Completion；结束（含中途失败）时记一条用量。调用方提前关闭（停止）不记用量。
+    流式响应在请求的数据库会话关闭后才迭代，用量用新会话记。"""
+    doc = doc or load(db, code)
+    lv = level if level_override or not doc.level_set else doc.level
+    gen = gateway.stream(message, tier=project.tier, project_code=project.code, level=lv, system=system)
+    try:
+        for item in gen:
+            if isinstance(item, gateway.Completion):
+                with SessionLocal() as s:
+                    usage.record(s, username=actor, project_code=project.code, level=lv, model=item.model, status="ok",
+                                 stream=True, completion=item, agent_code=code)
+            yield item
+    except gateway.GatewayError as e:
+        with SessionLocal() as s:
+            usage.record(s, username=actor, project_code=project.code, level=lv, model=gateway.model_for(lv),
+                         status="error", stream=True, attempts=e.attempts, agent_code=code)
+        raise

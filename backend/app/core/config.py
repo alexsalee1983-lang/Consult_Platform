@@ -53,7 +53,11 @@ class Settings(BaseSettings):
     llm_tool_calling: bool = True
     llm_tool_max_rounds: int = 4
     llm_tool_max_calls: int = 8       # 每次提问最多执行几次工具调用，超过的回错误说明并要求直接答复
-    llm_model_tools: str = ""         # 对话带工具时用的模型；空为按 Agent 等级选（工具调用不稳的轻量模型可换掉）
+    llm_model_tools: str = ""
+    # 我的任务（三期 B17②）：分数 = (1 + 影响权重 × 影响) × (1 + 不确定度权重 × 不确定度)；超出每日额度的折叠。
+    tasks_impact_weight: float = 1.0
+    tasks_uncertainty_weight: float = 2.0
+    tasks_daily_quota: int = 20         # 对话带工具时用的模型；空为按 Agent 等级选（工具调用不稳的轻量模型可换掉）
 
     # 向量服务（OpenAI 兼容 /embeddings），同样只经网关调用。决策记录 2026-11-08：公司模型平台的 embedding
     # 接口就绪前，用 CPU 上的小型中文向量模型（docker compose 的 embed 服务）；就绪后只改这里并重新向量化。
@@ -80,7 +84,10 @@ class Settings(BaseSettings):
     # 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：kb-source-publish 核验通过的 SRC 由平台自动发布，
     # 每批按比例随机抽检；最近 20 次抽检不通过率超过上限时暂停自动发布、全部转人工审核，直到抽检恢复。
     kb_src_auto_publish: bool = True
-    kb_sample_rate_src: float = 0.05
+    # 三期 B20：每批抽检量按统计抽样（超几何零接收）算，下面两个比例只作兜底下限；停止规则攒满 20 个样本才启用
+    kb_sample_defect_max: float = 0.1
+    kb_sample_confidence: float = 0.8
+    kb_sample_rate_src: float = 0.0
     kb_sample_rate_src_partial: float = 0.4   # 有条款被机密级检测退回的那几份（负责人 2026-11-16）
     kb_sample_fail_max: float = 0.1
     # 知识审核 Agent（二期 B11，二期开发计划第十二节第二级）：公开资料的解读、映射、方法和只含公开资料的案例、异议应答，
@@ -96,6 +103,11 @@ class Settings(BaseSettings):
     # 未达标就暂停自动发布（B10、B11 两级），直到再跑一次达标
     kb_eval_min_accuracy: float = 0.9
     kb_eval_gate: bool = True
+    # 知识批次页（三期 B18）发起 kb-import、kb-eval 时，资料目录和题目文件只能在这个目录下（后端容器里的只读挂载）
+    kb_batch_dir: str = "/srv/knowledge/downloads"
+    # 就绪度看板（三期 F2②）读哪些章节级装配评测集（A24 格式，逗号分隔的文件或目录，目录取其中 *.yaml）；
+    # 留空用平台回归样例 knowledge/eval/assembly_samples.yaml。真实评测集在私有资料仓，部署机指到 /srv/knowledge/downloads 下
+    kb_readiness_evalsets: str = ""
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
 

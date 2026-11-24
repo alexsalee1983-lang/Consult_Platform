@@ -2,31 +2,35 @@
 // “过时 / 不对”由平台标待复查，进知识专家的抽检队列；附言可选、先过机密级检测，严格档项目不收附言。
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
+import { itemsById } from "../kbUsage.js";
 
 const KEYS = [["useful", "有用", "var(--ok)"], ["outdated", "过时", "var(--amber)"], ["wrong", "不对", "var(--crim)"]];
 
 export function useKbFeedback(code, target) {
   const key = JSON.stringify(target || null);
   const [mine, setMine] = useState({});
+  const [items, setItems] = useState({});   // 四期 A17：每条知识的版本、权威等级、依据、待复查
   const [error, setError] = useState("");
   useEffect(() => {
     setMine({});
+    setItems({});
     setError("");
     if (!code || !target) return;
-    api.kbFeedback(code, target).then((r) => setMine(r.mine || {})).catch(() => {});
+    api.kbFeedback(code, target).then((r) => { setMine(r.mine || {}); setItems(itemsById(r.items)); }).catch(() => {});
   }, [code, key]); // eslint-disable-line react-hooks/exhaustive-deps
   async function pick(doc_id, rating, note = "") {
     setError("");
     try {
       const r = await api.sendKbFeedback(code, { ...target, doc_id, rating, note });
       setMine(r.mine || {});
+      setItems(itemsById(r.items));
       return r;
     } catch (e) {
       setError(e.message);
       return null;
     }
   }
-  return { mine, pick, error };
+  return { mine, items, pick, error };
 }
 
 export function FeedbackKeys({ docId, fb }) {

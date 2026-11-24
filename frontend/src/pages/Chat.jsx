@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, sendMessage, TIER } from "../api.js";
 import { TopBar } from "../components/common.jsx";
 import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
+import { knowledgeLine } from "../kbUsage.js";
 
 // 首次使用的 6 张示例卡（4A 架构设计 v4.0 §3.6、§7.2 埋点）：对话定位为副驾驶，点卡片把示例放进输入框，改好再发
 const EXAMPLES = [
@@ -39,6 +40,7 @@ function References({ refs, code, messageId }) {
           <span className="ref" title={r.citation || r.heading || r.title}>
             <span className="mono">{r.doc_id}</span> {r.title}{r.heading ? ` · ${r.heading}` : ""}
           </span>
+          {fb.items[r.doc_id] && <span className="sub">{knowledgeLine(fb.items[r.doc_id])}</span>}
           {messageId && <FeedbackKeys docId={r.doc_id} fb={fb} />}
         </div>
       ))}

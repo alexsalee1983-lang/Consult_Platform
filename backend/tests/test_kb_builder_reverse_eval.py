@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from app.agents import evalset, registry
+from app.project import quality
 from app.services import guard
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,3 +54,40 @@ def test_eval_set_valid_and_covers_duties():
     for duty in ("没走知识区导入", "地址规划表", "王建国", "测评通过", "没有给槽位清单", "直接发布",
                  "案例候选", "预算约", "KB-SOC-021"):
         assert duty in text, duty
+
+
+def _mode_g() -> str:
+    body = registry.load(AGENT).body
+    return body[body.index("## 模式 G"):body.index("## 模式 H")]
+
+
+def _case(cid: str) -> dict:
+    return next(c for c in evalset.load(EVAL) if c["id"] == cid)
+
+
+def test_mode_g_has_no_unquoted_qualification_wording():
+    """#296 测试未通过 KBR-R04：md 正文（引号外）不得有会被判为资质用语的写法，模型照抄即触发红线。"""
+    bad = [ln for ln in _mode_g().splitlines() if quality.qualification_hits(evalset._unquoted(ln))]
+    assert not bad, bad
+
+
+def test_mode_g_pitfall_example_meets_kbr_r04():
+    """KBR-R04：常见坑示例复述原话整段加引号，引号外 0 处资质用语，满足 must、不触 must_not。"""
+    g = _mode_g()
+    assert "整段加中文引号" in g
+    example = g[g.index("**资质用语常见坑示例**"):].split("\n\n", 1)[0]
+    case = _case("KBR-R04")
+    assert all(re.search(m, example) for m in case["must"])
+    assert not any(re.search(m, example) for m in case["must_not"])
+    assert quality.qualification_hits(evalset._unquoted(example)) == 0
+    assert quality.qualification_hits(example) > 0, "示例要真的复述了原话（在引号里）"
+
+
+def test_mode_g_dedup_names_existing_doc_id():
+    """KBR-R08：去重必须点名已有条目编号，不能只写“已去重”；示例满足 must。"""
+    g = _mode_g()
+    assert "去重" in g and "不能只写“已去重”" in g
+    example = g[g.index("**去重示例**"):].split("\n\n", 1)[0]
+    case = _case("KBR-R08")
+    assert all(re.search(m, example) for m in case["must"])
+    assert not any(re.search(m, example) for m in case["must_not"])

@@ -47,6 +47,7 @@ class AgentDoc:
     md_tools: list[str] = field(default_factory=list)
     service_modules: list[str] = field(default_factory=list)
     level_set: bool = False    # md 写了 model_tier（没写时调用方可指定默认档，app/agents/call.py）
+    role_text: str = ""        # 角色 md 全文（含 frontmatter），存版本库用（四期 F3②e）
 
 
 def agents_dir() -> Path:
@@ -94,18 +95,22 @@ def load(code: str) -> AgentDoc | None:
 def _read(code: str, common_path: Path, role_path: Path) -> AgentDoc | None:
     if not (common_path.exists() and role_path.exists()):
         return None
-    common = common_path.read_text(encoding="utf-8")
-    meta, body = _split_frontmatter(role_path.read_text(encoding="utf-8"))
+    return parse(code, common_path.read_text(encoding="utf-8"), role_path.read_text(encoding="utf-8"), role_path.name)
+
+
+def parse(code: str, common: str, role_text: str, name: str = "") -> AgentDoc | None:
+    """由公共规范全文和角色 md 全文组装 AgentDoc（四期 F3②e：回滚时由版本库里的原文组装）。"""
+    meta, body = _split_frontmatter(role_text)
     if meta.get("name") != code:
-        log.warning("Agent md %s 的 name 为 %r，与代号不一致，视为未就绪", role_path.name, meta.get("name"))
+        log.warning("Agent md %s 的 name 为 %r，与代号不一致，视为未就绪", name or code, meta.get("name"))
         return None
-    version = hashlib.sha256((common + "\n\x00\n" + role_path.read_text(encoding="utf-8")).encode()).hexdigest()[:12]
+    version = hashlib.sha256((common + "\n\x00\n" + role_text).encode()).hexdigest()[:12]
     return AgentDoc(
         code=code, display_name=str(meta.get("display_name") or code), md_version=str(meta.get("version") or ""),
         level=TIER_LEVEL.get(str(meta.get("model_tier") or "").strip(), "standard"), body=body, common=common,
         version=version, md_tools=[str(t) for t in (meta.get("tools") or [])],
         service_modules=[str(m) for m in (meta.get("service_modules") or [])],
-        level_set=str(meta.get("model_tier") or "").strip() in TIER_LEVEL,
+        level_set=str(meta.get("model_tier") or "").strip() in TIER_LEVEL, role_text=role_text,
     )
 
 

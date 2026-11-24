@@ -73,6 +73,7 @@ export default function Sidebar() {
   const items = [
     ...(business ? [
       { to: "/workbench", icon: "inbox", label: "工作台", badge: todo },
+      { to: "/my-tasks", icon: "review", label: "我的任务" },
       { group: "项目交付" },
       { to: "/projects", icon: "proj", label: "我的项目" },
       ...(code ? [
@@ -81,21 +82,27 @@ export default function Sidebar() {
         { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
       ] : []),
       ...(lead ? [{ group: "项目负责人" }, { to: "/portfolio", icon: "map", label: "项目总览" },
+        { to: "/indicators", icon: "dash", label: "指标看板" },
+        { to: "/quality-incidents", icon: "review", label: "质量事件" },
         { to: "/deletions", icon: "trash", label: "资料删除" }] : []),
       { group: "知识" },
       { to: "/kb/search", icon: "search", label: "知识检索" },
       { to: "/kb/intake", icon: "inbox", label: "投料箱" },
       ...(isKnowledge(user) ? [
         { to: "/kb/review", icon: "review", label: "审批队列" },
+        ...(hasRole(user, "knowledge_expert") ? [{ to: "/kb/bench", icon: "review", label: "专家工作台" }] : []),
         { to: "/kb/map", icon: "map", label: "知识地图与健康" },
+        ...(hasRole(user, "knowledge_admin") ? [{ to: "/kb/batches", icon: "dash", label: "知识批次" }] : []),
         { to: "/kb/usage", icon: "dash", label: "知识使用统计" },
         { to: "/kb/sources", icon: "doc", label: "来源登记表" },
       ] : []),
+      ...(isKnowledge(user) || lead ? [{ to: "/kb/readiness", icon: "dash", label: "就绪度看板" }] : []),
     ] : []),
     ...(isAuditor(user) ? [{ to: "/audit", icon: "audit", label: "审计日志" }] : []),
     ...(isSysAdmin(user) ? [
       { to: "/admin/users", icon: "users", label: "用户与角色" },
       { to: "/admin/models", icon: "dash", label: "模型配置状态" },
+      { to: "/admin/runtime-config", icon: "dash", label: "运行层配置" },
     ] : []),
     { to: PASSWORD_PATH, icon: "key", label: "修改口令" },
   ];

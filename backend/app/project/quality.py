@@ -566,7 +566,12 @@ def generator_families(db: Session, project: Project, d: Deliverable, versions: 
     models = {st.model for st in steps
               if (st.refs or {}).get("deliverable") == d.code
               and any(want.get(str(k)) == str(v) for k, v in ((st.refs or {}).get("versions") or {}).items())}
-    return model_catalog.families_of(models)
+    recorded: set[str] = set()                     # 主链 0040 起章节版本自己记着生成家族（含手改沿用）
+    for s in d.sections:
+        for v in s.versions:
+            if want.get(str(s.seq)) == str(v.version):
+                recorded |= {v.model_family} if v.model_family else model_catalog.families_of([v.model] if v.model else [])
+    return model_catalog.families_of(models) | recorded
 
 
 def _execute(db: Session, user: User, project: Project, d: Deliverable, r: QualityReview) -> None:

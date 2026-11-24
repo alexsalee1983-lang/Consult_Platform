@@ -46,7 +46,7 @@ from ..core.config import get_settings
 from ..core.db import SessionLocal, utcnow
 from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMember, User
 from ..products import config
-from ..services import gateway, guard, jobs, usage
+from ..services import config_registry, gateway, guard, jobs, runtime_config, usage
 from . import cards as cards_svc
 from . import assessment, configs, findings
 from . import deliverables
@@ -231,8 +231,9 @@ def start(db: Session, user: User, project: Project, trigger: str = "") -> Agent
                    created_by=user.username, config_sha=config_sha(db, project))
     db.add(run)
     db.flush()
+    runtime_config.sync(db)   # G3②：其他进程改过运行层配置时先追上
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code, run_id=run.id,
-                 **({"trigger": trigger} if trigger else {}))
+                 config_registry_sha=config_registry.effective_sha(db), **({"trigger": trigger} if trigger else {}))
     db.commit()
     _enqueue(db, run, project)
     db.refresh(run)
