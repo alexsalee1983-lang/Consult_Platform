@@ -16,7 +16,7 @@ from app.kb.items import CONTROL_ID_RE
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / "knowledge" / "controls" / "v0.yaml"
-QUESTION_BANK = ROOT / "question_bank"
+QUESTION_BANK = ROOT / "knowledge" / "question_bank"  # 样例；正文在资料仓，由 test_question_bank.py 校验
 
 PRODUCTS = {"SOC", "IRE"}
 INDUSTRIES = {"通用", "银行", "电力"}
@@ -71,20 +71,18 @@ def test_four_grid_coverage(catalog: dict) -> None:
 
 
 def test_question_bank_controls_included(catalog: dict) -> None:
-    """题库（E1）里的 controls 必须在清单里，名称和评估域一致；题目引用的编号必须在清单里。"""
-    banks = sorted(QUESTION_BANK.glob("*.yaml")) if QUESTION_BANK.is_dir() else []
-    if not banks:
-        pytest.skip("题库尚未合并（#223）")
+    """题库（E1）题目引用的控制项和检查点必须在清单里；完整校验见 test_question_bank.py。"""
+    banks = sorted(QUESTION_BANK.glob("*.yaml"))
+    assert banks, "缺题库样例 knowledge/question_bank/*.yaml"
     by_id = {c["id"]: c for c in catalog["controls"]}
+    cps = {f"{c['id']}.{cp['id']}" for c in catalog["controls"] for cp in c.get("checkpoints") or []}
     for path in banks:
         bank = yaml.safe_load(path.read_text(encoding="utf-8"))
-        for c in bank.get("controls", []):
-            assert c["id"] in by_id, f"{path.name}: {c['id']}"
-            assert by_id[c["id"]]["name"] == c["name"], c["id"]
-            assert by_id[c["id"]]["domain"] == c["domain"], c["id"]
         for q in bank.get("questions", []):
             for cid in q.get("control_ids", []):
                 assert cid in by_id, f"{path.name}: {cid}"
+            for cp in q.get("checkpoints", []):
+                assert cp in cps, f"{path.name}: {cp}"
 
 
 # ---- 检查点（三期 B19，挂知识区 kb_control_checkpoints，参照 SP 800-53A 评估目标）----
