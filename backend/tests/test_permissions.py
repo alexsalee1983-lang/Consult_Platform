@@ -46,6 +46,10 @@ MATRIX = [
     (("POST", "/api/quality-incidents/999999/events", {"step": "assess"}), (404, 404, 403, 403, 403)),
     # 工作台：业务角色可用，只汇总本人能看到的待办
     (("GET", "/api/workbench", None),                   (200, 200, 403, 403, 403)),
+    # 我的任务（三期 B17②）：业务角色可用；退回不在本人待办里的对象 404，无业务角色 403
+    (("GET", "/api/my-tasks", None),                    (200, 200, 403, 403, 403)),
+    (("POST", "/api/my-tasks/return", {"kind": "confirmation", "ref_id": 999999, "reason": "依据不对"}),
+                                                        (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),

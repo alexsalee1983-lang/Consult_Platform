@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import DataError
 
 from .api import (admin, agents, assist, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, health, indicators, portfolio,
-                  workbench, kb, kb_batches, kb_feedback, kb_items, kb_sources, projects, quality, quality_incidents, readiness, runs)
+                  tasks, workbench, kb, kb_batches, kb_feedback, kb_items, kb_sources, projects, quality, quality_incidents, readiness, runs)
 from .api import revision_mining as revision_mining_api   # 三期 F4
 from .core import audit as core_audit
 from .core.auth import authenticate
@@ -91,3 +91,4 @@ app.include_router(readiness.router)
 app.include_router(kb_feedback.router)
 app.include_router(quality_incidents.router)
 app.include_router(kb_sources.router)
+app.include_router(tasks.router)
