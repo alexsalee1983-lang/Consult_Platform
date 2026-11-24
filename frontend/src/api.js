@@ -195,6 +195,14 @@ export const api = {
   cardTemplate: (code) => request(`/api/projects/${encodeURIComponent(code)}/summary-cards/template`),
   uploadCards: (code, cards) =>
     request(`/api/projects/${encodeURIComponent(code)}/summary-cards`, { method: "POST", body: JSON.stringify({ cards }) }),
+  // 四期 E2：调研助手（调研包、回传、事实确认单）
+  surveyPacks: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/packs`),
+  createSurveyPack: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/packs`, { method: "POST" }),
+  surveyResults: (code, pack, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/packs/${encodeURIComponent(pack)}/results`, { method: "POST", body: JSON.stringify(body) }),
+  surveyFacts: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/facts`),
+  confirmSurveyFact: (code, id, confirmed_role) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/facts/${id}/confirm`, { method: "POST", body: JSON.stringify({ confirmed_role }) }),
   withdrawCard: (code, card) =>
     request(`/api/projects/${encodeURIComponent(code)}/summary-cards/${encodeURIComponent(card)}/withdraw`, { method: "POST" }),
   // 项目资料删除（M4 ②）：项目经理发起提前删除、标记客户不同意回流；项目负责人确认

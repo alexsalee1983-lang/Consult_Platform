@@ -9,6 +9,7 @@ import Members from "../components/Members.jsx";
 import Retention from "../components/Retention.jsx";
 import RunPanel from "../components/RunPanel.jsx";
 import StrictCards from "../components/StrictCards.jsx";
+import Survey from "../components/Survey.jsx";
 
 function Kpi({ cap, value, sub, color }) {
   return (
@@ -64,6 +65,7 @@ export default function Overview({ code }) {
           </section>
           <Assessment code={p.code} />
           {strict ? <StrictCards code={p.code} onChange={load} /> : <Evidence code={p.code} strict={strict} items={evs} onChange={load} />}
+          <Survey code={p.code} tier={p.tier} />
           <section className="pnl pad" aria-label="交付件">
             <h2 className="h2">交付件</h2>
             <ul className="lst" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 16 }}>
