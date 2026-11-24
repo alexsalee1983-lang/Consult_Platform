@@ -23,7 +23,7 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.permissions import CONSULTANT, PROJECT_LEAD
 from app.main import app
-from app.models import AuditLog, Deliverable, LlmUsage, Project
+from app.models import AuditLog, Deliverable, Job, LlmUsage, Project
 from app.project import configs, deliverables, quality, runs
 from app.services import gateway, jobs
 
@@ -105,6 +105,10 @@ def _work() -> None:
     with SessionLocal() as db:
         while jobs.run_once(db, "e2e-worker", kinds=[runs.JOB_KIND, quality.JOB_KIND]):
             pass
+        # 出错退回 queued 的任务带退避时间，循环领不到就停；把错误类型直接报出来，不让运行只显示“停在 queued”（#418）
+        stuck = db.scalars(select(Job).where(Job.status == jobs.QUEUED, Job.attempts > 0,
+                                             Job.kind.in_([runs.JOB_KIND, quality.JOB_KIND]))).all()
+        assert not stuck, [(j.kind, j.attempts, j.last_error) for j in stuck]
 
 
 def _notes(product_dir: str | None) -> list[tuple[str, str, str]]:
