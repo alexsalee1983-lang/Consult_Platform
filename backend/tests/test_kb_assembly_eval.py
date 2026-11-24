@@ -185,17 +185,24 @@ def test_a12_gate_beats_fixed_query_baseline(published):
     assert slot.hit_rate > base.hit_rate and "通过" in line
 
 
-def test_a12_gate_fails_without_slots_or_without_gain(published):
+def _no_product_slots(monkeypatch: pytest.MonkeyPatch) -> None:
+    """只看评测集覆盖的槽位，屏蔽产品配置（SOC 自 C10 起已配槽位），让门的判定逻辑可单独测。"""
+    monkeypatch.setattr(ae, "step_slots", lambda evalset, snap: dict(evalset.get("slots") or {}))
+
+
+def test_a12_gate_fails_without_slots_or_without_gain(published, monkeypatch):
+    _no_product_slots(monkeypatch)
     with SessionLocal() as db:
         ok, line, *_ = ae.gate(db, db.merge(published), {**_evalset(), "slots": {}})
-        assert not ok and "没有配置知识槽位" in line                    # SOC 配置还没有槽位
+        assert not ok and "没有配置知识槽位" in line
         same = {**_evalset(), "slots": {"facts": ({"id": "x", "type": "GLD", "query": "不存在的类型", "need": 1,
                                                    "required": False},)}}
         ok, line, base, slot = ae.gate(db, db.merge(published), same)
     assert not ok and slot.hit_rate == base.hit_rate and "未通过" in line   # 持平不算高于
 
 
-def test_cli_gate(published, tmp_path, capsys):
+def test_cli_gate(published, tmp_path, capsys, monkeypatch):
+    _no_product_slots(monkeypatch)
     with SessionLocal() as db:
         name = db.merge(published).username
     p = tmp_path / "e.yaml"
