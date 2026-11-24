@@ -41,21 +41,24 @@ export const ROOT_CAUSES = {
 export const NOTE_MAX = 2000;
 
 // 与后端 add_event 的校验顺序一致；返回错误文字，通过返回 null。
-export function validateEvent({ step, level = "", action = "", root_cause = "", note = "" }) {
+export function validateEvent({ step, level = "", action = "", root_cause = "", note = "", agent = "", version = "" }) {
   const keys = STEPS.slice(1).map((s) => s.key);
   if (!keys.includes(step)) return "处置步骤不在八步内";
   if (step === "grade" && !LEVELS.includes(level)) return "分级只能是 P1、P2、P3";
   if (step === "contain" && !(action in ACTIONS)) return "遏制措施不在清单内";
+  if (step === "contain" && action === "rollback_agent" && !agent) return "回滚 Agent 版本须选 Agent";
+  if (step === "contain" && action === "rollback_agent" && !version) return "回滚 Agent 版本须选目标版本";
   if (step === "root_cause" && !(root_cause in ROOT_CAUSES)) return "根因类别不在清单内";
   if ((note || "").length > NOTE_MAX) return `说明不超过 ${NOTE_MAX} 字`;
   return null;
 }
 
 // 只发本步需要的字段
-export function eventPayload({ step, level = "", action = "", root_cause = "", note = "" }) {
+export function eventPayload({ step, level = "", action = "", root_cause = "", note = "", agent = "", version = "" }) {
   const p = { step };
   if (step === "grade") p.level = level;
   if (step === "contain") p.action = action;
+  if (step === "contain" && action === "rollback_agent") Object.assign(p, { agent, version });
   if (step === "root_cause") p.root_cause = root_cause;
   p.note = note || "";
   return p;
@@ -77,4 +80,20 @@ export function dueText(inc, now = new Date()) {
   const left = new Date(inc.contain_due) - now;
   if (left < 0 || inc.overdue) return `已超时 ${Math.max(1, Math.floor(-left / HOUR))} 小时`;
   return `剩 ${Math.max(1, Math.floor(left / HOUR))} 小时`;
+}
+
+// 回滚 Agent 版本（四期 F3②g）：版本库历史来自 GET /api/agent-md/{代号}/versions；
+// 在用版本 = 回滚指针（有的话）或仓库当前版本，目标不能等于在用版本（后端同样 422）。
+export function rollbackVersions(history) {
+  if (!history) return [];
+  const inUse = history.pinned || history.current;
+  return (history.items || []).filter((x) => x.version !== inUse);
+}
+
+export function versionLabel(item, history) {
+  const parts = [item.version];
+  if (item.md_version) parts.push(item.md_version);
+  if (item.captured_at) parts.push(item.captured_at.slice(0, 10));
+  if (history && item.version === history.current) parts.push("仓库当前");
+  return parts.join(" · ");
 }
