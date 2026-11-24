@@ -221,13 +221,15 @@ def test_conflict_choices_map_to_decisions():
     author, _ = _user("knowledge_expert")
     expert, _ = _user("knowledge_expert")
     old = _published(author, expert)
-    a, b, c = (_conflicting(author, old) for _ in range(3))
+    a, b, c, d = (_conflicting(author, old) for _ in range(4))
     with SessionLocal() as db:
         ex = db.merge(expert)
         r = eb.answer(db, ex, a, [{"id": "keep", "choice": "yes"}, {"id": "conflict", "choice": "old"}])
         assert r["outcome"] == "reject" and db.get(KbVersion, a).status == "rejected"
         r = eb.answer(db, ex, b, [{"id": "keep", "choice": "yes"}, {"id": "conflict", "choice": "unsure"}])
         assert r["outcome"] == "undecided" and db.get(KbVersion, b).status == "in_review"
+        r = eb.answer(db, ex, d, [{"id": "keep", "choice": "no"}, {"id": "conflict", "choice": "unsure"}])
+        assert r["outcome"] == "reject"                                       # 不收就退回，不看冲突题
         r = eb.answer(db, ex, c, [{"id": "keep", "choice": "yes"}, {"id": "conflict", "choice": "new"}])
         assert r["outcome"] == "approve" and r["recheck"] == [old]
         live = db.scalar(select(KbVersion).join(KbVersion.item).where(KbVersion.status == "published",
