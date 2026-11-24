@@ -185,17 +185,29 @@ def test_a12_gate_beats_fixed_query_baseline(published):
     assert slot.hit_rate > base.hit_rate and "通过" in line
 
 
-def test_a12_gate_fails_without_slots_or_without_gain(published):
+def _no_config_slots(monkeypatch) -> None:
+    """模拟产品配置还没有知识槽位（SOC 自 C10 起已配 D4/D5 槽位，不能再拿真实配置当“无槽位”）。"""
+    orig = ae._snapshot
+
+    def snap(evalset):
+        out = dict(orig(evalset))
+        out["chain"] = [{**c, "slots": ()} for c in out["chain"]]
+        return out
+    monkeypatch.setattr(ae, "_snapshot", snap)
+
+
+def test_a12_gate_fails_without_slots_or_without_gain(published, monkeypatch):
+    _no_config_slots(monkeypatch)
     with SessionLocal() as db:
         ok, line, *_ = ae.gate(db, db.merge(published), {**_evalset(), "slots": {}})
-        assert not ok and "没有配置知识槽位" in line                    # SOC 配置还没有槽位
+        assert not ok and "没有配置知识槽位" in line                    # 产品配置没有槽位
         same = {**_evalset(), "slots": {"facts": ({"id": "x", "type": "GLD", "query": "不存在的类型", "need": 1,
                                                    "required": False},)}}
         ok, line, base, slot = ae.gate(db, db.merge(published), same)
     assert not ok and slot.hit_rate == base.hit_rate and "未通过" in line   # 持平不算高于
 
 
-def test_cli_gate(published, tmp_path, capsys):
+def test_cli_gate(published, tmp_path, capsys, monkeypatch):
     with SessionLocal() as db:
         name = db.merge(published).username
     p = tmp_path / "e.yaml"
@@ -204,6 +216,7 @@ def test_cli_gate(published, tmp_path, capsys):
                                 allow_unicode=True), encoding="utf-8")
     assert cli_main(["kb-assembly-eval", str(p), "--as", name, "--gate"]) == 0
     assert "A12 门" in capsys.readouterr().out
+    _no_config_slots(monkeypatch)
     q = tmp_path / "none.yaml"
     q.write_text(yaml.safe_dump({k: v for k, v in _evalset().items() if k != "slots"}, allow_unicode=True),
                  encoding="utf-8")
