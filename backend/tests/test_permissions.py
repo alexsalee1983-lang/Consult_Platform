@@ -54,6 +54,13 @@ MATRIX = [
     (("GET", "/api/my-tasks", None),                    (200, 200, 403, 403, 403)),
     (("POST", "/api/my-tasks/return", {"kind": "confirmation", "ref_id": 999999, "reason": "依据不对"}),
                                                         (404, 404, 403, 403, 403)),
+    # 专家工作台（四期 B23①）：只给知识专家（200 在 test_expert_bench 里测），矩阵里的角色全部 403
+    (("GET", "/api/expert-bench/cards", None),          (403, 403, 403, 403, 403)),
+    (("GET", "/api/expert-bench/templates", None),      (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/fill", {"template": "practice", "fill": {"how": "示范"}}),
+                                                        (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/cards/999999/answer", {"answers": [{"id": "keep", "choice": "yes"}]}),
+                                                        (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),

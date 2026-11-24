@@ -12,6 +12,7 @@ import Indicators from "./pages/Indicators.jsx";
 import QualityIncidents from "./pages/QualityIncidents.jsx";
 import Workbench from "./pages/Workbench.jsx";
 import MyTasks from "./pages/MyTasks.jsx";
+import ExpertBench from "./pages/ExpertBench.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
 import KbBatches from "./pages/KbBatches.jsx";
 import KbIntake from "./pages/KbIntake.jsx";
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="/kb/search" element={<KbSearch />} />
           <Route path="/kb/intake" element={<KbIntake />} />
           <Route path="/kb/review" element={<RequireKnowledge><KbReview /></RequireKnowledge>} />
+          <Route path="/kb/bench" element={<RequireKnowledge><ExpertBench /></RequireKnowledge>} />
           <Route path="/kb/map" element={<RequireKnowledge><KbMap /></RequireKnowledge>} />
           <Route path="/kb/batches" element={<KbBatches />} />
           <Route path="/kb/readiness" element={<KbReadiness />} />

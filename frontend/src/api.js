@@ -214,6 +214,9 @@ export const api = {
     request(`/api/quality-incidents/${id}/events`, { method: "POST", body: JSON.stringify(body) }),
   workbench: () => request("/api/workbench"),
   myTasks: () => request("/api/my-tasks"),
+  benchCards: () => request("/api/expert-bench/cards"),
+  benchAnswer: (versionId, body) =>
+    request(`/api/expert-bench/cards/${versionId}/answer`, { method: "POST", body: JSON.stringify(body) }),
   returnTask: (kind, ref_id, reason) =>
     request("/api/my-tasks/return", { method: "POST", body: JSON.stringify({ kind, ref_id, reason }) }),
   deletion: (id) => request(`/api/deletions/${id}`),

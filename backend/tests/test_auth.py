@@ -22,12 +22,16 @@ PROTECTED = [
     ("POST", "/api/quality-incidents"),
     ("GET", "/api/quality-incidents/1"),
     ("POST", "/api/quality-incidents/1/events"),
-    ("GET", "/api/agent-md/report-writer/versions"),
-    ("GET", "/api/agent-md/report-writer/versions/abc"),
-    ("POST", "/api/agent-md/report-writer/unpin"),
+    ("GET", "/api/agent-md/BANK-A/versions"),
+    ("GET", "/api/agent-md/BANK-A/versions/abc"),
+    ("POST", "/api/agent-md/BANK-A/unpin"),
     ("GET", "/api/workbench"),
     ("GET", "/api/my-tasks"),
     ("POST", "/api/my-tasks/return"),
+    ("GET", "/api/expert-bench/cards"),
+    ("GET", "/api/expert-bench/templates"),
+    ("POST", "/api/expert-bench/fill"),
+    ("POST", "/api/expert-bench/cards/1/answer"),
     ("GET", "/api/projects/BANK-A"),
     ("POST", "/api/projects"),
     ("GET", "/api/catalog/products"),
@@ -193,7 +197,8 @@ def test_every_api_route_is_protected_or_public(client):
             concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x") \
                 .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1") \
                 .replace("{rid}", "1").replace("{deletion_id}", "1").replace("{incident_id}", "1") \
-                .replace("{consent_id}", "1").replace("{card}", "S-01")
+                .replace("{consent_id}", "1").replace("{card}", "S-01") \
+                .replace("{version}", "abc")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 
