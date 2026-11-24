@@ -207,6 +207,11 @@ export const api = {
   deletions: (status = "open") => request(`/api/deletions?status=${encodeURIComponent(status)}`),
   portfolio: () => request("/api/portfolio"),
   indicators: (days) => request(`/api/indicators?days=${days}`),
+  qualityIncidents: (status = "", level = "") =>
+    request(`/api/quality-incidents?status=${encodeURIComponent(status)}&level=${encodeURIComponent(level)}`),
+  qualityIncident: (id) => request(`/api/quality-incidents/${id}`),
+  addIncidentEvent: (id, body) =>
+    request(`/api/quality-incidents/${id}/events`, { method: "POST", body: JSON.stringify(body) }),
   workbench: () => request("/api/workbench"),
   deletion: (id) => request(`/api/deletions/${id}`),
   confirmDeletion: (id, flowback, flowback_refs) =>
