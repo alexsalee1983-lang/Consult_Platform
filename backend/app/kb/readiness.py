@@ -7,7 +7,7 @@
 按规格换口径，看板结构不变。槽位状态：
 - ready 就绪：已发布（有现行版本）、未停用、现行版本不在待复查（B13 使用反馈标记；B29 的“不对 / 过时”接入后同样不算）；
 - candidate 候选：库里有草稿或待审版本，还没发布（就绪度口径不含候选）；
-- recheck 待复查；retired 已下线；missing 缺槽：库里没有这条。
+- recheck 待复查（reason=feedback：顾问标“过时 / 不对”引起，四期 A17）；retired 已下线；missing 缺槽：库里没有这条。
 章节就绪度 = 就绪槽位 ÷ 槽位数；评测集就绪度 = 各章平均，另列最低一章；依据类（L4）槽位单列（v3.0 第 9 条要求 ≥ 95%）。
 
 专家指标（按条目类型 doc_type，统计窗内的人工内容审核 review_role=content）：
@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
 from ..models import KbItem, KbReview, KbVersion
-from . import assembly_eval
+from . import assembly_eval, feedback
 
 EDIT_MIN_REVIEWS = 20       # 有修改记录的采纳至少这么多条才判断，免得样本太少误报
 EDIT_LOW_RATE = 0.05        # 修改率不高于 5% 算“接近 0”
@@ -68,7 +68,7 @@ def _slot_states(db: Session, keys: set[str]) -> dict[str, dict[str, str]]:
     for key in keys:
         item = items.get(key)
         if item is None:
-            out[key] = {"state": "missing", "doc_type": "", "layer": ""}
+            out[key] = {"state": "missing", "doc_type": "", "layer": "", "reason": ""}
             continue
         v = current.get(item.current_version_id or 0)
         if item.retired:
@@ -79,7 +79,8 @@ def _slot_states(db: Session, keys: set[str]) -> dict[str, dict[str, str]]:
             state = "recheck"
         else:
             state = "ready"
-        out[key] = {"state": state, "doc_type": item.doc_type, "layer": item.layer}
+        reason = "feedback" if state == "recheck" and feedback.is_feedback_recheck(v) else ""
+        out[key] = {"state": state, "doc_type": item.doc_type, "layer": item.layer, "reason": reason}
     return out
 
 

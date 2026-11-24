@@ -1,6 +1,7 @@
 """知识使用反馈接口（三期 B29 最小版）。规则在 app/kb/feedback.py。
 
-- GET  /api/projects/{code}/kb-feedback：某处引用（章节版本或 Agent 回复）里能标的知识和本人的选择；
+- GET  /api/projects/{code}/kb-feedback：某处引用（章节版本或 Agent 回复）里能标的知识、本人的选择，
+  以及每条知识的标题、版本、依据和权威等级（四期 A17，不含正文）；
 - POST /api/projects/{code}/kb-feedback：标“有用 / 过时 / 不对”（可附一句话）；
 - GET  /api/kb-usage：每条知识的引用次数、采纳率和三键计数（与 B4 引用计数一样只给知识专家、知识管理员；
   只有编号、标题和计数，不含项目、正文和附言）。
@@ -36,6 +37,7 @@ class TargetOut(BaseModel):
     surface: str
     doc_ids: list[str]
     mine: dict[str, str]
+    items: list[dict] = []          # A17：每条知识的标题、版本、依据、权威等级、待复查（不含正文）
 
 
 class FeedbackOut(TargetOut):
@@ -59,7 +61,8 @@ def _target(db: Session, p: Project, user: User, message_id: int | None, deliver
 
 
 def _out(db: Session, user: User, t: svc.Target) -> dict:
-    return {"surface": t.surface, "doc_ids": sorted(t.doc_ids), "mine": svc.mine(db, user, t)}
+    return {"surface": t.surface, "doc_ids": sorted(t.doc_ids), "mine": svc.mine(db, user, t),
+            "items": svc.describe(db, user, t.doc_ids)}
 
 
 @router.get("/projects/{code}/kb-feedback", response_model=TargetOut)

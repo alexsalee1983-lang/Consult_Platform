@@ -80,7 +80,10 @@ def test_review_three_keys_and_flag_goes_to_recheck(people):
     try:
         r = c.get(f"/api/projects/{code}/kb-feedback", params=_review())
         assert r.status_code == 200, r.text
-        assert r.json() == {"surface": "review", "doc_ids": sorted([x, y]), "mine": {}}
+        body = r.json()
+        assert {k: body[k] for k in ("surface", "doc_ids", "mine")} == {"surface": "review", "doc_ids": sorted([x, y]),
+                                                                        "mine": {}}
+        assert [i["doc_id"] for i in body["items"]] == sorted([x, y])     # 四期 A17：本段用了哪些知识
 
         r = c.post(f"/api/projects/{code}/kb-feedback", json={**_review(), "doc_id": y, "rating": "useful"})
         assert r.status_code == 200, r.text
@@ -167,7 +170,9 @@ def test_chat_feedback_only_for_conversation_owner(people):
     try:
         url = f"/api/projects/{code}/kb-feedback"
         r = c.get(url, params={"message_id": mid})
-        assert r.status_code == 200 and r.json() == {"surface": "chat", "doc_ids": [x], "mine": {}}
+        assert r.status_code == 200 and {k: r.json()[k] for k in ("surface", "doc_ids", "mine")} == {
+            "surface": "chat", "doc_ids": [x], "mine": {}}
+        assert r.json()["items"][0]["doc_id"] == x and r.json()["items"][0]["visible"] is True
         assert o.get(url, params={"message_id": mid}).status_code == 404
         assert o.post(url, json={"message_id": mid, "doc_id": x, "rating": "wrong"}).status_code == 404
         r = c.post(url, json={"message_id": mid, "doc_id": x, "rating": "wrong"})

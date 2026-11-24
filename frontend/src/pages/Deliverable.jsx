@@ -23,6 +23,7 @@ function useNewEditor() {
   return [on, toggle];
 }
 import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
+import { knowledgeLine } from "../kbUsage.js";
 
 // 交付件审阅（设计稿 04）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
 // 右栏与本交付件有关的确认卡、签署流程。规则都在后端，界面只按接口返回显示和操作。
@@ -245,16 +246,22 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
         ) : (
           <div className="sub">本章还没有正文。</div>
         )}
-        {!edit && (refs.length > 0 || unresolved.length > 0) && (
+        {(refs.length > 0 || unresolved.length > 0) && (
           <div className="doc-refs" aria-label="本章来源">
-            {refs.map((r) => (
-              <div key={r.ref} className="row">
+            {edit && <div className="cap">当前保存版本用到的来源与知识（保存后更新）</div>}
+            {refs.map((r) => {
+              const kb = r.found && r.ref.startsWith("L") ? fb.items[r.ref] || fb.items[r.doc_id] : null;
+              return (
+              <div key={r.ref} className="row" style={{ flexWrap: "wrap" }}>
                 <span className="mono" style={{ color: !r.found ? "var(--crim)" : r.ref.startsWith("L") ? "var(--cyan)" : "var(--ok)", minWidth: 120 }}>{r.ref}</span>
                 <span className="sub">{!r.found ? "核对不上：项目里没有这条证据或知识"
                   : r.layer_name || r.layer || EVIDENCE_KIND[r.ref[0]] || ""}</span>
-                {kbCited && r.found && r.ref.startsWith("L") && <FeedbackKeys docId={r.ref} fb={fb} />}
+                {kb && kb.visible && <span>{kb.title}</span>}
+                {kb && <span className="sub" style={kb.recheck_state ? { color: "var(--amber)" } : undefined}>{knowledgeLine(kb)}</span>}
+                {!edit && kbCited && r.found && r.ref.startsWith("L") && <FeedbackKeys docId={r.ref} fb={fb} />}
               </div>
-            ))}
+              );
+            })}
             {fb.error && <div className="err" role="alert">{fb.error}</div>}
           </div>
         )}
