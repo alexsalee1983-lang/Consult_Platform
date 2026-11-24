@@ -233,7 +233,7 @@ def start(db: Session, user: User, project: Project, trigger: str = "") -> Agent
     db.flush()
     runtime_config.sync(db)   # G3②：其他进程改过运行层配置时先追上
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code, run_id=run.id,
-                 config_registry_sha=config_registry.effective_sha(), **({"trigger": trigger} if trigger else {}))
+                 config_registry_sha=config_registry.effective_sha(db), **({"trigger": trigger} if trigger else {}))
     db.commit()
     _enqueue(db, run, project)
     db.refresh(run)

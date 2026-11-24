@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from ..agents import registry
 from ..core.config import get_settings
 from ..products.config import catalog_dir
@@ -56,7 +59,7 @@ def _endpoint(url: str) -> str:
     return f"{u.scheme}://{u.hostname or ''}{f':{u.port}' if u.port else ''}"
 
 
-def _locked() -> list[dict]:
+def _locked(db: Session | None = None) -> list[dict]:
     s = get_settings()
     items = [{"key": k, "value": getattr(s, k), "source": ENV} for k in LOCKED_FLAGS]
     items += [{"key": k, "value": "已配置" if getattr(s, k) else "未配置", "source": ENV} for k in LOCKED_SECRETS]
@@ -68,7 +71,25 @@ def _file_sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
 
-def _method() -> list[dict]:
+def _pins(db: Session | None) -> dict[str, tuple[str, str]]:
+    """F3②f：回滚指针 {Agent 代号: (版本, md_version)}，运行时按指针取 md，方法层哈希也按指针算。"""
+    from ..core.db import SessionLocal      # 避免循环导入
+    from ..models import AgentMdPin, AgentMdVersion
+
+    def read(s: Session) -> dict[str, tuple[str, str]]:
+        rows = s.execute(select(AgentMdPin.agent_code, AgentMdPin.version, AgentMdVersion.md_version)
+                         .outerjoin(AgentMdVersion, (AgentMdVersion.agent_code == AgentMdPin.agent_code)
+                                    & (AgentMdVersion.version == AgentMdPin.version))).all()
+        return {c: (v, m or "") for c, v, m in rows}
+
+    if db is not None:
+        return read(db)
+    with SessionLocal() as s:
+        return read(s)
+
+
+def _method(db: Session | None = None) -> list[dict]:
+    pins = _pins(db)
     items: list[dict] = []
     base = registry.agents_dir()
     common = base / registry.COMMON_FILE
@@ -76,9 +97,14 @@ def _method() -> list[dict]:
         items.append({"key": f"agents/{registry.COMMON_FILE}", "value": _file_sha(common), "source": REPO})
     for role in sorted((base / "roles").glob("*.md")):
         doc = registry.load(role.stem)
-        if doc is not None:
-            items.append({"key": f"agent:{doc.code}", "value": doc.version, "md_version": doc.md_version,
-                          "level": doc.level, "source": REPO})
+        if doc is None:
+            continue
+        item = {"key": f"agent:{doc.code}", "value": doc.version, "md_version": doc.md_version,
+                "level": doc.level, "source": REPO}
+        if doc.code in pins:
+            version, md_version = pins[doc.code]
+            item.update(value=version, md_version=md_version, pinned=True, repo_version=doc.version)
+        items.append(item)
     root = catalog_dir()
     for d in METHOD_DIRS:
         for f in sorted((root / d).glob("*.yaml")):
@@ -86,7 +112,7 @@ def _method() -> list[dict]:
     return items
 
 
-def _runtime() -> list[dict]:
+def _runtime(db: Session | None = None) -> list[dict]:
     from . import runtime_config   # 避免循环导入
 
     s = get_settings()
@@ -98,15 +124,16 @@ def _runtime() -> list[dict]:
 LAYERS = (("locked", "锁定层", _locked), ("method", "方法层", _method), ("runtime", "运行层", _runtime))
 
 
-def build() -> dict:
-    """三层登记视图：layers[].sha 是该层哈希，sha 是三层合起来的生效配置哈希。"""
+def build(db: Session | None = None) -> dict:
+    """三层登记视图：layers[].sha 是该层哈希，sha 是三层合起来的生效配置哈希。
+    db：读回滚指针用；不传则临时开一个会话（调用方有未提交的指针时要传自己的会话）。"""
     layers = []
     for key, name, fn in LAYERS:
-        items = fn()
+        items = fn(db)
         layers.append({"key": key, "name": name, "sha": _sha(items), "items": items})
     return {"sha": _sha({x["key"]: x["sha"] for x in layers}), "layers": layers}
 
 
-def effective_sha() -> str:
-    """当前生效配置哈希（三层合计），供运行记录、回放比对使用。"""
-    return build()["sha"]
+def effective_sha(db: Session | None = None) -> str:
+    """当前生效配置哈希（三层合计，Agent md 按回滚指针），供运行记录、回放比对使用。"""
+    return build(db)["sha"]

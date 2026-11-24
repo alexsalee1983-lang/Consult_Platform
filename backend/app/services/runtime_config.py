@@ -111,7 +111,7 @@ def _audit(db: Session, actor: str, action: str, v: RuntimeConfigVersion, items:
     detail: dict[str, Any] = {
         "version": v.id, "status": v.status, "keys": [i.key for i in items], "reason_len": len(v.reason),
         "values": [{"key": i.key, "old": _vsha(i.old_value), "new": _vsha(i.value)} for i in items],
-        "config_registry_sha": config_registry.effective_sha()}
+        "config_registry_sha": config_registry.effective_sha(db)}
     if v.rollback_to is not None:
         detail["rollback_to"] = v.rollback_to
     audit.record(db, actor=actor, action=action, result="allowed", **detail)
