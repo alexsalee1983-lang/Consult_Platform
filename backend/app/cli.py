@@ -465,6 +465,20 @@ def verify_audit(args: argparse.Namespace) -> int:
     return 0 if r.ok else 2
 
 
+def quality_fp_stats(args: argparse.Namespace) -> int:  # noqa: ARG001
+    """四期 A18②：各类阻断的驳回率（误报率）和是否已自动降为提醒。"""
+    from .project import contradictions
+
+    with SessionLocal() as db:
+        rows = contradictions.false_positive_stats(db)
+    print(f"阻断误报率（样本不少于 {contradictions.CALIBRATE_MIN} 条且驳回率不低于 "
+          f"{contradictions.CALIBRATE_RATE:.0%} 的类别自动降为提醒；机密与客户信息、资质用语不降）：")
+    for r in rows:
+        mark = "已降为提醒" if r["calibrated"] else ""
+        print(f"{r['by']:<6} {r['category']:<10} 阻断 {r['total']:>5}  驳回 {r['waived']:>5}  驳回率 {r['rate']:.1%}  {mark}")
+    return 0
+
+
 def usage_report(args: argparse.Namespace) -> int:
     from .services import usage
 
@@ -1187,6 +1201,8 @@ def main(argv: list[str] | None = None) -> int:
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
     a.set_defaults(func=verify_audit)
+    sub.add_parser("quality-fp-stats", help="各类阻断的驳回率（误报率）与自动校准状态（四期 A18②）"
+                   ).set_defaults(func=quality_fp_stats)
     us = sub.add_parser("usage-report", help="大模型用量汇总")
     us.add_argument("--days", type=int, default=30)
     us.add_argument("--by", default="username,project_code,model",
