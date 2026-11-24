@@ -134,6 +134,7 @@ MATRIX = [
     (("GET", "/api/admin/roles", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/usage", None),                 (403, 403, 200, 403, 403)),
     (("GET", "/api/admin/models", None),                (403, 403, 200, 403, 403)),
+    (("GET", "/api/admin/config-registry", None),       (403, 403, 200, 403, 403)),   # G3①：只给系统管理员
     (("GET", "/api/admin/agent-grants", None),          (403, 403, 200, 403, 403)),
     (("POST", "/api/admin/users", {"username": "matrix_new"}), (403, 403, 201, 403, 403)),
     (("POST", "/api/admin/users/matrix_target/reset-password", None), (403, 403, 200, 403, 403)),

@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit, sessions
-from ..services import gateway, jobs, ops, usage
+from ..services import config_registry, gateway, jobs, ops, usage
 from ..core.auth import current_user, password_expired
 from ..core.config import get_settings
 from ..core.db import get_db, utcnow
@@ -141,6 +141,12 @@ def _endpoint(url: str) -> str:
     u = urlsplit(url)
     host = u.hostname or ""
     return f"{u.scheme}://{host}{f':{u.port}' if u.port else ''}{u.path}"
+
+
+@router.get("/config-registry")
+def config_registry_view() -> dict:
+    """统一配置登记（四期 G3①）：锁定层、方法层、运行层的只读视图和各层哈希；不返回密钥。"""
+    return config_registry.build()
 
 
 @router.get("/models")
