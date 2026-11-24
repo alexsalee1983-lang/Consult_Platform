@@ -27,6 +27,8 @@
                     {session} 本单会话名 pr<号>-<提交前 7 位>（同一提交重试复用同一会话）、{model} RUNNER_MODEL。
                     例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
     RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
+    PR_RECHECK_ONLY 默认 1：PR 上最近一次测试结论之后有“复核说明”时只测点名项（冒烟、迁移头、数据保护照跑不可裁；
+                    PR 命令块只跑点名的；点名项无人工/真实模型项则不起会话）。设 0 恢复全量
     RUNNER_GH       gh 命令（默认 gh）。WSL 上 PATH 先命中 Windows 版 gh.exe 会在 WSL 路径下失败，设成 /usr/local/bin/gh
     NOTIFY_CMD      发群通知的命令，消息作为最后一个参数追加；须“直接发群消息”而不是回复某条消息
 """
@@ -123,8 +125,62 @@ def how_to_test(body: str) -> str:
     return ""
 
 
-def needs_session(body: str, has_recheck: bool) -> str:
-    """需要起模型会话的原因；返回空串表示脚本项全过即可直接出结论。"""
+RECHECK_ONLY = os.environ.get("PR_RECHECK_ONLY", "1") != "0"  # 默认开：命中复核说明只测点名项
+CONCLUSION_RE = re.compile(r"测试(结论|结果)")
+_MD_PREFIX = "#*>`@ 	-"
+
+
+def _first_line(text: str) -> str:
+    return next((ln.strip(_MD_PREFIX) for ln in text.splitlines() if ln.strip(_MD_PREFIX)), "")
+
+
+def find_recheck(comments: list[dict]) -> str:
+    """最近一次测试结论评论之后的最新“复核说明”全文；没有返回空串。
+
+    评论按时间排序（gh 默认已排序，这里再按 createdAt 稳定排一次）。标题行以“复核说明”开头（容忍 #、**、引用、
+    @ 前缀与“（第二轮）”等后缀）；测试结论评论里即便提到“复核说明”也不算复核说明。"""
+    ordered = sorted(comments, key=lambda c: c.get("createdAt") or "")
+    found = ""
+    for c in ordered:
+        body = c.get("body") or ""
+        first = _first_line(body)
+        if first.startswith("复核说明"):
+            found = body
+        elif CONCLUSION_RE.search(first[:20]):
+            found = ""  # 这一轮已有结论，之前的复核说明作废
+    return found
+
+
+def command_blocks(body: str) -> list[str]:
+    """PR 描述里“测试机命令”代码块（与 pr_test.sh 的提取规则一致）。"""
+    pat = r"^[^\n]*测试机命令[^\n]*\n+```bash[^\n]*\n(.*?)\n```"
+    return [m.group(1) for m in re.finditer(pat, body, re.S | re.M)]
+
+
+def named_blocks(recheck: str, blocks: list[str]) -> list[int]:
+    """复核说明点名的命令块序号（从 1 起）：写了“命令块 N”/“cmdN”，或块里的测试文件、模块名出现在复核说明里。
+    一个都认不出来就返回全部（宁可多跑，不漏测）。"""
+    hit = []
+    for i, blk in enumerate(blocks, 1):
+        if re.search(rf"命令块\s*{i}\b|\bcmd\s*{i}\b|块\s*{i}\b", recheck):
+            hit.append(i)
+            continue
+        names = set(re.findall(r"[\w./-]*test_\w+(?:\.py)?|[\w./-]+\.py\b", blk))
+        if any(n in recheck for n in names if len(n) >= 6):
+            hit.append(i)
+    return hit or list(range(1, len(blocks) + 1))
+
+
+def needs_session(body: str, has_recheck: bool, recheck: str = "") -> str:
+    """需要起模型会话的原因；返回空串表示脚本项全过即可直接出结论。
+
+    有复核说明且 PR_RECHECK_ONLY 开启时以点名项为准：点名项里没有人工核对/真实模型/浏览器类项就不起会话。"""
+    if has_recheck and RECHECK_ONLY and recheck:
+        for ln in recheck.splitlines():
+            m = HUMAN_RE.search(ln)
+            if m and not NEG_RE.search(ln):
+                return f"复核说明点名项含需判断项（{m.group(0)}）"
+        return ""
     if has_recheck:
         return "PR 有复核说明，只测点名项"
     howto = how_to_test(body)
@@ -382,13 +438,21 @@ def run_one(env: str, pr: int, head: str, logdir: Path) -> int:
     cfg = ENVS[env]
     info = json.loads(sh(["gh", "pr", "view", str(pr), "--json", "body,comments"]) or "{}")
     body = info.get("body") or ""
-    rechecks = [c.get("body") or "" for c in info.get("comments") or [] if "复核说明" in (c.get("body") or "")[:40]]
-    why = needs_session(body, bool(rechecks))
+    latest = find_recheck(info.get("comments") or [])
+    rechecks = [latest] if latest else []
+    if latest:
+        (logdir / "recheck.md").write_text(latest, encoding="utf-8")
+    why = needs_session(body, bool(rechecks), latest)
+    scope = dict(os.environ)
+    if latest and RECHECK_ONLY:
+        blocks = command_blocks(body)
+        if blocks:
+            scope["PR_CMD_ONLY"] = ",".join(str(i) for i in named_blocks(latest, blocks))
     keep = "1" if why else os.environ.get("KEEP_UP", "0")
     run_log = logdir / "run.log"
     with run_log.open("w", encoding="utf-8") as fh:
         subprocess.run(["bash", "scripts/pr_test.sh", str(pr), env, str(logdir)], cwd=cfg["dir"],
-                       stdout=fh, stderr=subprocess.STDOUT, env={**os.environ, "KEEP_UP": keep})
+                       stdout=fh, stderr=subprocess.STDOUT, env={**scope, "KEEP_UP": keep})
     verdict = verdict_of(run_log.read_text(encoding="utf-8", errors="replace"))
     summary = logdir / "summary.md"
     if verdict == "环境问题未测":
