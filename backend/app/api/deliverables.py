@@ -30,6 +30,7 @@ from ..project import assessment
 from ..project import deliverables as svc
 from ..project import export as export_svc
 from ..project import export_pptx
+from ..project import forms as forms_svc
 from ..project import kb_impact
 from ..services import quality_incidents
 
@@ -56,6 +57,10 @@ class DeliverableDetail(BaseModel):
     updated_by: str
     sections: list[SectionRow]
     totals: dict                 # 当前版本的来源计数：evidence / knowledge / inferred / unresolved
+
+
+class FormIn(BaseModel):
+    values: dict[str, str] = Field(default_factory=dict)
 
 
 class OutlineIn(BaseModel):
@@ -195,6 +200,30 @@ def put_outline(code: str, dcode: str, body: OutlineIn, db: Session = Depends(ge
         d = svc.set_outline(db, user, p, d, body.titles)
     except svc.DeliverableError as e:
         _raise(e)
+    return _detail(db, d)
+
+
+@router.get("/{code}/deliverables/{dcode}/form")
+def get_form(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """四期 A14：D1、D2 表单定义；writable=False 表示已有正文，表单只读（之后在编辑器里改）。"""
+    _, d = _load(db, code, dcode, user)
+    form = forms_svc.load_form(d.code)
+    if form is None:
+        raise HTTPException(404, f"{d.code} 没有表单")
+    return {**forms_svc.schema(form), "writable": not any(s.current_version for s in d.sections)}
+
+
+@router.post("/{code}/deliverables/{dcode}/form", response_model=DeliverableDetail, status_code=201)
+def post_form(code: str, dcode: str, body: FormIn, db: Session = Depends(get_db),
+              user: User = Depends(current_user)):
+    p, d = _load(db, code, dcode, user)
+    form = forms_svc.load_form(d.code)
+    if form is None:
+        raise HTTPException(404, f"{d.code} 没有表单")
+    try:
+        d = forms_svc.submit(db, user, p, d, form, body.values)
+    except (svc.DeliverableError, forms_svc.FormError) as e:
+        raise HTTPException(e.status, e.detail) from e
     return _detail(db, d)
 
 

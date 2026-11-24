@@ -1,0 +1,62 @@
+# 四期 A14：D1 启动包表单（各产品通用；顾问填表，平台按模板程序成稿，不调模型）
+# 字段类型：text 单行、textarea 多行、list 每行一项（成稿时渲染为列表）
+# 模板里用 {字段 key} 引用字段；fixed 为平台固定写入的段落（资质边界），顾问不能改
+code: D1
+title: 启动包
+sections:
+- title: 项目概况
+  fields:
+  - {key: goal, label: 项目目标, type: textarea, required: true}
+  - {key: period, label: 项目周期, type: text, required: true, hint: 例如 2027-01-05 至 2027-03-31}
+  - {key: background, label: 背景与驱动因素, type: textarea}
+  template: |
+    **项目目标**
+
+    {goal}
+
+    **项目周期**：{period}
+
+    {background}
+- title: 范围确认
+  fields:
+  - {key: in_scope, label: 本次范围（每行一项）, type: list, required: true}
+  - {key: out_of_scope, label: 不包含项（每行一项）, type: list, required: true}
+  - {key: assumptions, label: 前提与依赖（每行一项）, type: list}
+  template: |
+    **本次范围**
+
+    {in_scope}
+
+    **不包含项**
+
+    {out_of_scope}
+
+    **前提与依赖**
+
+    {assumptions}
+  fixed: 本项目提供差距分析、符合性初判与整改建议，不出具等级保护测评结论、商用密码应用安全性评估结论或认证结论。
+- title: 工作分解与里程碑
+  fields:
+  - {key: milestones, label: 阶段与里程碑（每行一项：阶段｜时间｜产出）, type: list, required: true}
+  template: |
+    {milestones}
+- title: 组织与沟通
+  fields:
+  - {key: roles, label: 双方角色与职责（每行一项）, type: list, required: true}
+  - {key: communication, label: 沟通机制, type: textarea}
+  template: |
+    **角色与职责**
+
+    {roles}
+
+    **沟通机制**
+
+    {communication}
+- title: 启动会议程
+  fields:
+  - {key: agenda, label: 议程（每行一项）, type: list, required: true}
+  - {key: meeting, label: 时间与参会人, type: text}
+  template: |
+    {meeting}
+
+    {agenda}
