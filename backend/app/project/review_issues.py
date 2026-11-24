@@ -95,6 +95,11 @@ def apply_profile(issues: list[dict], counts: dict[str, int], name: str) -> int:
     return n
 
 
+def soft(issue: dict) -> bool:
+    """可驳回、驳回后不重提的问题：评审 Agent 提的，或 A18 矛盾核对（程序比对，可能误报）判的。"""
+    return issue.get("by") == "agent" or issue.get("rule") == "contradiction"
+
+
 def _norm(s: str) -> str:
     return _NOISE.sub("", s or "")
 
@@ -137,17 +142,17 @@ def reconcile(db: Session, d: Deliverable, r: QualityReview, issues: list[dict],
             by_fp[fp], by_code[row.code] = row, row
             stats["new"] += 1
         elif row.id not in seen:
-            if row.status == "waived" and i.get("by") == "agent":
+            if row.status == "waived" and soft(i):
                 i["status"] = WAIVED_MARK
                 sev = i.get("severity", "")
-                if sev in counts:
+                if sev in counts and i.get("by") == "agent":
                     counts[sev] = max(counts[sev] - 1, 0)
                 stats["carried_waived"] += 1
             elif row.status == "resolved":
                 row.status, row.resolved_review_id = "open", None
                 stats["reopened"] += 1
             row.last_review_id, row.updated_at = r.id, now
-        elif row.status == "waived" and i.get("by") == "agent":
+        elif row.status == "waived" and soft(i):
             i["status"] = WAIVED_MARK
         i["code"] = row.code
         if row.id is not None:

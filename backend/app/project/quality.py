@@ -61,7 +61,7 @@ from ..models import (AgentRun, AgentRunStep, Deliverable, KbVersion, Project, Q
                       User)
 from ..products import config
 from ..services import gateway, guard, jobs, model_catalog
-from . import cards, configs, deliverables, review_issues
+from . import cards, configs, contradictions, deliverables, review_issues
 from . import evidence as evidence_svc
 
 AGENT = "qa-reviewer"
@@ -215,17 +215,21 @@ def list_waivers(db: Session, r: QualityReview) -> list[ReviewWaiver]:
 
 
 def waivable(issue: dict) -> bool:
-    return (issue.get("by") == "agent" and issue.get("severity") == "阻断"
+    """评审 Agent 的阻断和 A18 矛盾核对的阻断（程序比对、可能误报）可以驳回；其他平台规则不能。"""
+    return (review_issues.soft(issue) and issue.get("severity") == "阻断"
             and issue.get("status") != review_issues.WAIVED_MARK)
 
 
 def blocking_of(db: Session, r: QualityReview) -> Blocking:
     issues = r.issues or []
-    rule = sum(1 for i in issues if i.get("by") == "rule" and i.get("severity") == "阻断")
+    rule_all = sum(1 for i in issues if i.get("by") == "rule" and i.get("severity") == "阻断"
+                   and i.get("status") != review_issues.WAIVED_MARK)
     listed = {n for n, i in enumerate(issues) if waivable(i)}
-    agent = max(r.blocking - rule, 0)
+    soft_rule = sum(1 for n in listed if issues[n].get("by") == "rule")
+    agent = max(r.blocking - rule_all, 0)
     waived = sum(1 for w in list_waivers(db, r) if w.issue_index in listed)
-    return Blocking(rule=rule, agent_open=len(listed) - waived, unlisted=max(agent - len(listed), 0), waived=waived)
+    return Blocking(rule=rule_all - soft_rule, agent_open=len(listed) - waived,
+                    unlisted=max(agent - (len(listed) - soft_rule), 0), waived=waived)
 
 
 def gate(db: Session, d: Deliverable) -> Gate:
@@ -580,6 +584,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
     issues, confidential = rule_issues(d, r.versions, evidence_svc.withdrawn_codes(db, project),
                                        strict=project.tier == "strict",
                                        kb_states=kb_ref_states(db, cited_kb_refs(d, r.versions)))
+    issues += contradictions.check(db, project, d, r.versions)        # A18①：与确认卡、事实确认单矛盾
     gates, profile = project_gates(db, project), review_profile(db, project, d)
     if gates is None:
         issues.append(_issue("阻断", "全文", "产品规则", "服务产品配置有问题，产品门禁规则无法核对",
@@ -654,9 +659,11 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
         return
     for k, v in meta.items():                  # 加锁会 refresh，模型信息放在加锁之后写，否则被冲掉
         setattr(r, k, v)
+    calibrated = contradictions.apply_calibration(issues, counts, contradictions.calibrated_keys(db))  # A18②
     issues = issues[:MAX_ISSUES]
     ledger = review_issues.reconcile(db, d, r, issues, counts)    # 固定编号、已驳回不重提（A13）
-    rule_counts = {s: sum(1 for i in issues if i["by"] == "rule" and i["severity"] == s) for s in SEVERITIES}
+    rule_counts = {s: sum(1 for i in issues if i["by"] == "rule" and i["severity"] == s
+                          and i.get("status") != review_issues.WAIVED_MARK) for s in SEVERITIES}
     blocking, major, minor = (rule_counts[s] + counts[s] for s in SEVERITIES)
     r.issues, r.report = issues, report
     r.blocking, r.major, r.minor = blocking, major, minor
@@ -664,7 +671,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
     audit.record(db, actor="worker", action="quality.review", result="allowed", project_code=project.code,
                  deliverable=d.code, review_id=r.id, revision=r.revision, conclusion=r.conclusion,
                  blocking=blocking, major=major, minor=minor, rule_issues=sum(rule_counts.values()),
-                 downgraded=downgraded, profile=profile, profile_capped=capped,
+                 downgraded=downgraded, profile=profile, profile_capped=capped, calibrated=calibrated,
                  **{f"incremental_{k}": v for k, v in incremental.items()},
                  **{f"issues_{k}": v for k, v in ledger.items()},
                  length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens,
@@ -798,7 +805,8 @@ def waive(db: Session, user: User, project: Project, d: Deliverable, r: QualityR
     if not 0 <= index < len(issues):
         raise QualityError(404, "问题不存在")
     if not waivable(issues[index]):
-        reason_code = "rule_issue" if issues[index].get("by") == "rule" else "not_blocking"
+        reason_code = ("rule_issue" if issues[index].get("by") == "rule" and issues[index].get("severity") == "阻断"
+                       else "not_blocking")
         _refuse(db, user, project, d, action, reason_code, 422,
                 "平台规则判出的阻断不能驳回，请修改正文后重新评审" if reason_code == "rule_issue"
                 else "只有阻断问题需要驳回")
