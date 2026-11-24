@@ -26,7 +26,7 @@ def _section(text: str, head: str) -> str:
     return text[start:nxt if nxt > 0 else None]
 
 
-@pytest.mark.parametrize("name", ["solution-designer", "compliance-basis", "report-writer", "qa-reviewer"])
+@pytest.mark.parametrize("name", ["solution-designer", "compliance-basis", "report-writer", "qa-reviewer", "report-comms"])
 def test_role_md_has_no_unquoted_qualification_wording(name):
     text = (ROLES / f"{name}.md").read_text(encoding="utf-8")
     bad = [line for line in text.splitlines() if quality.qualification_hits(evalset._unquoted(line))]
