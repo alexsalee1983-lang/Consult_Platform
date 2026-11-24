@@ -5,7 +5,9 @@
 - 八步处置只追加：分级可重做（以最后一次为准），复盘即关闭，关闭后不再追加（409）。
 - 处置人：项目负责人，或事件所属项目的项目经理；查看：再加登记人；其他人 404。
 - 遏制联动：冻结导出见 export_frozen()；下线条目（只用于挂知识条目的事件）当场把条目下线（同知识库“下线条目”，
-  审计 kb.retire），处置人须同时是知识管理员（不扩大下线权限），条目已下线时只记步骤。
+  审计 kb.retire），处置人须同时是知识管理员（不扩大下线权限），条目已下线时只记步骤；
+  回滚 Agent 版本（四期 F3②e）当场把该 Agent 切到 md 版本库里的已合入版本（app/services/agent_md.py），
+  处置人须是项目负责人（系统管理员与其他角色互斥，不能兼任处置人），撤销见 /api/agent-md/{代号}/unpin。
 """
 from __future__ import annotations
 
@@ -174,7 +176,7 @@ def get(db: Session, user: User, incident_id: int, handle: bool = False) -> View
 
 
 def add_event(db: Session, user: User, incident_id: int, *, step: str, level: str = "", action: str = "",
-              root_cause: str = "", note: str = "") -> View:
+              root_cause: str = "", note: str = "", agent: str = "", version: str = "") -> View:
     v = get(db, user, incident_id, handle=True)
     if step not in STEPS[1:]:
         raise IncidentError(422, "处置步骤不在八步内")
@@ -188,6 +190,8 @@ def add_event(db: Session, user: User, incident_id: int, *, step: str, level: st
         raise IncidentError(409, "事件已复盘关闭")
     if step == "contain" and action == "offline_item":
         _offline_item(db, user, v.incident)
+    if step == "contain" and action == "rollback_agent":
+        _rollback_agent(db, user, v.incident, agent, version)
     e = QualityIncidentEvent(incident_id=v.incident.id, step=step, level=level if step == "grade" else "",
                              action=action if step == "contain" else "",
                              root_cause=root_cause if step == "root_cause" else "",
@@ -215,6 +219,17 @@ def _offline_item(db: Session, user: User, inc: QualityIncident) -> None:
         raise IncidentError(422, "关联的知识条目不存在")
     if not item.retired:
         review.retire(db, user, item, f"质量事件 #{inc.id} 遏制")
+
+
+def _rollback_agent(db: Session, user: User, inc: QualityIncident, agent: str, version: str) -> None:
+    from . import agent_md
+
+    if PROJECT_LEAD not in roles_of(db, user.id):
+        raise IncidentError(403, "回滚 Agent 版本须由项目负责人处置")
+    try:
+        agent_md.pin(db, user.username, agent, version, inc.id)
+    except agent_md.MdError as e:
+        raise IncidentError(e.status, str(e)) from None
 
 
 def all_views(db: Session) -> list[View]:

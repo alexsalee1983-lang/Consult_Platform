@@ -38,6 +38,8 @@ class EventIn(BaseModel):
     action: str = Field(default="", max_length=24)
     root_cause: str = Field(default="", max_length=16)
     note: str = Field(default="", max_length=svc.NOTE_MAX)
+    agent: str = Field(default="", max_length=32)        # 回滚 Agent 版本：Agent 代号与目标版本哈希
+    version: str = Field(default="", max_length=12)
 
 
 def _now() -> datetime:

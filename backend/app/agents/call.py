@@ -53,7 +53,9 @@ def load(db: Session, code: str) -> registry.AgentDoc:
     agent = db.get(Agent, code)
     if agent is None or not agent.enabled:
         raise AgentUnavailable(f"Agent {code} 未登记或已停用")
-    doc = registry.load(code)
+    from ..services import agent_md   # 四期 F3②e：有回滚指针时按指针取版本库里的 md
+
+    doc = agent_md.effective(db, code)
     if doc is None:
         raise AgentUnavailable(f"Agent {code} 的 md 缺失或 name 不一致")
     return doc

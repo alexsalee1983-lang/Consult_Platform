@@ -6,7 +6,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..core.db import Base, utcnow
@@ -38,3 +38,28 @@ class AgentToolGrant(Base):
     tool_code: Mapped[str] = mapped_column(ForeignKey("tools.code"), primary_key=True)
     granted_by: Mapped[str] = mapped_column(String(64))
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AgentMdVersion(Base):
+    """四期 F3②e：Agent md 版本库（迁移 0052）。平台取用 md 时按内容哈希存一份，部署机只部署 main。"""
+    __tablename__ = "agent_md_versions"
+    __table_args__ = (UniqueConstraint("agent_code", "version", name="uq_agent_md_versions_code_version"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    agent_code: Mapped[str] = mapped_column(String(32), index=True)
+    version: Mapped[str] = mapped_column(String(12))                    # 公共规范 + 角色 md 的内容哈希
+    md_version: Mapped[str] = mapped_column(String(32), default="")    # md 自己写的 version
+    common_text: Mapped[str] = mapped_column(Text)
+    role_text: Mapped[str] = mapped_column(Text)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AgentMdPin(Base):
+    """四期 F3②e：回滚指针。有指针时运行时按指针取 md，撤销即删除指针。"""
+    __tablename__ = "agent_md_pins"
+
+    agent_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    version: Mapped[str] = mapped_column(String(12))
+    incident_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pinned_by: Mapped[str] = mapped_column(String(64))
+    pinned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

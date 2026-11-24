@@ -44,6 +44,10 @@ MATRIX = [
      (422, 422, 403, 403, 403)),
     (("GET", "/api/quality-incidents/999999", None),    (404, 404, 403, 403, 403)),
     (("POST", "/api/quality-incidents/999999/events", {"step": "assess"}), (404, 404, 403, 403, 403)),
+    # Agent md 版本库与撤销回滚（四期 F3②e）：项目负责人、系统管理员（负责人 200 在 test_agent_md_rollback 里测）
+    (("GET", "/api/agent-md/report-writer/versions", None), (403, 403, 200, 403, 403)),
+    (("GET", "/api/agent-md/report-writer/versions/000000000000", None), (403, 403, 404, 403, 403)),
+    (("POST", "/api/agent-md/report-writer/unpin", {"reason": "权限矩阵"}), (403, 403, 404, 403, 403)),
     # 工作台：业务角色可用，只汇总本人能看到的待办
     (("GET", "/api/workbench", None),                   (200, 200, 403, 403, 403)),
     # 我的任务（三期 B17②）：业务角色可用；退回不在本人待办里的对象 404，无业务角色 403

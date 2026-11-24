@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from ..core.config import get_settings
 from ..models import Agent, Message, User
+from ..services import agent_md
 from . import registry, tools
 
 TIER_NAMES = {"standard": "标准档", "strict": "严格档"}
@@ -41,7 +42,7 @@ class AgentInfo:
 
 def agent_info(db: Session, agent: Agent) -> AgentInfo:
     granted = tools.granted_tools(db, agent.code)
-    doc = registry.load(agent.code)
+    doc = agent_md.effective(db, agent.code)
     if not agent.enabled:
         return AgentInfo(agent.code, agent.name, agent.side, granted, False, "预留，未启用", "standard", "", [])
     if doc is None:
@@ -65,7 +66,7 @@ def ready_doc(db: Session, agent_code: str) -> registry.AgentDoc:
     info = agent_info(db, agent)
     if not info.ready:
         raise AgentNotReady(f"{agent.name} Agent 暂不可用：{info.reason}")
-    return registry.load(agent_code)
+    return agent_md.effective(db, agent_code)
 
 
 class Card(str):
