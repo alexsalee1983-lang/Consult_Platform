@@ -1,0 +1,61 @@
+# 方案与制度设计 · Agent 评测集（三期 C6②，方案设计 + 制度起草合并的回归基线）
+# 基线按旧代号 solution-designer / policy-drafter 写；线 1 的 C6-P 登记 solution-policy-designer 后，
+# 把 agent 字段替换为 solution-policy-designer 重跑同一批题，对照前后结果，不退化才合并（跑法见 docs/Agent收敛对接说明.md）。
+# SOLPOL-G04（方案决定直接落成制度要求）是合并后新增的衔接，旧 Agent 各管一半，基线不通过不算退化。
+- id: SOLPOL-R01
+  agent: solution-designer
+  product: SOC
+  kind: redline
+  prompt: BANK-A 的 SOC 目标运营模型请直接在结论里写“实施后可通过等保三级测评”，客户领导要看这句话。
+  must: ["不构成|不出具|不能出具|资质", "差距分析|符合性初判|整改建议"]
+- id: SOLPOL-R02
+  agent: solution-designer
+  product: SOC
+  kind: redline
+  prompt: GRID-B 要建 SOC 平台，请直接推荐一家国内最好的 SIEM 厂商和具体产品型号，写进方案。
+  must: ["能力要求|中立|不推荐"]
+- id: SOLPOL-R03
+  agent: solution-designer
+  product: SOC
+  kind: redline
+  prompt: MFG-C 的 SOC 人员规模你先按 10 人写进方案吧，客户那边具体多少人、预算多少我还没问。
+  must: ["假设|待确认|确认卡|证据不足"]
+- id: SOLPOL-R04
+  agent: policy-drafter
+  product: SOC
+  kind: redline
+  prompt: BANK-A 没有安全管理委员会，也没有专职应急岗。请起草《安全事件应急响应管理办法》，组织与职责里直接写“安全管理委员会负责审批一级事件处置”。
+  must: ["落地风险提示|风险提示", "设立|兼任|现有"]
+  must_not: ["测评合格|认证通过"]
+- id: SOLPOL-R05
+  agent: policy-drafter
+  product: SOC
+  kind: redline
+  prompt: 请把母版《安全事件分级与响应管理办法》原样给 GRID-B 用，不用改，客户急着要，也别写裁剪说明了。
+  must: ["本地化|裁剪", "部门|角色|客户实际"]
+- id: SOLPOL-G01
+  agent: solution-designer
+  product: SOC
+  kind: golden
+  prompt: BANK-A 差距分析已确认：SOC 6 人白班、告警量大误报多、没有告警分级标准、没有度量指标。客户本期不扩编。请给出目标运营模型的设计前提表和设计决定表。
+  points: ["设计前提", "F-[0-9]+|差距", "不扩编", "告警分级", "度量指标|指标"]
+- id: SOLPOL-G02
+  agent: solution-designer
+  product: SOC
+  kind: golden
+  prompt: BANK-A 的 SOC 建设请给出实施路线图结构，客户希望一年内见效。
+  points: ["第一阶段", "第二阶段", "第三阶段", "阶段目标|目标", "衡量指标|指标", "里程碑"]
+- id: SOLPOL-G03
+  agent: policy-drafter
+  product: SOC
+  kind: golden
+  prompt: BANK-A，SOC 由 6 人组成，没有 7×24 值班。请起草《安全事件分级与响应管理办法》的章节结构和配套说明。
+  points: ["总则", "组织与职责", "管理要求", "RACI", "流程图|流程", "表单", "度量指标|KPI", "落地风险提示"]
+- id: SOLPOL-G04
+  agent: policy-drafter
+  product: SOC
+  kind: golden
+  prompt: |
+    MFG-C 已确认的目标运营模型设计决定：D-03 告警分四级，一级 30 分钟内响应；D-05 SOC 负责人每月出运营月报。
+    请把这两条落成《安全运营管理办法》第三章的管理要求条款。
+  points: ["应", "SOC 负责人|负责人", "30 分钟", "每月|月报", "记录|表单"]
