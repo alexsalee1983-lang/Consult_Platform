@@ -8,6 +8,7 @@ from sqlalchemy.exc import DataError
 from .api import (admin, agents, assist, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, expert_bench, health, indicators, portfolio,
                   tasks, workbench, kb, kb_batches, kb_feedback, kb_items, kb_sources, projects, quality, quality_incidents, readiness, runs)
 from .api import revision_mining as revision_mining_api   # 三期 F4
+from .api import revision_features as revision_features_api   # 四期 F4②
 from .api import agent_md as agent_md_api   # 四期 F3②e
 from .core import audit as core_audit
 from .core.auth import authenticate
@@ -79,6 +80,7 @@ app.include_router(assist.router)
 app.include_router(runs.router)
 app.include_router(quality.router)
 app.include_router(revision_mining_api.router)
+app.include_router(revision_features_api.router)
 app.include_router(chat.router)
 app.include_router(audit.router)
 app.include_router(admin.router)

@@ -806,6 +806,8 @@ def waive(db: Session, user: User, project: Project, d: Deliverable, r: QualityR
     db.add(w)
     db.flush()
     review_issues.mark_waived(db, d, issues[index], w.id)
+    from . import revision_features          # 四期 F4②：评审驳回特征（开关关、严格档、不同意回流不写）
+    revision_features.record_waiver(db, project, d, issues[index])
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, review_id=r.id, revision=r.revision, issue=index,
                  reason_length=len(reason))
