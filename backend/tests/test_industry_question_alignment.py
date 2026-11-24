@@ -4,6 +4,10 @@
 """
 from __future__ import annotations
 
+import os
+import re
+from pathlib import Path
+
 import pytest
 import yaml
 
@@ -28,4 +32,67 @@ def test_question_bank_variants_match_industry_packs() -> None:
                     bad.append(f"{q['id']}：行业 {v['industry']} 没有行业包")
                 elif product not in ind.products:
                     bad.append(f"{q['id']}：行业包 {v['industry']} 未覆盖产品 {product}")
+    assert bad == [], bad
+
+
+# ---- 行业调研题 × 控制项检查点（三期 B14 × B19）----
+# 行业调研题在私有资料仓 Consult_Knowledge 的 drafts/ind/ind-*-tpl-*-questions.md（知识内容不进代码仓），
+# 每题在追问后写一行“挂：SOC.TEC.01.a、SOC.BNK.01.b”。资料仓不在本机（如 CI）时跳过；
+# 资料仓位置取环境变量 CONSULT_KNOWLEDGE_DIR，默认与代码仓同级的 Consult_Knowledge。
+
+_QNUM = re.compile(r"^\d+\.\s")
+_HANG = re.compile(r"^\s+挂：(.+)$")
+
+
+def _knowledge_dir() -> Path:
+    return Path(os.environ.get("CONSULT_KNOWLEDGE_DIR") or REPO.parent / "Consult_Knowledge")
+
+
+def _checkpoints() -> dict[str, tuple[str, list[str]]]:
+    data = yaml.safe_load((REPO / "knowledge" / "controls" / "v0.yaml").read_text(encoding="utf-8"))
+    out: dict[str, tuple[str, list[str]]] = {}
+    for c in data["controls"]:
+        for cp in c.get("checkpoints") or []:
+            out[f"{c['id']}.{cp['id']}"] = (c["product"], list(c["industries"]))
+    return out
+
+
+def _question_refs(text: str) -> list[tuple[str, list[str]]]:
+    """返回 [(题号行, [检查点编号…])]；只看“## 题目”一节。"""
+    body = text.split("## 题目", 1)[1].split("\n## ", 1)[0]
+    items: list[tuple[str, list[str]]] = []
+    for line in body.splitlines():
+        if _QNUM.match(line):
+            items.append((line.split("：", 1)[0], []))
+        elif (m := _HANG.match(line)) and items:
+            items[-1][1].extend(x.strip() for x in m.group(1).split("、") if x.strip())
+    return items
+
+
+def test_industry_questions_hang_on_checkpoints() -> None:
+    files = sorted((_knowledge_dir() / "drafts" / "ind").glob("ind-*-tpl-*-questions.md"))
+    if not files:
+        pytest.skip("资料仓不在本机")
+    cps = _checkpoints()
+    bad: list[str] = []
+    for f in files:
+        text = f.read_text(encoding="utf-8")
+        meta = yaml.safe_load(text.split("---", 2)[1])
+        product, industries = meta["product"], set(meta["industries"])
+        items = _question_refs(text)
+        if not items:
+            bad.append(f"{f.name}：没有题目")
+        for qid, refs in items:
+            where = f"{f.name} {qid}"
+            if not refs:
+                bad.append(f"{where}：未挂检查点")
+            for r in refs:
+                if r not in cps:
+                    bad.append(f"{where}：检查点 {r} 不在控制项清单")
+                    continue
+                p, inds = cps[r]
+                if p != product:
+                    bad.append(f"{where}：{r} 属产品 {p}，题目是 {product}")
+                if "通用" not in inds and not industries & set(inds):
+                    bad.append(f"{where}：{r} 是 {'、'.join(inds)} 专属项")
     assert bad == [], bad
