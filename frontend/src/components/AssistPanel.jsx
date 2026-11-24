@@ -3,9 +3,11 @@
 // “插入”把回复原样放到光标处或替换选区（来源标注保留），之后照常保存为新版本、过签署门禁；助手不直接写交付件。
 // 四期 A16① 选中即改：“改”且有选区时锁定该区间，回复后显示词级前后对比，接受 = 替换原区间（可回退）、放弃 = 正文不动；
 // 原区间文字被改动过就拒绝替换；改写去掉的来源标注单独提醒。
+// 四期 A16③ 三个一键工作流：补来源、口径检查（选区或整章，前后对比 + 接受 / 回退）、管理层摘要（插入光标处）；
+// 要求框可空（填了算补充要求），程序核对结果（无来源论断数、资质边界用语）随结果显示。
 import { useEffect, useMemo, useRef, useState } from "react";
 import { assistSection } from "../api.js";
-import { sourcesLine } from "../editor/assist.js";
+import { WORKFLOWS, findingsLine, sourcesLine, workflowTarget } from "../editor/assist.js";
 import { diffStats, lostRefs, wordDiff } from "../editor/selectEdit.js";
 
 const MODES = [["ask", "问"], ["edit", "改"]];
@@ -57,10 +59,16 @@ export default function AssistPanel({ code, dcode, seq, getContext, getRange, on
     promptRef.current?.focus();
   }, [request]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function send() {
-    const r = target || getRange() || { from: 0, to: 0, text: "" };
-    const selection = r.text || "";
-    setTarget(mode === "edit" && selection ? r : null);
+  async function send(wf) {
+    const m = wf || mode;
+    let r = target || getRange() || { from: 0, to: 0, text: "" };
+    let selection = r.text || "";
+    if (wf) {
+      setMode(wf);
+      r = workflowTarget(wf, target || getRange(), getContext() || "");
+      selection = wf === "summary" ? (getRange()?.text || "") : (r?.text || "");
+      setTarget(r);
+    } else setTarget(m === "edit" && selection ? r : null);
     setApplied(null);
     const c = new AbortController();
     ctrl.current = c;
@@ -70,7 +78,7 @@ export default function AssistPanel({ code, dcode, seq, getContext, getRange, on
     setStopped(false);
     setRunning(true);
     try {
-      const d = await assistSection(code, dcode, seq, { mode, speed, prompt, context: getContext(), selection },
+      const d = await assistSection(code, dcode, seq, { mode: m, speed, prompt, context: getContext(), selection },
         (t) => setReply((r) => r + t), c.signal);
       setDone(d);
       setReply(d.text);
@@ -88,7 +96,7 @@ export default function AssistPanel({ code, dcode, seq, getContext, getRange, on
   }
 
   const canInsert = !running && reply.trim() !== "";
-  const compare = Boolean(mode === "edit" && target && done && !stopped);
+  const compare = Boolean(["edit", "cite", "check"].includes(mode) && target && done && !stopped);
   const segs = useMemo(() => (compare ? wordDiff(target.text, reply) : null), [compare, target, reply]);
   const stats = segs && diffStats(segs);
   const lost = compare ? lostRefs(target.text, reply) : [];
@@ -128,9 +136,15 @@ export default function AssistPanel({ code, dcode, seq, getContext, getRange, on
       <div className="row">
         {running
           ? <button className="btn" onClick={stop}>停止</button>
-          : <button className="btnp" disabled={!prompt.trim()} onClick={send}>{mode === "ask" ? "提问" : "改写"}</button>}
+          : <button className="btnp" disabled={!prompt.trim()} onClick={() => send()}>{mode === "ask" ? "提问" : "改写"}</button>}
         <span className="sub">{speed === "fast" ? "快档：轻量模型，先出结果" : "深档：推理模型，更慢更细"}</span>
       </div>
+      <div className="row" role="group" aria-label="一键工作流">
+        {WORKFLOWS.map(([k, name]) => (
+          <button key={k} type="button" className="btn sm" disabled={running} onClick={() => send(k)}>{name}</button>
+        ))}
+      </div>
+      <div className="sub">一键工作流对选中文字或本章生效，要求框可空（填了算补充要求）。</div>
       {error && <div className="err" role="alert">{error}</div>}
       {(reply || running) && (
         <div className="assist-out" aria-live="polite">
@@ -139,6 +153,7 @@ export default function AssistPanel({ code, dcode, seq, getContext, getRange, on
           {lost.length > 0 && <div className="assist-bad">改写去掉了来源标注：{lost.join("、")}，接受前请确认。</div>}
           {stopped && <div className="sub">已停止，以上为停止前的部分。</div>}
           {done && <div className={done.sources?.unresolved?.length ? "assist-bad" : "sub"}>{sourcesLine(done.sources)}</div>}
+          {done?.findings && <div className={done.findings.qualification?.length ? "assist-bad" : "sub"}>{findingsLine(done.findings)}</div>}
           {done?.demo && <div className="sub">演示模式：未接入模型，以上为示例文字。</div>}
           {segs ? (
             <div className="row">
@@ -148,8 +163,8 @@ export default function AssistPanel({ code, dcode, seq, getContext, getRange, on
             </div>
           ) : (
             <div className="row">
-              <button className="btn sm" disabled={!canInsert} onClick={() => onInsert(reply)}>
-                {mode === "edit" ? "替换选区 / 插入光标处" : "插入光标处"}
+              <button className="btn sm" disabled={!canInsert} onClick={() => onInsert(mode === "summary" ? `\n\n${reply.trim()}\n\n` : reply)}>
+                {mode === "edit" ? "替换选区 / 插入光标处" : mode === "summary" ? "作为新段落插入光标处" : "插入光标处"}
               </button>
               <span className="sub">插入后保存为新版本，签署前照样过质量门禁。</span>
             </div>
