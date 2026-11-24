@@ -10,6 +10,15 @@
 - 填空卡：按知识类型和交付物类型给几格短填空，专家可直接贴零散文字；拼成“## 标题 + 内容”的正文，过机密级检测。
 - 大白话：状态、字段、把握程度一律换成日常说法（PLAIN），界面只显示这些说法。
 - 审计只记编号、结果、改了哪些字段和回答计数，不记回答原文。无迁移。
+
+四期 B23②：冲突处理卡、去标识预览（无迁移）。
+- 冲突处理卡：知识审核 Agent 的“不重复、不冲突”一项没过时，卡上列出可能冲突的已发布条目（理由里写到的 KB 编号，
+  PostgreSQL 上再加同产品相近条目前 3 条），多一道必答题 conflict：
+  both 不冲突、两条都留（照常拍板）；new 以这条为准（照常拍板，收下后把已有条目的现行版本标待复查，复用 B13）；
+  old 以已有的为准（这条退回）；unsure 拿不准（不拍板）。
+- 去标识预览：专家自己写的文字（填空卡、不收的理由、备注）先按投料去标识的规则（app/kb/deid.py）换占位符给专家看，
+  只在内存里做，不保存、不写审计；机密级命中只返回类别。交上去时这些文字里还有可识别信息，要专家看过预览、
+  确认不是客户信息（deid_ack）才收，否则 409；审计只记命中个数。
 """
 from __future__ import annotations
 
@@ -19,15 +28,23 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from ..core import audit
+from ..core.db import utcnow
 from ..core.permissions import KNOWLEDGE_EXPERT, roles_of
-from ..models import KbVersion, User
+from ..models import KbItem, KbVersion, User
 from ..project import my_tasks as mt
-from . import meta
+from ..services import guard
+from . import deid, meta
 from . import practice_queue as pq
 from . import review as rv
 from .items import VersionContent, replace_mapping_rows
+from .recheck import OPEN_STATES
 
 CHOICES = ("yes", "no", "unsure")
+CONFLICT_CHOICES = {"both": "不冲突，两条都留", "new": "以这条为准，已有的标待复查", "old": "以已有的为准，这条不收",
+                    "unsure": "拿不准，先不定"}
+_DOC_ID_RE = re.compile(r"KB-\d{6}")
+MAX_CONFLICTS = 5
+MAX_PREVIEW_KEYS = 12
 MAX_VALUE = 500
 
 PLAIN: dict[str, str] = {
@@ -122,10 +139,53 @@ def _confidence_plain(raw: str) -> str:
     return "Agent 有十足把握" if n == 10 else f"Agent 有{_CN_DIGITS[n]}成把握"
 
 
-def _questions(v: KbVersion, unsure: set[str], issues: list[str]) -> list[dict]:
+def _no_conflict_failed(v: KbVersion) -> tuple[bool, str]:
+    agent = [r for r in v.reviews if r.review_role == "agent"]
+    if not agent:
+        return False, ""
+    f = max(agent, key=lambda x: x.id).findings
+    c = ((f or {}).get("checks") or {}).get("no_conflict") if isinstance(f, dict) else None
+    if not isinstance(c, dict) or c.get("pass", True):
+        return False, ""
+    return True, str(c.get("reason") or "")[:300]
+
+
+def _live(db: Session, doc_id: str) -> tuple[KbItem | None, KbVersion | None]:
+    item = db.query(KbItem).filter(KbItem.doc_id == doc_id).one_or_none()
+    cur = db.get(KbVersion, item.current_version_id) if item and item.current_version_id else None
+    if item is None or item.retired or cur is None or cur.status != "published":
+        return item, None
+    return item, cur
+
+
+def conflict_of(db: Session, v: KbVersion) -> dict | None:
+    """Agent 判“可能重复或冲突”时给冲突处理卡：理由 + 可能冲突的已发布条目（编号、标题、摘要）。"""
+    failed, reason = _no_conflict_failed(v)
+    if not failed:
+        return None
+    ids = list(dict.fromkeys(_DOC_ID_RE.findall(reason)))
+    ids += [x["doc_id"] for x in rv.similar_items(db, v, limit=3) if x["doc_id"] not in ids]
+    items = []
+    for doc_id in ids:
+        item, cur = _live(db, doc_id)
+        if cur is None or item.id == v.item_id:
+            continue
+        items.append({"doc_id": doc_id, "version": cur.version, "title": cur.title,
+                      "summary": cur.summary or cur.body[:200]})
+        if len(items) >= MAX_CONFLICTS:
+            break
+    return {"reason": reason, "items": items}
+
+
+def _questions(v: KbVersion, unsure: set[str], issues: list[str], conflict: dict | None = None) -> list[dict]:
     kind = meta.KNOWLEDGE_KINDS.get(v.item.knowledge_kind, "") or "知识"
     qs = [{"id": "keep", "kind": "keep", "text": f"这条值得收进知识库吗？（{kind}）", "empty": False,
            "uncertain": False, "value": ""}]
+    if conflict is not None:
+        n = len(conflict["items"])
+        qs.append({"id": "conflict", "kind": "conflict", "empty": False, "uncertain": True, "value": "",
+                   "text": f"Agent 觉得这条和已有的 {n} 条可能重复或矛盾，怎么处理？" if n
+                   else "Agent 觉得这条和已有条目可能重复或矛盾，怎么处理？", "options": CONFLICT_CHOICES})
     for name, label in FIELDS:
         val = getattr(v, name)
         text = "" if val is None else str(val)
@@ -161,25 +221,33 @@ def cards(db: Session, user: User) -> dict:
             continue
         _, unsure = mt._kb_uncertainty(v)
         basis, confidence, issues = pq._agent_opinion(v)
+        conflict = conflict_of(db, v)
         out.append({"version_id": v.id, "doc_id": v.item.doc_id, "version": v.version, "title": v.title,
                     "summary": v.summary, "body": v.body, "status_plain": PLAIN["in_review"],
                     "kind_plain": meta.KNOWLEDGE_KINDS.get(v.item.knowledge_kind, "") or "通用",
                     "doc_type": v.item.doc_type, "source_detail": v.source_detail, "basis": basis,
                     "confidence_plain": _confidence_plain(confidence), "issues": issues,
                     "score": t.score, "folded": t.folded,
-                    "questions": _questions(v, unsure, issues),
+                    "conflict": conflict, "questions": _questions(v, unsure, issues, conflict),
                     "template": template_for(v.item.knowledge_kind, v.item.doc_type)})
     return {"quota": w.quota, "folded": folded, "plain": PLAIN, "cards": out}
 
 
-def _parse_answers(v: KbVersion, answers: list[dict], issues: list[str]) -> tuple[dict, dict, str, list[int]]:
-    """返回 (keep 回答, 字段改正, 驳回理由, 认可的问题序号)；不合法 422。"""
+def _parse_answers(v: KbVersion, answers: list[dict], issues: list[str],
+                   has_conflict: bool = False) -> tuple[dict, dict, str, list[int], str]:
+    """返回 (keep 回答, 字段改正, 驳回理由, 认可的问题序号, 冲突回答)；不合法 422。"""
     valid = {"keep"} | {f"field:{n}" for n, _ in FIELDS} | {f"issue:{i}" for i in range(len(issues))}
     keep: dict = {}
     changes: dict = {}
     agreed: list[int] = []
+    conflict = ""
     for a in answers:
         qid, choice, value = str(a.get("id", "")), str(a.get("choice", "")), _tidy(a.get("value", ""))[:MAX_VALUE]
+        if qid == "conflict" and has_conflict:
+            if choice not in CONFLICT_CHOICES:
+                raise rv.ReviewError(422, "冲突处理只能选：都留、以这条为准、以已有的为准、拿不准")
+            conflict = choice
+            continue
         if qid not in valid or choice not in CHOICES:
             raise rv.ReviewError(422, "回答里有不认识的问题或选项")
         if qid == "keep":
@@ -205,25 +273,72 @@ def _parse_answers(v: KbVersion, answers: list[dict], issues: list[str]) -> tupl
                     raise rv.ReviewError(422, "下次复查日期不是有效日期") from e
             else:
                 changes[name] = value[:FIELD_LIMITS[name]]
-    return keep, changes, keep.get("value", ""), agreed
+    if has_conflict and not conflict:
+        raise rv.ReviewError(422, "请先回答冲突处理：和已有条目重复或矛盾时怎么办")
+    return keep, changes, keep.get("value", ""), agreed, conflict
+
+
+def deid_preview(texts: dict[str, str]) -> dict:
+    """专家自己写的文字先去标识给专家看（同一实体同一占位符）；只在内存里做，不保存、不写审计。
+    机密级命中只回类别、不回文字（这些不能入库，要删掉重写）。"""
+    keys = [k for k in texts if _tidy(texts[k])]
+    g = guard.check("\n".join(texts[k] for k in keys))
+    if g.blocked:
+        return {"blocked": True, "guard_labels": sorted({f.label for f in g.findings}), "texts": {}, "hits": [],
+                "total": 0}
+    r = deid.deidentify([("", texts[k]) for k in keys], "x")
+    out = {k: body for k, (_, body) in zip(keys, r.sections, strict=True)}
+    hits = [{"category": x.category, "placeholder": x.placeholder, "count": x.count} for x in r.replacements if x.count]
+    return {"blocked": False, "guard_labels": [], "texts": out, "hits": hits, "total": r.total}
+
+
+def _deid_hits(texts: list[str]) -> list[dict]:
+    texts = [t for t in texts if _tidy(t)]
+    if not texts:
+        return []
+    r = deid.deidentify([("", t) for t in texts], "x")
+    return [{"category": x.category, "count": x.count} for x in r.replacements if x.count]
+
+
+def _mark_recheck(db: Session, doc_ids: list[str], new_doc: str) -> list[str]:
+    """“以这条为准”：已有条目的现行版本标待复查（复用 B13，进抽检队列），已在队列里的不重复标。"""
+    marked = []
+    for doc_id in doc_ids:
+        _, cur = _live(db, doc_id)
+        if cur is None or cur.recheck_state in OPEN_STATES:
+            continue
+        cur.recheck_state, cur.recheck_at = "pending", utcnow()
+        cur.recheck_reason = f"专家工作台：与 {new_doc} 冲突，专家定以 {new_doc} 为准"[:200]
+        marked.append(doc_id)
+    if marked:
+        db.commit()
+    return marked
 
 
 def answer(db: Session, user: User, version_id: int, answers: list[dict], fill: dict[str, str] | None = None,
-           comment: str = "", elapsed_ms: int = 0) -> dict:
-    if not any(c["version_id"] == version_id for c in cards(db, user)["cards"]):
-        raise rv.ReviewError(404, "没有这张卡")
-    v = db.get(KbVersion, version_id)
+           comment: str = "", elapsed_ms: int = 0, deid_ack: bool = False) -> dict:
+    card = next((c for c in cards(db, user)["cards"] if c["version_id"] == version_id), None)
+    v = db.get(KbVersion, version_id) if card else None
     if v is None:
         raise rv.ReviewError(404, "没有这张卡")
     _, _, issues = pq._agent_opinion(v)
-    keep, changes, reason, agreed = _parse_answers(v, answers, issues)
+    conflict_card = card["conflict"]
+    keep, changes, reason, agreed, conflict = _parse_answers(v, answers, issues, conflict_card is not None)
     if not keep:
         raise rv.ReviewError(422, "请先回答“这条值得收进知识库吗”")
     body = compose(template_for(v.item.knowledge_kind, v.item.doc_type)["key"], fill) if fill else ""
+    hits = _deid_hits([*(fill or {}).values(), comment, reason])
+    if hits and not deid_ack:
+        desc = "、".join(f"{h['category']} {h['count']} 处" for h in hits)
+        raise rv.ReviewError(409, f"你写的文字里可能有能认出客户的信息（{desc}），请先看去标识预览：换成占位符，"
+                                  "或确认不是客户信息再交")
+    old_ids = [x["doc_id"] for x in conflict_card["items"]] if conflict_card else []
+    if conflict == "old":
+        reason = reason or f"与已有条目{'、'.join(old_ids)}重复或矛盾，以已有的为准"
     note = (comment or reason)[:1000]
-    if keep["choice"] == "unsure":
+    if keep["choice"] == "unsure" or conflict == "unsure":
         outcome = "undecided"
-    elif keep["choice"] == "no":
+    elif keep["choice"] == "no" or conflict == "old":
         outcome = "reject"
     else:
         if agreed and not body:
@@ -259,7 +374,9 @@ def answer(db: Session, user: User, version_id: int, answers: list[dict], fill: 
                 replace_mapping_rows(db, v)
             v = rv.review(db, user, v, "content", "reject" if outcome == "reject" else "approve", note)
         status = v.status
+    recheck = _mark_recheck(db, old_ids, v.item.doc_id) if conflict == "new" and status == "published" else []
     audit.record(db, actor=user.username, action="kb.bench_answer", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, outcome=outcome, changed=changed, answers=len(answers), agreed=len(agreed),
+                 conflict=conflict, recheck=recheck, deid_hits=sum(h["count"] for h in hits), deid_ack=bool(deid_ack),
                  elapsed_ms=max(0, min(int(elapsed_ms or 0), pq.MAX_ELAPSED_MS)))
-    return {"outcome": outcome, "version_status": status, "changed": changed}
+    return {"outcome": outcome, "version_status": status, "changed": changed, "recheck": recheck}

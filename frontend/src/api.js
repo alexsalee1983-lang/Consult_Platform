@@ -217,6 +217,8 @@ export const api = {
   benchCards: () => request("/api/expert-bench/cards"),
   benchAnswer: (versionId, body) =>
     request(`/api/expert-bench/cards/${versionId}/answer`, { method: "POST", body: JSON.stringify(body) }),
+  benchDeidPreview: (texts) =>
+    request("/api/expert-bench/deid-preview", { method: "POST", body: JSON.stringify({ texts }) }),
   returnTask: (kind, ref_id, reason) =>
     request("/api/my-tasks/return", { method: "POST", body: JSON.stringify({ kind, ref_id, reason }) }),
   deletion: (id) => request(`/api/deletions/${id}`),

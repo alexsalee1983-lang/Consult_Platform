@@ -76,7 +76,7 @@ def test_answers_all_yes_approves_and_records_decision():
     with SessionLocal() as db:
         out = eb.answer(db, db.merge(expert), vid, [{"id": "keep", "choice": "yes"},
                                                     {"id": "field:ref_document", "choice": "yes"}], elapsed_ms=4000)
-        assert out == {"outcome": "approve", "version_status": "published", "changed": []}
+        assert out == {"outcome": "approve", "version_status": "published", "changed": [], "recheck": []}
         d = db.scalar(select(KbPracticeDecision).where(KbPracticeDecision.version_id == vid))
         assert d.decision == "adopt" and d.elapsed_ms == 4000
         log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer")).all()[-1]
@@ -108,7 +108,7 @@ def test_reject_undecided_and_errors():
     a, b, c = (_version(author, agent={"issues": ["依据已废止"]}) for _ in range(3))
     with SessionLocal() as db:
         ex = db.merge(expert)
-        assert eb.answer(db, ex, a, [{"id": "keep", "choice": "no", "value": "不是公司做法"}])["outcome"] == "reject"
+        assert eb.answer(db, ex, a, [{"id": "keep", "choice": "no", "value": "不算通用做法"}])["outcome"] == "reject"
         assert db.get(KbVersion, a).status == "rejected"
         assert eb.answer(db, ex, b, [{"id": "keep", "choice": "unsure"}])["outcome"] == "undecided"
         assert db.get(KbVersion, b).status == "in_review"
@@ -168,4 +168,117 @@ def test_api_permissions_and_flow():
         assert r.status_code == 404
     finally:
         for c in (ex, adm, con):
+            c.__exit__(None, None, None)
+
+
+# ---- 四期 B23②：冲突处理卡、去标识预览 ----
+
+def _published(author: User, expert: User) -> str:
+    vid = _version(author)
+    with SessionLocal() as db:
+        eb.answer(db, db.merge(expert), vid, [{"id": "keep", "choice": "yes"}])
+        return db.get(KbVersion, vid).item.doc_id
+
+
+def _conflicting(author: User, old_doc: str) -> int:
+    return _version(author, agent={"checks": {"no_conflict": {"pass": False, "reason": f"存疑：与 {old_doc} 的交接步骤矛盾"}},
+                                   "issues": []})
+
+
+def test_conflict_card_lists_existing_item_and_needs_answer():
+    author, _ = _user("knowledge_expert")
+    expert, _ = _user("knowledge_expert")
+    old = _published(author, expert)
+    vid = _conflicting(author, old)
+    with SessionLocal() as db:
+        ex = db.merge(expert)
+        card = _card(db, ex, vid)
+        c = card["conflict"]
+        assert c is not None and c["reason"].endswith("交接步骤矛盾")
+        assert [x["doc_id"] for x in c["items"]] == [old] and c["items"][0]["title"].startswith("示范条目")
+        q = next(q for q in card["questions"] if q["id"] == "conflict")
+        assert q["kind"] == "conflict" and set(q["options"]) == {"both", "new", "old", "unsure"}
+        try:
+            eb.answer(db, ex, vid, [{"id": "keep", "choice": "yes"}])          # 冲突没回答
+            raise AssertionError("应当 422")
+        except rv.ReviewError as e:
+            assert e.status == 422 and "冲突" in str(e)
+            db.rollback()
+        try:
+            eb.answer(db, ex, vid, [{"id": "keep", "choice": "yes"}, {"id": "conflict", "choice": "yes"}])
+            raise AssertionError("应当 422")
+        except rv.ReviewError as e:
+            assert e.status == 422
+            db.rollback()
+    # 没有冲突的卡没有冲突题
+    plain = _version(author)
+    with SessionLocal() as db:
+        card = _card(db, db.merge(expert), plain)
+        assert card["conflict"] is None and all(q["id"] != "conflict" for q in card["questions"])
+
+
+def test_conflict_choices_map_to_decisions():
+    author, _ = _user("knowledge_expert")
+    expert, _ = _user("knowledge_expert")
+    old = _published(author, expert)
+    a, b, c = (_conflicting(author, old) for _ in range(3))
+    with SessionLocal() as db:
+        ex = db.merge(expert)
+        r = eb.answer(db, ex, a, [{"id": "keep", "choice": "yes"}, {"id": "conflict", "choice": "old"}])
+        assert r["outcome"] == "reject" and db.get(KbVersion, a).status == "rejected"
+        r = eb.answer(db, ex, b, [{"id": "keep", "choice": "yes"}, {"id": "conflict", "choice": "unsure"}])
+        assert r["outcome"] == "undecided" and db.get(KbVersion, b).status == "in_review"
+        r = eb.answer(db, ex, c, [{"id": "keep", "choice": "yes"}, {"id": "conflict", "choice": "new"}])
+        assert r["outcome"] == "approve" and r["recheck"] == [old]
+        live = db.scalar(select(KbVersion).join(KbVersion.item).where(KbVersion.status == "published",
+                                                                       KbVersion.item.has(doc_id=old)))
+        assert live.recheck_state == "pending"
+        assert "专家工作台" in live.recheck_reason
+        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer")).all()[-1]
+        assert "new" in log.detail and "交接步骤" not in log.detail
+
+
+def test_deid_preview_replaces_identifiers_without_saving():
+    out = eb.deid_preview({"how": "按 示范科技有限公司 的做法，找李经理确认", "why": "中型 SOC",
+                           "note": "示范科技有限公司 也这样"})
+    assert out["blocked"] is False and out["total"] == 3
+    assert "示范科技有限公司" not in out["texts"]["how"] and "李经理" not in out["texts"]["how"]
+    assert out["texts"]["why"] == "中型 SOC"
+    assert out["texts"]["note"].startswith("【客户1】")                 # 同一实体同一占位符
+    cats = {h["category"] for h in out["hits"]}
+    assert cats == {"客户名称", "人名"}
+    blocked = eb.deid_preview({"how": "密码 Passw0rd!2026 写在交接单上"})
+    assert blocked["blocked"] is True and blocked["guard_labels"] and blocked["texts"] == {}
+
+
+def test_answer_with_identifiers_needs_preview_ack():
+    author, _ = _user("knowledge_expert")
+    expert, _ = _user("knowledge_expert")
+    vid = _version(author)
+    fill = {"how": "照 示范科技有限公司 的交接单做"}
+    with SessionLocal() as db:
+        ex = db.merge(expert)
+        try:
+            eb.answer(db, ex, vid, [{"id": "keep", "choice": "yes"}], fill=fill)
+            raise AssertionError("应当 409")
+        except rv.ReviewError as e:
+            assert e.status == 409 and "去标识" in str(e)
+            db.rollback()
+        out = eb.answer(db, ex, vid, [{"id": "keep", "choice": "yes"}], fill=fill, deid_ack=True)
+        assert out["outcome"] == "modify"
+        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer")).all()[-1]
+        assert "示范科技" not in log.detail and '"deid_hits": 1' in log.detail
+
+
+def test_api_deid_preview():
+    _, ex_creds = _user("knowledge_expert")
+    _, con_creds = _user("consultant")
+    ex, con = (logged_in_client(app, c) for c in (ex_creds, con_creds))
+    try:
+        r = ex.post("/api/expert-bench/deid-preview", json={"texts": {"how": "找王总确认"}})
+        assert r.status_code == 200 and "王总" not in r.json()["texts"]["how"]
+        assert con.post("/api/expert-bench/deid-preview", json={"texts": {"how": "x"}}).status_code == 403
+        assert ex.post("/api/expert-bench/deid-preview", json={"texts": {f"k{i}": "x" for i in range(30)}}).status_code == 422
+    finally:
+        for c in (ex, con):
             c.__exit__(None, None, None)
