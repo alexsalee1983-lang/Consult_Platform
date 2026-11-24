@@ -10,6 +10,7 @@
 命令行 create-user 仍可用（口令由本人当场输入，不要求修改）。
 """
 from datetime import datetime, timedelta
+from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -18,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..core import audit, sessions
-from ..services import config_registry, gateway, jobs, ops, usage
+from ..services import config_registry, gateway, jobs, ops, runtime_config, usage
 from ..core.auth import current_user, password_expired
 from ..core.config import get_settings
 from ..core.db import get_db, utcnow
@@ -147,6 +148,57 @@ def _endpoint(url: str) -> str:
 def config_registry_view() -> dict:
     """统一配置登记（四期 G3①）：锁定层、方法层、运行层的只读视图和各层哈希；不返回密钥。"""
     return config_registry.build()
+
+
+class RuntimeChangeIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+    values: dict[str, Any] = Field(min_length=1, max_length=40)
+
+
+class RuntimeRollbackIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+    to_version: int = Field(ge=0)
+
+
+def _runtime_call(fn, *args) -> dict:
+    try:
+        v = fn(*args)
+    except runtime_config.ConfigError as e:
+        raise HTTPException(e.status, e.message) from None
+    return {"id": v.id, "status": v.status, "needs_confirm": v.needs_confirm,
+            "config_registry_sha": config_registry.effective_sha()}
+
+
+@router.get("/config-registry/runtime/versions")
+def runtime_versions(db: Session = Depends(get_db)) -> dict:
+    """运行层改动历史（四期 G3②），新的在前；含待二次确认的改动。"""
+    runtime_config.sync(db)
+    return {"versions": runtime_config.history(db)}
+
+
+@router.post("/config-registry/runtime", status_code=201)
+def runtime_change(body: RuntimeChangeIn, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """改运行层配置（G3②）：必须填理由；含切模型、开自动发布等敏感项时进待确认，须另一位系统管理员确认。"""
+    return _runtime_call(runtime_config.propose, db, user.username, body.reason, body.values)
+
+
+@router.post("/config-registry/runtime/rollback", status_code=201)
+def runtime_rollback(body: RuntimeRollbackIn, user: User = Depends(current_user),
+                     db: Session = Depends(get_db)) -> dict:
+    """回滚到某个已生效版本之后的状态（0 = 全部恢复 .env）；规则同改动。"""
+    return _runtime_call(runtime_config.rollback, db, user.username, body.reason, body.to_version)
+
+
+@router.post("/config-registry/runtime/versions/{version_id}/confirm")
+def runtime_confirm(version_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """二次确认待确认的改动（发起人本人不能确认）。"""
+    return _runtime_call(runtime_config.decide, db, user.username, version_id, True)
+
+
+@router.post("/config-registry/runtime/versions/{version_id}/reject")
+def runtime_reject(version_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    """驳回待确认的改动（发起人本人不能驳回，可另提一次改动覆盖）。"""
+    return _runtime_call(runtime_config.decide, db, user.username, version_id, False)
 
 
 @router.get("/models")

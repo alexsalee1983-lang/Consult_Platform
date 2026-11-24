@@ -3,7 +3,7 @@
 把锁定层（.env / 代码）、方法层（仓库里的产品、模块、行业包、Agent md）、运行层（模型绑定、门槛、开关、阈值）
 汇成一个只读视图，每层和总体各出一个哈希，用来回答“这次运行时生效的是哪套配置”。
 密钥、口令只显示“已配置/未配置”，地址只留协议、主机和端口；方法层文件只记内容哈希，不带正文。
-运行层改动的理由、审计与回滚（G3②）在页面编辑落地时再接；confirm=True 的项改动须负责人二次确认。"""
+运行层改动的理由、审计、回滚与二次确认见 runtime_config（G3②）；页面改过的键 source 显示“页面”。"""
 from __future__ import annotations
 
 import hashlib
@@ -16,7 +16,7 @@ from ..agents import registry
 from ..core.config import get_settings
 from ..products.config import catalog_dir
 
-ENV, REPO = ".env", "仓库"
+ENV, REPO, PAGE = ".env", "仓库", "页面"
 
 # 锁定层：不上页面，改动走运维变更流程
 LOCKED_FLAGS = ("app_env", "llm_external", "rerank_external", "llm_pseudonymize", "session_backend", "cookie_secure",
@@ -87,8 +87,12 @@ def _method() -> list[dict]:
 
 
 def _runtime() -> list[dict]:
+    from . import runtime_config   # 避免循环导入
+
     s = get_settings()
-    return [{"key": k, "value": getattr(s, k), "source": ENV, "confirm": c} for k, c in RUNTIME.items()]
+    over = runtime_config.overridden_keys()
+    return [{"key": k, "value": getattr(s, k), "source": PAGE if k in over else ENV, "confirm": c}
+            for k, c in RUNTIME.items()]
 
 
 LAYERS = (("locked", "锁定层", _locked), ("method", "方法层", _method), ("runtime", "运行层", _runtime))

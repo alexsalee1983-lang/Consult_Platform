@@ -26,7 +26,7 @@ from .core.config import get_settings
 from .core.db import SessionLocal
 from .kb import agent_review, batches, candidate, deid_flow, gap_pool, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review、kb.candidate_promote、kb.batch_* 等任务处理器
 from .project import autoflow, deletion, evidence, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
-from .services import jobs, ops
+from .services import jobs, ops, runtime_config
 
 POLL_SECONDS = 5
 SCAN_SECONDS = 3600        # 到期删除扫描间隔（平台规则自动发起到期删除，M4 ②）
@@ -203,6 +203,15 @@ def _weekly() -> None:
         log.warning("缺口池每周计划出错：%s", type(e).__name__)
 
 
+def _sync_runtime_config() -> None:
+    """四期 G3②：追上页面改过的运行层配置（阈值、开关、模型绑定）。"""
+    try:
+        with SessionLocal() as db:
+            runtime_config.sync(db)
+    except Exception as e:  # noqa: BLE001
+        log.warning("运行层配置同步出错：%s", type(e).__name__)
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -216,6 +225,7 @@ def main() -> None:
         heartbeat(r, wid)
         if last_scan is None or time.monotonic() - last_scan >= SCAN_SECONDS:
             last_scan = time.monotonic()
+            _sync_runtime_config()
             _scan_due()
             _scan_reconfirm()
             _auto_flow()
