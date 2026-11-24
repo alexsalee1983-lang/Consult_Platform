@@ -50,6 +50,7 @@ from ..models import (
     QualityReview,
     ReviewIssue,
     ReviewWaiver,
+    RevisionFeature,
     SectionVersion,
     SignOff,
     User,
@@ -279,6 +280,7 @@ def purge(db: Session, p: Project) -> dict:
     counts["runs"] = drop(AgentRun, AgentRun.project_id == pid)
     drop(ReviewIssue, ReviewIssue.project_id == pid)
     drop(ReviewWaiver, ReviewWaiver.project_id == pid)
+    drop(RevisionFeature, RevisionFeature.project_id == pid)   # 四期 F4② 特征（不含正文）
     counts["sign_offs"] = drop(SignOff, SignOff.project_id == pid)
     counts["quality_reviews"] = drop(QualityReview, QualityReview.project_id == pid)
     counts["confirmations"] = drop(Confirmation, Confirmation.project_id == pid)
