@@ -315,12 +315,14 @@ def _issue(severity: str, location: str, dimension: str, problem: str, suggestio
             "problem": problem[:500], "suggestion": suggestion[:500], "by": by}
 
 
+def qualification_matches(text: str) -> list[str]:
+    """命中的测评 / 认证结论用语原文（排除前面紧跟否定或设问的）。"""
+    return [m.group(0) for m in _QUALIF.finditer(text)
+            if not _NEGATION.search(text[max(0, m.start() - 20):m.start()])]
+
+
 def qualification_hits(text: str) -> int:
-    n = 0
-    for m in _QUALIF.finditer(text):
-        if not _NEGATION.search(text[max(0, m.start() - 20):m.start()]):
-            n += 1
-    return n
+    return len(qualification_matches(text))
 
 
 def rule_issues(d: Deliverable, versions: dict,
