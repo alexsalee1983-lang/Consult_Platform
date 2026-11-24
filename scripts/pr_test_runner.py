@@ -27,6 +27,7 @@
                     {session} 本单会话名 pr<号>-<提交前 7 位>（同一提交重试复用同一会话）、{model} RUNNER_MODEL。
                     例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
     RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
+    RUNNER_GH       gh 命令（默认 gh）。WSL 上 PATH 先命中 Windows 版 gh.exe 会在 WSL 路径下失败，设成 /usr/local/bin/gh
     NOTIFY_CMD      发群通知的命令，消息作为最后一个参数追加；须“直接发群消息”而不是回复某条消息
 """
 from __future__ import annotations
@@ -61,6 +62,7 @@ MAX_FAILS = 2
 # 会话进程退出但代理网关侧那一轮可能仍在跑（CLI 与网关断连），此时不能释放环境
 DETACHED_MARKS = ("may still be running this turn", "Lost the connection")
 SETSID = os.environ.get("RUNNER_SETSID", "1") != "0"
+GH = os.environ.get("RUNNER_GH", "gh")
 
 PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 PR #{pr}，测完即结束。
 环境 {env}：目录 {dir}，网页端口 {web}。日志目录 {logdir}。
@@ -83,8 +85,8 @@ PR 描述“怎么测”段：
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
 - 命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看；不用 tmux、screen、nohup、& 等后台方式。
 - 同一项试两次不达预期就记现象、测下一项；数据保护或冒烟失败如实写，不为通过而改动。
-- 结束前必须：`gh pr comment {pr} --body-file {logdir}/summary.md`；再换标签
-  `gh pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
+- 结束前必须：`{gh} pr comment {pr} --body-file - < {logdir}/summary.md`（正文走标准输入，Windows 版 gh 读不到 WSL 路径）；再换标签
+  `{gh} pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
 最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
 
 # “怎么测”里出现这些词说明需要模型或人判断；同一行带否定词（无、不需要、模拟模型即可）不算
@@ -145,11 +147,23 @@ def verdict_of(run_log: str) -> str:
 
 
 
-def sh(args: list[str], cwd: str | None = None, check: bool = True) -> str:
-    r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8")
-    if check and r.returncode != 0:
-        raise RuntimeError(f"{' '.join(args)}: {(r.stderr or r.stdout).strip()[:300]}")
+def sh(args: list[str], cwd: str | None = None, check: bool = True, stdin: str | None = None) -> str:
+    if args and args[0] == "gh":
+        args = [GH, *args[1:]]
+    r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", input=stdin)
+    if r.returncode != 0:
+        log(f"命令失败 rc={r.returncode}：{' '.join(args)[:200]}｜{(r.stderr or r.stdout).strip()[:300]}")
+        if check:
+            raise RuntimeError(f"{' '.join(args)}: rc={r.returncode} {(r.stderr or r.stdout).strip()[:300]}")
     return r.stdout
+
+
+def comment_file(pr: int, path: Path, check: bool = True) -> None:
+    """正文经标准输入传给 gh：Windows 版 gh.exe 打不开 WSL 路径（#428 测试机实测）。"""
+    if not path.exists():
+        raise RuntimeError(f"摘要文件不存在：{path}")
+    sh(["gh", "pr", "comment", str(pr), "--body-file", "-"], check=check,
+       stdin=path.read_text(encoding="utf-8", errors="replace"))
 
 
 def log(msg: str) -> None:
@@ -315,18 +329,18 @@ def run_one(env: str, pr: int, head: str, logdir: Path) -> int:
         if keep == "1":
             down(env, pr)
         if summary.exists():
-            sh(["gh", "pr", "comment", str(pr), "--body-file", str(summary)], check=False)
+            comment_file(pr, summary, check=False)
         print("RESULT: 环境问题未测 —— 见 summary（脚本判定，未起模型会话）", flush=True)
         return 0
     if verdict == "通过" and not why:
         summary.write_text(finalize_summary(summary.read_text(encoding="utf-8")), encoding="utf-8")
-        sh(["gh", "pr", "comment", str(pr), "--body-file", str(summary)])
+        comment_file(pr, summary)
         sh(["gh", "pr", "edit", str(pr), "--remove-label", "待测试", "--add-label", "测试通过"])
         print("RESULT: 通过 —— 脚本项全部通过，无人工核对项（未起模型会话）", flush=True)
         return 0
     failed = logdir / "failed.txt"
     prompt = PROMPT.format(
-        pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict,
+        pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
         why=why or "脚本项有失败，需定位原因",
         up="仍在线（KEEP_UP=1），会话结束后由调度脚本 down" if keep == "1" else "已 down，需要时自己 docker compose up -d",
         howto=how_to_test(body) or "（无）",

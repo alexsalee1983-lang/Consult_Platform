@@ -90,5 +90,44 @@ def test_finalize_summary_fills_manual_row() -> None:
 
 def test_prompt_formats_with_all_fields() -> None:
     txt = R.PROMPT.format(pr=1, env="A", dir="/d", web="8180", head="abc1234", logdir="/l", verdict="不通过",
-                          why="x", up="已 down", howto="h", recheck="", failed="")
+                          why="x", up="已 down", howto="h", recheck="", failed="", gh="gh")
     assert "RESULT:" in txt
+
+
+def test_comment_sends_body_via_stdin_with_configured_gh(tmp_path: Path, monkeypatch) -> None:
+    """#428 测试机：Windows 版 gh.exe 打不开 WSL 路径，正文须走标准输入；gh 可用 RUNNER_GH 指定。"""
+    import subprocess
+
+    calls: list[tuple[list[str], str | None]] = []
+
+    def fake_run(args, **kw):  # type: ignore[no-untyped-def]
+        calls.append((list(args), kw.get("input")))
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(R, "GH", "/usr/local/bin/gh")
+    monkeypatch.setattr(R.subprocess, "run", fake_run)
+    f = tmp_path / "summary.md"
+    f.write_text("## 结论 通过", encoding="utf-8")
+    R.comment_file(5, f)
+    args, stdin = calls[0]
+    assert args[0] == "/usr/local/bin/gh"
+    assert args[-2:] == ["--body-file", "-"] and str(f) not in args
+    assert stdin == "## 结论 通过"
+
+
+def test_comment_missing_summary_raises_clearly(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(RuntimeError, match="摘要文件不存在"):
+        R.comment_file(5, tmp_path / "none.md")
+
+
+def test_sh_failure_reports_rc(monkeypatch) -> None:
+    import subprocess
+
+    import pytest
+
+    monkeypatch.setattr(R.subprocess, "run",
+                        lambda args, **kw: subprocess.CompletedProcess(args, 1, stdout="", stderr=""))
+    with pytest.raises(RuntimeError, match="rc=1"):
+        R.sh(["gh", "pr", "view", "1"])
