@@ -100,6 +100,7 @@ export default function Sidebar() {
     ...(isSysAdmin(user) ? [
       { to: "/admin/users", icon: "users", label: "用户与角色" },
       { to: "/admin/models", icon: "dash", label: "模型配置状态" },
+      { to: "/admin/runtime-config", icon: "dash", label: "运行层配置" },
     ] : []),
     { to: PASSWORD_PATH, icon: "key", label: "修改口令" },
   ];
