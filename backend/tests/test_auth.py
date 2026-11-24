@@ -83,6 +83,10 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D1/form"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
     ("GET", "/api/revision-features/summary"),   # 四期 F4②
+    ("GET", "/api/extraction/questions"),   # 四期 F4③
+    ("POST", "/api/extraction/questions/1/answer"),
+    ("POST", "/api/extraction/questions/1/skip"),
+    ("GET", "/api/extraction/stats"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/sections/1/assist"),   # 三期 A15 写稿助手

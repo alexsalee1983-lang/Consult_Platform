@@ -127,6 +127,11 @@ MATRIX = [
     # 改稿与驳回特征汇总（四期 F4②）：只给项目负责人、知识管理员，顾问 403（负责人与开关行为在 test_revision_features）
     (("GET", "/api/revision-features/summary", None), (403, 403, 403, 403, 403)),
     (("GET", "/api/revision-features/summary?project=BANK-A", None), (403, 403, 403, 403, 403)),
+    # 经验萃取问题（四期 F4③）：只给知识专家，其他角色 403（专家与开关行为在 test_extraction_trigger）
+    (("GET", "/api/extraction/questions", None), (403, 403, 403, 403, 403)),
+    (("POST", "/api/extraction/questions/1/answer", {"body": "x"}), (403, 403, 403, 403, 403)),
+    (("POST", "/api/extraction/questions/1/skip", None), (403, 403, 403, 403, 403)),
+    (("GET", "/api/extraction/stats", None), (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export?format=pptx", None), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/GRID-B/deliverables/D2/outline", OUTLINE), (404, 404, 403, 403, 403)),
     # 四期 A14 D1/D2 表单：成员可看；空表提交 422（必填未填，不写入）；非成员 404

@@ -813,6 +813,16 @@ def kb_acquire_sources(args: argparse.Namespace) -> int:
     return 0
 
 
+def extraction_week(args: argparse.Namespace) -> int:
+    """经验萃取一轮（四期 F4③）：超时收尾 → 3 类信号 → 三道过滤 → 派题（每人每周 ≤ 3 题）；只打印计数。"""
+    from .project import extraction_trigger as et
+    with SessionLocal() as db:
+        r = et.run_week(db, actor="cli")
+        st = et.stats(db)
+    print("经验萃取：" + "，".join(f"{k}={v}" for k, v in r.items()) + f"；跳过率 {st['skip_rate']:.0%}")
+    return 0
+
+
 def kb_acquire_dispatch(args: argparse.Namespace) -> int:
     """采集下发包导出（三期 B25③）：本周“直接采集”的缺口，只含网址与采集规则，交采集机。"""
     import json
@@ -1226,6 +1236,8 @@ def main(argv: list[str] | None = None) -> int:
     kas.add_argument("--out", required=True, help="清单 JSON 文件")
     kas.add_argument("--as", dest="as_user", default="", help="发起人（记用量与审计）")
     kas.set_defaults(func=kb_acquire_sources)
+    ew = sub.add_parser("extraction-week", help="经验萃取一轮（四期 F4③）：收信号、先查后问过滤、派题、超时收尾")
+    ew.set_defaults(func=extraction_week)
     kad = sub.add_parser("kb-acquire-dispatch", help="导出采集下发包：本周直接采集的缺口网址与规则（白名单外拒绝）")
     kad.add_argument("--out", required=True, help="下发包 JSON 文件")
     kad.set_defaults(func=kb_acquire_dispatch)
