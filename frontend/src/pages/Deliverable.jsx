@@ -7,6 +7,7 @@ import AssistPanel from "../components/AssistPanel.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
 import { noteAfterInsert, spliceText } from "../editor/assist.js";
+import { applyReplace } from "../editor/selectEdit.js";
 
 // A15：新编辑器按需加载；新旧并存一个关口，新编辑器默认开启（决策记录 2026-11-21 ⑦），可一键切回文本框
 const DocEditor = lazy(() => import("../components/DocEditor.jsx"));
@@ -128,16 +129,29 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [newEditor, toggleEditor] = useNewEditor();
+  const [askReq, setAskReq] = useState(null);   // A16① 选区浮层“让助手改”
   const editorRef = useRef(null);     // 新编辑器：selection() / insert()
   const areaRef = useRef(null);       // 文本框兜底
   const bodyRef = useRef("");
   bodyRef.current = edit?.body ?? "";
 
   // 写稿助手（A15②）：取选中文字、插入回复（来源标注原样保留），修改说明记一笔“含写稿助手插入内容”
-  function selectionText() {
-    if (newEditor) return editorRef.current?.selection() || "";
+  function selectionRange() {
+    if (newEditor) return editorRef.current?.range() || null;
     const a = areaRef.current;
-    return a ? a.value.slice(a.selectionStart, a.selectionEnd) : "";
+    return a ? { from: a.selectionStart, to: a.selectionEnd, text: a.value.slice(a.selectionStart, a.selectionEnd) } : null;
+  }
+  // A16① 接受 / 回退改写：原区间文字没变才替换
+  function replaceReply(range, snippet) {
+    let ok;
+    if (newEditor && editorRef.current) ok = editorRef.current.replaceRange(range.from, range.to, range.text, snippet);
+    else {
+      const r = applyReplace(bodyRef.current, range, snippet);
+      ok = r.ok;
+      if (ok) setEdit((e) => ({ ...e, body: r.text }));
+    }
+    if (ok) setEdit((e) => ({ ...e, note: noteAfterInsert(e.note) }));
+    return ok;
   }
   function insertReply(snippet) {
     if (newEditor && editorRef.current) editorRef.current.insert(snippet);
@@ -223,7 +237,7 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
             </div>
             {newEditor ? (
               <Suspense fallback={<div className="sub">编辑器加载中…</div>}>
-                <DocEditor ref={editorRef} value={edit.body} onChange={(body) => setEdit((e) => ({ ...e, body }))} unresolved={new Set(unresolved)}
+                <DocEditor ref={editorRef} onAsk={(r) => setAskReq({ ...r, at: Date.now() })} value={edit.body} onChange={(body) => setEdit((e) => ({ ...e, body }))} unresolved={new Set(unresolved)}
                   placeholder="Markdown；来源标注写成 [I-01] [D-12] [O-05] [S-02] [L4-…] [推断]，显示为标签，退格整体删除" />
               </Suspense>
             ) : (
@@ -239,7 +253,7 @@ function Section({ code, dcode, seq, editable, onSaved, signed }) {
             </div>
           </div>
           <AssistPanel code={code} dcode={dcode} seq={seq} getContext={() => bodyRef.current}
-            getSelection={selectionText} onInsert={insertReply} />
+            getRange={selectionRange} onInsert={insertReply} onReplace={replaceReply} request={askReq} />
           </div>
         ) : s.version ? (
           <DocBody body={s.body} unresolved={unresolved} />
