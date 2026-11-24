@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import re
 import secrets
 from dataclasses import dataclass, field
 
@@ -57,7 +58,7 @@ OUTPUT_RULES = """
 
 {"checks": {"faithful": {"pass": true, "reason": "一句话理由"}, "no_addition": {...}, "citation_fit": {...},
             "boundary": {...}, "confidential": {...}, "no_conflict": {...}, "applicability": {...}},
- "issues": [{"severity": "阻断 | 重要 | 建议", "location": "位置", "problem": "问题", "suggestion": "修改建议"}],
+ "issues": [{"severity": "阻断 | 重要 | 建议", "check": "对应的检查项键，如 citation_fit", "location": "位置", "problem": "问题", "suggestion": "修改建议"}],
  "conclusion": "通过 | 存疑"}
 
 七项必须都给出；拿不准的 pass 写 false、理由以“存疑：”开头。"""
@@ -88,11 +89,65 @@ def enqueue(db: Session, v: KbVersion, created_by: str) -> int | None:
     return jobs.enqueue(db, "kb.agent_review", {"version_id": v.id}, created_by=created_by, max_attempts=3)
 
 
+def expert_input(v: KbVersion) -> bool:
+    """专家输入（四期 B38①）：人工作者的版本，即第三级（项目沉淀、专家萃取、内部制度改造，含专家工作台答题生成的版本）。
+    其余（公开资料由 Agent 起草）保持严格规则。"""
+    return rv.level3(v)
+
+
+# 专家输入时 Agent 的问题和检查项只有这三类保持“阻断”，其余降为建议
+EXPERT_BLOCKING = ("citation_fit", "boundary", "confidential")
+
+
+def tidy_format(text: str) -> str:
+    """专家输入的程序化整理：空白、全半角、条款编号；不改语义。"""
+    table = {**{0xFF10 + i: 0x30 + i for i in range(10)}, **{0xFF21 + i: 0x41 + i for i in range(26)},
+             **{0xFF41 + i: 0x61 + i for i in range(26)}, 0x3000: 0x20, 0xFF0E: 0x2E}
+    s = str(text or "").translate(table)
+    s = re.sub(r"第\s*([0-9]+|[一二三四五六七八九十百千零〇两]+)\s*(条|款|章|节|项)", r"第\1\2", s)
+    s = re.sub(r"(?<=[一-鿿]),[ ]*", "，", s)
+    s = re.sub(r"(?<=[一-鿿]);[ ]*", "；", s)
+    s = re.sub(r"(?<=[一-鿿]):(?!\d|//)[ ]*", "：", s)
+    s = re.sub(r"(?<=[一-鿿])\?", "？", s)
+    s = re.sub(r"(?<=[一-鿿])!", "！", s)
+    s = "\n".join(line.rstrip().replace("\t", " ") for line in s.splitlines())
+    return re.sub(r"\n{3,}", "\n\n", s).strip()
+
+
+def tidy_version(v: KbVersion) -> bool:
+    """整理专家输入版本的标题、摘要、适用条件、正文；有改动返回 True（调用方提交事务）。"""
+    changed = False
+    for f in ("title", "summary", "applicability", "body"):
+        old = getattr(v, f) or ""
+        new = tidy_format(old)
+        if new != old:
+            setattr(v, f, new)
+            changed = True
+    return changed
+
+
+def _metadata_missing(v: KbVersion) -> bool:
+    return (not v.summary.strip() or not v.applicability.strip()
+            or (v.item.doc_type in ("REF", "MAP", "ENF") and not v.ref_document.strip()))
+
+
+def rule_advice(v: KbVersion, cites: list[citations.Citation]) -> list[str]:
+    """专家输入时降为建议的程序规则（不阻断）：元数据缺项、引用尚未核对（库里没有对应依据原文）。"""
+    out = []
+    if any(not c.found and not c.doc_known for c in cites):
+        out.append("citations")
+    if _metadata_missing(v):
+        out.append("metadata")
+    return out
+
+
 def rule_failures(db: Session, v: KbVersion) -> tuple[list[str], list[citations.Citation]]:
     cites = citations.for_version(db, v)
     text = f"{v.title}\n{v.summary}\n{v.applicability}\n{v.body}"
     failed = []
-    if citations.pending(cites):
+    expert = expert_input(v)
+    # 专家输入只拦“引用与原文对不上”；尚未核对（库里没有该文件）给建议
+    if any(not c.found and c.doc_known for c in cites) if expert else citations.pending(cites):
         failed.append("citations")
     from ..project.quality import qualification_hits
 
@@ -100,8 +155,7 @@ def rule_failures(db: Session, v: KbVersion) -> tuple[list[str], list[citations.
         failed.append("boundary")
     if guard.check(text).blocked:
         failed.append("confidential")
-    if (not v.summary.strip() or not v.applicability.strip()
-            or (v.item.doc_type in ("REF", "MAP", "ENF") and not v.ref_document.strip())):
+    if not expert and _metadata_missing(v):
         failed.append("metadata")
     return failed, cites
 
@@ -147,7 +201,7 @@ def _clean(data: dict) -> tuple[dict, list[dict], str]:
     for x in (data.get("issues") or [])[:30]:
         if isinstance(x, dict) and str(x.get("problem", "")).strip():
             sev = x.get("severity") if x.get("severity") in SEVERITIES else "重要"
-            issues.append({"severity": sev, "location": str(x.get("location", ""))[:100],
+            issues.append({"severity": sev, "check": str(x.get("check", ""))[:30], "location": str(x.get("location", ""))[:100],
                            "problem": str(x["problem"])[:300], "suggestion": str(x.get("suggestion", ""))[:300]})
     conclusion = data.get("conclusion") if data.get("conclusion") in ("通过", "存疑") else "存疑"
     return checks, issues, conclusion
@@ -186,7 +240,29 @@ def _hetero(findings: dict) -> dict:
     return {k: findings[k] for k in ("model_family", "degraded") if k in findings}
 
 
+def relax_expert(findings: dict) -> dict:
+    """专家输入：只有 citation_fit / boundary / confidential 保持阻断；其他问题的阻断与重要降为建议并记原级别，
+    其他检查项没过也只记建议。"""
+    issues = []
+    for i in findings.get("issues", []):
+        if i["severity"] in ("阻断", "重要") and i.get("check") not in EXPERT_BLOCKING:
+            i = {**i, "severity": "建议", "original_severity": i["severity"]}
+        issues.append(i)
+    checks = {k: ({**c, "advisory": True} if not c.get("pass") and k not in EXPERT_BLOCKING else c)
+              for k, c in findings.get("checks", {}).items()}
+    return {**findings, "issues": issues, "checks": checks, "relaxed": True}
+
+
+def expert_passed(findings: dict) -> bool:
+    checks = findings.get("checks", {})
+    return (len(checks) == len(CHECKS)
+            and all(checks[k].get("pass") for k in EXPERT_BLOCKING)
+            and not any(i["severity"] in ("阻断", "重要") for i in findings.get("issues", [])))
+
+
 def agent_passed(findings: dict) -> bool:
+    if findings.get("relaxed"):
+        return expert_passed(findings)
     return (findings.get("conclusion") == "通过"
             and all(c.get("pass") for c in findings.get("checks", {}).values())
             and len(findings.get("checks", {})) == len(CHECKS)
@@ -206,9 +282,19 @@ def run(db: Session, v: KbVersion) -> Outcome:
         return Outcome("skipped", note="不在待审状态或不适用")
     if any(r.review_role == ROLE for r in v.reviews):
         return Outcome("skipped", note="已审过")
+    tidied = False
+    if expert_input(v):
+        tidied = tidy_version(v)
+        if tidied:
+            db.commit()
     failed, cites = rule_failures(db, v)
     status, note, findings, prompt_version, model = _agent(db, v, cites)
     findings = {**findings, "rules_failed": failed, "agent": status, "note": note}
+    if expert_input(v):
+        findings = relax_expert(findings) | {"rules_advice": rule_advice(v, cites),
+                                              "format_tidied": tidied}
+        if tidied:
+            findings["note"] = (findings["note"] + "；" if findings["note"] else "") + "已自动整理格式"
     if advisory(v):
         return _advise(db, v, failed, status, findings, prompt_version, model)
     suspended = autopublish.suspended(db, KIND)
@@ -258,7 +344,8 @@ def _advise(db: Session, v: KbVersion, failed: list[str], status: str, findings:
     audit.record(db, actor=AGENT, action="kb.agent_review", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, outcome="advice", level=3, rules_failed=failed, agent=AGENT,
                  agent_status=status, prompt_version=prompt_version, model=model,
-                 issues=len(findings.get("issues", [])), **_hetero(findings))
+                 issues=len(findings.get("issues", [])), advice=len(findings.get("rules_advice", [])),
+                 tidied=bool(findings.get("format_tidied")), **_hetero(findings))
     return Outcome("manual", rules_failed=failed, agent=status, note=findings.get("note", ""))
 
 
