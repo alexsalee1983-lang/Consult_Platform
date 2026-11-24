@@ -8,6 +8,7 @@
 - `mine`：埋雷测试。交给质量评审 Agent 的稿件里埋了错，要求评审挑出来。
 
 `extract.yaml`：知识侧 kb-builder 模式 I（提炼与挂载，三期 C12）的平台回归最小样例；正式内容题放资料仓 Consult_Knowledge。
+`kbx.yaml`：知识建设与萃取（kb-builder 0.6，三期 C6④ 知识建设与经验萃取合并）的回归基线，合并前后各跑一次比 md 版本。
 
 运行（测试机）：
 
