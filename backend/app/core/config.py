@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # 起草引用校验（二期 B8）：解读、映射、案例、异议应答引用的“文件 + 条款号”在库里找不到依据原文时不能提交审核。
     # 关掉只显示“待核”、不拦提交（例如依据原文还没切条入库的过渡期）。
     kb_citation_gate: bool = True
+    # 四期 B28①：知识条目可选的语种与辖区（逗号分隔，app/kb/multilang.py）。辖区默认含负责人 2026-11-16 定的
+    # 7 个非洲国家（埃及、科特迪瓦、塞内加尔、南非、安哥拉、埃塞俄比亚、尼日利亚）和港、澳、泰、印尼、越、新、马
+    kb_languages: str = "zh,zh-Hant,en,fr,pt,ar,th,id,vi,ms,am"
+    kb_jurisdictions: str = "CN,HK,MO,TH,ID,VN,SG,MY,EG,CI,SN,ZA,AO,ET,NG"
     # 三期 F4 最小版：改稿差异转候选（app/project/revision_mining.py）。只在测试机、试用机虚拟数据上开；生产环境一律不生效
     f4_revision_mining: bool = False
     # 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：kb-source-publish 核验通过的 SRC 由平台自动发布，

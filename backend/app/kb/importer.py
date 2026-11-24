@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import KbItem, KbVersion, User
-from . import labels
+from . import labels, meta, multilang
 from . import review as rv
 from .files import Entry, EntryError, parse_entry
 
@@ -58,6 +58,15 @@ def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> Imp
         # 检索标签、控制项、产品、行业是条目级标签，不进版本内容、不走审核，重复导入时直接更新（产品、行业记审计）
         item.tags, item.control_ids = list(e.meta.tags), list(e.meta.control_ids)
         item.industries = list(e.meta.industries)
+        if (item.language, item.jurisdiction, item.translation_of, item.translation_notice) != (
+                e.meta.language, e.meta.jurisdiction, e.meta.translation_of, e.meta.translation_notice):
+            try:                                    # 四期 B28①：语种、辖区、译本字段是条目级，重复导入时复核后更新
+                multilang.check_link(db, e.meta.translation_of, e.meta.language, item.doc_id)
+            except meta.MetaError as err:
+                db.rollback()
+                raise rv.ReviewError(422, str(err)) from err
+            item.language, item.jurisdiction = e.meta.language, e.meta.jurisdiction
+            item.translation_of, item.translation_notice = e.meta.translation_of, e.meta.translation_notice
         changed = labels.sync(db, item, e.meta.products or [e.meta.product], actor=user.username)
         db.commit()
         products_changed = "product" in changed

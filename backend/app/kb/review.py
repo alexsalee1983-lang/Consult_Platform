@@ -32,7 +32,7 @@ from ..core.db import KB_BIND, utcnow
 from ..core.permissions import KNOWLEDGE_ADMIN, KNOWLEDGE_EXPERT, roles_of
 from ..models import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion, User
 from ..services import guard, storage
-from . import labels, meta, parse
+from . import labels, meta, multilang, parse
 from .items import ItemMeta, VersionContent, create_draft, create_item, replace_mapping_rows
 
 ROLE_OF = {"content": KNOWLEDGE_EXPERT, "compliance": KNOWLEDGE_ADMIN}
@@ -109,6 +109,8 @@ def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id:
     fields = _source_fields(db, c, upload_id)
     _check_text(c.title, c.body)
     try:
+        m.check()
+        multilang.check_link(db, m.translation_of, m.language)     # 四期 B28①：译文必须挂原文
         v = create_item(db, m, c, created_by=user.username)
     except meta.MetaError as e:
         raise ReviewError(422, str(e)) from e
@@ -183,6 +185,7 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
         raise ReviewError(409, "去标识还没有通过，不能提交")
     if not v.body.strip():
         raise ReviewError(422, "正文不能为空")
+    _check_multilang(db, v, user.username, "kb.submit")
     if v.item.knowledge_kind in meta.EXPERT_ONLY_KINDS and v.source_type == "public":
         raise ReviewError(422, f"{meta.KNOWLEDGE_KINDS[v.item.knowledge_kind]}不收公开资料：请经投料箱以专家萃取、项目沉淀"
                                "或内部制度改造来源提交")
@@ -280,8 +283,19 @@ def supersede_candidates(db: Session, v: KbVersion) -> None:
             other.status, other.candidate_result = "superseded", "superseded"
 
 
+def _check_multilang(db: Session, v: KbVersion, actor: str, action: str) -> None:
+    """四期 B28①：译文缺“非官方译本”标记或原文不对，提交、发布都拦。"""
+    try:
+        multilang.check_item(db, v.item)
+    except meta.MetaError as e:
+        audit.record(db, actor=actor, action=action, result="blocked", doc_id=v.item.doc_id, version=v.version,
+                     reason="translation_invalid")
+        raise ReviewError(422, str(e)) from e
+
+
 def publish(db: Session, v: KbVersion) -> None:
     item = v.item
+    _check_multilang(db, v, "platform", "kb.publish")
     if item.knowledge_kind in meta.EXPERT_ONLY_KINDS and not expert_confirmed(v):   # 三期 B35：守住所有发布入口
         audit.record(db, actor="platform", action="kb.publish", result="blocked", doc_id=item.doc_id,
                      version=v.version, reason="expert_required")
