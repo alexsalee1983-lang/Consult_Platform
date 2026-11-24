@@ -100,7 +100,7 @@ def _evalset_matrix(db: Session, data: dict[str, Any], name: str) -> dict[str, A
                          "slots": slots, "ready": ready, "readiness": _ratio(ready, len(slots)) or 0.0,
                          "missing": [s["key"] for s in slots if s["state"] != "ready"]})
     low = min(chapters, key=lambda c: c["readiness"])
-    return {"file": name, "product": data["product"], "chapters": chapters,
+    return {"file": name, "product": data["product"], "industry": data.get("industry", ""), "chapters": chapters,
             "readiness": round(sum(c["readiness"] for c in chapters) / len(chapters), 4),
             "lowest": {"id": low["id"], "title": low["title"], "readiness": low["readiness"]},
             "basis_readiness": _ratio(basis_ready, basis_total)}

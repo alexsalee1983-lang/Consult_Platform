@@ -440,6 +440,23 @@ def storage_provision(args: argparse.Namespace) -> int:
     return 0
 
 
+def indicators_cmd(args: argparse.Namespace) -> int:
+    """指标看板（三期 F2①）；--v4 只出 v4.0 验收口径一页汇总（四期 F2③）。只有数字，不出项目代号和正文。"""
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    from .services import indicators, indicators_v4
+
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=args.days)
+    with SessionLocal() as db:
+        if args.v4:
+            print(indicators_v4.render(indicators_v4.summary(db, start, end)))
+        else:
+            print(json.dumps(indicators.compute(db, start, end), ensure_ascii=False, indent=2))
+    return 0
+
+
 def backup_record(args: argparse.Namespace) -> int:
     """备份、恢复脚本（scripts/backup.sh、restore.sh）完成后记一条审计：只有时间戳、链头编号和字节数。"""
     if not re.fullmatch(r"\d{8}T\d{6}Z", args.stamp):
@@ -1342,6 +1359,10 @@ def main(argv: list[str] | None = None) -> int:
     ks.add_argument("--drop-source", action="store_true", help="核对一致后删掉主库里的知识区表（删数据，先经负责人同意）")
     ks.set_defaults(func=kb_split)
     sub.add_parser("storage-provision", help="对象存储最小权限：用根账号建桶、建应用账号、挂只限两个桶的策略（可重复执行）")         .set_defaults(func=storage_provision)
+    ind = sub.add_parser("indicators", help="指标看板（只有数字）；--v4 出 v4.0 验收口径汇总（萃取跳过率、四格分列、四格就绪度）")
+    ind.add_argument("--days", type=int, default=30)
+    ind.add_argument("--v4", action="store_true")
+    ind.set_defaults(func=indicators_cmd)
     br = sub.add_parser("backup-record", help="备份 / 恢复脚本完成后记审计（由 scripts/backup.sh、restore.sh 调用）")
     br.add_argument("--op", choices=["create", "restore"], required=True)
     br.add_argument("--stamp", required=True)
