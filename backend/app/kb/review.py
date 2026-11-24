@@ -303,6 +303,10 @@ def publish(db: Session, v: KbVersion) -> None:
     from .search import enqueue_embedding          # 发布后后台向量化（未启用向量服务时跳过）
 
     enqueue_embedding(db, v.id, created_by=v.submitted_by or "kb-review")
+    if v.ref_status in ("repealed", "superseded"):   # 四期 F3②b：已签署交付件引用了已废止依据，程序自动登记质量事件
+        from ..services import quality_incidents
+
+        quality_incidents.register_signed_basis(db, item.doc_id)
 
 
 def retire(db: Session, user: User, item: KbItem, reason: str) -> KbItem:

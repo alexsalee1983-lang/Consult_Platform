@@ -227,6 +227,32 @@ def export_frozen(db: Session, project_code: str, deliverable_code: str) -> int 
     return None
 
 
+def register_signed_basis(db: Session, doc_id: str, source: str = "kb.basis",
+                          category: str = "repealed_basis") -> list[int]:
+    """程序自动登记（F3②b）：条目被标为已废止 / 已被替代时，当前正文引用它的**已签署**交付件各登记一条事件
+    （挂交付件，登记人 system:<来源>）。未签署的只走 B4 复核提醒。同一交付件已有未关闭的同类事件就不重复登记。
+    说明只写条目编号（不含正文），且只记长度和哈希。"""
+    from ..models import Deliverable
+    from ..project import kb_impact
+
+    ids = {d for _, d in kb_impact.citing_sections(db, doc_id)}
+    if not ids:
+        return []
+    rows = db.execute(select(Project.code, Deliverable.code).join(Deliverable, Deliverable.project_id == Project.id)
+                      .where(Deliverable.id.in_(ids), Deliverable.status == "signed")).tuples()
+    out: list[int] = []
+    for project, code in sorted(set(rows)):
+        open_same = [i for i in db.scalars(select(QualityIncident).where(
+            QualityIncident.project_code == project, QualityIncident.ref_kind == "deliverable",
+            QualityIncident.ref_id == code, QualityIncident.category == category)).all()
+            if _view(db, i).status != "closed"]
+        if open_same:
+            continue
+        out.append(register_system(db, source, category=category, ref_kind="deliverable", ref_id=code,
+                                   project=project, description=f"引用条目 {doc_id}").incident.id)
+    return out
+
+
 def impact(db: Session, user: User, v: View) -> list[dict]:
     """影响面反查：挂交付件时就是它自己；挂知识条目时列出当前正文引用了该条目的交付件（含别名，见 kb_impact）。
     项目负责人看全部；其他人只看自己是成员的项目（非成员项目不出现，免得泄露项目代号）。"""

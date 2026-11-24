@@ -119,3 +119,40 @@ def test_impact_lists_citing_deliverables_by_visibility():
     mgr = logged_in_client(app, create_user(("consultant",), {a: "manager"}))
     got = mgr.get(f"/api/quality-incidents/{iid}").json()["impact"]
     assert {x["project"] for x in got} == {a}                           # 项目经理看不到别的项目
+
+
+def _cite(code: str, doc_id: str) -> None:
+    w = logged_in_client(app, create_user(("consultant",), {code: "member"}))
+    w.put(f"{_base(code)}/outline", json={"titles": ["差距分析"]})
+    r = w.put(f"{_base(code)}/sections/1", json={"body": f"依据【依据：GB/T 22239 2019 8.1.5｜{doc_id}】。"})
+    assert r.status_code == 201
+
+
+def test_repeal_auto_registers_for_signed_deliverables_only():
+    """F3②b：依据被平台标为已废止 / 已被替代时，引用它的已签署交付件各自动登记一条“引用已废止依据”，
+    登记人 system:kb.basis；未签署的只走 B4 复核提醒，不登记；再发布一次不重复登记。"""
+    from app.kb import basis_change
+    from app.models import Deliverable, Project
+
+    doc_id = _publish_kb("质量事件废止联动测试依据")
+    signed, draft = _new_project(), _new_project()
+    for code in (signed, draft):
+        _cite(code, doc_id)
+    with SessionLocal() as db:
+        d = db.scalar(select(Deliverable).join(Project, Project.id == Deliverable.project_id)
+                      .where(Project.code == signed, Deliverable.code == "D4"))
+        d.status = "signed"
+        db.commit()
+        item = db.scalar(select(KbItem).where(KbItem.doc_id == doc_id))
+        basis_change.publish_status(db, "platform:basis-check", item, status="repealed", replaced_by="",
+                                    effective=None, note="官网核对：已废止")
+        incs = db.scalars(select(QualityIncident).where(QualityIncident.reported_by == "system:kb.basis")).all()
+        mine = [i for i in incs if i.project_code in (signed, draft)]
+        assert [(i.project_code, i.ref_kind, i.ref_id, i.category) for i in mine] == \
+            [(signed, "deliverable", "D4", "repealed_basis")]
+        item = db.scalar(select(KbItem).where(KbItem.doc_id == doc_id))
+        basis_change.publish_status(db, "platform:basis-check", item, status="superseded", replaced_by="GB/T 1-2026",
+                                    effective=None, note="官网核对：已被替代")
+        again = db.scalars(select(QualityIncident).where(QualityIncident.reported_by == "system:kb.basis",
+                                                         QualityIncident.project_code == signed)).all()
+        assert len(again) == 1                                          # 未关闭的同类事件不重复登记
