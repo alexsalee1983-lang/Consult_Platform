@@ -11,6 +11,7 @@ import pytest
 # 下面再只设测试需要的值（tests/test_env_isolation.py）
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.config import Settings  # noqa: E402
+from tests.dblock import BUSY_HINT, hold_file_lock, hold_pg_lock  # noqa: E402
 from tests.envguard import clean_settings_env  # noqa: E402
 
 Settings.model_config["env_file"] = None
@@ -19,7 +20,13 @@ clean_settings_env(os.environ)
 # 数据库：设了 TEST_DATABASE_URL（CI 用平台数据库镜像，含 pgvector + zhparser）就用 PostgreSQL，
 # 每次运行前清空 public 模式；否则用本地 SQLite 文件快速跑（中文全文检索等 PostgreSQL 专属测试会跳过）。
 # 会话用内存，不依赖 Redis；不配置模型地址，走演示回复。
+# 清库前先拿测试库独占锁（issue #382）：同一库同时跑两份 pytest 会互相清库，拿不到锁就直接退出。
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
+_db_lock = (hold_pg_lock(TEST_DATABASE_URL) if TEST_DATABASE_URL
+            else hold_file_lock(Path(__file__).parent / "test.db.lock"))
+if _db_lock is None:
+    pytest.exit(BUSY_HINT.format(where=TEST_DATABASE_URL.rsplit("/", 1)[-1] if TEST_DATABASE_URL
+                                 else "backend/tests/test.db"), returncode=4)
 if TEST_DATABASE_URL:
     from sqlalchemy import create_engine, text
 
@@ -37,6 +44,11 @@ else:
 # 知识区分库（M5 ③）：设了 TEST_KB_DATABASE_URL（CI 用同一 PostgreSQL 里的第二个库）或 TEST_KB_SPLIT=1（第二个 SQLite 文件）
 # 就把知识区表放到单独的库里跑全部测试；都不设则同库
 TEST_KB_DATABASE_URL = os.environ.get("TEST_KB_DATABASE_URL", "")
+_kb_db_lock = None
+if TEST_KB_DATABASE_URL and TEST_KB_DATABASE_URL != TEST_DATABASE_URL:
+    _kb_db_lock = hold_pg_lock(TEST_KB_DATABASE_URL)
+    if _kb_db_lock is None:
+        pytest.exit(BUSY_HINT.format(where=TEST_KB_DATABASE_URL.rsplit("/", 1)[-1]), returncode=4)
 if TEST_KB_DATABASE_URL:
     from sqlalchemy import create_engine, text
 
