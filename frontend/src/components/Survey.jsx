@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
+import { clampInterval, registerShell, REMIND_CHOICES, REMIND_DEFAULT_MIN, reminderState } from "../survey/offline.js";
 import { canPersist, checkResponses, clearDraft, listDrafts, loadDraft, progress, resultsBody, saveDraft } from "../survey/draft.js";
 
 const STATUS = { pending: ["待确认", "c-a"], confirmed: ["已确认", "c-g"], superseded: ["已被取代", ""] };
@@ -20,6 +21,22 @@ export default function Survey({ code, tier }) {
   const [ok, setOk] = useState("");
   const [busy, setBusy] = useState(false);
   const [roles, setRoles] = useState({});         // 事实 id → 确认人角色
+  // 严格档定时导出摘要卡提醒：计时与间隔只在内存，不写 storage（E2②b）
+  const [interval, setIntervalMin] = useState(REMIND_DEFAULT_MIN);
+  const [since, setSince] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+
+  // 普通档注册离线壳（只缓存页面壳与静态资源，不缓存接口和答卷）；严格档不注册。开发模式没有 /sw.js，跳过
+  useEffect(() => {
+    if (import.meta.env?.PROD) registerShell(globalThis.navigator, tier).catch(() => {});
+  }, [tier]);
+  useEffect(() => {
+    if (persist || !open) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, [persist, open]);
+  const remind = reminderState(since, now, interval);
+  const exported = () => { const t = Date.now(); setSince(t); setNow(t); };
 
   const load = useCallback(() => {
     api.surveyPacks(code).then(setPacks).catch(() => setPacks([]));
@@ -54,6 +71,7 @@ export default function Survey({ code, tier }) {
     setIdx(0);
     setErrs([]);
     edit({ pack, responses: [blank()] });
+    exported();
     load();
   });
 
@@ -153,6 +171,20 @@ export default function Survey({ code, tier }) {
           <label className="sub">受访角色（写角色不写姓名，例如“SOC 主管”）
             <input className="inp" maxLength={32} value={cur.respondent_role} onChange={(e) => setRole(e.target.value)} />
           </label>
+          {!persist && (
+            <div className="row" style={{ flexWrap: "wrap" }} aria-label="定时导出摘要卡提醒">
+              {remind.due
+                ? <span className="chip c-r">已填 {remind.elapsedMin} 分钟未导出：请用现场工具导出去标识摘要卡，经客户书面确认后带回</span>
+                : <span className="sub">距下次导出摘要卡提醒约 {remind.remainMin} 分钟</span>}
+              <label className="sub">每
+                <select className="inp" value={interval} onChange={(e) => setIntervalMin(clampInterval(e.target.value))}>
+                  {REMIND_CHOICES.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                分钟提醒
+              </label>
+              <button className="btn sm" onClick={exported}>已导出，重新计时</button>
+            </div>
+          )}
           {open.pack.questions.map((q) => {
             const a = cur.answers[q.qid] || {};
             return (
