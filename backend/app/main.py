@@ -16,7 +16,7 @@ from .core.db import SessionLocal, engine, kb_engine
 from .core.errors import out_of_range_handler, reject_control_chars, validation_error_handler
 from .core.metrics import MetricsMiddleware, register_state_collector, start_server
 from .core.migrate import upgrade_to_head
-from .services import storage
+from .services import runtime_config, storage
 from .project import configs as project_configs
 from .seed import seed, seed_signed_sample
 
@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
             seed_signed_sample(db)
         ensure_test_memberships(db, _settings)
         project_configs.backfill(db)
+        runtime_config.sync(db)   # 四期 G3②：页面改过的运行层配置覆盖 .env
     if storage.enabled():
         try:
             storage.ensure_buckets()
