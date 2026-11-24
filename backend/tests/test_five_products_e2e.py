@@ -104,8 +104,18 @@ class _Model:
 def _work() -> None:
     kinds = [runs.JOB_KIND, quality.JOB_KIND]
     with SessionLocal() as db:
-        while jobs.run_once(db, "e2e-worker", kinds=kinds):
-            pass
+        for _ in range(50):
+            while jobs.run_once(db, "e2e-worker", kinds=kinds):
+                pass
+            # 系统时钟回拨容忍（#418）：测试机上 created_at/run_after 比循环结束晚 30 多秒，入队后时钟被往回校，
+            # 0 延迟任务一时“未到期”。这里只把 attempts=0 的 0 延迟任务拨到现在再领；出错退避（attempts>0）照常报现场
+            late = db.scalars(select(Job).where(Job.status == jobs.QUEUED, Job.kind.in_(kinds),
+                                                Job.attempts == 0)).all()
+            if not late:
+                break
+            for j in late:
+                j.run_after = utcnow()
+            db.commit()
         loop_end = utcnow()
         # 循环停下后仍有 queued 任务就报现场（#418）：attempts>0 是出错退避；attempts=0 看 run_after/created_at
         # 与 loop_end 的先后、再领一次能否领到，区分“循环结束后才入队”和“到期了却领不到”
