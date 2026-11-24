@@ -86,3 +86,47 @@ def test_check_snapshot() -> None:
     for bad in (None, [], {"format": 0, "chain": []}, {"format": 1}):
         with pytest.raises(config.CatalogError):
             config.check_snapshot(bad)
+
+
+def test_outline_goes_into_step_instruction(tmp_path: Path) -> None:
+    """交付件大纲（产品大纲 + 模块追加章节）要写进产出它那一步的任务说明，只进快照、模型看不到等于没有。"""
+    p = copy.deepcopy(PRODUCT)
+    p["deliverables"][2]["outline"] = ["评估范围", "主要差距"]
+    cat = _cat(tmp_path, p)
+    plain = config.compose(cat.products["SOC"])["chain"][2]["instruction"]
+    assert plain.startswith("第 7 步。") and "评估范围、主要差距" in plain
+    draft = config.compose(cat.products["SOC"], [cat.modules["DJBH"]])["chain"][2]["instruction"]
+    assert "评估范围、主要差距、等保整改专项" in draft
+    facts = config.compose(cat.products["SOC"])["chain"][0]["instruction"]
+    assert "必须包含这些章节" not in facts        # D2 没有大纲，不加
+
+
+def test_module_sections_become_required_gate(tmp_path: Path) -> None:
+    """模块给本产品追加的章节自动成为必备章节门禁；只挂到加了章节的产品，模块已自写同交付件的门禁时不重复。"""
+    m = copy.deepcopy(MODULE)
+    m["adds"]["gates"] = []
+    cat = _cat(tmp_path, module=m)
+    gates = config.compose(cat.products["SOC"], [cat.modules["DJBH"]])["gates"]
+    auto = [g for g in gates if g["source"] == "DJBH"]
+    assert len(auto) == 1
+    g = auto[0]
+    assert (g["kind"], g["deliverable"], g["sections"], g["level"]) == ("required_sections", "D3", ["等保整改专项"],
+                                                                        "blocking")
+    explicit = config.compose(_cat(tmp_path / "b").products["SOC"], [_cat(tmp_path / "b").modules["DJBH"]])["gates"]
+    assert [x["id"] for x in explicit if x["source"] == "DJBH"] == ["djbh"]
+
+
+def test_repo_djbh_gate_only_where_sections_added() -> None:
+    soc = config.compose_codes("SOC", ["DJBH"])
+    iso = config.compose_codes("ISO", ["DJBH"])
+    assert any(g["source"] == "DJBH" and g["kind"] == "required_sections" and g["deliverable"] == "D5"
+               and g["sections"] == ["等保 2.0 整改专项"] for g in soc["gates"])
+    assert not any(g["source"] == "DJBH" and g["kind"] == "required_sections" for g in iso["gates"])
+    d5 = next(s for s in soc["chain"] if s["output"] == "D5")
+    assert "等保 2.0 整改专项" in d5["instruction"]
+
+
+def test_repo_soc_d5_required_sections() -> None:
+    gates = config.compose_codes("SOC")["gates"]
+    g = next(g for g in gates if g["kind"] == "required_sections" and g["deliverable"] == "D5")
+    assert g["level"] == "blocking" and "目标运营模型" in g["sections"]

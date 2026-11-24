@@ -534,6 +534,7 @@ VERIFY_RULES = {
     "code": "清单写了文号或标准号",
     "complete": "切出了条款（机密级检测退回的条款不入库，单列）",
     "continuous": "法规条号从第一条起连续、附件项号从一起连续，没有漏切",
+    "timely": "现行有效：已施行（施行日期不晚于今天）且没有废止、被替代（三期 B20；不满足的转人工确认）",
 }
 # 境外（决策记录 2026-11-16）：南非、尼日利亚、马来西亚政府域名，塞内加尔 vie-publique.sn；
 # 原法规库拒绝脚本下载的替代来源：新加坡公报和监管机构、印尼部委法规库、越南法规库和政府公报、
@@ -577,6 +578,8 @@ def verify(d: Doc, data: bytes, entries: list[Entry], rejected: list[tuple[str, 
         failed.append("code")
     if not entries:
         failed.append("complete")
+    if d.status != "current" or (d.effective is not None and d.effective > date.today()):
+        failed.append("timely")
     if d.mode == "law":
         got = {e.key for e in entries} | {k for k, _ in rejected}      # 退回的条款也算切出来了
         for ln in _body(_lines(parse.parse(d.file, data))):

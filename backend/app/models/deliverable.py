@@ -47,6 +47,10 @@ class SectionVersion(Base):
     note: Mapped[str] = mapped_column(String(200), default="")    # 修改说明
     author: Mapped[str] = mapped_column(String(64))               # 发起的用户（Agent 写入时是发起对话的顾问）
     agent_code: Mapped[str] = mapped_column(String(64), default="")   # Agent 写入时的 Agent 代号；顾问手改为空
+    # 三期 G2（主链 0040）：生成这段内容的模型和家族。Agent 写入记当次生成模型；顾问手改沿用上一版（内容仍出自该模型）；
+    # 从没经过模型的为空。质量评审据此排除同家族。
+    model: Mapped[str] = mapped_column(String(128), default="", server_default="")
+    model_family: Mapped[str] = mapped_column(String(32), default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     section: Mapped[DeliverableSection] = relationship(back_populates="versions")

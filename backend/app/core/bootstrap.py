@@ -10,11 +10,13 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import urlsplit
 
 from sqlalchemy import Engine, func, make_url, select, text
 from sqlalchemy.orm import Session
 
 from ..models import Project, ProjectMember, User
+from ..services import model_catalog
 from . import audit, secretbox
 from .auth import password_expired
 from .db import utcnow
@@ -27,6 +29,10 @@ log = logging.getLogger(__name__)
 
 class BootstrapError(RuntimeError):
     pass
+
+
+def _url_host(url: str) -> str:
+    return (urlsplit(url).hostname or "").lower()
 
 
 def check_settings(s: Settings) -> None:
@@ -42,6 +48,11 @@ def check_settings(s: Settings) -> None:
         raise BootstrapError("生产环境必须配置对象存储（MINIO_ENDPOINT）")
     if s.minio_endpoint and (not s.minio_access_key or len(s.minio_secret_key) < 20):
         raise BootstrapError("对象存储的访问密钥未配置或过短（MINIO_ACCESS_KEY、MINIO_SECRET_KEY 至少 20 位）")
+    if s.is_prod and s.minio_endpoint and not s.minio_root_user:
+        raise BootstrapError("生产环境要配置 MINIO_ROOT_USER（对象存储根账号名），用于核对后端没有用根账号连接")
+    if s.is_prod and s.minio_endpoint and s.minio_access_key == s.minio_root_user:
+        raise BootstrapError("生产环境后端不能用对象存储根账号连接：先执行 storage-provision 建应用账号，"
+                             "MINIO_ACCESS_KEY 改为应用账号（见 docs/部署手册.md）")
     try:
         if not secretbox.parse_keys(s.totp_keys) and s.is_prod:
             raise BootstrapError("生产环境必须配置 TOTP_KEYS（账号 TOTP 密钥加密存储，生成方法见 .env.example）")
@@ -55,10 +66,21 @@ def check_settings(s: Settings) -> None:
         if (kb.host, kb.port, kb.database) == (main.host, main.port, main.database) \
                 or (s.is_prod and kb.username == main.username):
             raise BootstrapError("知识区要用单独的数据库和单独的账号（KB_DATABASE_URL 的库名、用户名都要与主库不同）")
+    try:
+        model_catalog.load(s.llm_model_catalog)
+    except model_catalog.CatalogError as e:
+        raise BootstrapError(f"模型目录配置有误（LLM_MODEL_CATALOG）：{e}") from e
     if s.is_prod and s.llm_external:
         raise BootstrapError("生产环境不得使用外部模型（LLM_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-08）")
     if s.is_prod and s.rerank_external:
         raise BootstrapError("生产环境不得使用外部重排服务（RERANK_EXTERNAL=true 只允许开发和测试环境，决策记录 2026-11-14）")
+    if s.is_prod and s.seed_demo_data:
+        raise BootstrapError("生产环境不得写入演示数据（SEED_DEMO_DATA 要设为 false，见 docs/部署手册.md）")
+    if s.is_prod:
+        for name, url in (("LLM_BASE_URL", s.llm_base_url), ("EMBED_BASE_URL", s.embed_base_url),
+                          ("RERANK_BASE_URL", s.rerank_base_url)):
+            if url and _url_host(url) == "mock-llm":
+                raise BootstrapError(f"生产环境不得接模拟模型（{name} 指向 mock-llm，只用于测试机）")
 
 
 def check_db_accounts(s: Settings, engines: list[Engine]) -> None:
