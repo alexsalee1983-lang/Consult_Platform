@@ -131,3 +131,46 @@ def test_sh_failure_reports_rc(monkeypatch) -> None:
                         lambda args, **kw: subprocess.CompletedProcess(args, 1, stdout="", stderr=""))
     with pytest.raises(RuntimeError, match="rc=1"):
         R.sh(["gh", "pr", "view", "1"])
+
+
+# ---- #438：OpenClaw 会话上下文超限 ----
+
+def test_prompt_length_capped_for_huge_pr(tmp_path: Path) -> None:
+    howto = "## 怎么测\n" + "- 人工核对项：逐条核对很长的说明\n" * 2000
+    recheck = "## 复核说明\n" + "第 N 项复测细节。" * 3000
+    failed = tmp_path / "failed.txt"
+    failed.write_text("x" * 400 + "\n" * 1 + ("错误行\n" * 500), encoding="utf-8")
+    prompt = R.build_prompt(env="A", pr=1, head="abcdef1234", logdir=tmp_path, verdict="不通过", why="x",
+                            keep="1", body=howto, rechecks=[recheck])
+    assert len(prompt) <= R.PROMPT_MAX
+    # 全文落文件，提示里只给路径
+    assert (tmp_path / "howto.md").read_text(encoding="utf-8").count("逐条核对") == 2000
+    assert "复核说明" in (tmp_path / "recheck.md").read_text(encoding="utf-8")
+    assert str(tmp_path / "howto.md") in prompt and str(tmp_path / "recheck.md") in prompt
+
+
+def test_session_id_unique_per_run(tmp_path: Path) -> None:
+    a = R.session_id(1, "abcdef1234", tmp_path / "pr1-1125-0130")
+    b = R.session_id(1, "abcdef1234", tmp_path / "pr1-1125-0200")
+    assert a != b  # 上次会话超限后重试不能复用同一会话
+
+
+def test_salvage_posts_partial_summary_when_no_conclusion(tmp_path: Path, monkeypatch) -> None:
+    summary = tmp_path / "summary.md"
+    summary.write_text("## 测试结果：未通过\n| | 人工核对项 | ML-03 命中 |\n", encoding="utf-8")
+    posted: list[str] = []
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["待测试"])
+    monkeypatch.setattr(R, "comment_file", lambda pr, p, check=True: posted.append(p.read_text(encoding="utf-8")))
+    assert R.salvage(7, summary, before="旧内容")
+    assert posted and "会话异常结束" in posted[0] and "ML-03" in posted[0]
+
+
+def test_salvage_skips_when_concluded_or_unchanged(tmp_path: Path, monkeypatch) -> None:
+    summary = tmp_path / "summary.md"
+    summary.write_text("同样", encoding="utf-8")
+    monkeypatch.setattr(R, "comment_file", lambda *a, **k: (_ for _ in ()).throw(AssertionError("不应评论")))
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["待测试"])
+    assert not R.salvage(7, summary, before="同样")
+    summary.write_text("改过", encoding="utf-8")
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["测试未通过"])
+    assert not R.salvage(7, summary, before="同样")

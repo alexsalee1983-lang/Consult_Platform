@@ -70,10 +70,10 @@ PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 P
 不要重跑这些步骤。脚本结论：{verdict}。起会话的原因：{why}。服务{up}。
 摘要在 {logdir}/summary.md，各项日志在 {logdir}/ 下，需要时只看 tail -50 / grep。
 
-PR 描述“怎么测”段：
+PR 描述“怎么测”段（全文 {logdir}/howto.md，超长时下面只给开头）：
 {howto}
 {recheck}
-失败日志（failed.txt 末 50 行，无失败则为空）：
+失败日志（{logdir}/failed.txt 末尾，无失败则为空）：
 {failed}
 
 要做的事：
@@ -85,9 +85,17 @@ PR 描述“怎么测”段：
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
 - 命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看；不用 tmux、screen、nohup、& 等后台方式。
 - 同一项试两次不达预期就记现象、测下一项；数据保护或冒烟失败如实写，不为通过而改动。
+- 防上下文超限：每测完一项立刻把结果写进 summary.md；文件只按需 grep / 按行号读，不整份读入；
+  觉得上下文快满时先发 PR 评论（已测项 + 未测项写“未测，会话上下文将满”）再结束。
 - 结束前必须：`{gh} pr comment {pr} --body-file - < {logdir}/summary.md`（正文走标准输入，Windows 版 gh 读不到 WSL 路径）；再换标签
   `{gh} pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
 最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
+
+# 首个提示的长度上限（#438：PR 描述、复核说明、日志过长曾把 OpenClaw 会话一开始就撑爆）
+PROMPT_MAX = 8000
+HOWTO_MAX = 2500
+RECHECK_MAX = 1500
+FAILED_MAX = 1500
 
 # “怎么测”里出现这些词说明需要模型或人判断；同一行带否定词（无、不需要、模拟模型即可）不算
 HUMAN_RE = re.compile(r"人工核对|人工检查|人工确认|手动|需真实模型|需要真实模型|真实模型评测|浏览器|截图|界面核对"
@@ -145,6 +153,64 @@ def verdict_of(run_log: str) -> str:
     line = next((ln for ln in reversed(run_log.splitlines()) if ln.startswith("RESULT:")), "")
     return next((v for v in ("环境问题未测", "不通过", "通过") if line.startswith(f"RESULT: {v}")), "环境问题未测")
 
+
+
+def _clip(text: str, limit: int, path: Path) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n……（已截断，全文见 {path}，按需 grep / 按行号读）"
+
+
+def session_id(pr: int, head: str, logdir: Path) -> str:
+    """每次派单一个新会话：同一提交重试若复用会话，上次超限的上下文会带过来（#438）。"""
+    return f"pr{pr}-{head[:7]}-{logdir.name}"
+
+
+def build_prompt(env: str, pr: int, head: str, logdir: Path, verdict: str, why: str, keep: str,
+                 body: str, rechecks: list[str]) -> str:
+    """组装首个提示：长段落全文落 logdir 文件，提示里只放截断摘要，总长不超过 PROMPT_MAX。"""
+    cfg = ENVS[env]
+    howto_full = how_to_test(body) or "（无）"
+    hfile = logdir / "howto.md"
+    hfile.write_text(howto_full, encoding="utf-8")
+    recheck = ""
+    if rechecks:
+        rfile = logdir / "recheck.md"
+        rfile.write_text(rechecks[-1], encoding="utf-8")
+        recheck = (f"\n最新复核说明（以此为准，只测点名项；全文 {rfile}）：\n"
+                   + _clip(rechecks[-1], RECHECK_MAX, rfile) + "\n")
+    ffile = logdir / "failed.txt"
+    failed = ""
+    if ffile.exists():
+        tail = "\n".join(ffile.read_text(encoding="utf-8", errors="replace").splitlines()[-50:])
+        failed = tail[-FAILED_MAX:]
+    prompt = PROMPT.format(
+        pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
+        why=why or "脚本项有失败，需定位原因",
+        up="仍在线（KEEP_UP=1），会话结束后由调度脚本 down" if keep == "1" else "已 down，需要时自己 docker compose up -d",
+        howto=_clip(howto_full, HOWTO_MAX, hfile), recheck=recheck, failed=failed)
+    if len(prompt) > PROMPT_MAX:  # 兜底：仍超长就去掉失败日志和“怎么测”摘要，只留文件路径
+        prompt = PROMPT.format(
+            pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
+            why=why or "脚本项有失败，需定位原因", up="见 docker compose ps",
+            howto=f"（过长，见 {hfile}）", recheck=f"\n复核说明见 {logdir / 'recheck.md'}\n" if rechecks else "",
+            failed=f"（见 {ffile}）")
+    return prompt[:PROMPT_MAX]
+
+
+def salvage(pr: int, summary: Path, before: str) -> bool:
+    """会话结束但没换标签（多为上下文超限）：summary.md 若已写入部分结论，原样贴评论免得丢失；不改标签。"""
+    try:
+        now = summary.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    if now == before or "待测试" not in pr_labels(pr):
+        return False
+    tmp = summary.with_name("summary_salvage.md")
+    tmp.write_text("> 会话异常结束（可能上下文超限），以下为会话已写入 summary 的部分结论，标签未改，"
+                   "待人工复核或重派。\n\n" + now, encoding="utf-8")
+    comment_file(pr, tmp, check=False)
+    return True
 
 
 def sh(args: list[str], cwd: str | None = None, check: bool = True, stdin: str | None = None) -> str:
@@ -338,19 +404,11 @@ def run_one(env: str, pr: int, head: str, logdir: Path) -> int:
         sh(["gh", "pr", "edit", str(pr), "--remove-label", "待测试", "--add-label", "测试通过"])
         print("RESULT: 通过 —— 脚本项全部通过，无人工核对项（未起模型会话）", flush=True)
         return 0
-    failed = logdir / "failed.txt"
-    prompt = PROMPT.format(
-        pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
-        why=why or "脚本项有失败，需定位原因",
-        up="仍在线（KEEP_UP=1），会话结束后由调度脚本 down" if keep == "1" else "已 down，需要时自己 docker compose up -d",
-        howto=how_to_test(body) or "（无）",
-        recheck=("\n最新复核说明（以此为准，只测点名项）：\n" + rechecks[-1] + "\n") if rechecks else "",
-        failed="\n".join(failed.read_text(encoding="utf-8", errors="replace").splitlines()[-50:])
-        if failed.exists() else "")
+    prompt = build_prompt(env, pr, head, logdir, verdict, why, keep, body, rechecks)
     pfile = logdir / "prompt.txt"
     pfile.write_text(prompt, encoding="utf-8")
-    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": f"pr{pr}-{head[:7]}",  # 同一提交重试复用同一会话
-           "model": MODEL}
+    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": session_id(pr, head, logdir), "model": MODEL}
+    before = summary.read_text(encoding="utf-8") if summary.exists() else ""
     tmpl = os.environ.get("RUNNER_AGENT_CMD") or "claude -p {prompt} --model {model} --dangerously-skip-permissions"
     print(f"起模型会话：{why or verdict}", flush=True)
     try:
@@ -358,6 +416,8 @@ def run_one(env: str, pr: int, head: str, logdir: Path) -> int:
     finally:
         if keep == "1":
             down(env, pr)
+    if salvage(pr, summary, before):
+        print("会话未换标签，已把 summary 部分结论贴评论（未改标签）", flush=True)
     return 0
 
 
