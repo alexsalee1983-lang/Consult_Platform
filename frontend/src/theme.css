@@ -214,6 +214,14 @@ select.sm { height: 28px; padding: 0 6px; border: 1px solid var(--ln2); border-r
 .assist-text { white-space: pre-wrap; font-size: 13px; line-height: 1.7; max-height: 40vh; overflow: auto; color: var(--tx2); }
 .assist-bad { color: var(--crim); font-size: 13px; }
 .assist-float { box-shadow: 0 4px 12px var(--obs); }
+/* A16② @ 引用 / [ 补全弹层 */
+.mention-pop { list-style: none; margin: 0; padding: 4px; min-width: 280px; max-width: 460px; background: var(--s3); border: 1px solid var(--ln2); border-radius: 6px; box-shadow: 0 4px 12px var(--obs); }
+.mention-pop li { display: flex; gap: 8px; align-items: baseline; padding: 4px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mention-pop li.on, .mention-pop li:hover { background: var(--ln2); }
+.mention-kind { font-size: 12px; border-radius: 4px; padding: 0 4px; }
+.mention-kind.k-ev { background: var(--ok-d); }
+.mention-kind.k-kb { background: var(--cyan-d); }
+.mention-kind.k-sec { background: var(--vio-d); }
 .assist-diff { white-space: pre-wrap; font-size: 13px; line-height: 1.7; max-height: 40vh; overflow: auto; color: var(--tx2); }
 .assist-diff del { color: var(--crim); background: var(--crim-d); }
 .assist-diff ins { color: var(--ok); background: var(--ok-d); text-decoration: none; }
