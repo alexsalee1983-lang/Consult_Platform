@@ -33,7 +33,7 @@ from ..core.permissions import KNOWLEDGE_EXPERT, roles_of
 from ..models import KbItem, KbVersion, User
 from ..project import my_tasks as mt
 from ..services import guard
-from . import deid, meta
+from . import deid, meta, refs
 from . import practice_queue as pq
 from . import review as rv
 from .items import VersionContent, replace_mapping_rows
@@ -42,7 +42,7 @@ from .recheck import OPEN_STATES
 CHOICES = ("yes", "no", "unsure")
 CONFLICT_CHOICES = {"both": "不冲突，两条都留", "new": "以这条为准，已有的标待复查", "old": "以已有的为准，这条不收",
                     "unsure": "拿不准，先不定"}
-_DOC_ID_RE = re.compile(r"KB-\d{6}")
+_REF_RE = re.compile(refs.REF_PATTERN)                # 知识编号正则只在 refs.py 里写
 MAX_CONFLICTS = 5
 MAX_PREVIEW_KEYS = 12
 MAX_VALUE = 500
@@ -163,7 +163,8 @@ def conflict_of(db: Session, v: KbVersion) -> dict | None:
     failed, reason = _no_conflict_failed(v)
     if not failed:
         return None
-    ids = list(dict.fromkeys(_DOC_ID_RE.findall(reason)))
+    found = refs.resolve(db, _REF_RE.findall(reason))         # 旧编号、别名换成现行编号
+    ids = list(dict.fromkeys(r.doc_id for r in found.values()))
     ids += [x["doc_id"] for x in rv.similar_items(db, v, limit=3) if x["doc_id"] not in ids]
     items = []
     for doc_id in ids:
@@ -336,10 +337,10 @@ def answer(db: Session, user: User, version_id: int, answers: list[dict], fill: 
     if conflict == "old":
         reason = reason or f"与已有条目{'、'.join(old_ids)}重复或矛盾，以已有的为准"
     note = (comment or reason)[:1000]
-    if keep["choice"] == "unsure" or conflict == "unsure":
-        outcome = "undecided"
-    elif keep["choice"] == "no" or conflict == "old":
+    if keep["choice"] == "no" or (keep["choice"] == "yes" and conflict == "old"):
         outcome = "reject"
+    elif keep["choice"] == "unsure" or conflict == "unsure":
+        outcome = "undecided"
     else:
         if agreed and not body:
             raise rv.ReviewError(422, "你认可 Agent 提的问题：请用填空卡改正文，或选“不收，退回”")
