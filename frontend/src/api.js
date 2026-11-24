@@ -222,6 +222,14 @@ export const api = {
   // 系统管理员：账号与角色
   adminUsers: () => request("/api/admin/users"),
   adminModels: () => request("/api/admin/models"),
+  configRegistry: () => request("/api/admin/config-registry"),   // 四期 G3
+  runtimeVersions: () => request("/api/admin/config-registry/runtime/versions"),
+  runtimeChange: (reason, values) =>
+    request("/api/admin/config-registry/runtime", { method: "POST", body: JSON.stringify({ reason, values }) }),
+  runtimeRollback: (reason, to_version) =>
+    request("/api/admin/config-registry/runtime/rollback", { method: "POST", body: JSON.stringify({ reason, to_version }) }),
+  runtimeDecide: (id, approve) =>
+    request(`/api/admin/config-registry/runtime/versions/${id}/${approve ? "confirm" : "reject"}`, { method: "POST" }),
   createUser: (username, display_name, roles) =>
     request("/api/admin/users", { method: "POST", body: JSON.stringify({ username, display_name, roles }) }),
   setRoles: (username, roles) =>

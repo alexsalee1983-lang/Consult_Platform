@@ -25,6 +25,7 @@ import Overview from "./pages/Overview.jsx";
 import Password from "./pages/Password.jsx";
 import Projects from "./pages/Projects.jsx";
 import Models from "./pages/Models.jsx";
+import RuntimeConfig from "./pages/RuntimeConfig.jsx";
 import Users from "./pages/Users.jsx";
 
 function Shell() {
@@ -103,6 +104,7 @@ export default function App() {
         <Route path="/audit" element={<RequireAuditor><Audit /></RequireAuditor>} />
         <Route path="/admin/users" element={<RequireSysAdmin><Users /></RequireSysAdmin>} />
         <Route path="/admin/models" element={<RequireSysAdmin><Models /></RequireSysAdmin>} />
+        <Route path="/admin/runtime-config" element={<RequireSysAdmin><RuntimeConfig /></RequireSysAdmin>} />
         <Route path={PASSWORD_PATH} element={<Password />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
