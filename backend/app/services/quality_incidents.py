@@ -121,22 +121,40 @@ def _is_member(db: Session, code: str, user: User, manager_only: bool = False) -
     return db.scalar(stmt) is not None
 
 
-def register(db: Session, user: User, *, category: str, ref_kind: str, ref_id: str, project: str = "",
-             description: str = "") -> View:
+def _validate(category: str, ref_kind: str) -> None:
     if category not in CATEGORIES:
         raise IncidentError(422, "事件类别不在清单内")
     if ref_kind not in REF_KINDS:
         raise IncidentError(422, "关联对象只能是交付件、知识条目或运行记录")
+
+
+def register(db: Session, user: User, *, category: str, ref_kind: str, ref_id: str, project: str = "",
+             description: str = "") -> View:
+    _validate(category, ref_kind)
     if project and not _is_member(db, project, user):
         raise IncidentError(404, "项目不存在")
+    return _register(db, user.username, category=category, ref_kind=ref_kind, ref_id=ref_id, project=project,
+                     description=description)
+
+
+def register_system(db: Session, source: str, *, category: str, ref_kind: str, ref_id: str, project: str = "",
+                    description: str = "") -> View:
+    """程序自动登记（门禁、抽检命中时）：登记人记 system:<来源>，不做成员检查；说明同样只记长度和哈希。"""
+    return _register(db, f"system:{source}", category=category, ref_kind=ref_kind, ref_id=ref_id, project=project,
+                     description=description)
+
+
+def _register(db: Session, actor: str, *, category: str, ref_kind: str, ref_id: str, project: str,
+              description: str) -> View:
+    _validate(category, ref_kind)
     inc = QualityIncident(project_code=project, category=category, ref_kind=ref_kind, ref_id=ref_id,
                           description_len=len(description), description_sha=digest(description),
-                          reported_by=user.username)
+                          reported_by=actor)
     db.add(inc)
     db.flush()
-    db.add(QualityIncidentEvent(incident_id=inc.id, step="register", actor=user.username))
+    db.add(QualityIncidentEvent(incident_id=inc.id, step="register", actor=actor))
     db.commit()
-    audit.record(db, actor=user.username, action="quality_incident.register", result="ok", project_code=project,
+    audit.record(db, actor=actor, action="quality_incident.register", result="ok", project_code=project,
                  incident=inc.id, category=category, ref_kind=ref_kind, description_len=len(description),
                  description_sha=inc.description_sha)
     return _view(db, inc)
@@ -194,3 +212,62 @@ def summary(db: Session, now: datetime | None = None) -> dict:
     for v in open_:
         by_level[v.level or "ungraded"] += 1
     return {"open": len(open_), "by_level": by_level, "overdue": sum(v.overdue(now) for v in open_)}
+
+
+def export_frozen(db: Session, project_code: str, deliverable_code: str) -> int | None:
+    """遏制联动：挂这个交付件、未关闭、已执行“冻结导出”的事件编号（取最早一条）；没有返回 None。"""
+    incs = db.scalars(select(QualityIncident).where(QualityIncident.project_code == project_code,
+                                                    QualityIncident.ref_kind == "deliverable",
+                                                    QualityIncident.ref_id == deliverable_code)
+                      .order_by(QualityIncident.id)).all()
+    for inc in incs:
+        v = _view(db, inc)
+        if v.status != "closed" and any(e.step == "contain" and e.action == "freeze_export" for e in v.events):
+            return inc.id
+    return None
+
+
+def register_signed_basis(db: Session, doc_id: str, source: str = "kb.basis",
+                          category: str = "repealed_basis") -> list[int]:
+    """程序自动登记（F3②b）：条目被标为已废止 / 已被替代时，当前正文引用它的**已签署**交付件各登记一条事件
+    （挂交付件，登记人 system:<来源>）。未签署的只走 B4 复核提醒。同一交付件已有未关闭的同类事件就不重复登记。
+    说明只写条目编号（不含正文），且只记长度和哈希。"""
+    from ..models import Deliverable
+    from ..project import kb_impact
+
+    ids = {d for _, d in kb_impact.citing_sections(db, doc_id)}
+    if not ids:
+        return []
+    rows = db.execute(select(Project.code, Deliverable.code).join(Deliverable, Deliverable.project_id == Project.id)
+                      .where(Deliverable.id.in_(ids), Deliverable.status == "signed")).tuples()
+    out: list[int] = []
+    for project, code in sorted(set(rows)):
+        open_same = [i for i in db.scalars(select(QualityIncident).where(
+            QualityIncident.project_code == project, QualityIncident.ref_kind == "deliverable",
+            QualityIncident.ref_id == code, QualityIncident.category == category)).all()
+            if _view(db, i).status != "closed"]
+        if open_same:
+            continue
+        out.append(register_system(db, source, category=category, ref_kind="deliverable", ref_id=code,
+                                   project=project, description=f"引用条目 {doc_id}").incident.id)
+    return out
+
+
+def impact(db: Session, user: User, v: View) -> list[dict]:
+    """影响面反查：挂交付件时就是它自己；挂知识条目时列出当前正文引用了该条目的交付件（含别名，见 kb_impact）。
+    项目负责人看全部；其他人只看自己是成员的项目（非成员项目不出现，免得泄露项目代号）。"""
+    from ..models import Deliverable
+    from ..project import kb_impact
+
+    inc = v.incident
+    if inc.ref_kind == "deliverable":
+        return [{"project": inc.project_code, "deliverable": inc.ref_id}] if inc.project_code else []
+    if inc.ref_kind != "kb_item":
+        return []
+    ids = {d for _, d in kb_impact.citing_sections(db, inc.ref_id)}
+    if not ids:
+        return []
+    stmt = select(Project.code, Deliverable.code).join(Deliverable, Deliverable.project_id == Project.id)         .where(Deliverable.id.in_(ids))
+    if PROJECT_LEAD not in roles_of(db, user.id):
+        stmt = stmt.join(ProjectMember, ProjectMember.project_id == Project.id).where(ProjectMember.user_id == user.id)
+    return [{"project": p, "deliverable": d} for p, d in sorted(set(db.execute(stmt).tuples()))]
