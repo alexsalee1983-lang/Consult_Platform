@@ -213,3 +213,7 @@ select.sm { height: 28px; padding: 0 6px; border: 1px solid var(--ln2); border-r
 .assist-out { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--ln); padding-top: 10px; }
 .assist-text { white-space: pre-wrap; font-size: 13px; line-height: 1.7; max-height: 40vh; overflow: auto; color: var(--tx2); }
 .assist-bad { color: var(--crim); font-size: 13px; }
+.assist-float { box-shadow: 0 4px 12px var(--obs); }
+.assist-diff { white-space: pre-wrap; font-size: 13px; line-height: 1.7; max-height: 40vh; overflow: auto; color: var(--tx2); }
+.assist-diff del { color: var(--crim); background: var(--crim-d); }
+.assist-diff ins { color: var(--ok); background: var(--ok-d); text-decoration: none; }

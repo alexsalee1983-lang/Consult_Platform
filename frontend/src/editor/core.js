@@ -3,7 +3,7 @@
 // 来源标注识别规则与后端 app/project/deliverables.py 的 _EVIDENCE_REF、_KB_REF、_INFERRED 一致（共用 refSamples.json 测试）；
 // 用户删除碰到半个标注时整体删除（决策记录 2026-11-21 ⑧），不加确认。
 import { Annotation, EditorSelection, EditorState, StateField } from "@codemirror/state";
-import { Decoration, EditorView } from "@codemirror/view";
+import { Decoration, EditorView, showTooltip } from "@codemirror/view";
 import { KB_REF_PATTERN } from "../kbRef.js";
 
 const EVIDENCE_REF = /\[((?:I|D|O|S)-\d{2,4})(-\d{1,3})?\]/g;
@@ -109,4 +109,46 @@ export function refDecorations(unresolved = new Set()) {
     }).range(r.from, r.to)));
   }
   return deco;
+}
+
+// A16① 选中即改：原区间文字没变才替换（返回事务，可 Ctrl+Z 撤销），变了返回 null；替换后选中新文字便于再看一眼
+export function replaceRangeIfUnchanged(state, from, to, original, snippet) {
+  if (to > state.doc.length || state.sliceDoc(from, to) !== original) return null;
+  return {
+    changes: { from, to, insert: snippet },
+    selection: EditorSelection.range(from, from + snippet.length),
+    userEvent: "input.replace",
+    scrollIntoView: true,
+  };
+}
+
+// A16① 选区浮层：有选区时在选区末端出“让助手改”，点了回调 onAsk({from, to, text})；空光标不出现
+export function selectionAsk(onAsk) {
+  const tip = (state) => {
+    const r = state.selection.main;
+    if (r.empty) return null;
+    return {
+      pos: r.to,
+      above: false,
+      strictSide: true,
+      arrow: false,
+      create: (view) => {
+        const dom = document.createElement("button");
+        dom.type = "button";
+        dom.className = "btn sm assist-float";
+        dom.textContent = "让助手改";
+        dom.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          const s = view.state.selection.main;
+          onAsk({ from: s.from, to: s.to, text: view.state.sliceDoc(s.from, s.to) });
+        });
+        return { dom };
+      },
+    };
+  };
+  return StateField.define({
+    create: tip,
+    update: (t, tr) => (tr.docChanged || tr.selection ? tip(tr.state) : t),
+    provide: (f) => showTooltip.from(f),
+  });
 }

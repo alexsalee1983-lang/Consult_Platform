@@ -7,7 +7,7 @@ import { HighlightStyle, Language, defineLanguageFacet, syntaxHighlighting } fro
 import { GFM, parser as mdParser } from "@lezer/markdown";
 import { EditorView, keymap, placeholder as placeholderExt, drawSelection } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { External, createState, docText, insertWithSources, refDecorations } from "../editor/core.js";
+import { External, createState, docText, insertWithSources, refDecorations, replaceRangeIfUnchanged, selectionAsk } from "../editor/core.js";
 
 // 只取 @lezer/markdown 语法树做高亮：@codemirror/lang-markdown 会静态拉入 lang-html/css/javascript（嵌套代码高亮用），
 // 交付件正文用不到，去掉后编辑器块 gzip 179.5 KB 降到 105.0 KB。
@@ -39,7 +39,7 @@ const highlight = HighlightStyle.define([
 ]);
 
 // ref 暴露给写稿侧栏（A15②）：selection() 取选中文字，insert(snippet) 在光标处插入或替换选区（来源标注原样保留）
-const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder = "", unresolved, ariaLabel = "章节正文编辑" }, ref) {
+const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder = "", unresolved, ariaLabel = "章节正文编辑", onAsk }, ref) {
   const host = useRef(null);
   const view = useRef(null);
   useImperativeHandle(ref, () => ({
@@ -55,7 +55,24 @@ const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder =
       v.dispatch(insertWithSources(v.state, snippet));
       v.focus();
     },
+    // A16①：当前选区 {from, to, text}；按区间替换（原文没变才换，返回是否成功，可 Ctrl+Z 撤销）
+    range() {
+      const v = view.current;
+      if (!v) return null;
+      const r = v.state.selection.main;
+      return { from: r.from, to: r.to, text: v.state.sliceDoc(r.from, r.to) };
+    },
+    replaceRange(from, to, original, snippet) {
+      const v = view.current;
+      const spec = v && replaceRangeIfUnchanged(v.state, from, to, original, snippet);
+      if (!spec) return false;
+      v.dispatch(spec);
+      v.focus();
+      return true;
+    },
   }), []);
+  const onAskRef = useRef(onAsk);
+  onAskRef.current = onAsk;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -72,6 +89,7 @@ const DocEditor = forwardRef(function DocEditor({ value, onChange, placeholder =
         theme,
         placeholderExt(placeholder),
         refDecorations(unresolved || new Set()),
+        selectionAsk((r) => onAskRef.current?.(r)),
         EditorView.contentAttributes.of({ "aria-label": ariaLabel, spellcheck: "false" }),
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !u.transactions.some((t) => t.annotation(External))) onChangeRef.current(docText(u.state));
