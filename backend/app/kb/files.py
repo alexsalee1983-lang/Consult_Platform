@@ -47,7 +47,8 @@ from .items import ItemMeta, VersionContent
 
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 META_KEYS = ("layer", "domain", "product", "doc_type", "stage", "capabilities", "industries", "classification",
-             "visible_roles", "owner", "tags", "control_ids")
+             "visible_roles", "owner", "tags", "control_ids",
+             "language", "jurisdiction", "translation_of", "translation_notice")   # 后四项：四期 B28①
 CONTENT_KEYS = ("title", "source_type", "source_detail", "summary", "applicability", "change_note", "ref_document",
                 "ref_version", "ref_status", "ref_code", "ref_replaced_by",
                 "ref_replaces", "ref_amends", "model")
@@ -125,7 +126,7 @@ def format_entry(e: Entry) -> str:
         if k == "product" and len(e.meta.products) > 1:
             v = list(e.meta.products)
         if v not in ("", None, []) and not (k == "classification" and v == "internal") \
-                and not (k == "visible_roles" and v == ["consultant", "admin"]):
+                and not (k == "visible_roles" and v == ["consultant", "admin"])                 and not (k == "language" and v == "zh") and not (k == "jurisdiction" and v == "CN"):
             head[k] = v
     for k in CONTENT_KEYS:
         v = getattr(e.content, k)

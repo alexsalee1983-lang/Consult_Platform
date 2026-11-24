@@ -9,8 +9,12 @@
 每次运行：
 1. 收尾：检查各环境上次启动的会话是否结束；结束了就核对 PR 上是否已有结论评论和新标签，
    发一行群通知（NOTIFY_CMD），没产出结论的记失败，连续两次失败留给人看。
-2. 派单：`gh pr list --label 待测试`，按环境空闲情况每个空闲环境领一单，
-   在该环境目录起一个全新的一次性会话（默认 `claude -p`，可用 RUNNER_AGENT_CMD 换成 OpenClaw 等）（后台运行，日志落文件），本脚本立即退出。
+2. 派单：`gh pr list --label 待测试`，按环境空闲情况每个空闲环境领一单，后台起本脚本的 --run-one（日志落文件），本脚本立即退出。
+3. --run-one（token 优化，负责人 2026-11-24）：先由脚本跑 pr_test.sh（冒烟、迁移头、数据保护、PR 测试机命令块）。
+   - 全部通过、“怎么测”里没有人工核对、真实模型、浏览器类项、也没有复核说明：脚本直接贴“测试通过”评论、换标签，不起模型会话；
+   - 环境问题未测：脚本贴 summary、不换标签，不起会话；
+   - 其余（有失败、需人工判断）：才起一次性会话（默认 `claude -p`，可用 RUNNER_AGENT_CMD 换成 OpenClaw 等），
+     只给 summary 路径、“怎么测”段、复核说明和失败日志 tail -50。
 
 群会话只收一行结论，不在群会话里跑测试；大输出只进日志文件。
 环境变量（都可不设）：
@@ -23,12 +27,14 @@
                     {session} 本单会话名 pr<号>-<提交前 7 位>（同一提交重试复用同一会话）、{model} RUNNER_MODEL。
                     例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
     RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
+    RUNNER_GH       gh 命令（默认 gh）。WSL 上 PATH 先命中 Windows 版 gh.exe 会在 WSL 路径下失败，设成 /usr/local/bin/gh
     NOTIFY_CMD      发群通知的命令，消息作为最后一个参数追加；须“直接发群消息”而不是回复某条消息
 """
 from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -56,37 +62,108 @@ MAX_FAILS = 2
 # 会话进程退出但代理网关侧那一轮可能仍在跑（CLI 与网关断连），此时不能释放环境
 DETACHED_MARKS = ("may still be running this turn", "Lost the connection")
 SETSID = os.environ.get("RUNNER_SETSID", "1") != "0"
+GH = os.environ.get("RUNNER_GH", "gh")
 
 PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 PR #{pr}，测完即结束。
 环境 {env}：目录 {dir}，网页端口 {web}。日志目录 {logdir}。
-先读 docs/测试交接规范.md 第 3 节（结论格式）和第 6 节，不必读全文。
-第 1 步（只此一条命令，不要拆开手动重跑脚本已做的步骤）：
-  cd {dir} && bash scripts/pr_test.sh {pr} {env} {logdir} > {logdir}/run.log 2>&1; tail -15 {logdir}/run.log
-  脚本自动做：检出 PR 头提交、独立 compose 项目新库起整套、冒烟、迁移头核对、数据保护检查、执行 PR 描述里“测试机命令”代码块、写 summary.md。
-另外要额外跑 pytest（全量、分片 broad/broad2/broad_pg、单文件）时，一律走隔离脚本，不要在环境目录里直接跑 pytest（并发会互相清库）：
-  SQLite：bash scripts/pytest_iso.sh --repo {dir} --tag {env}-<标签> -- -q <pytest 参数>
-  PostgreSQL：bash scripts/pytest_iso.sh --repo {dir} --tag {env}-<标签> --pg -- -q <pytest 参数>
-  每次跑各自的 worktree（SQLite 各自 test.db）或各自 pt_* 库，结束自动清理。
-  PR 有人工核对项或真实模型评测、需要服务保持在线时，命令前加 KEEP_UP=1。
-第 2 步：只读 {logdir}/summary.md（失败项再 tail -50 对应的日志文件）。结论是“环境问题未测”则直接评论该 summary、不换标签、结束。
-第 3 步：仅补做 PR 描述里的“人工核对项”和真实模型评测（若有，多轮规则见规范第 5 节），把结果补进 summary.md（替换“待填”行，改写总结论）。
+调度脚本已跑完 pr_test.sh（检出 PR 头提交 {head}、独立 compose 项目新库起整套、冒烟、迁移头、数据保护、PR 测试机命令块），
+不要重跑这些步骤。脚本结论：{verdict}。起会话的原因：{why}。服务{up}。
+摘要在 {logdir}/summary.md，各项日志在 {logdir}/ 下，需要时只看 tail -50 / grep。
+
+PR 描述“怎么测”段：
+{howto}
+{recheck}
+失败日志（failed.txt 末 50 行，无失败则为空）：
+{failed}
+
+要做的事：
+1. 有失败项：看对应日志 tail -50 定位原因，把一句话原因写进 summary.md 对应行的“说明”。
+2. 补做“怎么测”里的人工核对项和真实模型评测（多轮规则见 docs/测试交接规范.md 第 5 节，只读需要的节），
+   结果替换 summary.md 里“（待填）”行，改写首行总结论。额外 pytest 一律走 scripts/pytest_iso.sh
+   （--repo {dir} --tag {env}-<标签>，PostgreSQL 加 --pg），不要在环境目录里直接跑 pytest。
 规则：
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
-- 控制上下文：命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看需要的部分。
-- 不用 tmux、screen、nohup、& 等后台方式：长评测在本轮前台跑完（输出重定向到文件）。
-- 不逐步手动重跑脚本已做的步骤；同一项试两次不达预期就记现象、测下一项。
-- 数据保护检查失败或冒烟有失败项，如实写入结论，不要为了通过而改动。
-- 结束前必须做两件事：
-  1. `gh pr comment {pr} --body-file {logdir}/summary.md`（首行已含“环境 {env}”）。
-  2. 换标签：`gh pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
-过程中不要把日志、报告全文回显到对话里，只读 tail/grep 结果；最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
+- 命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看；不用 tmux、screen、nohup、& 等后台方式。
+- 同一项试两次不达预期就记现象、测下一项；数据保护或冒烟失败如实写，不为通过而改动。
+- 结束前必须：`{gh} pr comment {pr} --body-file - < {logdir}/summary.md`（正文走标准输入，Windows 版 gh 读不到 WSL 路径）；再换标签
+  `{gh} pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
+最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因（环境问题未测时不换标签，只评论）。"""
+
+# “怎么测”里出现这些词说明需要模型或人判断；同一行带否定词（无、不需要、模拟模型即可）不算
+HUMAN_RE = re.compile(r"人工核对|人工检查|人工确认|手动|需真实模型|需要真实模型|真实模型评测|浏览器|截图|界面核对"
+                      r"|agent-eval|kb-eval|md 评测|D[1-8] ?评测")
+NEG_RE = re.compile(r"[：:]\s*无|不需要|不需|无需|模拟模型即可|不涉及|免测")
+HEAD_RE = re.compile(r"^\s*(#{1,6}\s|\*\*[^*]+\*\*[：:]?\s*$)")
 
 
-def sh(args: list[str], cwd: str | None = None, check: bool = True) -> str:
-    r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8")
-    if check and r.returncode != 0:
-        raise RuntimeError(f"{' '.join(args)}: {(r.stderr or r.stdout).strip()[:300]}")
+def _level(line: str) -> int:
+    t = line.lstrip()
+    return len(t) - len(t.lstrip("#")) if t.startswith("#") else 7
+
+
+def how_to_test(body: str) -> str:
+    """PR 描述里“怎么测”一节（到下一个同级或更高级标题为止）；没有这一节返回空串。"""
+    lines = body.splitlines()
+    for k, ln in enumerate(lines):
+        if "怎么测" in ln and HEAD_RE.match(ln):
+            level, out = _level(ln), []
+            for nxt in lines[k + 1:]:
+                if HEAD_RE.match(nxt) and _level(nxt) <= level:
+                    break
+                out.append(nxt)
+            return "\n".join(out).strip()
+    return ""
+
+
+def needs_session(body: str, has_recheck: bool) -> str:
+    """需要起模型会话的原因；返回空串表示脚本项全过即可直接出结论。"""
+    if has_recheck:
+        return "PR 有复核说明，只测点名项"
+    howto = how_to_test(body)
+    if not howto:
+        return "PR 描述没有“怎么测”一节"
+    in_code = False
+    for ln in howto.splitlines():
+        if ln.strip().startswith("```"):
+            in_code = not in_code
+            continue
+        m = None if in_code else HUMAN_RE.search(ln)
+        if m and not NEG_RE.search(ln):
+            return f"“怎么测”含需判断项（{m.group(0)}）"
+    return ""
+
+
+def finalize_summary(text: str) -> str:
+    """脚本直接出结论时改写 summary：人工核对项填“无”，去掉“由测试助手补写”。"""
+    text = text.replace("| | 人工核对项 | （待填） | |",
+                        "| | 人工核对项 | 无 | “怎么测”无人工核对或真实模型项，调度脚本直接出结论、未起模型会话 |")
+    return text.replace("人工核对项和真实模型评测由测试助手补写", "无人工核对项，调度脚本直接出结论")
+
+
+def verdict_of(run_log: str) -> str:
+    """pr_test.sh 输出里最后一条 RESULT 行的结论；没有 RESULT 行按环境问题处理。"""
+    line = next((ln for ln in reversed(run_log.splitlines()) if ln.startswith("RESULT:")), "")
+    return next((v for v in ("环境问题未测", "不通过", "通过") if line.startswith(f"RESULT: {v}")), "环境问题未测")
+
+
+
+def sh(args: list[str], cwd: str | None = None, check: bool = True, stdin: str | None = None) -> str:
+    if args and args[0] == "gh":
+        args = [GH, *args[1:]]
+    r = subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", input=stdin)
+    if r.returncode != 0:
+        log(f"命令失败 rc={r.returncode}：{' '.join(args)[:200]}｜{(r.stderr or r.stdout).strip()[:300]}")
+        if check:
+            raise RuntimeError(f"{' '.join(args)}: rc={r.returncode} {(r.stderr or r.stdout).strip()[:300]}")
     return r.stdout
+
+
+def comment_file(pr: int, path: Path, check: bool = True) -> None:
+    """正文经标准输入传给 gh：Windows 版 gh.exe 打不开 WSL 路径（#428 测试机实测）。"""
+    if not path.exists():
+        raise RuntimeError(f"摘要文件不存在：{path}")
+    sh(["gh", "pr", "comment", str(pr), "--body-file", "-"], check=check,
+       stdin=path.read_text(encoding="utf-8", errors="replace"))
 
 
 def log(msg: str) -> None:
@@ -215,29 +292,78 @@ def dispatch(st: dict) -> None:
 
 
 def start(st: dict, env: str, pr: int, branch: str, head: str) -> None:
-    cfg = ENVS[env]
     logdir = RUNNER_HOME / "logs" / f"pr{pr}-{time.strftime('%m%d-%H%M')}"
     logdir.mkdir(parents=True, exist_ok=True)
-    prompt = PROMPT.format(pr=pr, env=env, env_l=env.lower(), dir=cfg["dir"], web=cfg["web"], branch=branch,
-                           head=head[:7], logdir=logdir)
     logf = logdir / "session.log"
-    pfile = logdir / "prompt.txt"
-    pfile.write_text(prompt, encoding="utf-8")
-    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": f"pr{pr}-{head[:7]}",  # 同一提交重试复用同一会话，不重新载入上下文
-           "model": MODEL}
-    tmpl = os.environ.get("RUNNER_AGENT_CMD") or "claude -p {prompt} --model {model} --dangerously-skip-permissions"
-    cmd = [part.format(**sub) for part in shlex.split(tmpl)]
+    cmd = [sys.executable, str(Path(__file__).resolve()), "--run-one", env, str(pr), head, str(logdir)]
     with logf.open("w", encoding="utf-8") as fh:
         proc = subprocess.Popen(
-            cmd,
-            cwd=cfg["dir"], stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+            cmd, cwd=ENVS[env]["dir"], stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
             start_new_session=SETSID)
     st["running"][env] = {"pid": proc.pid, "pr": pr, "head": head, "start": time.time(), "log": str(logf),
                          "setsid": SETSID}
     log(f"#{pr} 派到环境 {env}（pid {proc.pid}），日志 {logf}")
 
 
+def down(env: str, pr: int) -> None:
+    """KEEP_UP 起的服务在会话结束后收掉（不带 -v，保留数据卷）。"""
+    subprocess.run(["docker", "compose", "down"], cwd=ENVS[env]["dir"], capture_output=True,
+                   env={**os.environ, "COMPOSE_PROJECT_NAME": f"cp{env.lower()}-pr{pr}"})
+
+
+def run_one(env: str, pr: int, head: str, logdir: Path) -> int:
+    """后台进程：先跑 pr_test.sh；只有失败或需判断时才起模型会话。最后一行打印 RESULT 供 finish() 读。"""
+    cfg = ENVS[env]
+    info = json.loads(sh(["gh", "pr", "view", str(pr), "--json", "body,comments"]) or "{}")
+    body = info.get("body") or ""
+    rechecks = [c.get("body") or "" for c in info.get("comments") or [] if "复核说明" in (c.get("body") or "")[:40]]
+    why = needs_session(body, bool(rechecks))
+    keep = "1" if why else os.environ.get("KEEP_UP", "0")
+    run_log = logdir / "run.log"
+    with run_log.open("w", encoding="utf-8") as fh:
+        subprocess.run(["bash", "scripts/pr_test.sh", str(pr), env, str(logdir)], cwd=cfg["dir"],
+                       stdout=fh, stderr=subprocess.STDOUT, env={**os.environ, "KEEP_UP": keep})
+    verdict = verdict_of(run_log.read_text(encoding="utf-8", errors="replace"))
+    summary = logdir / "summary.md"
+    if verdict == "环境问题未测":
+        if keep == "1":
+            down(env, pr)
+        if summary.exists():
+            comment_file(pr, summary, check=False)
+        print("RESULT: 环境问题未测 —— 见 summary（脚本判定，未起模型会话）", flush=True)
+        return 0
+    if verdict == "通过" and not why:
+        summary.write_text(finalize_summary(summary.read_text(encoding="utf-8")), encoding="utf-8")
+        comment_file(pr, summary)
+        sh(["gh", "pr", "edit", str(pr), "--remove-label", "待测试", "--add-label", "测试通过"])
+        print("RESULT: 通过 —— 脚本项全部通过，无人工核对项（未起模型会话）", flush=True)
+        return 0
+    failed = logdir / "failed.txt"
+    prompt = PROMPT.format(
+        pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
+        why=why or "脚本项有失败，需定位原因",
+        up="仍在线（KEEP_UP=1），会话结束后由调度脚本 down" if keep == "1" else "已 down，需要时自己 docker compose up -d",
+        howto=how_to_test(body) or "（无）",
+        recheck=("\n最新复核说明（以此为准，只测点名项）：\n" + rechecks[-1] + "\n") if rechecks else "",
+        failed="\n".join(failed.read_text(encoding="utf-8", errors="replace").splitlines()[-50:])
+        if failed.exists() else "")
+    pfile = logdir / "prompt.txt"
+    pfile.write_text(prompt, encoding="utf-8")
+    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": f"pr{pr}-{head[:7]}",  # 同一提交重试复用同一会话
+           "model": MODEL}
+    tmpl = os.environ.get("RUNNER_AGENT_CMD") or "claude -p {prompt} --model {model} --dangerously-skip-permissions"
+    print(f"起模型会话：{why or verdict}", flush=True)
+    try:
+        subprocess.run([part.format(**sub) for part in shlex.split(tmpl)], cwd=cfg["dir"], stdin=subprocess.DEVNULL)
+    finally:
+        if keep == "1":
+            down(env, pr)
+    return 0
+
+
 def main() -> int:
+    if len(sys.argv) == 6 and sys.argv[1] == "--run-one":
+        return run_one(sys.argv[2], int(sys.argv[3]), sys.argv[4], Path(sys.argv[5]))
     RUNNER_HOME.mkdir(parents=True, exist_ok=True)
     lock = RUNNER_HOME / "runner.lock"
     try:

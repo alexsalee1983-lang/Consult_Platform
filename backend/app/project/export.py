@@ -321,8 +321,14 @@ def kb_labels(db: Session, docs: set[str]) -> dict[str, str]:
     found = {ref: r for ref, r in kb_refs_svc.resolve(db, docs).items() if r.usable}
     titles = dict(db.execute(select(KbVersion.id, KbVersion.title).where(
         KbVersion.id.in_({r.current_version_id for r in found.values()}))).all()) if found else {}
-    return {ref: f"知识库 {r.layer} {LAYERS.get(r.layer, '')}《{titles[r.current_version_id]}》"
-            for ref, r in found.items() if r.current_version_id in titles}
+    from ..kb import multilang                    # 四期 B28①：译文引用旁注“非官方译本，以原文为准”并给原文条款
+
+    out = {ref: f"知识库 {r.layer} {LAYERS.get(r.layer, '')}《{titles[r.current_version_id]}》"
+           for ref, r in found.items() if r.current_version_id in titles}
+    for ref, t in multilang.trace(db, set(found)).items():
+        if ref in out:
+            out[ref] += f"（{multilang.EXPORT_NOTE}；原文 {t.original_doc_id}《{t.original_title}》）"
+    return out
 
 
 def _xml_safe(text: str) -> str:

@@ -823,6 +823,21 @@ def extraction_week(args: argparse.Namespace) -> int:
     return 0
 
 
+def survey_import(args: argparse.Namespace) -> int:
+    """调研题库导入（四期 E2①）：整批校验后按题号增改；只打印计数。"""
+    from pathlib import Path
+
+    from .project import survey
+    try:
+        with SessionLocal() as db:
+            added, updated = survey.import_bank(db, [q for f in args.files for q in survey.load_bank_file(Path(f))])
+    except survey.SurveyError as e:
+        print(f"题库未导入：{e.detail}")
+        return 1
+    print(f"调研题库：新增 {added}，更新 {updated}")
+    return 0
+
+
 def kb_acquire_dispatch(args: argparse.Namespace) -> int:
     """采集下发包导出（三期 B25③）：本周“直接采集”的缺口，只含网址与采集规则，交采集机。"""
     import json
@@ -1238,6 +1253,9 @@ def main(argv: list[str] | None = None) -> int:
     kas.set_defaults(func=kb_acquire_sources)
     ew = sub.add_parser("extraction-week", help="经验萃取一轮（四期 F4③）：收信号、先查后问过滤、派题、超时收尾")
     ew.set_defaults(func=extraction_week)
+    si = sub.add_parser("survey-import", help="导入调研题库文件（四期 E2①，E1 题库格式 YAML，可多个）")
+    si.add_argument("files", nargs="+")
+    si.set_defaults(func=survey_import)
     kad = sub.add_parser("kb-acquire-dispatch", help="导出采集下发包：本周直接采集的缺口网址与规则（白名单外拒绝）")
     kad.add_argument("--out", required=True, help="下发包 JSON 文件")
     kad.set_defaults(func=kb_acquire_dispatch)
