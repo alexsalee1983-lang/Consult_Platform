@@ -46,6 +46,12 @@ class KbItem(KbBase):
     # 后两类必须由作者以外的知识专家人工确认才能发布。slot：C10 章节槽位键，选填
     knowledge_kind: Mapped[str] = mapped_column(String(16), default="", server_default="", index=True)
     slot: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # 多语言与海外法规（四期 B28①，知识区迁移 k0021，app/kb/multilang.py）：language 原文语种、jurisdiction 辖区；
+    # 译文条目 translation_of 挂原文条目编号，translation_notice 必须是“非官方译本”，引用与导出回溯到原文条款
+    language: Mapped[str] = mapped_column(String(16), default="zh", server_default="zh")
+    jurisdiction: Mapped[str] = mapped_column(String(16), default="CN", server_default="CN", index=True)
+    translation_of: Mapped[str] = mapped_column(String(40), default="", server_default="", index=True)
+    translation_notice: Mapped[str] = mapped_column(String(16), default="", server_default="")
     classification: Mapped[str] = mapped_column(String(16), default="internal")  # internal / restricted
     visible_roles: Mapped[list] = mapped_column(JSON, default=_default_visible_roles)
     owner: Mapped[str] = mapped_column(String(64), default="")                 # 专家负责人（用户名）
