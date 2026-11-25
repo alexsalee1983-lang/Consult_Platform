@@ -82,6 +82,7 @@ app.include_router(deliverables.router)
 app.include_router(assist.router)
 app.include_router(runs.router)
 app.include_router(quality.router)
+app.include_router(quality.batch_router)   # 四期 A26 D3 批量签
 app.include_router(revision_mining_api.router)
 app.include_router(revision_features_api.router)
 app.include_router(extraction_api.router)

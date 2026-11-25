@@ -22,7 +22,11 @@
 
 签署流程（设计稿 04：Agent 起草 → 质量评审 → 顾问审核 → 项目负责人签署）：
 - 提交签署（submit）：项目成员；门禁 = 每章都有正文 + 最近一次评审已完成、针对当前修订、阻断为 0。状态 → review。
-- 签署（sign）：项目经理；交付件在 review 且修订号与提交时一致，门禁再查一次；项目经理可以签自己提交的（负责人 2026-11-12 定，不设四眼限制）。
+- 签署（sign）：项目经理；交付件在 review 且修订号与提交时一致，门禁再查一次；项目经理可以签自己提交的（负责人 2026-11-12 定）。
+  写签分离（四期 A26，负责人 2026-11-25 阻断）：对客户的交付件，签署人不能是起草人（各章第 1 版的作者）或最后修改人
+  （各章当前版本的作者；Agent 写入记发起的顾问）→ 403；SIGN_SEPARATION_EXEMPT（默认 D3 对内件）豁免。
+  核对与签署合并（A26，MERGED_SIGN_DELIVERABLES 默认 D3）：门禁通过且评审阻断、重要、已驳回都为 0 时，
+  项目经理一步完成提交和签署（sign_merged），可跨项目批量签（batch_sign），审计逐份记 trigger。
   状态 → signed，之后交付件只读（写入 409、交付链不跑），导出不再带草稿页眉。
 - 退回（return）：项目经理，必须写理由；状态 → drafting。
 - review 状态下任何章节或大纲写入，都把状态改回 drafting（提交作废，要重新评审、重新提交）。
@@ -55,10 +59,11 @@ from sqlalchemy.orm import Session
 from ..agents import call, knowledge, runtime, tools
 from ..core import audit
 from ..kb import refs as kb_refs_svc
+from ..core.config import get_settings
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
-from ..models import (AgentRun, AgentRunStep, Deliverable, KbVersion, Project, QualityReview, ReviewWaiver, SignOff,
-                      User)
+from ..models import (AgentRun, AgentRunStep, Deliverable, KbVersion, Project, ProjectMember, QualityReview,
+                      ReviewWaiver, SignOff, User)
 from ..products import config
 from ..services import gateway, guard, jobs, model_catalog
 from . import cards, configs, contradictions, deliverables, review_issues
@@ -556,6 +561,11 @@ def _review_job(payload: dict, ctx: jobs.JobContext) -> None:
             raise
 
 
+def execute_review(review_id: int, ctx: jobs.JobContext) -> None:
+    """在调用方的任务里立即执行一次已排队的评审（四期 A26 一键修订每轮复查用）；排队的任务之后看到已完成就跳过。"""
+    _review_job({"review_id": review_id}, ctx)
+
+
 def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverable, reason: str) -> None:
     _lock(db, r)
     r.status, r.error, r.finished_at = "failed", reason[:200], utcnow()
@@ -732,12 +742,49 @@ def submit(db: Session, user: User, project: Project, d: Deliverable, comment: s
     return s
 
 
-def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str = "") -> SignOff:
+def _codes(raw: str) -> set[str]:
+    return {c.strip().upper() for c in (raw or "").split(",") if c.strip()}
+
+
+def writers(d: Deliverable) -> tuple[set[str], set[str]]:
+    """(起草人, 最后修改人)：各章第 1 版的作者、各章当前版本的作者；平台自动写入不算人。"""
+    drafters, last = set(), set()
+    for s in d.sections:
+        first, cur = deliverables.get_version(s, 1), deliverables.get_version(s)
+        drafters |= {first.author} if first else set()
+        last |= {cur.author} if cur else set()
+    return drafters - {"", "platform"}, last - {"", "platform"}
+
+
+def merged_kind(d: Deliverable) -> bool:
+    return d.code.upper() in _codes(get_settings().merged_sign_deliverables)
+
+
+def separation_exempt(d: Deliverable) -> bool:
+    return d.code.upper() in _codes(get_settings().sign_separation_exempt)
+
+
+def separation_conflict(d: Deliverable, username: str) -> str:
+    """写签分离：对客户交付件，签署人是起草人或最后修改人时返回中文原因；没有冲突返回空串。"""
+    if separation_exempt(d):
+        return ""
+    drafters, last = writers(d)
+    roles = [n for n, who in (("起草人", drafters), ("最后修改人", last)) if username in who]
+    if not roles:
+        return ""
+    return (f"写签分离：你是 {d.code} 的{'和'.join(roles)}，不能签署自己写的对客户交付件，"
+            "请由本项目另一位项目经理签署")
+
+
+def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str = "", trigger: str = "") -> SignOff:
     """项目经理签署。"""
     action = "deliverable.sign"
     comment = _comment(comment)
     if not _is_manager(db, project, user):
         _refuse(db, user, project, d, action, "not_manager", 403, "只有项目经理能签署")
+    why = separation_conflict(d, user.username)
+    if why:
+        _refuse(db, user, project, d, action, "write_sign_separation", 403, why)
     _lock_deliverable(db, d)
     if d.status != "review":
         _refuse(db, user, project, d, action, "not_submitted", 409,
@@ -755,10 +802,81 @@ def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str
     db.flush()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, revision=d.revision, versions=s.versions, review_id=g.review.id,
-                 submit_id=sub.id, waived=g.waived, comment_length=len(comment))
+                 submit_id=sub.id, waived=g.waived, comment_length=len(comment),
+                 **({"trigger": trigger} if trigger else {}))
     db.commit()
     db.refresh(s)
     return s
+
+
+# ---- 核对与签署合并、批量签（四期 A26）----
+
+MERGED = "d3-merged"
+BATCH = "d3-batch"
+
+
+def merged_check(db: Session, d: Deliverable) -> list[str]:
+    """能否核对与签署合并；返回不能的原因（空 = 可以）。门禁通过且评审 0 问题（阻断、重要、已驳回都为 0）。"""
+    if not merged_kind(d):
+        return [f"{d.code} 不走核对与签署合并"]
+    if d.status not in ("drafting", "review"):
+        return [f"{d.code} 已签署" if d.status == "signed" else f"{d.code} 还没有正文"]
+    g = gate(db, d)
+    reasons = list(g.reasons)
+    r = g.review
+    if r is not None and not reasons and (r.major or g.waived):
+        reasons.append(f"质量门禁还有问题（重要 {r.major}、已驳回阻断 {g.waived}），请回到逐条核对")
+    return reasons
+
+
+def sign_merged(db: Session, user: User, project: Project, d: Deliverable, trigger: str = MERGED) -> SignOff:
+    """项目经理一步完成提交与签署（D3 门禁 0 问题）。提交、签署各记一条审计，带 trigger。"""
+    action = "deliverable.sign"
+    if not _is_manager(db, project, user):
+        _refuse(db, user, project, d, action, "not_manager", 403, "只有项目经理能签署")
+    reasons = merged_check(db, d)
+    if reasons:
+        _refuse(db, user, project, d, action, "merged_gate", 409, {"gate": False, "reasons": reasons})
+    if d.status == "drafting":
+        submit(db, user, project, d, trigger=trigger)
+    return sign(db, user, project, d, trigger=trigger)
+
+
+def _managed_projects(db: Session, user: User) -> list[Project]:
+    return list(db.scalars(select(Project).join(ProjectMember, ProjectMember.project_id == Project.id)
+                           .where(ProjectMember.user_id == user.id, ProjectMember.project_role == PROJECT_MANAGER,
+                                  Project.deleted_at.is_(None)).order_by(Project.code)))
+
+
+def batch_candidates(db: Session, user: User) -> list[dict]:
+    """本人任项目经理的项目里，待签的合并签署交付件（起草中或待签署、已有正文）及能否签。"""
+    out = []
+    for p in _managed_projects(db, user):
+        for d in p.deliverables:
+            if merged_kind(d) and d.status in ("drafting", "review") and d.sections:
+                reasons = merged_check(db, d)
+                out.append({"project": p.code, "deliverable": d.code, "title": d.title, "revision": d.revision,
+                            "status": d.status, "ready": not reasons, "reasons": reasons})
+    return out
+
+
+def batch_sign(db: Session, user: User, items: list[tuple[str, str]]) -> list[dict]:
+    """逐份签：每份单独判、单独提交事务和审计；不是本人任经理的项目一律“不存在”，不泄露。"""
+    managed = {p.code: p for p in _managed_projects(db, user)}
+    out = []
+    for code, dcode in items:
+        p = managed.get(code)
+        d = deliverables.get_deliverable(db, p, dcode) if p is not None else None
+        if d is None:
+            out.append({"project": code, "deliverable": dcode, "ok": False, "reason": "不存在或你不是该项目的项目经理"})
+            continue
+        try:
+            sign_merged(db, user, p, d, trigger=BATCH)
+            out.append({"project": code, "deliverable": dcode, "ok": True, "reason": ""})
+        except QualityError as e:
+            detail = e.detail if isinstance(e.detail, str) else "；".join(e.detail.get("reasons", []))
+            out.append({"project": code, "deliverable": dcode, "ok": False, "reason": detail})
+    return out
 
 
 def send_back(db: Session, user: User, project: Project, d: Deliverable, comment: str) -> SignOff:

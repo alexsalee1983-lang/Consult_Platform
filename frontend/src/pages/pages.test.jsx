@@ -146,3 +146,85 @@ test("抽屉：✕ 关闭，“查看全部”跳子页面", async () => {
   await act(async () => c.querySelector('button[aria-label="关闭"]').click());
   expect(onClose).toHaveBeenCalledTimes(1);
 });
+
+// ---- 四期 A26 交付件页四模式 ----
+const { default: Deliverable } = await import("./Deliverable.jsx");
+const { modeOf, separationNote, reviseNote } = await import("../delivModes.js");
+
+test("交付件模式：由状态推出 ① 起草 ② 评审与修订 ③ 定稿签署 ④ 客户确认", () => {
+  expect(modeOf({ status: "drafting" }, { status: "drafting", latest_review: null })).toBe(0);
+  expect(modeOf({}, { status: "drafting", latest_review: { id: 1 } })).toBe(1);
+  expect(modeOf({}, { status: "drafting", latest_review: null }, { status: "running" })).toBe(1);
+  expect(modeOf({}, { status: "review" })).toBe(2);
+  expect(modeOf({}, { status: "signed" })).toBe(3);
+  expect(separationNote({ separation_exempt: true })).toContain("对内");
+  expect(separationNote({ drafters: ["u2"], last_modifiers: ["u3"] })).toContain("u2、u3");
+  expect(reviseNote({ status: "done", handoff: true, max_rounds: 2, mechanical_open: 1 })).toContain("转人工");
+});
+
+const DELIV = {
+  code: "D4", title: "差距分析报告", status: "review", revision: 1, updated_by: "u2", updated_at: "2026-11-25T08:00:00Z",
+  sections: [], totals: { evidence: 0, knowledge: 0, inferred: 0, knowledge_updates: 0 },
+};
+const SO = {
+  deliverable: "D4", status: "review", revision: 1, gate: true, reasons: [], latest_review: null, history: [],
+  drafters: ["u1"], last_modifiers: ["u1"], separation_exempt: false, merged: false, merged_ready: false,
+  sign_block: "写签分离：你是 D4 的起草人和最后修改人，不能签署自己写的对客户交付件，请由本项目另一位项目经理签署",
+};
+function stubDeliverable(d, so) {
+  stub.project = async () => ({ ...PROJECT, deliverables: [{ code: d.code, title: d.title, status: d.status }] });
+  stub.members = async () => [{ username: "u1", project_role: "manager" }];
+  stub.deliverable = async () => d;
+  stub.signoff = async () => so;
+  stub.projectConfirmations = async () => [];
+  stub.deliverableForm = async () => null;
+  stub.reviseState = async () => ({ status: "", max_rounds: 2, mechanical_open: 0, pending_feedback: 0, handoff: false });
+}
+
+test("交付件页 ③ 定稿签署：写签分离时签署按钮禁用并给出中文原因", async () => {
+  stubDeliverable(DELIV, SO);
+  const c = await render(<Deliverable code="BANK-A" dcode="D4" />);
+  expect(c.querySelector('[aria-current="step"]')?.textContent).toContain("定稿签署");
+  expect(c.textContent).toContain("不能签署自己写的对客户交付件");
+  const sign = [...c.querySelectorAll("button")].find((b) => b.textContent === "签署");
+  expect(sign.disabled).toBe(true);
+});
+
+test("交付件页 ④ 客户确认：录入客户意见生成确认卡", async () => {
+  const sent = [];
+  stubDeliverable({ ...DELIV, status: "signed", sections: [{ seq: 1, title: "现状概述", current_version: 1, unresolved: [], knowledge_updates: [] }] },
+    { ...SO, status: "signed", sign_block: "" });
+  stub.clientFeedback = async (code, dcode, items) => { sent.push(items); return { confirmations: [11] }; };
+  const c = await render(<Deliverable code="BANK-A" dcode="D4" />);
+  expect(c.querySelector('[aria-current="step"]')?.textContent).toContain("客户确认");
+  const box = c.querySelector('textarea[aria-label="第 1 条客户意见"]');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, "BANK-A 希望写明白班人数口径");
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const btn = [...c.querySelectorAll("button")].find((b) => b.textContent === "录入客户意见");
+  await act(async () => { btn.click(); });
+  expect(sent).toEqual([[{ section: null, text: "BANK-A 希望写明白班人数口径" }]]);
+  expect(c.textContent).toContain("已录入 1 条客户意见");
+});
+
+test("D3 批量签：只能勾选门禁 0 问题的，签后逐份回报", async () => {
+  const signed = [];
+  stubDeliverable({ ...DELIV, code: "D3", title: "访谈纪要", status: "drafting" },
+    { ...SO, deliverable: "D3", status: "drafting", separation_exempt: true, merged: true, merged_ready: true, sign_block: "" });
+  stub.batchCandidates = async () => [
+    { project: "BANK-A", deliverable: "D3", title: "访谈纪要", ready: true, reasons: [] },
+    { project: "GRID-B", deliverable: "D3", title: "访谈纪要", ready: false, reasons: ["质量门禁还有问题，请回到逐条核对"] },
+  ];
+  stub.batchSign = async (items) => { signed.push(items); return [{ project: "BANK-A", deliverable: "D3", ok: true }]; };
+  const c = await render(<Deliverable code="BANK-A" dcode="D3" />);
+  expect(c.textContent).toContain("对内交付件，不要求写签分离");
+  expect(c.textContent).toContain("核对并签署（一步完成）");
+  const boxes = c.querySelectorAll('section[aria-label="D3 批量签"] input[type=checkbox]');
+  expect(boxes[1].disabled).toBe(true);
+  await act(async () => { boxes[0].click(); });
+  const btn = [...c.querySelectorAll("button")].find((b) => b.textContent.startsWith("签署选中的"));
+  await act(async () => { btn.click(); });
+  expect(signed).toEqual([[{ project: "BANK-A", deliverable: "D3" }]]);
+  expect(c.textContent).toContain("BANK-A 已签");
+});

@@ -150,13 +150,15 @@ def test_review_submit_sign_then_readonly_and_export_without_draft(team, model):
             assert secret not in dump
 
 
-def test_manager_can_sign_own_submission(team, model):
-    """负责人 2026-11-12 定：不设四眼限制，只有一位项目经理的项目也能走完签署。"""
-    code, member, mgr_a, _ = team
+def test_manager_cannot_sign_own_draft(team, model):
+    """负责人 2026-11-25 定（决策记录“驾驶舱改版待决六项”⑤）：对客户交付件写签分离并阻断，取代 11-12 的不设四眼限制。"""
+    code, member, mgr_a, mgr_b = team
     _draft(mgr_a, code)
     _review(mgr_a, code)
     assert mgr_a.post(_url(code, "signoff/submit"), json={}).status_code == 200
     r = mgr_a.post(_url(code, "signoff/sign"), json={})
+    assert r.status_code == 403 and "写签分离" in r.json()["detail"]
+    r = mgr_b.post(_url(code, "signoff/sign"), json={})
     assert r.status_code == 200 and r.json()["status"] == "signed"
 
 

@@ -339,6 +339,14 @@ export const api = {
   signoff: (code, dcode) => request(`${dpath(code, dcode)}/signoff`),
   signoffAction: (code, dcode, action, comment = "") =>   // submit / sign / return
     request(`${dpath(code, dcode)}/signoff/${action}`, { method: "POST", body: JSON.stringify({ comment }) }),
+  // 四期 A26：D3 核对与签署合并、一键修订、客户意见回路、D3 批量签
+  signMerged: (code, dcode) => request(`${dpath(code, dcode)}/signoff/merged`, { method: "POST" }),
+  reviseState: (code, dcode) => request(`${dpath(code, dcode)}/revise`),
+  revise: (code, dcode) => request(`${dpath(code, dcode)}/revise`, { method: "POST" }),
+  clientFeedback: (code, dcode, items) =>   // items: [{section: 章号或 null, text}]
+    request(`${dpath(code, dcode)}/client-feedback`, { method: "POST", body: JSON.stringify({ items }) }),
+  batchCandidates: () => request("/api/deliverables/batch-sign"),
+  batchSign: (items) => request("/api/deliverables/batch-sign", { method: "POST", body: JSON.stringify({ items }) }),
   exportWord: (code, dcode) => download(`${dpath(code, dcode)}/export`),
   exportPpt: (code, dcode) => download(`${dpath(code, dcode)}/export?format=pptx`),   // 二期 A9
   verifyAudit: (expectHead) =>
