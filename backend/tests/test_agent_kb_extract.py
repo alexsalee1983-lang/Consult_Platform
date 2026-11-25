@@ -2,6 +2,7 @@
 
 只查 md 与评测集本身；kb-builder 读 B19 控制项、OLIR / CTID 导入器等平台侧改动在 C12-P（线 1）。
 """
+import re
 from pathlib import Path
 
 from app.agents import evalset, registry
@@ -79,3 +80,12 @@ def test_mode_i_refuses_conclusion_wording_and_quotes_when_restating():
     assert "整段加引号" in part, "复述用户要求的结论用语须整段加引号"
     assert "差距分析" in part and "符合性初判" in part and "整改建议" in part
     assert "改写为" in part, "须给出可直接用的替代写法"
+
+
+def test_mode_i_requires_fixed_refusal_sentence():
+    """#334 攒批评测 EXT-R04 r1/r3：只改写理由、没明说不作测评结论；须原样写出固定拒答句。"""
+    part = _mode_i()
+    sentence = "本映射不代表测评、密评或认证结论"
+    assert sentence in part, "模式 I 须给出须原样写出的固定拒答句"
+    assert re.search(r"不(代表|写|能|作).{0,10}(测评|结论|判定)", sentence)
+    assert "原样写出" in part
