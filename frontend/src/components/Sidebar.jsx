@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { api } from "../api.js";
 import { hasBusinessRole, hasRole, isAuditor, isKnowledge, isSysAdmin, PASSWORD_PATH, ROLE_NAMES, useAuth } from "../auth.jsx";
+import { actionableCount } from "../tasks/view.js";
 
 const ICONS = {
   chat: <path d="M4 5h16v11H8l-4 4z" />,
@@ -56,9 +57,9 @@ export default function Sidebar() {
   const [health, setHealth] = useState(null);
   const business = hasBusinessRole(user);
   const [todo, setTodo] = useState(0);
-  useEffect(() => {      // 工作台角标：本人能处理的待办数，换页时刷新
+  useEffect(() => {      // 我的任务角标：本人能处理的待办数（与“我的任务”同一口径），换页时刷新
     if (!business) return;
-    api.workbench().then((w) => setTodo(w.todos.filter((t) => !t.blocked).length)).catch(() => setTodo(0));
+    api.myTasks().then((d) => setTodo(actionableCount(d.tasks))).catch(() => setTodo(0));
   }, [business, pathname]);
   useEffect(() => {
     if (!business) return;
@@ -72,8 +73,7 @@ export default function Sidebar() {
   const lead = hasRole(user, "project_lead");
   const items = [
     ...(business ? [
-      { to: "/workbench", icon: "inbox", label: "工作台", badge: todo },
-      { to: "/my-tasks", icon: "review", label: "我的任务" },
+      { to: "/my-tasks", icon: "inbox", label: "我的任务", badge: todo },
       { group: "项目交付" },
       { to: "/projects", icon: "proj", label: "我的项目" },
       ...(code ? [
@@ -90,7 +90,6 @@ export default function Sidebar() {
       { to: "/kb/intake", icon: "inbox", label: "投料箱" },
       ...(isKnowledge(user) ? [
         { to: "/kb/review", icon: "review", label: "审批队列" },
-        ...(hasRole(user, "knowledge_expert") ? [{ to: "/kb/bench", icon: "review", label: "专家工作台" }] : []),
         { to: "/kb/map", icon: "map", label: "知识地图与健康" },
         ...(hasRole(user, "knowledge_admin") ? [{ to: "/kb/batches", icon: "dash", label: "知识批次" }] : []),
         { to: "/kb/usage", icon: "dash", label: "知识使用统计" },

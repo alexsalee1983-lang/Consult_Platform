@@ -223,7 +223,6 @@ export const api = {
   agentMdVersions: (code) => request(`/api/agent-md/${encodeURIComponent(code)}/versions`),
   agentMdUnpin: (code, reason) =>
     request(`/api/agent-md/${encodeURIComponent(code)}/unpin`, { method: "POST", body: JSON.stringify({ reason }) }),
-  workbench: () => request("/api/workbench"),
   myTasks: () => request("/api/my-tasks"),
   benchCards: () => request("/api/expert-bench/cards"),
   benchAnswer: (versionId, body) =>

@@ -10,7 +10,6 @@ import Deletions from "./pages/Deletions.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
 import Indicators from "./pages/Indicators.jsx";
 import QualityIncidents from "./pages/QualityIncidents.jsx";
-import Workbench from "./pages/Workbench.jsx";
 import MyTasks from "./pages/MyTasks.jsx";
 import ExpertBench from "./pages/ExpertBench.jsx";
 import Deliverable from "./pages/Deliverable.jsx";
@@ -84,7 +83,7 @@ export default function App() {
       <Route element={<Shell />}>
         <Route index element={<HomeRedirect />} />
         <Route element={<Business />}>
-          <Route path="/workbench" element={<Workbench />} />
+          <Route path="/workbench" element={<Navigate to="/my-tasks" replace />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/project/:code" element={<OverviewPage />} />

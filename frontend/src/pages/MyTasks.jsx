@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../api.js";
+import { hasRole, ROLE_NAMES, useAuth } from "../auth.jsx";
 import { TopBar } from "../components/common.jsx";
+import { filterChips, splitTasks, toggleFilter } from "../tasks/view.js";
 
-// 我的任务（三期 B17②）：七类待办合一，按影响 × 不确定度排好；超出每日额度的折叠；拿不准的字段标黄；可退回由 Agent 重写
+// 我的任务（三期 B17②；四期试用反馈 11-25 并入原工作台）：平台唯一的待办入口。
+// 各类待办合一，按影响 × 不确定度排好；超出每日额度的折叠；拿不准的字段标黄；可退回由 Agent 重写；
+// 顶部按类型筛选；按规则须由别人处理的放在底部折叠区，写明须谁处理
 function Fields({ fields }) {
   if (!fields?.length) return null;
   return (
@@ -66,30 +70,42 @@ function TaskRow({ t, kindName, onReturned }) {
 }
 
 export default function MyTasks() {
+  const { user } = useAuth();
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
   const [showFolded, setShowFolded] = useState(false);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [filter, setFilter] = useState("");
   const load = useCallback(() => { api.myTasks().then(setD).catch((e) => setError(e.message)); }, []);
   useEffect(load, [load]);
   if (error) return <section className="pnl pad err" role="alert">{error}</section>;
   if (!d) return <section className="pnl pad sub">加载中…</section>;
   const name = (k) => d.kinds[k]?.name || k;
-  const today = d.tasks.filter((t) => !t.blocked && !t.folded);
-  const later = d.tasks.filter((t) => !t.blocked && t.folded);
-  const blocked = d.tasks.filter((t) => t.blocked);
+  const { today, later, blocked } = splitTasks(d.tasks, filter);
+  const roles = (user?.roles || []).map((r) => ROLE_NAMES[r] || r).join("、");
   const list = (rows) => (
     <ul className="lst">{rows.map((t) => <TaskRow key={`${t.kind}-${t.ref_id}`} t={t} kindName={name(t.kind)} onReturned={load} />)}</ul>
   );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <TopBar cap="七类待办合一，按影响 × 不确定度排序" title="我的任务" />
-      <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-        {Object.entries(d.kinds).map(([k, v]) => (
-          <span key={k} className="chip c-n" style={v.available ? undefined : { opacity: 0.55 }}>
-            {v.name} {v.available ? v.count : "未接入"}
-          </span>
+      <TopBar cap={roles ? `${roles} · 按影响 × 不确定度排序` : "按影响 × 不确定度排序"} title="我的任务" />
+      <div className="row" role="group" aria-label="按类型筛选" style={{ gap: 6, flexWrap: "wrap" }}>
+        {filterChips(d.kinds).map((c) => (
+          <button key={c.key} type="button" className={filter === c.key ? "btnp sm" : "btn sm"} aria-pressed={filter === c.key}
+            onClick={() => setFilter((f) => toggleFilter(f, c.key))}>
+            {c.name} <span className="mono">{c.count}</span>
+          </button>
         ))}
+        {filter && <span className="sub">只看“{name(filter)}”，再点一次取消</span>}
       </div>
+      {!d.member_projects && (
+        <section className="pnl pad">
+          {hasRole(user, "project_lead")
+            ? <div className="row"><span className="sub">你还不是任何项目的成员。立项时把自己指定为项目经理，或请项目经理把你加入项目。</span>
+                <Link className="btnp sm" to="/projects">新建项目</Link></div>
+            : <span className="sub">你还不是任何项目的成员，请项目经理把你加入项目；知识检索和投料箱不需要项目。</span>}
+        </section>
+      )}
       <section className="pnl pad" aria-label="今天">
         <div className="sb"><h2 className="h2">今天 <span className="sub mono">{today.length}/{d.quota}</span></h2>
           <span className="sub">每日额度 {d.quota} 项；标黄的字段拿不准，请核对</span></div>
@@ -105,8 +121,9 @@ export default function MyTasks() {
       {blocked.length > 0 && (
         <section className="pnl pad" aria-label="须由别人处理">
           <div className="sb"><h2 className="h2">须由别人处理 <span className="sub mono">{blocked.length}</span></h2>
-            <span className="sub">按规则你不能处理，列出供了解</span></div>
-          {list(blocked)}
+            <span className="row" style={{ gap: 6 }}><span className="sub">按规则你不能处理，每项写明须谁处理</span>
+              <button className="btn sm" onClick={() => setShowBlocked((v) => !v)}>{showBlocked ? "收起" : "展开"}</button></span></div>
+          {showBlocked && list(blocked)}
         </section>
       )}
     </div>
