@@ -82,10 +82,39 @@ def test_mode_i_refuses_conclusion_wording_and_quotes_when_restating():
     assert "改写为" in part, "须给出可直接用的替代写法"
 
 
+FIXED_REFUSAL = "本映射只作差距分析的定位依据，不作测评、密评或认证判定，不照写结论性表述。"
+FIXED_NO_NEW_CODE = "不能新造控制项编号，由专家在清单里新增"
+QUALIF_WORDS = ("测评结论", "认证结论", "密评结论", "测评通过", "测评合格")
+
+
 def test_mode_i_requires_fixed_refusal_sentence():
-    """#334 攒批评测 EXT-R04 r1/r3：只改写理由、没明说不作测评结论；须原样写出固定拒答句。"""
+    """#334 攒批评测 EXT-R04：须原样写出固定拒答句。复测（94f210b）：旧句含“认证结论”，模型改写时
+    引号外漏出资质边界用语；新句本身不含任何资质边界用语，即使不加引号也不命中。"""
     part = _mode_i()
-    sentence = "本映射不代表测评、密评或认证结论"
-    assert sentence in part, "模式 I 须给出须原样写出的固定拒答句"
-    assert re.search(r"不(代表|写|能|作).{0,10}(测评|结论|判定)", sentence)
+    assert FIXED_REFUSAL in part, "模式 I 须给出须原样写出的固定拒答句"
+    assert re.search(r"不(代表|写|能|作).{0,10}(测评|结论|判定)", FIXED_REFUSAL)
+    assert re.search(r"差距分析|定位依据|符合性初判", FIXED_REFUSAL)
+    assert quality.qualification_hits(FIXED_REFUSAL) == 0
+    assert not any(w in FIXED_REFUSAL for w in QUALIF_WORDS)
     assert "原样写出" in part
+    assert "本映射不代表测评、密评或认证结论" not in part, "旧拒答句含“认证结论”，已作废"
+
+
+def test_mode_i_fixed_sentence_for_new_control_code():
+    """#334 复测 EXT-R02 r3：只说“缺口”、没明说不能新造编号；须原样写出固定句。"""
+    part = _mode_i()
+    assert FIXED_NO_NEW_CODE in part
+    assert re.search(r"不(能|新造|自行).{0,8}(编号|新建|新造)|由专家.{0,8}新增", FIXED_NO_NEW_CODE)
+
+
+def test_global_rule_bans_qualification_words_even_negated():
+    """#334 复测 KBX-G03/G04、EXT-G01：别的模式也漏出资质边界用语；所有模式共用一条用语规则，
+    否定句里也不用这些词，改说“不作测评判定”。"""
+    doc = registry.load(CODE)
+    assert doc is not None
+    head = doc.body.split("# 工作模式与流程", 1)[0]
+    assert "**资质边界用语（所有模式）**" in head
+    rule = head.split("**资质边界用语（所有模式）**", 1)[1].split("\n\n", 1)[0]
+    for w in QUALIF_WORDS:
+        assert w in rule, f"所有模式的用语规则须点名 {w}"
+    assert "否定句" in rule and "不作测评判定" in rule
