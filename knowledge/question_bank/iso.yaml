@@ -1,0 +1,331 @@
+# 题库样例（四期 C21）：每个控制域取一题，供格式自检与开发用。正文在资料仓 Consult_Knowledge/question_bank/。
+product: ISO
+version: v1
+status: draft
+expert_review: pending
+note: 公开方法版；评分锚点为内部使用，不进客户调研包与自评包；对客只说“提前了解情况”。
+domains:
+- 体系范围与领导作用
+- 风险评估与处置
+- 组织控制
+- 人员控制
+- 物理控制
+- 技术控制
+- 绩效评价与改进
+catalog: v0
+scope: sample
+questions:
+- id: ISO-LDR-001
+  product: ISO
+  domain: 体系范围与领导作用
+  control_ids:
+  - ISO.LDR.01
+  checkpoints:
+  - ISO.LDR.01.a
+  kind: closed
+  stem: 信息安全管理体系的范围是否已书面确定？
+  options:
+  - key: A
+    level: 1
+    text: 还没有确定范围
+  - key: B
+    level: 2
+    text: 口头确定了范围，没有书面文件
+  - key: C
+    level: 3
+    text: 有范围文件，边界和接口描述不完整
+  - key: D
+    level: 4
+    text: 范围文件写明边界、接口和排除项，并经管理层批准
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 还没有确定范围
+  - level: 2
+    state: 口头确定了范围，没有书面文件
+  - level: 3
+    state: 有范围文件，边界和接口描述不完整
+  - level: 4
+    state: 范围文件写明边界、接口和排除项，并经管理层批准
+  followups:
+  - 范围是否覆盖所有对外服务的系统？
+  depth: &id001
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 管理层
+  prefill:
+  - source: policy_docs
+  channel: prefill
+  problem: false
+- id: ISO-RSK-001
+  product: ISO
+  domain: 风险评估与处置
+  control_ids:
+  - ISO.RSK.01
+  checkpoints:
+  - ISO.RSK.01.b
+  kind: closed
+  stem: 信息安全风险评估多久开展一次？
+  options:
+  - key: A
+    level: 1
+    text: 没有开展过
+  - key: B
+    level: 2
+    text: 只在项目需要时开展过一次
+  - key: C
+    level: 3
+    text: 定期开展，重大变更时未重新评估
+  - key: D
+    level: 4
+    text: 按约定周期开展，重大变更时也会重新评估
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有开展过
+  - level: 2
+    state: 只在项目需要时开展过一次
+  - level: 3
+    state: 定期开展，重大变更时未重新评估
+  - level: 4
+    state: 按约定周期开展，重大变更时也会重新评估
+  followups:
+  - 最近一次风险评估是什么时候？
+  depth: *id001
+  respondent_roles:
+  - 安全负责人
+  - 合规风控
+  prefill:
+  - source: risk_register
+  - source: prior_report
+  channel: prefill
+  problem: false
+- id: ISO-ORG-001
+  product: ISO
+  domain: 组织控制
+  control_ids:
+  - ISO.ORG.03
+  checkpoints:
+  - ISO.ORG.03.a
+  kind: closed
+  stem: 系统访问权限如何申请、审批和复核？
+  options:
+  - key: A
+    level: 1
+    text: 没有固定流程
+  - key: B
+    level: 2
+    text: 有申请审批，没有定期复核
+  - key: C
+    level: 3
+    text: 有申请审批和复核要求，复核执行不稳定
+  - key: D
+    level: 4
+    text: 申请、审批、定期复核均有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有固定流程
+  - level: 2
+    state: 有申请审批，没有定期复核
+  - level: 3
+    state: 有申请审批和复核要求，复核执行不稳定
+  - level: 4
+    state: 申请、审批、定期复核均有记录
+  followups:
+  - 权限复核多久做一次？
+  depth: *id001
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  channel: self
+  problem: false
+- id: ISO-PPL-001
+  product: ISO
+  domain: 人员控制
+  control_ids:
+  - ISO.PPL.02
+  checkpoints:
+  - ISO.PPL.02.a
+  kind: closed
+  stem: 全员信息安全意识教育是怎么安排的？
+  options:
+  - key: A
+    level: 1
+    text: 没有安排
+  - key: B
+    level: 2
+    text: 入职时讲一次，之后不再安排
+  - key: C
+    level: 3
+    text: 有年度计划，覆盖率没有统计
+  - key: D
+    level: 4
+    text: 有年度计划，覆盖率有统计并跟踪未参加人员
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有安排
+  - level: 2
+    state: 入职时讲一次，之后不再安排
+  - level: 3
+    state: 有年度计划，覆盖率没有统计
+  - level: 4
+    state: 有年度计划，覆盖率有统计并跟踪未参加人员
+  followups:
+  - 去年的覆盖率大约是多少？
+  depth: *id001
+  respondent_roles:
+  - 人力行政
+  - 安全负责人
+  prefill:
+  - source: self_assessment
+  channel: self
+  problem: false
+- id: ISO-PHY-001
+  product: ISO
+  domain: 物理控制
+  control_ids:
+  - ISO.PHY.01
+  checkpoints:
+  - ISO.PHY.01.a
+  kind: closed
+  stem: 机房等安全区域有哪些出入控制措施？
+  options:
+  - key: A
+    level: 1
+    text: 没有划定安全区域
+  - key: B
+    level: 2
+    text: 有门禁，没有出入记录
+  - key: C
+    level: 3
+    text: 有门禁和出入记录，没有定期检查
+  - key: D
+    level: 4
+    text: 有门禁、出入记录并定期检查
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有划定安全区域
+  - level: 2
+    state: 有门禁，没有出入记录
+  - level: 3
+    state: 有门禁和出入记录，没有定期检查
+  - level: 4
+    state: 有门禁、出入记录并定期检查
+  followups:
+  - 访客进入机房如何陪同和登记？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 人力行政
+  prefill:
+  - source: none
+  channel: onsite
+  problem: false
+- id: ISO-TEC-001
+  product: ISO
+  domain: 技术控制
+  control_ids:
+  - ISO.TEC.02
+  checkpoints:
+  - ISO.TEC.02.b
+  kind: closed
+  stem: 高危漏洞从发现到修复一般需要多长时间？
+  options:
+  - key: A
+    level: 1
+    text: 没有跟踪修复时间
+  - key: B
+    level: 2
+    text: 视情况处理，没有时限要求
+  - key: C
+    level: 3
+    text: 有时限要求，超期情况较多
+  - key: D
+    level: 4
+    text: 按时限修复，超期有审批和补偿措施
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有跟踪修复时间
+  - level: 2
+    state: 视情况处理，没有时限要求
+  - level: 3
+    state: 有时限要求，超期情况较多
+  - level: 4
+    state: 按时限修复，超期有审批和补偿措施
+  followups:
+  - 超期未修的漏洞如何处理？
+  depth: *id001
+  respondent_roles:
+  - IT运维
+  - 安全分析
+  prefill:
+  - source: ticket_export
+  channel: prefill
+  problem: false
+- id: ISO-PER-001
+  product: ISO
+  domain: 绩效评价与改进
+  control_ids:
+  - ISO.PER.01
+  checkpoints:
+  - ISO.PER.01.b
+  kind: closed
+  stem: 内部审核是否按年度方案执行？
+  options:
+  - key: A
+    level: 1
+    text: 没有开展内部审核
+  - key: B
+    level: 2
+    text: 偶尔开展，没有年度方案
+  - key: C
+    level: 3
+    text: 有年度方案，部分范围未覆盖
+  - key: D
+    level: 4
+    text: 按年度方案覆盖全部范围并形成报告
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有开展内部审核
+  - level: 2
+    state: 偶尔开展，没有年度方案
+  - level: 3
+    state: 有年度方案，部分范围未覆盖
+  - level: 4
+    state: 按年度方案覆盖全部范围并形成报告
+  followups:
+  - 内审员是否独立于被审核部门？
+  depth: *id001
+  respondent_roles:
+  - 合规风控
+  - 安全负责人
+  prefill:
+  - source: prior_report
+  channel: prefill
+  problem: false
