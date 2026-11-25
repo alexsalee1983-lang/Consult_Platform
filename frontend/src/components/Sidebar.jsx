@@ -113,7 +113,7 @@ export default function Sidebar() {
     <aside className="pnl side" aria-label="导航">
       <div className="logo">
         <div className="logo-mark">
-          <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0A0D12" strokeWidth="2.4" strokeLinejoin="round">
+          <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ stroke: "var(--obs)" }} strokeWidth="2.4" strokeLinejoin="round">
             <path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z" />
             <path d="M8.5 12l2.5 2.5 4.5-5" strokeLinecap="round" />
           </svg>
