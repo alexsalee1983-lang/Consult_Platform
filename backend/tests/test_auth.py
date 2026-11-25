@@ -164,6 +164,7 @@ PROTECTED = [
     ("POST", "/api/kb/versions/1/submit"),
     ("POST", "/api/kb/versions/1/review"),
     ("GET", "/api/kb/review-queue"),
+    ("GET", "/api/kb/recheck-queue"),
     ("GET", "/api/kb/practice-queue"),
     ("POST", "/api/kb/practice-queue/decide"),
     ("GET", "/api/kb/practice-queue/stats"),
