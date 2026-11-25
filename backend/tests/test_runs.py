@@ -1,4 +1,5 @@
-"""交付链编排（M3 ④，二期 A5 补全）：SOC 3→4→5→6→7 跑通（D3、差距分析、目标运营模型、D6、D4、D5、D7、D8），没有证据时发卡停下、补证处理卡后继续，
+"""交付链编排（M3 ④，二期 A5 补全，四期 D4 前移）：SOC 3→4→5→6→7 跑通（D3、差距分析、D4、目标运营模型、D6、D5、D7、D8），
+差距分析得出草稿发现时发“发现表确认”卡、确认后才起草 D4，没有证据时发卡停下、补证处理卡后继续，
 模型提出的确认卡让运行停在下一步之前、顾问意见交给后续步骤，重复发起被拒（严格档见 test_strict_draft），取消后任务不再执行，
 模型输出命中机密级时不保存、运行失败，模型暂不可用时重试、到上限失败，成员隔离，审计不记原文。"""
 import json
@@ -13,11 +14,12 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.main import app
 from app.models import AgentRunStep, AuditLog, Confirmation, Deliverable, Job, LlmUsage, Project
-from app.project import deliverables, runs
+from app.project import deliverables, findings, runs
 from app.seed import DELIVERABLES
 from app.services import gateway, jobs
 
 from .conftest import create_user, logged_in_client
+from .test_assessment import GAP as GAP_TABLE
 
 FACTS = "## 组织与人员\nSOC 现有 6 人，全部白班 [O-01]。\n\n## 待补证据与矛盾点\n夜间值守安排未见书面材料 [推断]。"
 GAP = "## 差距分析表\n夜间无人值守，与 7×24 监测要求存在差距 [O-01]。\n\n## 业务影响 TOP 5\n夜间事件发现滞后 [推断]。"
@@ -35,7 +37,7 @@ class _Model:
 
     def __init__(self):
         self.requests: list[dict] = []
-        self.replies = {"起草 D5": DOC, "起草 D7": DOC, "起草 D8": DOC, "交付链第 3 步": FACTS, "交付链第 4 步": GAP,
+        self.replies = {"起草 D4": DRAFT, "起草 D5": DOC, "起草 D7": DOC, "起草 D8": DOC, "交付链第 3 步": FACTS, "交付链第 4 步": GAP,
                         "交付链第 5 步": DESIGN, "交付链第 6 步": POLICY, "交付链第 7 步": DRAFT}   # 具体的在前
         self.status = 200
 
@@ -117,19 +119,20 @@ def test_chain_runs_end_to_end(proj, model):
     run = _run(c, code, rid)
     assert run["status"] == "done" and run["next_step"] == "end" and run["finished_at"]
     assert run["chain"] == "standard"
-    assert [s["step"] for s in run["steps"]] == ["facts", "gap", "design", "policy", "draft", "design_doc", "roadmap",
+    assert [s["step"] for s in run["steps"]] == ["facts", "gap", "draft", "design", "policy", "design_doc", "roadmap",
                                                  "briefing"]
     assert all(s["status"] == "done" and s["prompt_version"] and s["model"] == "mock-model" for s in run["steps"])
-    assert [s["refs"].get("deliverable", "") for s in run["steps"]] == ["D3", "", "", "D6", "D4", "D5", "D7", "D8"]
+    assert [s["refs"].get("deliverable", "") for s in run["steps"]] == ["D3", "", "D4", "", "D6", "D5", "D7", "D8"]
     assert "差距分析表" in run["steps"][1]["output"]               # 第 4、5 步产出存在运行记录里
-    assert "路线图草案" in run["steps"][2]["output"]
+    assert "路线图草案" in run["steps"][3]["output"]
+    assert run["card_ids"] == []                                    # 差距分析没有解析出发现：不发发现表确认卡
     assert _bodies(code, "D3") == ["SOC 现有 6 人，全部白班 [O-01]。", "夜间值守安排未见书面材料 [推断]。"]
     assert len(_bodies(code, "D4")) == 2
     assert _bodies(code, "D6")[0] == "值守交接留书面记录 [O-01]。" and len(_bodies(code, "D8")) == 2
     # 每一步拿到上一步的产出：证据 → D3 → 差距分析
     assert "夜间无人值守" in model.prompt("交付链第 3 步")
     assert "SOC 现有 6 人" in model.prompt("交付链第 4 步")
-    assert "夜间无人值守，与 7×24" in model.prompt("交付链第 7 步")
+    assert "夜间无人值守，与 7×24" in model.prompt("起草 D4")
     # 第 5 步读差距分析和 D3；第 6 步读目标运营模型；D5、D7 读目标运营模型和差距分析；D8 读 D4、D5、D7
     assert "差距分析（第 4 步产出）" in model.prompt("交付链第 5 步") and "SOC 现有 6 人" in model.prompt("交付链第 5 步")
     assert "目标运营模型设计（第 5 步产出）" in model.prompt("交付链第 6 步")
@@ -169,21 +172,21 @@ def test_model_card_pauses_before_next_step_and_resolution_is_passed_on(proj, mo
     rid = c.post(f"/api/projects/{code}/runs").json()["id"]
     _work()
     run = _run(c, code, rid)
-    assert run["status"] == "waiting" and run["next_step"] == "design" and len(run["waiting_cards"]) == 1
+    assert run["status"] == "waiting" and run["next_step"] == "draft" and len(run["waiting_cards"]) == 1
     assert run["steps"][1]["refs"]["cards"] == run["waiting_cards"]
     assert "确认卡" not in run["steps"][1]["output"]                     # 卡片块不进产出正文
     card = run["waiting_cards"][0]
     assert c.post(f"/api/confirmations/{card}/resolve", json={"resolution": "按托管夜间初筛写"}).status_code == 200
     _work()
     assert _run(c, code, rid)["status"] == "done"
-    assert "顾问已确认事项" in model.prompt("交付链第 7 步") and "按托管夜间初筛写" in model.prompt("交付链第 7 步")
+    assert "顾问已确认事项" in model.prompt("起草 D4") and "按托管夜间初筛写" in model.prompt("起草 D4")
 
 
 def test_resolved_question_is_not_asked_again_in_same_run(proj, model):
     code, c = proj
     _note(c, code)
     model.replies["交付链第 4 步"] = GAP + CARD_BLOCK
-    model.replies["交付链第 7 步"] = DRAFT + CARD_BLOCK                  # 模型在下一步又问同一个问题
+    model.replies["起草 D4"] = DRAFT + CARD_BLOCK                  # 模型在下一步又问同一个问题
     rid = c.post(f"/api/projects/{code}/runs").json()["id"]
     _work()
     card = _run(c, code, rid)["waiting_cards"][0]
@@ -339,9 +342,9 @@ def test_chain_endpoint_lists_steps_from_snapshot(proj):
     code, c = proj
     steps = c.get(f"/api/projects/{code}/chain").json()
     assert [(s["key"], s["number"], s["output"]) for s in steps] == [
-        ("facts", 3, "D3"), ("gap", 4, ""), ("design", 5, ""), ("policy", 6, "D6"), ("draft", 7, "D4"),
+        ("facts", 3, "D3"), ("gap", 4, ""), ("draft", 4, "D4"), ("design", 5, ""), ("policy", 6, "D6"),
         ("design_doc", 7, "D5"), ("roadmap", 7, "D7"), ("briefing", 7, "D8")]
-    assert steps[2]["agent"] == "solution-designer" and steps[2]["agent_name"].endswith("Agent")
+    assert steps[3]["agent"] == "solution-designer" and steps[2]["agent_name"].endswith("Agent")
 
 
 def test_design_tradeoff_card_pauses_before_policy(proj, model):
@@ -353,7 +356,7 @@ def test_design_tradeoff_card_pauses_before_policy(proj, model):
     _work()
     run = _run(c, code, rid)
     assert run["status"] == "waiting" and run["next_step"] == "policy"
-    assert [s["step"] for s in run["steps"]] == ["facts", "gap", "design"]
+    assert [s["step"] for s in run["steps"]] == ["facts", "gap", "draft", "design"]
     with SessionLocal() as db:
         assert db.get(Confirmation, run["waiting_cards"][0]).kind == "方案取舍"
     c.post(f"/api/confirmations/{run['waiting_cards'][0]}/resolve", json={"choice": "A"})
@@ -401,3 +404,64 @@ def test_step_started_at_is_taken_before_the_step_runs(proj, model, monkeypatch)
     for s in steps:
         assert s.finished_at is not None and s.started_at <= s.finished_at
         assert (s.finished_at - s.started_at).total_seconds() >= 0.02
+
+
+def _drafted_d4(model) -> bool:
+    return any("起草 D4" in r["messages"][-1]["content"] for r in model.requests)
+
+
+def _finding_statuses(code: str) -> set[str]:
+    with SessionLocal() as db:
+        return {f.status for f in findings.list_for_project(db, db.scalar(select(Project).where(Project.code == code)))}
+
+
+def _gap_waits_on_findings_card(c, code: str, model) -> tuple[int, int]:
+    _note(c, code)
+    model.replies["交付链第 4 步"] = GAP_TABLE
+    rid = c.post(f"/api/projects/{code}/runs").json()["id"]
+    _work()
+    run = _run(c, code, rid)
+    assert run["status"] == "waiting" and run["next_step"] == "draft" and len(run["waiting_cards"]) == 1
+    assert [s["step"] for s in run["steps"]] == ["facts", "gap"] and not _drafted_d4(model)
+    assert _finding_statuses(code) == {"draft"}
+    return rid, run["waiting_cards"][0]
+
+
+def test_findings_checkpoint_before_d4(proj, model):
+    """四期 D4（负责人 2026-11-25）：差距分析同步出草稿发现后平台发“发现表确认”卡，停在 D4 起草之前；
+    选 A 后草稿发现转为已确认，再起草 D4，确认结果交给 D4。"""
+    code, c = proj
+    rid, card = _gap_waits_on_findings_card(c, code, model)
+    with SessionLocal() as db:
+        cf = db.get(Confirmation, card)
+        assert cf.kind == runs.FINDINGS_KIND and cf.agent_code == "compliance-basis" and cf.recommendation == "A"
+        assert "4 条" in cf.title and "第 4 步现状评估报告初稿" in cf.title
+    assert c.post(f"/api/confirmations/{card}/resolve", json={"choice": "A"}).status_code == 200
+    assert _finding_statuses(code) == {"confirmed"}
+    _work()
+    run = _run(c, code, rid)
+    assert run["status"] == "done" and [s["step"] for s in run["steps"]][:4] == ["facts", "gap", "draft", "design"]
+    assert "顾问已确认事项" in model.prompt("起草 D4") and "请确认发现表" in model.prompt("起草 D4")
+
+
+def test_findings_checkpoint_comment_is_passed_to_d4(proj, model):
+    """写意见处理发现表确认卡：草稿发现照样确认，意见作为顾问已确认事项交给 D4。"""
+    code, c = proj
+    rid, card = _gap_waits_on_findings_card(c, code, model)
+    assert c.post(f"/api/confirmations/{card}/resolve", json={"resolution": "G-02 按不符合写"}).status_code == 200
+    assert _finding_statuses(code) == {"confirmed"}
+    _work()
+    assert _run(c, code, rid)["status"] == "done" and "G-02 按不符合写" in model.prompt("起草 D4")
+
+
+def test_findings_checkpoint_b_cancels_run(proj, model):
+    """选 B：本次运行取消、不起草 D4，发现保持草稿。"""
+    code, c = proj
+    rid, card = _gap_waits_on_findings_card(c, code, model)
+    assert c.post(f"/api/confirmations/{card}/resolve", json={"choice": "B"}).status_code == 200
+    _work()
+    run = _run(c, code, rid)
+    assert run["status"] == "cancelled" and run["waiting_cards"] == [] and not _drafted_d4(model)
+    assert _finding_statuses(code) == {"draft"}
+    with SessionLocal() as db:
+        assert db.scalar(select(AuditLog).where(AuditLog.project_code == code, AuditLog.action == "run.cancel"))
