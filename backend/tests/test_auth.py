@@ -34,6 +34,7 @@ PROTECTED = [
     ("POST", "/api/expert-bench/cards/1/answer"),
     ("POST", "/api/expert-bench/deid-preview"),
     ("GET", "/api/projects/BANK-A"),
+    ("GET", "/api/projects/BANK-A/panorama"),
     ("POST", "/api/projects"),
     ("GET", "/api/catalog/products"),
     ("GET", "/api/confirmations"),

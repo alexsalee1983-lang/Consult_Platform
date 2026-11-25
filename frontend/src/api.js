@@ -124,6 +124,7 @@ export const api = {
   createProject: (body) => request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   assessment: (code) => request(`/api/projects/${encodeURIComponent(code)}/assessment`),
+  panorama: (code) => request(`/api/projects/${encodeURIComponent(code)}/panorama`),   // 四期 A25① 全景
   confirmations: () => request("/api/confirmations"),
   // 处理确认卡：选一个选项（choice）或写意见（resolution），或两者都有
   resolve: (id, { choice = "", resolution = "" }) =>
