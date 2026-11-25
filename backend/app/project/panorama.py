@@ -29,7 +29,9 @@ LANES = [
     {"id": "manager", "name": "项目经理"},
     {"id": "ai", "name": "AI·平台"},
 ]
-ACTIVE_RUN = {"queued", "running"}
+ACTIVE_RUN = {"queued", "running", "waiting"}   # 最近一次运行在做或停下等补证
+DELIV = {"signed": "ok", "review": "ok", "drafting": "cur"}   # 交付件状态 → 顾问节点（缺省 todo）
+SIGN = {"signed": "ok", "review": "cur"}                       # 交付件状态 → 签署节点（缺省 todo）
 
 
 def _step_stages(chain: list[dict], stage_of: dict[str, str], order: list[str]) -> dict[str, str]:
@@ -47,14 +49,6 @@ def _step_stages(chain: list[dict], stage_of: dict[str, str], order: list[str]) 
             ins = [stage_of[i] for i in s.get("inputs", []) if i in stage_of]
             out[s["key"]] = max(ins, key=order.index) if ins else order[0]
     return out
-
-
-def _deliv_status(status: str) -> str:
-    return {"signed": "ok", "review": "ok", "drafting": "cur"}.get(status, "todo")
-
-
-def _sign_status(status: str) -> str:
-    return {"signed": "ok", "review": "cur"}.get(status, "todo")
 
 
 def build(db: Session, project: Project, user: User) -> dict[str, Any]:
@@ -85,7 +79,7 @@ def build(db: Session, project: Project, user: User) -> dict[str, Any]:
                                 .where(AgentRun.project_id == project.id, AgentRunStep.status == "done")))
     last = db.scalar(select(AgentRun).where(AgentRun.project_id == project.id).order_by(AgentRun.id.desc()).limit(1))
     now_key = ""
-    if last is not None and (last.status in ACTIVE_RUN or last.status == "waiting") and last.step_index < len(chain):
+    if last is not None and last.status in ACTIVE_RUN and last.step_index < len(chain):
         now_key = chain[last.step_index]["key"]
     step_stage = _step_stages(chain, stage_of, order)
 
@@ -135,11 +129,11 @@ def build(db: Session, project: Project, user: User) -> dict[str, Any]:
     for d in dconf:
         dc, st = d["code"], d["stage"]
         s = dstatus[dc]
-        status = "blk" if dc in blocked_deliv and s != "signed" else _deliv_status(s)
+        status = "blk" if dc in blocked_deliv and s != "signed" else DELIV.get(s, "todo")
         add(f"deliv:{dc}", st, "consultant", "deliverable", status, f"{dc} {d['title']}",
             {"not_started": "未开始", "drafting": "起草中", "review": "待签署", "signed": "已签署"}.get(s, s),
             f"{dpath}/{dc}")
-        add(f"sign:{dc}", st, "manager", "signoff", _sign_status(s), f"签署 {dc}", "", f"{dpath}/{dc}")
+        add(f"sign:{dc}", st, "manager", "signoff", SIGN.get(s, "todo"), f"签署 {dc}", "", f"{dpath}/{dc}")
         edges.append({"from": f"deliv:{dc}", "to": f"sign:{dc}"})
         if d.get("client_facing"):
             add(f"client:{dc}", st, "client", "handover", "ok" if s == "signed" else "todo",
