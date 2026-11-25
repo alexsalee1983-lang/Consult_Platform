@@ -33,6 +33,10 @@
     RUNNER_MAX_CALLS 一单（所有会话合计）最多几次模型调用，默认 60：用完立即结束会话、不再换会话，
                     已写入 summary 的部分结论照贴评论（负责人 2026-11-25“2同意”）。0 表示不限。
                     只对输出逐次 usage JSON 行的代理生效；读不到用量时 STATS 行标“未读到逐次用量”
+    RUNNER_TOKEN_BUDGET 一单（所有会话合计）token 预算（输入 + 缓存 + 输出），默认 2000000：每个会话结束后
+                    读整段输出里的汇总 usage（claude 的 result 行、OpenClaw --json 的最终 JSON）累加，超预算
+                    不再换会话、按“额度用完”处理不自动重派。OpenClaw 只给整单汇总用量，逐次上限对它不生效，
+                    靠本项和 --timeout 兜底；模板须带 --json 才读得到（#452 后测试机核对，11-25）。0 表示不限
     RUNNER_TOOL_OUTPUT_MAX 单次工具输出字符上限，默认 4000：写进提示词，并作为 BASH_MAX_OUTPUT_LENGTH
                     传给 claude；模板里可用 {tool_max} 传给其他代理（OpenClaw 无单次工具输出硬上限配置项）
     RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
@@ -76,6 +80,9 @@ SETSID = os.environ.get("RUNNER_SETSID", "1") != "0"
 CTX_MAX = int(os.environ.get("RUNNER_CTX_MAX", "30000"))
 MAX_SESSIONS = int(os.environ.get("RUNNER_MAX_SESSIONS", "3"))
 MAX_CALLS = int(os.environ.get("RUNNER_MAX_CALLS", "60"))
+TOKEN_BUDGET = int(os.environ.get("RUNNER_TOKEN_BUDGET", "2000000"))
+SUM_KEYS = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
+            "cache_read_tokens", "cache_write_tokens", "prompt_tokens", "completion_tokens")
 TOOL_OUTPUT_MAX = int(os.environ.get("RUNNER_TOOL_OUTPUT_MAX", "4000"))
 RUNNER_AGENT_TMPL = os.environ.get("RUNNER_AGENT_CMD") or (
     "claude -p {prompt} --model {model} --dangerously-skip-permissions --output-format stream-json --verbose")
@@ -310,6 +317,56 @@ def context_of(line: str) -> int | None:
     return sum(vals) if vals else None
 
 
+def _usage_total(obj: object) -> int:
+    """JSON 对象里第一个 usage 字典的 token 合计（深度优先）；没有返回 0。"""
+    if isinstance(obj, dict):
+        u = obj.get("usage")
+        if isinstance(u, dict):
+            vals = [u[k] for k in SUM_KEYS if isinstance(u.get(k), int)]
+            if vals:
+                return sum(vals)
+        children = list(obj.values())
+    elif isinstance(obj, list):
+        children = obj
+    else:
+        return 0
+    for v in children:
+        t = _usage_total(v)
+        if t:
+            return t
+    return 0
+
+
+def session_usage(out: Path) -> int:
+    """一个会话输出里的整单汇总用量：claude stream-json 取最后一条 result 行；
+    OpenClaw --json 取最后一段从行首 { 开始、能整体解析的 JSON（可能跨多行）。读不到返回 0。"""
+    try:
+        text = out.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0
+    lines = text.splitlines()
+    for ln in reversed(lines):
+        ln = ln.strip()
+        if ln.startswith("{") and '"result"' in ln:
+            try:
+                obj = json.loads(ln)
+            except ValueError:
+                continue
+            if isinstance(obj, dict) and obj.get("type") == "result":
+                return _usage_total(obj)
+    for i in range(len(lines) - 1, -1, -1):
+        if not lines[i].startswith("{"):
+            continue
+        try:
+            obj, _ = json.JSONDecoder().raw_decode("\n".join(lines[i:]))
+        except ValueError:
+            continue
+        t = _usage_total(obj)
+        if t:
+            return t
+    return 0
+
+
 def agent_env(base: dict) -> dict:
     return {**base, "BASH_MAX_OUTPUT_LENGTH": str(TOOL_OUTPUT_MAX)}
 
@@ -357,7 +414,8 @@ def run_agent(cmd: list[str], cwd: str, env: dict, out: Path, cap: int, max_call
 
 def agent_sessions(env: str, pr: int, head: str, logdir: Path, prompt: str) -> dict:
     """首个会话超限且 PR 仍待测试就换新会话接着测，最多 MAX_SESSIONS 个；用量写 usage.json。"""
-    total = {"sessions": 0, "calls": 0, "max_ctx": 0, "avg_ctx": 0, "capped": False, "call_capped": False}
+    total = {"sessions": 0, "calls": 0, "max_ctx": 0, "avg_ctx": 0, "capped": False, "call_capped": False,
+             "tokens": 0, "token_capped": False}
     ctx_sum = 0
     for n in range(1, MAX_SESSIONS + 1):
         text = prompt if n == 1 else continue_prompt(env, pr, head, logdir, n)
@@ -367,17 +425,21 @@ def agent_sessions(env: str, pr: int, head: str, logdir: Path, prompt: str) -> d
         sub = {"prompt": text, "prompt_file": str(pfile), "session": sid, "model": MODEL, "tool_max": TOOL_OUTPUT_MAX}
         cmd = [part.format(**sub) for part in shlex.split(RUNNER_AGENT_TMPL)]
         left = MAX_CALLS - total["calls"] if MAX_CALLS else 0
-        st = run_agent(cmd, ENVS[env]["dir"], agent_env(dict(os.environ)), logdir / f"agent{n}.jsonl", CTX_MAX,
-                       max_calls=left)
+        out = logdir / f"agent{n}.jsonl"
+        st = run_agent(cmd, ENVS[env]["dir"], agent_env(dict(os.environ)), out, CTX_MAX, max_calls=left)
+        total["tokens"] += session_usage(out)
         total["sessions"] = n
         total["calls"] += st["calls"]
         total["max_ctx"] = max(total["max_ctx"], st["max_ctx"])
         ctx_sum += st["avg_ctx"] * st["calls"]
         total["capped"] = st["capped"]
         total["call_capped"] = bool(st.get("call_capped"))
+        if TOKEN_BUDGET and total["tokens"] >= TOKEN_BUDGET:
+            total["token_capped"] = total["call_capped"] = True
         print(f"会话 {n}：调用 {st['calls']} 次，单次平均上下文 {st['avg_ctx']}，最大 {st['max_ctx']}"
               + ("，超限已结束" if st["capped"] else "")
-              + (f"，一单调用满 {MAX_CALLS} 次已结束" if total["call_capped"] else ""), flush=True)
+              + (f"，一单 token 预算 {TOKEN_BUDGET} 已用完" if total["token_capped"]
+                 else f"，一单调用满 {MAX_CALLS} 次已结束" if total["call_capped"] else ""), flush=True)
         if total["call_capped"] or (MAX_CALLS and total["calls"] >= MAX_CALLS):
             break
         if not st["capped"] or "待测试" not in pr_labels(pr):
@@ -385,7 +447,9 @@ def agent_sessions(env: str, pr: int, head: str, logdir: Path, prompt: str) -> d
     total["avg_ctx"] = ctx_sum // total["calls"] if total["calls"] else 0
     (logdir / "usage.json").write_text(json.dumps(total, ensure_ascii=False), encoding="utf-8")
     print(f"STATS: 会话 {total['sessions']} 个，调用 {total['calls']} 次，单次平均上下文 {total['avg_ctx']}，"
-          f"最大 {total['max_ctx']}" + ("（未读到逐次用量，上下文与调用次数上限未生效）" if not total["calls"] else ""),
+          f"最大 {total['max_ctx']}，整单用量 {total['tokens']} token"
+          + ((f"（未读到逐次用量，逐次上限未生效，按整单预算 {TOKEN_BUDGET or '不限'} 兜底）" if total["tokens"]
+              else "（未读到逐次用量，上下文与调用次数上限未生效）") if not total["calls"] else ""),
           flush=True)
     return total
 
@@ -510,7 +574,7 @@ def finish(st: dict) -> None:
         if tail.startswith("RESULT: 调用额度用完"):
             # 额度用完不自动重派本 HEAD（否则每轮 cron 再烧一遍），人工看部分结论后清 state.json 的 fails 再派
             st["fails"][key] = MAX_FAILS
-            notify(f"#{pr} 调用额度 {MAX_CALLS} 次用完（环境 {env}），部分结论已贴评论，标签留 待测试，不自动重派")
+            notify(f"#{pr} 调用额度用完（环境 {env}）{('：' + reason) if reason else ''}，标签留 待测试，不自动重派")
         elif tail.startswith("RESULT: 环境问题未测"):
             # 环境问题不算 PR 缺陷：不重试本 HEAD，等人工修好环境后清 state.json 的 fails 再派
             st["fails"][key] = MAX_FAILS
@@ -620,7 +684,8 @@ def run_one(env: str, pr: int, head: str, logdir: Path) -> int:
     if salvage(pr, summary, before):
         print("会话未换标签，已把 summary 部分结论贴评论（未改标签）", flush=True)
     if total.get("call_capped") and "待测试" in pr_labels(pr):
-        print(f"RESULT: 调用额度用完 —— 一单 {MAX_CALLS} 次模型调用已用完，部分结论已贴评论，标签留 待测试", flush=True)
+        what = f"token 预算 {TOKEN_BUDGET}" if total.get("token_capped") else f"{MAX_CALLS} 次模型调用"
+        print(f"RESULT: 调用额度用完 —— 一单 {what} 已用完，部分结论已贴评论，标签留 待测试", flush=True)
     return 0
 
 
