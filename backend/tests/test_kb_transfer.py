@@ -61,7 +61,8 @@ def test_export_verify_and_import(tmp_path, monkeypatch):
         ids = {r.doc_id} | {i.doc_id for i in db.scalars(select(KbItem)) if i.versions
                             and i.versions[-1].ref_document == law}
     orig = transfer.exportable
-    monkeypatch.setattr(transfer, "exportable", lambda db: [(i, v) for i, v in orig(db) if i.doc_id in ids])
+    monkeypatch.setattr(transfer, "exportable", lambda db, include_company=False: [
+        (i, v) for i, v in orig(db, include_company) if i.doc_id in ids])
 
     out = tmp_path / "out"
     with SessionLocal() as db:
@@ -122,3 +123,61 @@ def test_rule_failures_metadata():
                                                    "decision": "approve"}]})
     assert not transfer.reviews_complete({"reviews": [{"reviewer": "a", "review_role": "content",
                                                        "decision": "reject"}]})
+
+
+def _published_pair(tmp_path, op):
+    """发布一条公开来源的依据原文，再另造一条公司做法类（来源改为专家、已去标识）；返回两者 doc_id 和公司类 doc_id。"""
+    manifest, src, titles = _batch(tmp_path, [("ok.txt", LAW, {})])
+    with SessionLocal() as db:
+        autopublish.run(db, db.merge(op), manifest, src)
+        pubs = [(i, i.versions[-1]) for i in db.scalars(select(KbItem)) if i.versions and i.current_version_id
+                and i.versions[-1].status == "published" and i.versions[-1].source_type == "public"
+                and i.versions[-1].deid_status == "not_needed" and i.doc_type == "SRC"]
+        item = pubs[-1][0]
+        return item.doc_id
+
+
+def test_export_include_company(tmp_path, monkeypatch):
+    op = _user("knowledge_expert")
+    doc_id = _published_pair(tmp_path, op)
+    with SessionLocal() as db:
+        item = db.scalar(select(KbItem).where(KbItem.doc_id == doc_id))
+        v = db.get(type(item.versions[-1]), item.current_version_id)
+        v.source_type, v.deid_status, v.source_detail = "expert", "passed", "公司做法：示范"
+        db.commit()
+        assert doc_id not in {i.doc_id for i, _ in transfer.exportable(db)}
+        assert doc_id in {i.doc_id for i, _ in transfer.exportable(db, include_company=True)}
+        orig = transfer.exportable
+        monkeypatch.setattr(transfer, "exportable", lambda d, include_company=False: [
+            (i, x) for i, x in orig(d, include_company) if i.doc_id == doc_id])
+        out0, out1 = tmp_path / "o0", tmp_path / "o1"
+        assert transfer.export(db, db.merge(op), out0).count == 0
+        rep = transfer.export(db, db.merge(op), out1, include_company=True)
+        assert rep.count == 1
+        x = json.loads((out1 / transfer.MANIFEST).read_text(encoding="utf-8"))["entries"][0]
+        assert x["doc_id"] == doc_id and x["sha256"] and x["reviews"]
+        manifest, entries = transfer.load(out1, rep.manifest_sha256)       # 现有导入校验照常通过
+        assert len(entries) == 1
+        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.export").order_by(AuditLog.id.desc())).first()
+        assert "公司做法" not in str(log.detail)
+        item.retired = True
+        db.commit()
+
+
+def test_export_include_company_refused_in_prod(tmp_path, monkeypatch):
+    op = _user("knowledge_expert")
+    monkeypatch.setattr(get_settings(), "app_env", "prod")
+    with SessionLocal() as db:
+        with pytest.raises(transfer.TransferError, match="生产环境禁止"):
+            transfer.export(db, db.merge(op), tmp_path / "o", include_company=True)
+    assert not (tmp_path / "o").exists()
+
+
+def test_cli_kb_export_include_company_prod_exit(tmp_path, monkeypatch, capsys):
+    from app import cli
+
+    op = _user("knowledge_expert")
+    monkeypatch.setattr(get_settings(), "app_env", "prod")
+    code = cli.main(["kb-export", str(tmp_path / "o"), "--as", op.username, "--include-company"])
+    assert code == 1
+    assert "生产环境禁止" in capsys.readouterr().err
