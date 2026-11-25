@@ -400,7 +400,8 @@ class KbGap(KbBase):
     due: Mapped[date | None] = mapped_column(Date, nullable=True)
     authority: Mapped[int] = mapped_column(Integer, default=3)
     status: Mapped[str] = mapped_column(String(12), default="open", index=True)
-    plan: Mapped[str] = mapped_column(String(12), default="")                   # direct / confirm / deferred / waiting
+    plan: Mapped[str] = mapped_column(String(12), default="")  # direct / confirm / deferred / waiting / confirmed / manual / uploaded
+    manual_reason: Mapped[str] = mapped_column(String(16), default="")          # 需人工下载的原因类别（k0022）
     score: Mapped[float] = mapped_column(Float, default=0.0)
     planned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     close_reason: Mapped[str] = mapped_column(String(16), default="")

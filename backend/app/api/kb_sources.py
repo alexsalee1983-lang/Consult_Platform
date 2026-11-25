@@ -7,19 +7,21 @@ POST  /api/kb/sources/{code}/status      状态流转 {to, reason}；转正式�
 GET   /api/kb/sources/{code}/events      状态变更记录
 GET   /api/kb/sources/confirm-queue      知识审批队列“来源确认”类（B25②，按主机分组）
 POST  /api/kb/sources/confirm-queue/decide  批量确认 / 不做 {gap_ids, decision, source?}；只限知识管理员
+GET   /api/kb/sources/manual-queue       需人工下载的缺口（四期 B25）
+POST  /api/kb/sources/manual-queue/{gap_id}/upload  上传原件 multipart {file, title, url?}，后台核对后走自动核验发布
 """
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import require_business
-from ..kb import gap_pool
+from ..kb import gap_manual, gap_pool
 from ..kb import review as rv
 from ..kb import source_registry as reg
 from ..models import KbSource, User
@@ -110,6 +112,21 @@ def confirm_decide(body: DecideIn, db: Session = Depends(get_db),
     _staff(db, user)
     src = body.source.model_dump() if body.source else None
     return _run(gap_pool.decide_confirm, db, user, body.gap_ids, body.decision, src)
+
+
+@router.get("/manual-queue")
+def manual_queue(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    _staff(db, user)
+    return gap_pool.manual_queue(db)
+
+
+@router.post("/manual-queue/{gap_id}/upload", status_code=202)
+def manual_upload(gap_id: int, file: UploadFile = File(...), title: str = Form("", max_length=200),
+                  url: str = Form("", max_length=500), db: Session = Depends(get_db),
+                  user: User = Depends(current_user)) -> dict[str, Any]:
+    _staff(db, user)
+    data = file.file.read(gap_manual.MAX_BYTES + 1)   # 同步端点在线程池执行
+    return _run(gap_manual.upload, db, user, gap_id, file.filename or "", data, title, url)
 
 
 @router.get("", response_model=list[SourceOut])

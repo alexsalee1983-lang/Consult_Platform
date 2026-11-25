@@ -298,6 +298,14 @@ export const api = {
   kbSamples: () => request("/api/kb/samples"),
   kbConfirmQueue: () => request("/api/kb/sources/confirm-queue"),
   kbConfirmDecide: (gapIds, decision, source = null) => request("/api/kb/sources/confirm-queue/decide", { method: "POST", body: JSON.stringify({ gap_ids: gapIds, decision, ...(source ? { source } : {}) }) }),
+  kbManualQueue: () => request("/api/kb/sources/manual-queue"),
+  kbManualUpload: (gapId, file, title, url = "") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("title", title);
+    if (url) fd.append("url", url);
+    return request(`/api/kb/sources/manual-queue/${encodeURIComponent(gapId)}/upload`, { method: "POST", body: fd });
+  },
   kbSample: (versionId, decision, comment = "") => request(`/api/kb/versions/${versionId}/sample`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),

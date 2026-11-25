@@ -952,7 +952,8 @@ def kb_acquire_import(args: argparse.Namespace) -> int:
     if not report.ok:
         print("回传批次核对未通过，整批不入库：" + "；".join(report.problems[:20]), file=sys.stderr)
         return 2
-    print(f"回传批次核对通过：{report.count} 个文件，关闭缺口 {closed} 个")
+    print(f"回传批次核对通过：{report.count} 个文件，关闭缺口 {closed} 个"
+          + (f"，{report.manual} 个取不到的转需人工下载" if report.manual else ""))
     if args.auto_manifest:
         import tempfile
 
@@ -972,6 +973,20 @@ def kb_acquire_import(args: argparse.Namespace) -> int:
         return 1
     return kb_source_publish(argparse.Namespace(manifest=args.manifest, dir=str(batch), as_user=args.as_user,
                                                 report=args.report))
+
+
+def kb_gap_manual(args: argparse.Namespace) -> int:
+    """登记“需人工下载”缺口（四期 B25）：资料仓 backlog 里自动取不到的条目，进知识审批页“需人工下载”清单。"""
+    from .kb import acquisition, gap_pool
+
+    with SessionLocal() as db:
+        try:
+            g = gap_pool.mark_manual(db, args.key.strip(), args.reason, create=True, event_ref=args.ref, actor="cli")
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+    print(f"缺口 {g.id} 已转需人工下载（{acquisition.MANUAL_REASONS[args.reason]}）")
+    return 0
 
 
 def kb_source_publish(args: argparse.Namespace) -> int:
@@ -1364,6 +1379,12 @@ def main(argv: list[str] | None = None) -> int:
     kai.add_argument("--as", dest="as_user", default="", help="导入人（知识专家或知识管理员）")
     kai.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     kai.set_defaults(func=kb_acquire_import)
+    kgm = sub.add_parser("kb-gap-manual", help="登记需人工下载的缺口（网址或编号），进知识审批页“需人工下载”清单")
+    kgm.add_argument("key", help="官方网址，或没有网址时用“国家 法规名称”")
+    kgm.add_argument("--reason", required=True, choices=("blocked", "dns", "timeout", "no_file", "not_found", "other"),
+                     help="原因类别")
+    kgm.add_argument("--ref", default="", help="事件编号（如 BACKLOG-12），只许编号字符")
+    kgm.set_defaults(func=kb_gap_manual)
     ksr = sub.add_parser("kb-source-registry", help="导出来源登记表里试用、正式的来源（CSV，供采集机按表抓取）")
     ksr.add_argument("--json", action="store_true", help="输出 JSON")
     ksr.set_defaults(func=kb_source_registry)
