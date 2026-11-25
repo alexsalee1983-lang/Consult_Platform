@@ -195,7 +195,9 @@ def test_conflict_card_lists_existing_item_and_needs_answer():
         card = _card(db, ex, vid)
         c = card["conflict"]
         assert c is not None and c["reason"].endswith("交接步骤矛盾")
-        assert [x["doc_id"] for x in c["items"]] == [old] and c["items"][0]["title"].startswith("示范条目")
+        # 理由里点名的条目排第一；PostgreSQL 上还会补同产品相近条目（库里别的用例留下的），不按精确列表断言
+        ids = [x["doc_id"] for x in c["items"]]
+        assert ids[0] == old and len(ids) == len(set(ids)) and c["items"][0]["title"].startswith("示范条目")
         q = next(q for q in card["questions"] if q["id"] == "conflict")
         assert q["kind"] == "conflict" and set(q["options"]) == {"both", "new", "old", "unsure"}
         try:
@@ -231,7 +233,7 @@ def test_conflict_choices_map_to_decisions():
         r = eb.answer(db, ex, d, [{"id": "keep", "choice": "no"}, {"id": "conflict", "choice": "unsure"}])
         assert r["outcome"] == "reject"                                       # 不收就退回，不看冲突题
         r = eb.answer(db, ex, c, [{"id": "keep", "choice": "yes"}, {"id": "conflict", "choice": "new"}])
-        assert r["outcome"] == "approve" and r["recheck"] == [old]
+        assert r["outcome"] == "approve" and r["recheck"][:1] == [old]     # PostgreSQL 上另含卡上列出的相近条目
         live = db.scalar(select(KbVersion).join(KbVersion.item).where(KbVersion.status == "published",
                                                                        KbVersion.item.has(doc_id=old)))
         assert live.recheck_state == "pending"
@@ -268,8 +270,12 @@ def test_answer_with_identifiers_needs_preview_ack():
             db.rollback()
         out = eb.answer(db, ex, vid, [{"id": "keep", "choice": "yes"}], fill=fill, deid_ack=True)
         assert out["outcome"] == "modify"
-        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer")).all()[-1]
-        assert "示范科技" not in log.detail and '"deid_hits": 1' in log.detail
+        doc_id = db.get(KbVersion, vid).item.doc_id
+        logs = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer")
+                          .order_by(AuditLog.id)).all()          # PostgreSQL 不排序时次序不定，按编号取本条
+        log = [x for x in logs if f'"doc_id": "{doc_id}"' in x.detail][-1]
+        assert '"deid_hits": 1' in log.detail and '"deid_ack": true' in log.detail
+        assert all("示范科技" not in x.detail for x in logs)    # 红线 4：所有审计都不记原文
 
 
 def test_api_deid_preview():
