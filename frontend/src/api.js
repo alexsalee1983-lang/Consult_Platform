@@ -294,7 +294,8 @@ export const api = {
   kbSubmit: (id) => request(`/api/kb/versions/${id}/submit`, { method: "POST" }),
   kbReview: (id, role, decision, comment) =>
     request(`/api/kb/versions/${id}/review`, { method: "POST", body: JSON.stringify({ role, decision, comment }) }),
-  kbQueue: () => request("/api/kb/review-queue"),
+  kbQueue: (p = {}) => request(`/api/kb/review-queue?${new URLSearchParams(p)}`),
+  kbRecheckQueue: (p = {}) => request(`/api/kb/recheck-queue?${new URLSearchParams(p)}`),
   kbSamples: () => request("/api/kb/samples"),
   kbConfirmQueue: () => request("/api/kb/sources/confirm-queue"),
   kbConfirmDecide: (gapIds, decision, source = null) => request("/api/kb/sources/confirm-queue/decide", { method: "POST", body: JSON.stringify({ gap_ids: gapIds, decision, ...(source ? { source } : {}) }) }),

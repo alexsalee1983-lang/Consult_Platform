@@ -206,6 +206,7 @@ MATRIX = [
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/readiness", None),                (403, 403, 403, 403, 403)),   # F2②：知识专家、知识管理员、项目负责人
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
+    (("GET", "/api/kb/recheck-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/practice-queue", None),           (403, 403, 403, 403, 403)),   # 公司做法确认队列（三期 B17），同上
     (("GET", "/api/kb/practice-queue/stats", None),     (403, 403, 403, 403, 403)),
     (("POST", "/api/kb/practice-queue/decide", {"items": [{"version_id": 999999, "decision": "adopt"}]}), (403, 403, 403, 403, 403)),

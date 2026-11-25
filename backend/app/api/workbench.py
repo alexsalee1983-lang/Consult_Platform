@@ -81,7 +81,7 @@ def workbench(db: Session = Depends(get_db), user: User = Depends(current_user))
             for v in db.scalars(select(KbVersion).where(KbVersion.status == "published",
                                                         KbVersion.single_review.is_(True))
                                 .options(selectinload(KbVersion.item))):
-                todos.append(Todo(kind="recheck", title=f"{v.item.doc_id} v{v.version} {v.title}", link="/kb/review",
+                todos.append(Todo(kind="recheck", title=f"{v.item.doc_id} v{v.version} {v.title}", link="/kb/review?tab=recheck",
                                   blocked="你是作者，需另一位知识专家复审" if me in rv._authors(v) else ""))
     if KNOWLEDGE_ADMIN in roles:
         for u in db.scalars(select(KbUpload).where(KbUpload.status == "deid_pending").order_by(KbUpload.id)):

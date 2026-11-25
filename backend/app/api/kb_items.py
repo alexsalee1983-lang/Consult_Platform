@@ -11,7 +11,8 @@ GET  /api/kb/versions/{id}               版本详情：正文、审核记录、
 PATCH /api/kb/versions/{id}              修改草稿
 POST /api/kb/versions/{id}/submit        提交待审
 POST /api/kb/versions/{id}/review        审核：role=content|compliance，decision=approve|reject
-GET  /api/kb/review-queue                待审版本（知识专家、知识管理员）
+GET  /api/kb/review-queue?limit=&offset=   待审版本，轻量列表 {total, items}，详情走 GET /versions/{id}（知识专家、知识管理员）
+GET  /api/kb/recheck-queue?limit=&offset=  待复审（单人发布、待补复审）的现行版本，同上；复审操作用 POST /items/{doc_id}/reconfirm
 GET  /api/kb/practice-queue              公司做法确认队列（三期 B17），按章节就绪度排（知识专家、知识管理员）
 POST /api/kb/practice-queue/decide       采纳 / 修改 / 驳回，可批量（只有知识专家能拍板）
 GET  /api/kb/practice-queue/stats        确认耗时与修改幅度汇总（知识专家、知识管理员）
@@ -31,8 +32,8 @@ from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session, selectinload
 
 from ..core.auth import current_user
 from ..core.db import get_db
@@ -147,6 +148,18 @@ class VersionBrief(BaseModel):
     recheck_reason: str = ""
 
 
+class VersionRow(VersionBrief):
+    """列表用的轻量行：不含正文、差异、相似条目、引用核对。"""
+    doc_id: str
+
+
+class VersionPage(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    items: list[VersionRow]
+
+
 class ReviewOut(BaseModel):
     reviewer: str
     review_role: str
@@ -239,6 +252,16 @@ def _version(db: Session, version_id: int, user: User) -> KbVersion:
     if v is None or not rv.can_view(db, user, v.item, v):
         raise HTTPException(404, NOT_FOUND)
     return v
+
+
+def _row(v: KbVersion) -> VersionRow:
+    return VersionRow(**_brief(v).model_dump(), doc_id=v.item.doc_id)
+
+
+def _page(db: Session, stmt, limit: int, offset: int) -> VersionPage:
+    total = db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery())) or 0
+    rows = db.scalars(stmt.options(selectinload(KbVersion.item)).limit(limit).offset(offset))
+    return VersionPage(total=total, limit=limit, offset=offset, items=[_row(v) for v in rows])
 
 
 def _version_out(db: Session, v: KbVersion, user: User) -> VersionOut:
@@ -378,11 +401,21 @@ def _knowledge_only(db: Session, user: User) -> None:
         raise HTTPException(403, "只有知识专家、知识管理员能查看")
 
 
-@router.get("/review-queue", response_model=list[VersionOut])
-def review_queue(db: Session = Depends(get_db), user: User = Depends(current_user)):
+@router.get("/review-queue", response_model=VersionPage)
+def review_queue(limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+                 db: Session = Depends(get_db), user: User = Depends(current_user)):
     _knowledge_only(db, user)
-    rows = db.scalars(select(KbVersion).where(KbVersion.status == "in_review").order_by(KbVersion.submitted_at))
-    return [_version_out(db, v, user) for v in rows]
+    return _page(db, select(KbVersion).where(KbVersion.status == "in_review").order_by(KbVersion.submitted_at, KbVersion.id),
+                 limit, offset)
+
+
+@router.get("/recheck-queue", response_model=VersionPage)
+def recheck_queue(limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+                  db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """单人发布、待另一位知识专家补复审的已发布版本（工作台“补复审”待办的落点）。"""
+    _knowledge_only(db, user)
+    return _page(db, select(KbVersion).where(KbVersion.status == "published", KbVersion.single_review.is_(True))
+                 .order_by(KbVersion.id), limit, offset)
 
 
 class PracticeDecisionIn(BaseModel):
@@ -478,16 +511,17 @@ def meta_options() -> dict:
             "version_statuses": m.VERSION_STATUSES}
 
 
-@router.get("/versions", response_model=list[VersionOut])
-def list_versions(status: str = Query("", max_length=16), mine: bool = False, db: Session = Depends(get_db),
-                  user: User = Depends(current_user)):
+@router.get("/versions", response_model=list[VersionRow])
+def list_versions(status: str = Query("", max_length=16), mine: bool = False,
+                  limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+                  db: Session = Depends(get_db), user: User = Depends(current_user)):
     _knowledge_only(db, user)
-    stmt = select(KbVersion).order_by(KbVersion.id.desc()).limit(200)
+    stmt = select(KbVersion).order_by(KbVersion.id.desc())
     if status:
         stmt = stmt.where(KbVersion.status == status)
     if mine:
         stmt = stmt.where(KbVersion.created_by == user.username)
-    return [_version_out(db, v, user) for v in db.scalars(stmt)]
+    return _page(db, stmt, limit, offset).items
 
 
 @router.get("/stats")
