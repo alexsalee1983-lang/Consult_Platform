@@ -110,6 +110,8 @@ MATRIX = [
      (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/summary-cards/S-01/withdraw", None), (404, 404, 403, 403, 403)),
     # 调研助手（四期 E2①）：成员看题目、包、确认单 200；不存在的包 / 事实 404；GRID-B 非成员 404
+    (("GET", "/api/projects/BANK-A/automation", None), (200, 404, 403, 403, 403)),   # 四期 F5
+    (("GET", "/api/projects/GRID-B/automation", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/survey/questions", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/survey/packs", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/survey/facts", None), (200, 404, 403, 403, 403)),
