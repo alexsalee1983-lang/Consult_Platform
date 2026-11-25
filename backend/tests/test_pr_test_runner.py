@@ -91,7 +91,7 @@ def test_finalize_summary_fills_manual_row() -> None:
 def test_prompt_formats_with_all_fields() -> None:
     txt = R.PROMPT.format(pr=1, env="A", dir="/d", web="8180", head="abc1234", logdir="/l", verdict="不通过",
                           why="x", up="已 down", howto="h", recheck="", failed="", gh="gh",
-                          ctx_max=30000, tool_max=4000)
+                          ctx_max=30000, tool_max=4000, max_calls=60)
     assert "RESULT:" in txt
 
 
@@ -268,7 +268,7 @@ def test_run_agent_under_cap_runs_to_end(tmp_path: Path) -> None:
                       encoding="utf-8")
     import sys as _sys
     stats = R.run_agent([_sys.executable, str(script)], str(tmp_path), {}, tmp_path / "a.jsonl", 30000)
-    assert stats == {"calls": 2, "max_ctx": 3000, "avg_ctx": 2000, "capped": False}
+    assert stats == {"calls": 2, "max_ctx": 3000, "avg_ctx": 2000, "capped": False, "call_capped": False}
 
 
 def test_agent_env_caps_tool_output(monkeypatch) -> None:
@@ -287,7 +287,7 @@ def test_prompt_states_caps_and_continue_prompt_is_short(tmp_path: Path) -> None
 def test_sessions_rotate_until_label_changes(tmp_path: Path, monkeypatch) -> None:
     calls: list[str] = []
 
-    def fake_run(cmd: list[str], cwd: str, env: dict, out: Path, cap: int) -> dict:
+    def fake_run(cmd: list[str], cwd: str, env: dict, out: Path, cap: int, max_calls: int = 0) -> dict:
         calls.append(cmd[-1])
         return {"calls": 4, "max_ctx": 31000, "avg_ctx": 20000, "capped": True}
 
@@ -302,7 +302,53 @@ def test_sessions_rotate_until_label_changes(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_sessions_stop_at_max(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(R, "run_agent", lambda *a: {"calls": 1, "max_ctx": 30001, "avg_ctx": 30001, "capped": True})
+    monkeypatch.setattr(R, "run_agent", lambda *a, **k: {"calls": 1, "max_ctx": 30001, "avg_ctx": 30001, "capped": True})
     monkeypatch.setattr(R, "pr_labels", lambda pr: ["待测试"])
     monkeypatch.setattr(R, "MAX_SESSIONS", 3)
     assert R.agent_sessions("A", 7, "abcdef123", tmp_path, "p")["sessions"] == 3
+
+
+def test_run_agent_stops_at_call_cap(tmp_path: Path) -> None:
+    out = tmp_path / "agent.jsonl"
+    stats = R.run_agent(_fake_agent(tmp_path, [1000] * 10), str(tmp_path), {}, out, 30000, max_calls=4)
+    assert stats["calls"] == 4 and stats["call_capped"] is True and stats["capped"] is False
+
+
+def test_sessions_share_one_call_budget_and_stop_when_spent(tmp_path: Path, monkeypatch) -> None:
+    budgets: list[int] = []
+
+    def fake_run(cmd: list[str], cwd: str, env: dict, out: Path, cap: int, max_calls: int = 0) -> dict:
+        budgets.append(max_calls)
+        used = 50 if len(budgets) == 1 else max_calls
+        return {"calls": used, "max_ctx": 31000, "avg_ctx": 20000, "capped": len(budgets) == 1,
+                "call_capped": len(budgets) > 1}
+
+    monkeypatch.setattr(R, "run_agent", fake_run)
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["待测试"])
+    monkeypatch.setattr(R, "MAX_CALLS", 60)
+    stats = R.agent_sessions("A", 7, "abcdef123", tmp_path, "p")
+    assert budgets == [60, 10]  # 第 2 个会话只拿剩余额度，额度用完不再开第 3 个
+    assert stats["calls"] == 60 and stats["call_capped"] is True
+
+
+def test_stats_flags_agent_without_usage_lines(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(R, "run_agent", lambda *a, **k: {"calls": 0, "max_ctx": 0, "avg_ctx": 0,
+                                                          "capped": False, "call_capped": False})
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["测试通过"])
+    R.agent_sessions("A", 7, "abcdef123", tmp_path, "p")
+    assert "未读到逐次用量" in capsys.readouterr().out
+
+
+def test_finish_does_not_redispatch_after_call_budget_spent(tmp_path: Path, monkeypatch) -> None:
+    logf = tmp_path / "job.log"
+    logf.write_text("会话 1：调用 60 次\nRESULT: 调用额度用完 —— 一单 60 次模型调用已用完\n", encoding="utf-8")
+    sent: list[str] = []
+    monkeypatch.setattr(R, "alive", lambda pid: False)
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["待测试"])
+    monkeypatch.setattr(R, "notify", sent.append)
+    monkeypatch.setattr(R, "down", lambda env, pr: None)
+    monkeypatch.setattr(R, "orphan_tmux", lambda pr: "")
+    st = {"running": {"A": {"pid": 1, "pr": 7, "head": "abc", "start": 0, "log": str(logf)}}, "fails": {}, "held": {}}
+    R.finish(st)
+    assert st["fails"]["7@abc"] == R.MAX_FAILS and "A" not in st["running"]
+    assert sent and "额度" in sent[0]
