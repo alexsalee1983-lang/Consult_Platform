@@ -1,0 +1,375 @@
+# 题库样例（四期 C21）：每个控制域取一题，供格式自检与开发用。正文在资料仓 Consult_Knowledge/question_bank/。
+product: NSG
+version: v1
+status: draft
+expert_review: pending
+note: 公开方法版；评分锚点为内部使用，不进客户调研包与自评包；对客只说“提前了解情况”。
+domains:
+- 战略与治理架构
+- 组织与人员
+- 合规与风险管理
+- 安全技术体系
+- 安全运营
+- 数据安全
+- 供应链与第三方
+- 投入与考核
+catalog: v0
+scope: sample
+questions:
+- id: NSG-GOV-001
+  product: NSG
+  domain: 战略与治理架构
+  control_ids:
+  - NSG.GOV.01
+  checkpoints:
+  - NSG.GOV.01.b
+  kind: closed
+  stem: 网络安全规划有没有分年度的目标和路线图？
+  options:
+  - key: A
+    level: 1
+    text: 没有网络安全规划
+  - key: B
+    level: 2
+    text: 有规划，没有分年度目标
+  - key: C
+    level: 3
+    text: 有分年度目标，路线图不完整
+  - key: D
+    level: 4
+    text: 有分年度目标和路线图，并按年度复盘
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有网络安全规划
+  - level: 2
+    state: 有规划，没有分年度目标
+  - level: 3
+    state: 有分年度目标，路线图不完整
+  - level: 4
+    state: 有分年度目标和路线图，并按年度复盘
+  followups:
+  - 规划与业务战略如何衔接？
+  depth: &id001
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 管理层
+  - 安全负责人
+  prefill:
+  - source: policy_docs
+  channel: prefill
+  problem: false
+- id: NSG-ORG-001
+  product: NSG
+  domain: 组织与人员
+  control_ids:
+  - NSG.ORG.01
+  checkpoints:
+  - NSG.ORG.01.a
+  kind: closed
+  stem: 是否设有专门的网络安全管理机构和负责人？
+  options:
+  - key: A
+    level: 1
+    text: 没有专门机构，也没有指定负责人
+  - key: B
+    level: 2
+    text: 有指定负责人，没有专门机构
+  - key: C
+    level: 3
+    text: 有专门机构，人员配置不足
+  - key: D
+    level: 4
+    text: 有专门机构和负责人，人员按编制到位
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有专门机构，也没有指定负责人
+  - level: 2
+    state: 有指定负责人，没有专门机构
+  - level: 3
+    state: 有专门机构，人员配置不足
+  - level: 4
+    state: 有专门机构和负责人，人员按编制到位
+  followups:
+  - 负责人向谁汇报？
+  depth: *id001
+  respondent_roles:
+  - 管理层
+  - 人力行政
+  prefill:
+  - source: org_chart
+  channel: prefill
+  problem: false
+- id: NSG-CMP-001
+  product: NSG
+  domain: 合规与风险管理
+  control_ids:
+  - NSG.CMP.01
+  checkpoints:
+  - NSG.CMP.01.a
+  kind: closed
+  stem: 适用的法律法规和监管要求是否已梳理成清单？
+  options:
+  - key: A
+    level: 1
+    text: 没有梳理
+  - key: B
+    level: 2
+    text: 零散掌握，没有清单
+  - key: C
+    level: 3
+    text: 有清单，没有定期更新
+  - key: D
+    level: 4
+    text: 有清单并跟踪变化、落实到责任部门
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有梳理
+  - level: 2
+    state: 零散掌握，没有清单
+  - level: 3
+    state: 有清单，没有定期更新
+  - level: 4
+    state: 有清单并跟踪变化、落实到责任部门
+  followups:
+  - 清单由哪个部门维护？
+  depth: *id001
+  respondent_roles:
+  - 合规风控
+  - 法务
+  prefill:
+  - source: policy_docs
+  channel: self
+  problem: false
+- id: NSG-TEC-001
+  product: NSG
+  domain: 安全技术体系
+  control_ids:
+  - NSG.TEC.03
+  checkpoints:
+  - NSG.TEC.03.a
+  kind: closed
+  stem: 新建信息系统时，安全措施是否同步规划并经过评审？
+  options:
+  - key: A
+    level: 1
+    text: 没有同步规划安全措施
+  - key: B
+    level: 2
+    text: 部分项目考虑了安全，没有评审
+  - key: C
+    level: 3
+    text: 有同步规划要求，评审执行不稳定
+  - key: D
+    level: 4
+    text: 同步规划安全措施并经安全评审，有记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有同步规划安全措施
+  - level: 2
+    state: 部分项目考虑了安全，没有评审
+  - level: 3
+    state: 有同步规划要求，评审执行不稳定
+  - level: 4
+    state: 同步规划安全措施并经安全评审，有记录
+  followups:
+  - 安全评审由谁组织？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 安全负责人
+  prefill:
+  - source: none
+  channel: onsite
+  problem: false
+- id: NSG-OPS-001
+  product: NSG
+  domain: 安全运营
+  control_ids:
+  - NSG.OPS.01
+  checkpoints:
+  - NSG.OPS.01.b
+  kind: closed
+  stem: 安全事件应急预案多久演练一次？
+  options:
+  - key: A
+    level: 1
+    text: 没有应急预案
+  - key: B
+    level: 2
+    text: 有预案，没有演练
+  - key: C
+    level: 3
+    text: 演练过，没有固定频次
+  - key: D
+    level: 4
+    text: 按约定频次演练并有总结和改进
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有应急预案
+  - level: 2
+    state: 有预案，没有演练
+  - level: 3
+    state: 演练过，没有固定频次
+  - level: 4
+    state: 按约定频次演练并有总结和改进
+  followups:
+  - 最近一次演练是什么场景？
+  depth: *id001
+  respondent_roles:
+  - 安全负责人
+  - 运营值班
+  prefill:
+  - source: incident_record
+  channel: prefill
+  problem: false
+- id: NSG-DAT-001
+  product: NSG
+  domain: 数据安全
+  control_ids:
+  - NSG.DAT.01
+  checkpoints:
+  - NSG.DAT.01.b
+  kind: closed
+  stem: 数据分类分级目前开展到什么程度？
+  options:
+  - key: A
+    level: 1
+    text: 还没有开展
+  - key: B
+    level: 2
+    text: 正在制定规则
+  - key: C
+    level: 3
+    text: 已有规则，目录尚未覆盖全部系统
+  - key: D
+    level: 4
+    text: 已有规则和目录，并按周期更新
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 还没有开展
+  - level: 2
+    state: 正在制定规则
+  - level: 3
+    state: 已有规则，目录尚未覆盖全部系统
+  - level: 4
+    state: 已有规则和目录，并按周期更新
+  followups:
+  - 分类分级由哪个部门牵头？
+  depth: *id001
+  respondent_roles:
+  - 数据负责人
+  - 安全负责人
+  prefill:
+  - source: data_inventory
+  channel: prefill
+  problem: false
+- id: NSG-SCM-001
+  product: NSG
+  domain: 供应链与第三方
+  control_ids:
+  - NSG.SCM.01
+  checkpoints:
+  - NSG.SCM.01.a
+  kind: closed
+  stem: 选择供应商时有哪些安全要求？
+  options:
+  - key: A
+    level: 1
+    text: 没有安全要求
+  - key: B
+    level: 2
+    text: 个别采购项目提出过安全要求
+  - key: C
+    level: 3
+    text: 有准入安全要求，没有评估记录
+  - key: D
+    level: 4
+    text: 有准入安全要求和评估记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有安全要求
+  - level: 2
+    state: 个别采购项目提出过安全要求
+  - level: 3
+    state: 有准入安全要求，没有评估记录
+  - level: 4
+    state: 有准入安全要求和评估记录
+  followups:
+  - 关键供应商有多少家？
+  depth: *id001
+  respondent_roles:
+  - 安全负责人
+  - 法务
+  prefill:
+  - source: policy_docs
+  channel: self
+  problem: false
+- id: NSG-INV-001
+  product: NSG
+  domain: 投入与考核
+  control_ids:
+  - NSG.INV.01
+  checkpoints:
+  - NSG.INV.01.a
+  kind: closed
+  stem: 网络安全预算是否单独列支？
+  options:
+  - key: A
+    level: 1
+    text: 没有单独预算
+  - key: B
+    level: 2
+    text: 预算混在信息化投入中
+  - key: C
+    level: 3
+    text: 单独列支，执行情况没有跟踪
+  - key: D
+    level: 4
+    text: 单独列支并跟踪执行情况
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有单独预算
+  - level: 2
+    state: 预算混在信息化投入中
+  - level: 3
+    state: 单独列支，执行情况没有跟踪
+  - level: 4
+    state: 单独列支并跟踪执行情况
+  followups:
+  - 安全投入大约占信息化投入的多少？
+  depth: *id001
+  respondent_roles:
+  - 管理层
+  - 安全负责人
+  prefill:
+  - source: self_assessment
+  channel: self
+  problem: false

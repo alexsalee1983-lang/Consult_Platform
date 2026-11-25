@@ -1,0 +1,242 @@
+# 题库样例（四期 C21）：每个控制域取一题，供格式自检与开发用。正文在资料仓 Consult_Knowledge/question_bank/。
+product: DSM
+version: v1
+status: draft
+expert_review: pending
+note: 公开方法版；评分锚点为内部使用，不进客户调研包与自评包；对客只说“提前了解情况”。
+domains:
+- 数据安全组织与职责
+- 数据资产与分类分级
+- 数据全生命周期安全
+- 数据出境与共享
+- 监测与事件处置
+catalog: v0
+scope: sample
+questions:
+- id: DSM-ORG-001
+  product: DSM
+  domain: 数据安全组织与职责
+  control_ids:
+  - DSM.ORG.01
+  checkpoints:
+  - DSM.ORG.01.a
+  kind: closed
+  stem: 数据安全由谁牵头负责？负责人和归口部门写在哪份文件里？
+  options:
+  - key: A
+    level: 1
+    text: 没有明确的负责人或归口部门
+  - key: B
+    level: 2
+    text: 有人牵头，但没有书面任命或职责说明
+  - key: C
+    level: 3
+    text: 负责人和归口部门已书面明确，业务部门职责尚未落实
+  - key: D
+    level: 4
+    text: 负责人、归口部门和业务部门职责均已书面明确并定期汇报
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有明确的负责人或归口部门
+  - level: 2
+    state: 有人牵头，但没有书面任命或职责说明
+  - level: 3
+    state: 负责人和归口部门已书面明确，业务部门职责尚未落实
+  - level: 4
+    state: 负责人、归口部门和业务部门职责均已书面明确并定期汇报
+  followups:
+  - 数据安全工作多久向管理层汇报一次？
+  depth: &id001
+  - quick
+  - full
+  - deep
+  respondent_roles:
+  - 安全负责人
+  - 数据负责人
+  prefill:
+  - source: org_chart
+  - source: policy_docs
+  channel: prefill
+  problem: false
+- id: DSM-CLS-001
+  product: DSM
+  domain: 数据资产与分类分级
+  control_ids:
+  - DSM.CLS.02
+  checkpoints:
+  - DSM.CLS.02.b
+  kind: closed
+  stem: 重要数据目录目前处于什么状态？
+  options:
+  - key: A
+    level: 1
+    text: 还没有开展重要数据识别
+  - key: B
+    level: 2
+    text: 做过初步梳理，没有形成目录
+  - key: C
+    level: 3
+    text: 已形成重要数据目录，部分系统尚未覆盖
+  - key: D
+    level: 4
+    text: 目录覆盖全部业务系统并按周期更新
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 还没有开展重要数据识别
+  - level: 2
+    state: 做过初步梳理，没有形成目录
+  - level: 3
+    state: 已形成重要数据目录，部分系统尚未覆盖
+  - level: 4
+    state: 目录覆盖全部业务系统并按周期更新
+  followups:
+  - 目录参照了哪项行业标准？
+  - 目录最近一次更新是什么时候？
+  depth: *id001
+  respondent_roles:
+  - 数据负责人
+  - 合规风控
+  prefill:
+  - source: data_inventory
+  channel: self
+  problem: false
+- id: DSM-LCY-001
+  product: DSM
+  domain: 数据全生命周期安全
+  control_ids:
+  - DSM.LCY.02
+  checkpoints:
+  - DSM.LCY.02.c
+  kind: closed
+  stem: 开发和测试环境使用的数据是怎么来的？
+  options:
+  - key: A
+    level: 1
+    text: 直接复制生产数据
+  - key: B
+    level: 2
+    text: 部分系统做了脱敏，没有统一要求
+  - key: C
+    level: 3
+    text: 有脱敏要求，个别系统仍使用生产数据
+  - key: D
+    level: 4
+    text: 统一脱敏后提供，并有抽查记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 直接复制生产数据
+  - level: 2
+    state: 部分系统做了脱敏，没有统一要求
+  - level: 3
+    state: 有脱敏要求，个别系统仍使用生产数据
+  - level: 4
+    state: 统一脱敏后提供，并有抽查记录
+  followups:
+  - 脱敏规则由谁维护？
+  depth:
+  - full
+  - deep
+  respondent_roles:
+  - IT运维
+  - 数据负责人
+  prefill:
+  - source: policy_docs
+  channel: onsite
+  problem: false
+- id: DSM-XFR-001
+  product: DSM
+  domain: 数据出境与共享
+  control_ids:
+  - DSM.XFR.01
+  checkpoints:
+  - DSM.XFR.01.a
+  kind: closed
+  stem: 向外部单位提供数据之前，要经过哪些评估和审批？
+  options:
+  - key: A
+    level: 1
+    text: 没有固定的评估或审批环节
+  - key: B
+    level: 2
+    text: 由业务部门自行决定，偶尔征求安全意见
+  - key: C
+    level: 3
+    text: 有书面审批流程，安全评估内容不固定
+  - key: D
+    level: 4
+    text: 有书面审批流程和安全评估模板，并留存记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有固定的评估或审批环节
+  - level: 2
+    state: 由业务部门自行决定，偶尔征求安全意见
+  - level: 3
+    state: 有书面审批流程，安全评估内容不固定
+  - level: 4
+    state: 有书面审批流程和安全评估模板，并留存记录
+  followups:
+  - 最近一年对外提供数据大约有多少次？
+  depth: *id001
+  respondent_roles:
+  - 数据负责人
+  - 法务
+  prefill:
+  - source: policy_docs
+  channel: self
+  problem: false
+- id: DSM-MON-001
+  product: DSM
+  domain: 监测与事件处置
+  control_ids:
+  - DSM.MON.01
+  checkpoints:
+  - DSM.MON.01.b
+  kind: closed
+  stem: 对异常访问和批量导出重要数据，目前能否及时发现？
+  options:
+  - key: A
+    level: 1
+    text: 没有相关日志或告警
+  - key: B
+    level: 2
+    text: 有日志，但没有告警规则
+  - key: C
+    level: 3
+    text: 部分系统有告警规则
+  - key: D
+    level: 4
+    text: 重要数据所在系统均有告警规则，并有处置记录
+  - key: X
+    level: null
+    text: 不清楚
+  anchors:
+  - level: 1
+    state: 没有相关日志或告警
+  - level: 2
+    state: 有日志，但没有告警规则
+  - level: 3
+    state: 部分系统有告警规则
+  - level: 4
+    state: 重要数据所在系统均有告警规则，并有处置记录
+  followups:
+  - 告警由谁接收和处置？
+  depth: *id001
+  respondent_roles:
+  - 安全分析
+  - IT运维
+  prefill:
+  - source: siem_stats
+  channel: prefill
+  problem: false

@@ -38,7 +38,8 @@ def _load(path: Path) -> dict:
 
 
 def test_question_bank_files_exist() -> None:
-    assert {p.stem for p in FILES} >= {"soc", "ire"}, f"{BANK_DIR} 下缺 soc.yaml / ire.yaml"
+    missing = {"soc", "ire", "dsm", "iso", "nsg"} - {p.stem for p in FILES}
+    assert not missing, f"{BANK_DIR} 下缺 {sorted(missing)}"
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: p.stem)

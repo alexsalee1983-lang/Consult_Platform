@@ -1,5 +1,6 @@
 # 控制项清单 v0（三期 B19 第一步，供 B15 校验与 B19 kb_controls 种子数据；公开方法版草稿，待产品专家复核）。
 # 范围：四格 SOC、IRE × 银行、电力。编号全局唯一、只增不改（改名另做别名）；行业专属项用 BNK / PWR 段。
+# 四期 C21：补 DSM、ISO、NSG 的通用控制项（各域 2～5 项，题库挂靠用），行业专属项待后续补。
 # 与等保 2.0、ISO 27001 附录 A、CSF 2.0、SOC-CMM、SP 800-61、行业条款的映射是第二步（12-18），只写条款号。
 # 资质边界：这里是差距分析的评估维度，不是测评或认证的判定项。
 # 检查点（checkpoints）参照 SP 800-53A 评估目标：objective 写可核查的事实，methods 取 examine / interview / test；
@@ -21,6 +22,29 @@ domains:
   - 恢复与业务连续性
   - 通报与报告
   - 治理与改进
+  DSM:
+  - 数据安全组织与职责
+  - 数据资产与分类分级
+  - 数据全生命周期安全
+  - 数据出境与共享
+  - 监测与事件处置
+  ISO:
+  - 体系范围与领导作用
+  - 风险评估与处置
+  - 组织控制
+  - 人员控制
+  - 物理控制
+  - 技术控制
+  - 绩效评价与改进
+  NSG:
+  - 战略与治理架构
+  - 组织与人员
+  - 合规与风险管理
+  - 安全技术体系
+  - 安全运营
+  - 数据安全
+  - 供应链与第三方
+  - 投入与考核
 controls:
 - id: SOC.ORG.01
   name: 职责与编制
@@ -809,3 +833,562 @@ controls:
   - {id: a, objective: 整改项有跟踪台账, methods: [examine]}
   - {id: b, objective: 已完成整改项有验证记录, methods: [examine, test]}
   - {id: c, objective: 逾期整改项有升级处理, methods: [examine, interview]}
+- id: DSM.ORG.01
+  name: 数据安全责任体系
+  product: DSM
+  domain: 数据安全组织与职责
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 已书面明确数据安全负责人和归口管理部门, methods: [examine]}
+  - {id: b, objective: 业务部门的数据安全职责已写入岗位职责, methods: [examine, interview]}
+  - {id: c, objective: 数据安全工作定期向管理层汇报并有记录, methods: [examine]}
+- id: DSM.ORG.02
+  name: 数据安全制度体系
+  product: DSM
+  domain: 数据安全组织与职责
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 数据安全管理制度已发布并覆盖分类分级、使用与共享, methods: [examine]}
+  - {id: b, objective: 制度按约定周期修订并有修订记录, methods: [examine]}
+  - {id: c, objective: 业务人员知道制度要求和查阅入口, methods: [interview]}
+  params:
+  - {id: review_months, label: 制度修订周期（月）, default: 12}
+- id: DSM.ORG.03
+  name: 人员管理与意识教育
+  product: DSM
+  domain: 数据安全组织与职责
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 接触重要数据的岗位已识别并签署保密承诺, methods: [examine]}
+  - {id: b, objective: 数据安全培训覆盖接触重要数据的岗位并有记录, methods: [examine]}
+  - {id: c, objective: 离岗人员的数据访问权限按时回收, methods: [examine, test]}
+- id: DSM.CLS.01
+  name: 数据资产识别与清单
+  product: DSM
+  domain: 数据资产与分类分级
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 有数据资产清单并记录所属系统和责任部门, methods: [examine]}
+  - {id: b, objective: 清单按约定周期更新且与系统现状一致, methods: [examine, test]}
+  params:
+  - {id: update_months, label: 清单更新周期（月）, default: 6}
+- id: DSM.CLS.02
+  name: 分类分级规则与目录
+  product: DSM
+  domain: 数据资产与分类分级
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 已制定数据分类分级规则并参照所在行业标准, methods: [examine]}
+  - {id: b, objective: 重要数据识别结果形成书面目录, methods: [examine]}
+  - {id: c, objective: 重要数据目录已按主管部门要求报送, methods: [examine, interview]}
+- id: DSM.CLS.03
+  name: 分级保护要求
+  product: DSM
+  domain: 数据资产与分类分级
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 各级数据对应的保护要求已书面规定, methods: [examine]}
+  - {id: b, objective: 系统中重要数据字段有分级标识, methods: [examine, test]}
+  - {id: c, objective: 分级结果变化时有复核和更新流程, methods: [examine, interview]}
+- id: DSM.LCY.01
+  name: 数据收集与存储
+  product: DSM
+  domain: 数据全生命周期安全
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 收集数据有明确用途和最小必要范围说明, methods: [examine]}
+  - {id: b, objective: 重要数据存储采用加密或等效保护措施, methods: [examine, test]}
+  - {id: c, objective: 备份覆盖重要数据并有恢复验证记录, methods: [examine, test]}
+- id: DSM.LCY.02
+  name: 数据使用与访问控制
+  product: DSM
+  domain: 数据全生命周期安全
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 重要数据访问按岗位授权并定期复核, methods: [examine, test]}
+  - {id: b, objective: 批量导出等高风险操作有审批记录, methods: [examine]}
+  - {id: c, objective: 开发测试环境使用脱敏后的数据, methods: [examine, test]}
+  params:
+  - {id: review_months, label: 访问权限复核周期（月）, default: 6}
+- id: DSM.LCY.03
+  name: 数据传输与删除销毁
+  product: DSM
+  domain: 数据全生命周期安全
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 重要数据传输采用加密通道, methods: [examine, test]}
+  - {id: b, objective: 数据删除与介质销毁有流程和记录, methods: [examine]}
+  - {id: c, objective: 超出保存期限的数据按规定删除, methods: [examine, interview]}
+- id: DSM.XFR.01
+  name: 数据共享与委托处理
+  product: DSM
+  domain: 数据出境与共享
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 对外提供数据前有安全评估和审批记录, methods: [examine]}
+  - {id: b, objective: 与接收方的协议写明用途、范围和安全责任, methods: [examine]}
+  - {id: c, objective: 对委托处理方的数据处理情况有定期核查记录, methods: [examine, interview]}
+- id: DSM.XFR.02
+  name: 数据出境管理
+  product: DSM
+  domain: 数据出境与共享
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 已梳理出境数据的类型、数量和境外接收方, methods: [examine, interview]}
+  - {id: b, objective: 出境活动已按适用路径完成申报或备案手续, methods: [examine]}
+  - {id: c, objective: 出境情况变化时有复核和重新申报机制, methods: [examine, interview]}
+- id: DSM.XFR.03
+  name: 对外数据接口管理
+  product: DSM
+  domain: 数据出境与共享
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 对外数据接口有清单并标明数据范围, methods: [examine]}
+  - {id: b, objective: 接口调用有身份鉴别和频率控制, methods: [examine, test]}
+  - {id: c, objective: 接口调用日志留存并定期分析, methods: [examine]}
+- id: DSM.MON.01
+  name: 数据安全监测
+  product: DSM
+  domain: 监测与事件处置
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 重要数据的访问与导出有日志并集中留存, methods: [examine, test]}
+  - {id: b, objective: 有针对异常访问和批量导出的告警规则, methods: [examine, test]}
+  params:
+  - {id: log_retention_months, label: 日志留存（月）, default: 6}
+- id: DSM.MON.02
+  name: 数据安全事件处置
+  product: DSM
+  domain: 监测与事件处置
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 有数据安全事件应急预案并写明报告时限, methods: [examine]}
+  - {id: b, objective: 按约定频次开展数据泄露应急演练, methods: [examine]}
+  - {id: c, objective: 事件发生后按要求向主管部门报告并留记录, methods: [examine, interview]}
+  params:
+  - {id: drill_per_year, label: 应急演练（次/年）, default: 1}
+- id: DSM.MON.03
+  name: 数据安全风险评估
+  product: DSM
+  domain: 监测与事件处置
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 按约定周期开展数据安全风险评估, methods: [examine]}
+  - {id: b, objective: 风险评估发现的问题有整改跟踪记录, methods: [examine]}
+  params:
+  - {id: assess_months, label: 风险评估周期（月）, default: 12}
+- id: ISO.LDR.01
+  name: 体系范围与相关方
+  product: ISO
+  domain: 体系范围与领导作用
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 体系范围文件写明边界、接口和排除项, methods: [examine]}
+  - {id: b, objective: 已识别内外部议题和相关方要求, methods: [examine, interview]}
+- id: ISO.LDR.02
+  name: 领导作用与方针目标
+  product: ISO
+  domain: 体系范围与领导作用
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 信息安全方针经最高管理者批准并发布, methods: [examine]}
+  - {id: b, objective: 管理层为体系分配了角色职责和资源, methods: [examine, interview]}
+  - {id: c, objective: 信息安全目标可度量并有跟踪记录, methods: [examine]}
+- id: ISO.LDR.03
+  name: 文件化信息控制
+  product: ISO
+  domain: 体系范围与领导作用
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 体系文件有编号、版本和审批记录, methods: [examine]}
+  - {id: b, objective: 文件发放与作废有受控流程, methods: [examine, test]}
+- id: ISO.RSK.01
+  name: 风险评估方法与实施
+  product: ISO
+  domain: 风险评估与处置
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 风险评估方法书面规定了准则和风险接受标准, methods: [examine]}
+  - {id: b, objective: 按约定周期或重大变更时开展风险评估, methods: [examine]}
+  - {id: c, objective: 风险评估覆盖体系范围内的资产, methods: [examine, interview]}
+  params:
+  - {id: assess_months, label: 风险评估周期（月）, default: 12}
+- id: ISO.RSK.02
+  name: 风险处置与适用性声明
+  product: ISO
+  domain: 风险评估与处置
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 风险处置计划有责任人和完成时限, methods: [examine]}
+  - {id: b, objective: 适用性声明写明控制选择与排除理由, methods: [examine]}
+  - {id: c, objective: 残余风险经风险责任人接受并有记录, methods: [examine]}
+- id: ISO.ORG.01
+  name: 安全策略与职责分离
+  product: ISO
+  domain: 组织控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 主题安全策略覆盖所选附录 A 控制, methods: [examine]}
+  - {id: b, objective: 冲突职责已识别并分离或有补偿措施, methods: [examine, interview]}
+- id: ISO.ORG.02
+  name: 资产管理与信息分类
+  product: ISO
+  domain: 组织控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 资产清单记录责任人并按约定周期更新, methods: [examine]}
+  - {id: b, objective: 信息按分类规则标识和处理, methods: [examine, test]}
+- id: ISO.ORG.03
+  name: 访问控制与身份管理
+  product: ISO
+  domain: 组织控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 访问权限按申请审批授予并定期复核, methods: [examine, test]}
+  - {id: b, objective: 账号开通、变更、注销有记录, methods: [examine]}
+  params:
+  - {id: review_months, label: 权限复核周期（月）, default: 6}
+- id: ISO.ORG.04
+  name: 供应商与云服务安全
+  product: ISO
+  domain: 组织控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 供应商协议包含信息安全要求, methods: [examine]}
+  - {id: b, objective: 对关键供应商有定期监督和评审记录, methods: [examine]}
+  - {id: c, objective: 云服务的使用与退出有书面安全要求, methods: [examine, interview]}
+- id: ISO.ORG.05
+  name: 事件管理与业务连续性
+  product: ISO
+  domain: 组织控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 有信息安全事件报告、评估和响应流程, methods: [examine]}
+  - {id: b, objective: 事件处理后有经验总结记录, methods: [examine]}
+  - {id: c, objective: 业务连续性计划包含信息安全要求并经过演练, methods: [examine, test]}
+- id: ISO.PPL.01
+  name: 背景审查与聘用条款
+  product: ISO
+  domain: 人员控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 入职前按岗位风险开展背景审查, methods: [examine]}
+  - {id: b, objective: 聘用合同或协议写明信息安全责任, methods: [examine]}
+- id: ISO.PPL.02
+  name: 意识教育与培训
+  product: ISO
+  domain: 人员控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 全员信息安全意识教育有计划和记录, methods: [examine]}
+  - {id: b, objective: 关键岗位人员接受过专项安全培训, methods: [examine, interview]}
+- id: ISO.PPL.03
+  name: 离职调岗与远程办公
+  product: ISO
+  domain: 人员控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 离职调岗时按时回收资产与权限, methods: [examine, test]}
+  - {id: b, objective: 远程办公有书面安全要求并执行, methods: [examine, interview]}
+- id: ISO.PHY.01
+  name: 物理边界与出入控制
+  product: ISO
+  domain: 物理控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 安全区域已划定并有出入控制措施, methods: [examine, test]}
+  - {id: b, objective: 出入记录留存并定期检查, methods: [examine]}
+- id: ISO.PHY.02
+  name: 设备与介质安全
+  product: ISO
+  domain: 物理控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 设备维护与带出有审批记录, methods: [examine]}
+  - {id: b, objective: 介质报废前数据已清除并有记录, methods: [examine]}
+  - {id: c, objective: 办公桌面和屏幕有清理与锁屏要求并执行, methods: [examine, test]}
+- id: ISO.TEC.01
+  name: 终端与特权访问
+  product: ISO
+  domain: 技术控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 终端有防恶意代码和补丁管理措施, methods: [examine, test]}
+  - {id: b, objective: 特权账号单独管理并记录操作, methods: [examine, test]}
+- id: ISO.TEC.02
+  name: 配置与漏洞管理
+  product: ISO
+  domain: 技术控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 关键系统有安全基线配置并定期核查, methods: [examine, test]}
+  - {id: b, objective: 漏洞按约定时限修复并有记录, methods: [examine]}
+  params:
+  - {id: critical_fix_days, label: 高危漏洞修复时限（天）, default: 15}
+- id: ISO.TEC.03
+  name: 日志与监控
+  product: ISO
+  domain: 技术控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 关键系统日志集中留存并防篡改, methods: [examine, test]}
+  - {id: b, objective: 有异常活动监控并有处理记录, methods: [examine]}
+  params:
+  - {id: log_retention_months, label: 日志留存（月）, default: 6}
+- id: ISO.TEC.04
+  name: 网络安全与密码使用
+  product: ISO
+  domain: 技术控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 网络按安全需求分区并有访问控制, methods: [examine, test]}
+  - {id: b, objective: 密码技术使用有策略和密钥管理要求, methods: [examine]}
+- id: ISO.TEC.05
+  name: 安全开发与变更
+  product: ISO
+  domain: 技术控制
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 开发过程有安全要求和代码审查记录, methods: [examine]}
+  - {id: b, objective: 变更经审批并在测试环境验证, methods: [examine, test]}
+- id: ISO.PER.01
+  name: 监视测量与内部审核
+  product: ISO
+  domain: 绩效评价与改进
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 安全指标按约定周期测量并有记录, methods: [examine]}
+  - {id: b, objective: 内部审核按年度方案执行并有报告, methods: [examine]}
+  params:
+  - {id: audit_per_year, label: 内部审核（次/年）, default: 1}
+- id: ISO.PER.02
+  name: 管理评审
+  product: ISO
+  domain: 绩效评价与改进
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 管理评审输入覆盖标准要求的各项事项, methods: [examine]}
+  - {id: b, objective: 管理评审决定有落实记录, methods: [examine]}
+- id: ISO.PER.03
+  name: 不符合与纠正措施
+  product: ISO
+  domain: 绩效评价与改进
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 不符合项有原因分析和纠正措施, methods: [examine]}
+  - {id: b, objective: 纠正措施的有效性经过验证, methods: [examine, interview]}
+- id: NSG.GOV.01
+  name: 安全战略与规划
+  product: NSG
+  domain: 战略与治理架构
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 网络安全规划已发布并与业务战略衔接, methods: [examine, interview]}
+  - {id: b, objective: 规划有分年度目标和路线图, methods: [examine]}
+- id: NSG.GOV.02
+  name: 治理架构与决策机制
+  product: NSG
+  domain: 战略与治理架构
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 设有网络安全领导机构并明确议事规则, methods: [examine]}
+  - {id: b, objective: 领导机构按约定频次开会并有纪要, methods: [examine]}
+  params:
+  - {id: meetings_per_year, label: 领导机构会议（次/年）, default: 2}
+- id: NSG.GOV.03
+  name: 制度体系
+  product: NSG
+  domain: 战略与治理架构
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 制度体系分层清晰并覆盖主要管理领域, methods: [examine]}
+  - {id: b, objective: 制度按约定周期评审修订, methods: [examine]}
+- id: NSG.ORG.01
+  name: 安全组织与岗位
+  product: NSG
+  domain: 组织与人员
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 设有专门的安全管理机构和负责人, methods: [examine]}
+  - {id: b, objective: 关键岗位职责书面明确且人员到位, methods: [examine, interview]}
+- id: NSG.ORG.02
+  name: 人员能力与意识
+  product: NSG
+  domain: 组织与人员
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 安全人员能力要求与培训计划已制定, methods: [examine]}
+  - {id: b, objective: 全员安全意识教育有覆盖率记录, methods: [examine]}
+- id: NSG.CMP.01
+  name: 合规义务管理
+  product: NSG
+  domain: 合规与风险管理
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 已梳理适用的法律法规与监管要求清单, methods: [examine]}
+  - {id: b, objective: 合规义务变化有跟踪和落实记录, methods: [examine, interview]}
+- id: NSG.CMP.02
+  name: 网络安全风险管理
+  product: NSG
+  domain: 合规与风险管理
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 网络安全风险纳入公司风险管理体系, methods: [examine, interview]}
+  - {id: b, objective: 有风险登记册并按约定周期更新, methods: [examine]}
+- id: NSG.CMP.03
+  name: 关键信息基础设施保护
+  product: NSG
+  domain: 合规与风险管理
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 已明确本单位是否涉及关键信息基础设施, methods: [examine, interview]}
+  - {id: b, objective: 关键业务系统有专门的保护措施清单, methods: [examine]}
+- id: NSG.TEC.01
+  name: 技术架构与纵深防护
+  product: NSG
+  domain: 安全技术体系
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 有整体的安全技术架构说明, methods: [examine]}
+  - {id: b, objective: 边界、终端、主机、应用防护覆盖关键系统, methods: [examine, test]}
+- id: NSG.TEC.02
+  name: 身份与访问管理
+  product: NSG
+  domain: 安全技术体系
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 有统一的身份与权限管理措施, methods: [examine, test]}
+  - {id: b, objective: 特权访问集中管控并留痕, methods: [examine, test]}
+- id: NSG.TEC.03
+  name: 安全同步建设
+  product: NSG
+  domain: 安全技术体系
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 新建系统同步规划安全措施并经安全评审, methods: [examine]}
+  - {id: b, objective: 安全项目建设有验收记录, methods: [examine]}
+- id: NSG.OPS.01
+  name: 监测与应急响应
+  product: NSG
+  domain: 安全运营
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 有持续的安全监测和告警处置机制, methods: [examine, interview]}
+  - {id: b, objective: 安全事件应急预案按约定频次演练, methods: [examine]}
+  params:
+  - {id: drill_per_year, label: 应急演练（次/年）, default: 1}
+- id: NSG.OPS.02
+  name: 漏洞与威胁管理
+  product: NSG
+  domain: 安全运营
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 漏洞发现与修复有闭环跟踪, methods: [examine]}
+  - {id: b, objective: 有外部威胁情报的获取渠道, methods: [interview]}
+- id: NSG.DAT.01
+  name: 数据安全管理
+  product: NSG
+  domain: 数据安全
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 已明确数据安全责任部门与制度, methods: [examine]}
+  - {id: b, objective: 已开展数据分类分级并形成目录, methods: [examine, interview]}
+- id: NSG.DAT.02
+  name: 数据保护措施
+  product: NSG
+  domain: 数据安全
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 重要数据有加密、脱敏或访问控制措施, methods: [examine, test]}
+  - {id: b, objective: 数据对外提供有审批与记录, methods: [examine]}
+- id: NSG.SCM.01
+  name: 供应商安全管理
+  product: NSG
+  domain: 供应链与第三方
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 供应商准入有安全要求和评估, methods: [examine]}
+  - {id: b, objective: 供应商合同写明安全责任与保密条款, methods: [examine]}
+- id: NSG.SCM.02
+  name: 外包与产品供应链
+  product: NSG
+  domain: 供应链与第三方
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 外包人员访问有授权和监督, methods: [examine, test]}
+  - {id: b, objective: 关键网络产品与服务采购考虑供应链风险, methods: [examine, interview]}
+- id: NSG.INV.01
+  name: 安全投入
+  product: NSG
+  domain: 投入与考核
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 网络安全预算单独列支并有执行记录, methods: [examine]}
+  - {id: b, objective: 安全投入与规划目标对应, methods: [examine, interview]}
+  params:
+  - {id: budget_ratio, label: 安全投入占信息化投入（%）, default: 5}
+- id: NSG.INV.02
+  name: 考核与问责
+  product: NSG
+  domain: 投入与考核
+  industries: [通用]
+  status: draft
+  checkpoints:
+  - {id: a, objective: 网络安全纳入部门和个人绩效考核, methods: [examine]}
+  - {id: b, objective: 发生安全事件时有问责记录, methods: [examine, interview]}
