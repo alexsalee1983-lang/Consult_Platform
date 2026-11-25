@@ -271,6 +271,11 @@ python3 "$LOGDIR/extract.py" "$LOGDIR/pr_body.md" "$LOGDIR"
 NCMD="$(cat "$LOGDIR/cmd_count" 2>/dev/null || echo 0)"
 for i in $(seq 1 "$NCMD"); do
   f="$LOGDIR/cmd$i.sh"
+  # 复核只测点名项（PR_CMD_ONLY=逗号分隔的命令块序号，调度脚本设；冒烟与数据保护不受影响）
+  if [ -n "${PR_CMD_ONLY:-}" ] && ! echo ",$PR_CMD_ONLY," | grep -q ",$i,"; then
+    row "PR 命令块 $i" 通过 "复核说明未点名，本轮跳过（沿用上一轮结论）"
+    continue
+  fi
   if head -3 "$f" | grep -qiE '^#.*(宿主机|host)'; then
     bash "$f" > "$LOGDIR/cmd$i.out" 2>&1
     CR=$?

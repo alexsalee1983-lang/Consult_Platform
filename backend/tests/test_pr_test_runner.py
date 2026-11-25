@@ -174,3 +174,59 @@ def test_salvage_skips_when_concluded_or_unchanged(tmp_path: Path, monkeypatch) 
     summary.write_text("改过", encoding="utf-8")
     monkeypatch.setattr(R, "pr_labels", lambda pr: ["测试未通过"])
     assert not R.salvage(7, summary, before="同样")
+
+
+def _c(body: str, at: str) -> dict:
+    return {"body": body, "createdAt": at}
+
+
+def test_find_recheck_takes_latest_after_last_conclusion() -> None:
+    cs = [_c("## 复核说明\n旧", "2026-11-20T01"), _c("## 测试结论：不通过\n含复核说明字样", "2026-11-20T02"),
+          _c("## 复核说明（第二轮）\n只测 test_a.py", "2026-11-20T03"),
+          _c("**复核说明**\n只测 test_b.py", "2026-11-20T04")]
+    assert "test_b.py" in R.find_recheck(cs)
+
+
+def test_find_recheck_ignored_once_concluded_and_unsorted_input() -> None:
+    cs = [_c("## 测试结果：通过", "2026-11-20T05"), _c("## 复核说明\n旧", "2026-11-20T01")]
+    assert R.find_recheck(cs) == ""  # 乱序输入也按时间判断
+    assert R.find_recheck([_c("## 统筹意见\n见复核说明", "1"), _c("> @测试 复核说明：只测 X", "2")]) == ""
+
+
+def test_recheck_with_only_script_items_needs_no_session(monkeypatch) -> None:
+    monkeypatch.setattr(R, "RECHECK_ONLY", True)
+    assert R.needs_session(BODY_GREEN, True, "## 复核说明\n只跑 tests/test_a.py") == ""
+    assert "浏览器" in R.needs_session(BODY_GREEN, True, "## 复核说明\n浏览器打开审阅页核对按钮")
+    assert R.needs_session(BODY_GREEN, True, "## 复核说明\n人工核对项：无") == ""
+
+
+def test_recheck_switch_off_keeps_full_session(monkeypatch) -> None:
+    monkeypatch.setattr(R, "RECHECK_ONLY", False)
+    assert R.needs_session(BODY_GREEN, True, "## 复核说明\n只跑 tests/test_a.py") != ""
+
+
+BODY_BLOCKS = """## 怎么测
+测试机命令（块一）：
+```bash
+pytest tests/test_alpha.py
+```
+测试机命令（块二）：
+```bash
+python -m app.cli beta --check test_beta_flow
+```
+"""
+
+
+def test_named_blocks_scoped_but_never_empty() -> None:
+    blocks = R.command_blocks(BODY_BLOCKS)
+    assert len(blocks) == 2
+    assert R.named_blocks("复核：只测 tests/test_alpha.py", blocks) == [1]
+    assert R.named_blocks("复核：命令块 2", blocks) == [2]
+    assert R.named_blocks("复核：修了文案", blocks) == [1, 2]  # 认不出就全跑
+
+
+def test_pr_test_sh_skips_unnamed_blocks_but_not_smoke_or_data_protection() -> None:
+    sh = (SCRIPT.parent / "pr_test.sh").read_text(encoding="utf-8")
+    assert "PR_CMD_ONLY" in sh
+    skip = sh.index("PR_CMD_ONLY")
+    assert sh.index("冒烟测试") < skip and sh.index("数据保护检查") < skip  # 冒烟与数据保护在裁剪之前、无条件执行
