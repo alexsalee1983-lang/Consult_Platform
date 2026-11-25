@@ -16,7 +16,7 @@ test("登录 → 我的项目 → 项目驾驶舱", async ({ page }) => {
 
   await page.goto("/projects");
   await expect(page.getByRole("heading", { name: "我的项目" })).toBeVisible();
-  await page.locator('a[href="/project/BANK-A"]').click();
+  await page.locator('a.pnl[href="/project/BANK-A"]').click();   // 项目卡片
   await expect(page.getByRole("heading", { level: 1 })).toContainText("项目驾驶舱");
   await page.waitForTimeout(3000);   // 等驾驶舱各面板的接口都回来
   expect(errors).toEqual([]);
