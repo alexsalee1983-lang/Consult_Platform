@@ -182,6 +182,10 @@ def test_upload_runs_publish_and_closes_gap(people, fake_storage, monkeypatch, t
     with SessionLocal() as db:
         g = db.get(KbGap, gid)
         assert (g.status, g.close_reason) == ("closed", "collected")
+    # 已入库后再传同一缺口：409「原件已上传」，不是 404（#459 测试评论）
+    r = people["expert"].post(f"/api/kb/sources/manual-queue/{gid}/upload", files=files, data={"title": "x"})
+    assert r.status_code == 409 and "已上传" in r.text, r.text
+    with SessionLocal() as db:
         a = db.scalar(select(AuditLog).where(AuditLog.action == "kb.gap.manual_upload").order_by(AuditLog.id.desc()))
         assert a is not None and "任意名" not in json.dumps(a.detail, ensure_ascii=False)
 
