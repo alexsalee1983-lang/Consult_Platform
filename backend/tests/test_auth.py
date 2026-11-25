@@ -145,6 +145,8 @@ PROTECTED = [
     ("GET", "/api/kb/sources/BANK-A/events"),
     ("GET", "/api/kb/sources/confirm-queue"),
     ("POST", "/api/kb/sources/confirm-queue/decide"),
+    ("GET", "/api/kb/sources/manual-queue"),
+    ("POST", "/api/kb/sources/manual-queue/1/upload"),
     ("GET", "/api/kb/intake"),
     ("GET", "/api/kb/intake/1"),
     ("GET", "/api/kb/intake/1/deid"),

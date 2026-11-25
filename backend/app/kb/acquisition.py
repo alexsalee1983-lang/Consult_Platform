@@ -30,6 +30,23 @@ KIND_LABELS = {"schedule": "定时巡检", "external": "外部变化", "usage": 
 EVENT_REF = re.compile(r"[A-Za-z0-9._:#/-]{1,64}")  # 事件编号：只许编号字符，防止夹带原文
 DISPATCH_FORMAT = "kb-acquire/1"
 RETURN_MANIFEST = "manifest.json"
+# 需人工下载的原因类别（四期 B25）：采集机回传 manifest 的 failed[].reason 是原始状态串，只按关键字归类，不存原串
+MANUAL_REASONS = {"blocked": "网站拒绝脚本访问", "dns": "采集机解析不到域名", "timeout": "多次超时",
+                  "no_file": "只有网页、没有原件", "not_found": "官方来源未找到", "other": "其他"}
+_REASON_HINTS = (("blocked", ("403", "401", "forbidden", "denied", "captcha")),
+                 ("dns", ("dns", "resolve", "name or service", "getaddrinfo", "nodename")),
+                 ("timeout", ("timeout", "timed out", "超时")),
+                 ("no_file", ("html", "no pdf", "not a file", "网页")),
+                 ("not_found", ("404", "not found")))
+
+
+def manual_reason(raw: str) -> str:
+    """采集机的原始失败状态 → 原因类别；认不出的归 other。"""
+    text = str(raw or "").lower()
+    for cat, hints in _REASON_HINTS:
+        if any(h in text for h in hints):
+            return cat
+    return "other"
 RULE_KEYS = {"interval_days", "file_types", "selector", "max_files", "note"}
 RULE_STR_MAX = 200  # 规则里单个字符串上限，防止夹带正文
 URL_MAX = 500
@@ -219,6 +236,7 @@ def check_dispatch(pkg: dict[str, Any], whitelist: tuple[str, ...]) -> list[str]
 @dataclass
 class ReturnReport:
     count: int = 0
+    manual: int = 0                          # 采集机取不到、转需人工下载的缺口数（import_return 填）
     problems: list[str] = field(default_factory=list)
 
     @property

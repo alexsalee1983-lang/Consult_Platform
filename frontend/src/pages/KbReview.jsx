@@ -4,10 +4,11 @@ import { api } from "../api.js";
 import { hasRole, useAuth } from "../auth.jsx";
 import { TopBar } from "../components/common.jsx";
 import { Chip, EMPTY_META, fmtDate, MetaForm, useKbMeta, VERSION_STATUS } from "../components/kb.jsx";
+import ManualDownload from "../components/ManualDownload.jsx";
 import SourceConfirm from "../components/SourceConfirm.jsx";
 
 const TABS = [
-  ["queue", "待审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"], ["confirm", "来源确认"],
+  ["queue", "待审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"], ["confirm", "来源确认"], ["manual", "需人工下载"],
 ];
 const ROLE_LABEL = { content: "内容", compliance: "合规", platform: "平台核验", sample: "抽检", agent: "知识审核 Agent" };
 const DECISION = { approve: ["c-g", "采纳"], reject: ["c-r", "退回"], flag: ["c-a", "存疑"] };
@@ -267,7 +268,7 @@ export default function KbReview() {
 
   const loadList = useCallback(async () => {
     setError("");
-    if (tab === "confirm") return;
+    if (tab === "confirm" || tab === "manual") return;
     try {
       if (tab === "queue") setList(await api.kbQueue());
       else if (tab === "sample") { const s = await api.kbSamples(); setStats(s); setList(s.items); }
@@ -305,13 +306,13 @@ export default function KbReview() {
       <TopBar cap="知识 · 双人审核（知识专家审内容，知识管理员审合规）" title="审批队列">
         <button type="button" className="btnp" onClick={() => { setCreating(true); setSelected(null); }}>＋ 新建公开资料条目</button>
       </TopBar>
-      {tab === "confirm" && (
+      {(tab === "confirm" || tab === "manual") && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <section className="pnl pad" aria-label="版本列表">{tabBar}</section>
-          <SourceConfirm />
+          {tab === "confirm" ? <SourceConfirm /> : <ManualDownload />}
         </div>
       )}
-      {tab !== "confirm" && <div className="kb3">
+      {tab !== "confirm" && tab !== "manual" && <div className="kb3">
         <section className="pnl pad" aria-label="版本列表">
           {tabBar}
           {error && <div className="err">{error}</div>}
