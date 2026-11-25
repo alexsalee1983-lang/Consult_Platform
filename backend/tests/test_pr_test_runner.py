@@ -352,3 +352,45 @@ def test_finish_does_not_redispatch_after_call_budget_spent(tmp_path: Path, monk
     R.finish(st)
     assert st["fails"]["7@abc"] == R.MAX_FAILS and "A" not in st["running"]
     assert sent and "额度" in sent[0]
+
+
+def test_session_usage_reads_openclaw_final_json_and_claude_result_line(tmp_path: Path) -> None:
+    oc = tmp_path / "oc.jsonl"
+    oc.write_text('[plugins] registered x\n{\n  "status": "ok",\n  "result": {\n    "meta": {"usage": '
+                  '{"input_tokens": 120000, "output_tokens": 3000, "cache_read_input_tokens": 500000}}\n  }\n}\n',
+                  encoding="utf-8")
+    assert R.session_usage(oc) == 623000
+    cl = tmp_path / "cl.jsonl"
+    cl.write_text('{"type":"assistant","message":{"usage":{"input_tokens":5}}}\n'
+                  '{"type":"result","usage":{"input_tokens":1000,"output_tokens":200,'
+                  '"cache_read_input_tokens":8000,"cache_creation_input_tokens":800}}\n', encoding="utf-8")
+    assert R.session_usage(cl) == 10000
+    none = tmp_path / "none.txt"
+    none.write_text("普通输出\n{坏 json\n", encoding="utf-8")
+    assert R.session_usage(none) == 0
+    assert R.session_usage(tmp_path / "missing.jsonl") == 0
+
+
+def test_token_budget_stops_sessions_and_marks_capped(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(R, "run_agent", lambda *a, **k: {"calls": 0, "max_ctx": 0, "avg_ctx": 0,
+                                                          "capped": False, "call_capped": False})
+    monkeypatch.setattr(R, "session_usage", lambda p: 2_500_000)
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["待测试"])
+    monkeypatch.setattr(R, "TOKEN_BUDGET", 2_000_000)
+    stats = R.agent_sessions("A", 7, "abcdef123", tmp_path, "p")
+    out = capsys.readouterr().out
+    assert stats["tokens"] == 2_500_000 and stats["token_capped"] is True and stats["call_capped"] is True
+    assert stats["sessions"] == 1
+    assert "整单用量 2500000" in out and "按整单预算" in out
+
+
+def test_token_usage_under_budget_not_capped(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(R, "run_agent", lambda *a, **k: {"calls": 0, "max_ctx": 0, "avg_ctx": 0,
+                                                          "capped": False, "call_capped": False})
+    monkeypatch.setattr(R, "session_usage", lambda p: 300_000)
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["测试通过"])
+    monkeypatch.setattr(R, "TOKEN_BUDGET", 2_000_000)
+    stats = R.agent_sessions("A", 7, "abcdef123", tmp_path, "p")
+    out = capsys.readouterr().out
+    assert stats["token_capped"] is False and stats["call_capped"] is False
+    assert "逐次上限未生效" in out and "整单用量 300000" in out

@@ -79,7 +79,7 @@ def test_answers_all_yes_approves_and_records_decision():
         assert out == {"outcome": "approve", "version_status": "published", "changed": [], "recheck": []}
         d = db.scalar(select(KbPracticeDecision).where(KbPracticeDecision.version_id == vid))
         assert d.decision == "adopt" and d.elapsed_ms == 4000
-        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer")).all()[-1]
+        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer").order_by(AuditLog.id)).all()[-1]
         assert "示范" not in log.detail                  # 审计不记原文
 
 
@@ -238,7 +238,7 @@ def test_conflict_choices_map_to_decisions():
                                                                        KbVersion.item.has(doc_id=old)))
         assert live.recheck_state == "pending"
         assert "专家工作台" in live.recheck_reason
-        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer")).all()[-1]
+        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.bench_answer").order_by(AuditLog.id)).all()[-1]
         assert "new" in log.detail and "交接步骤" not in log.detail
 
 
