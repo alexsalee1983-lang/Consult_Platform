@@ -130,7 +130,8 @@ def load(path: Path) -> dict[str, Any]:
     modules = data.get("modules") or []
     if not isinstance(modules, list):
         raise AssemblyEvalError("modules 要是列表")
-    return {"product": str(data["product"]).strip(), "modules": [str(m) for m in modules], "chapters": chapters,
+    return {"product": str(data["product"]).strip(), "industry": str(data.get("industry") or "").strip(),
+            "modules": [str(m) for m in modules], "chapters": chapters,
             "slots": _slots_override(data.get("slots"))}
 
 

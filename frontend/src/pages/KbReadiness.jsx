@@ -58,6 +58,27 @@ export default function KbReadiness() {
         <Kpi cap="依据类槽位" value={pct(basis.length ? Math.min(...basis) : null)} sub="要求 ≥ 95%（多个产品取最低）" />
         <Kpi cap="修改率提醒" value={ex.alerts.length} sub={ex.alerts.length ? "有类型修改率接近 0，建议抽查" : "暂无"} />
       </div>
+      {r.grids && (
+        <section className="pnl pad" aria-label="四格关键章节就绪度">
+          <h2 className="h2">四格关键章节就绪度</h2>
+          <table className="tbl">
+            <thead><tr><th>四格</th><th>章节</th><th>就绪度</th><th>目标</th><th>差距</th><th>状态</th></tr></thead>
+            <tbody>
+              {r.grids.map((g) => (
+                <tr key={g.key}>
+                  <td>{g.key}</td>
+                  <td className="mono">{g.chapters}</td>
+                  <td className={`mono ${level(g.readiness)}`}>{pct(g.readiness)}</td>
+                  <td className="mono">{g.target === null ? "未校准" : pct(g.target)}</td>
+                  <td className="mono">{g.gap === null ? "—" : `${g.gap >= 0 ? "+" : ""}${Math.round(g.gap * 1000) / 10}%`}</td>
+                  <td className="sub">{g.label}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="sub">目标按三期实测校准后由运维配置（KB_READINESS_TARGETS），没配的格显示“未校准”。</div>
+        </section>
+      )}
       {r.errors.length > 0 && (
         <section className="pnl pad" aria-label="评测集问题">
           <h2 className="h2">评测集读不了</h2>

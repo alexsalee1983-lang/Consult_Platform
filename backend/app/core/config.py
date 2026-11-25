@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     # 就绪度看板（三期 F2②）读哪些章节级装配评测集（A24 格式，逗号分隔的文件或目录，目录取其中 *.yaml）；
     # 留空用平台回归样例 knowledge/eval/assembly_samples.yaml。真实评测集在私有资料仓，部署机指到 /srv/knowledge/downloads 下
     kb_readiness_evalsets: str = ""
+    # 四格关键章节就绪度目标（四期 F2③，按三期实测校准后填）：如 "SOC·银行=0.7,IRE·电力=0.6"；没配的格看板显示“未校准”
+    kb_readiness_targets: str = ""
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
 

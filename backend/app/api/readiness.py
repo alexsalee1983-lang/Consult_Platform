@@ -12,6 +12,7 @@ from ..core.db import get_db, utcnow
 from ..core.permissions import KNOWLEDGE_ADMIN, KNOWLEDGE_EXPERT, PROJECT_LEAD, require_business, roles_of
 from ..kb import readiness
 from ..models import User
+from ..services import indicators_v4
 
 router = APIRouter(prefix="/api/kb", tags=["kb"], dependencies=[Depends(require_business)])
 ALLOWED = frozenset({KNOWLEDGE_EXPERT, KNOWLEDGE_ADMIN, PROJECT_LEAD})
@@ -23,4 +24,6 @@ def get_readiness(days: int = Query(90, ge=1, le=366), db: Session = Depends(get
     if not roles_of(db, user.id) & ALLOWED:
         raise HTTPException(403, "就绪度看板只给知识专家、知识管理员和项目负责人")
     end = utcnow()
-    return {"days": days, **readiness.matrix(db), "experts": readiness.expert_metrics(db, end - timedelta(days=days), end)}
+    m = readiness.matrix(db)
+    return {"days": days, **m, "grids": indicators_v4.readiness_grids(m["evalsets"]),   # 四期 F2③ 四格就绪度与目标
+            "experts": readiness.expert_metrics(db, end - timedelta(days=days), end)}
