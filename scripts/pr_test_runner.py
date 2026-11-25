@@ -30,6 +30,9 @@
                     PR 仍是“待测试”就开新会话只带 summary.md 接着测（负责人 2026-11-25 费用要求，#450）。
                     要读到用量，代理命令须输出逐次调用 usage 的 JSON 行（默认 claude -p 已加 stream-json）
     RUNNER_MAX_SESSIONS 一单最多换几次会话，默认 3
+    RUNNER_MAX_CALLS 一单（所有会话合计）最多几次模型调用，默认 60：用完立即结束会话、不再换会话，
+                    已写入 summary 的部分结论照贴评论（负责人 2026-11-25“2同意”）。0 表示不限。
+                    只对输出逐次 usage JSON 行的代理生效；读不到用量时 STATS 行标“未读到逐次用量”
     RUNNER_TOOL_OUTPUT_MAX 单次工具输出字符上限，默认 4000：写进提示词，并作为 BASH_MAX_OUTPUT_LENGTH
                     传给 claude；模板里可用 {tool_max} 传给其他代理（OpenClaw 无单次工具输出硬上限配置项）
     RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
@@ -72,6 +75,7 @@ DETACHED_MARKS = ("may still be running this turn", "Lost the connection")
 SETSID = os.environ.get("RUNNER_SETSID", "1") != "0"
 CTX_MAX = int(os.environ.get("RUNNER_CTX_MAX", "30000"))
 MAX_SESSIONS = int(os.environ.get("RUNNER_MAX_SESSIONS", "3"))
+MAX_CALLS = int(os.environ.get("RUNNER_MAX_CALLS", "60"))
 TOOL_OUTPUT_MAX = int(os.environ.get("RUNNER_TOOL_OUTPUT_MAX", "4000"))
 RUNNER_AGENT_TMPL = os.environ.get("RUNNER_AGENT_CMD") or (
     "claude -p {prompt} --model {model} --dangerously-skip-permissions --output-format stream-json --verbose")
@@ -100,6 +104,7 @@ PR 描述“怎么测”段（全文 {logdir}/howto.md，超长时下面只给�
 - 同一项试两次不达预期就记现象、测下一项；数据保护或冒烟失败如实写，不为通过而改动。
 - 上限：单次调用上下文超 {ctx_max} token 调度脚本直接结束本会话、开新会话只带 summary.md 接着测；
   单次工具输出不超过 {tool_max} 字符（先落文件再 tail / grep）。
+- 一单最多 {max_calls} 次模型调用（每次工具调用算一次），用完即被结束：先测最关键的项，每测完一项立即把结论追加进 summary.md，不要等最后一起写。
 - 防上下文超限：每测完一项立刻把结果写进 summary.md；文件只按需 grep / 按行号读，不整份读入；
   觉得上下文快满时先发 PR 评论（已测项 + 未测项写“未测，会话上下文将满”）再结束。
 - 结束前必须：`{gh} pr comment {pr} --body-file - < {logdir}/summary.md`（正文走标准输入，Windows 版 gh 读不到 WSL 路径）；再换标签
@@ -255,14 +260,14 @@ def build_prompt(env: str, pr: int, head: str, logdir: Path, verdict: str, why: 
         failed = tail[-FAILED_MAX:]
     prompt = PROMPT.format(
         pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
-        ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX,
+        ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX, max_calls=MAX_CALLS or "不限",
         why=why or "脚本项有失败，需定位原因",
         up="仍在线（KEEP_UP=1），会话结束后由调度脚本 down" if keep == "1" else "已 down，需要时自己 docker compose up -d",
         howto=_clip(howto_full, HOWTO_MAX, hfile), recheck=recheck, failed=failed)
     if len(prompt) > PROMPT_MAX:  # 兜底：仍超长就去掉失败日志和“怎么测”摘要，只留文件路径
         prompt = PROMPT.format(
             pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
-        ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX,
+        ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX, max_calls=MAX_CALLS or "不限",
             why=why or "脚本项有失败，需定位原因", up="见 docker compose ps",
             howto=f"（过长，见 {hfile}）", recheck=f"\n复核说明见 {logdir / 'recheck.md'}\n" if rechecks else "",
             failed=f"（见 {ffile}）")
@@ -282,7 +287,7 @@ CONTINUE = """你是测试机上的测试助手，PR #{pr}（环境 {env}，头�
 
 def continue_prompt(env: str, pr: int, head: str, logdir: Path, n: int) -> str:
     return CONTINUE.format(pr=pr, env=env, head=head[:7], n=n, logdir=logdir, gh=GH,
-                           ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX)
+                           ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX, max_calls=MAX_CALLS or "不限")
 
 
 def context_of(line: str) -> int | None:
@@ -321,10 +326,10 @@ def _stop(proc: subprocess.Popen) -> None:
         proc.wait()
 
 
-def run_agent(cmd: list[str], cwd: str, env: dict, out: Path, cap: int) -> dict:
-    """起一个代理会话，输出全部落 out；逐行读 usage，单次上下文超 cap 立即结束会话。"""
+def run_agent(cmd: list[str], cwd: str, env: dict, out: Path, cap: int, max_calls: int = 0) -> dict:
+    """起一个代理会话，输出全部落 out；逐行读 usage，单次上下文超 cap 或调用满 max_calls 次立即结束会话。"""
     ctxs: list[int] = []
-    capped = False
+    capped = call_capped = False
     with out.open("w", encoding="utf-8") as fh:
         proc = subprocess.Popen(cmd, cwd=cwd, env=env or None, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
@@ -341,14 +346,18 @@ def run_agent(cmd: list[str], cwd: str, env: dict, out: Path, cap: int) -> dict:
                 capped = True
                 _stop(proc)
                 break
+            if max_calls and len(ctxs) >= max_calls:
+                call_capped = True
+                _stop(proc)
+                break
         proc.wait()
     return {"calls": len(ctxs), "max_ctx": max(ctxs, default=0),
-            "avg_ctx": sum(ctxs) // len(ctxs) if ctxs else 0, "capped": capped}
+            "avg_ctx": sum(ctxs) // len(ctxs) if ctxs else 0, "capped": capped, "call_capped": call_capped}
 
 
 def agent_sessions(env: str, pr: int, head: str, logdir: Path, prompt: str) -> dict:
     """首个会话超限且 PR 仍待测试就换新会话接着测，最多 MAX_SESSIONS 个；用量写 usage.json。"""
-    total = {"sessions": 0, "calls": 0, "max_ctx": 0, "avg_ctx": 0, "capped": False}
+    total = {"sessions": 0, "calls": 0, "max_ctx": 0, "avg_ctx": 0, "capped": False, "call_capped": False}
     ctx_sum = 0
     for n in range(1, MAX_SESSIONS + 1):
         text = prompt if n == 1 else continue_prompt(env, pr, head, logdir, n)
@@ -357,20 +366,27 @@ def agent_sessions(env: str, pr: int, head: str, logdir: Path, prompt: str) -> d
         sid = session_id(pr, head, logdir) + ("" if n == 1 else f"-s{n}")
         sub = {"prompt": text, "prompt_file": str(pfile), "session": sid, "model": MODEL, "tool_max": TOOL_OUTPUT_MAX}
         cmd = [part.format(**sub) for part in shlex.split(RUNNER_AGENT_TMPL)]
-        st = run_agent(cmd, ENVS[env]["dir"], agent_env(dict(os.environ)), logdir / f"agent{n}.jsonl", CTX_MAX)
+        left = MAX_CALLS - total["calls"] if MAX_CALLS else 0
+        st = run_agent(cmd, ENVS[env]["dir"], agent_env(dict(os.environ)), logdir / f"agent{n}.jsonl", CTX_MAX,
+                       max_calls=left)
         total["sessions"] = n
         total["calls"] += st["calls"]
         total["max_ctx"] = max(total["max_ctx"], st["max_ctx"])
         ctx_sum += st["avg_ctx"] * st["calls"]
         total["capped"] = st["capped"]
+        total["call_capped"] = bool(st.get("call_capped"))
         print(f"会话 {n}：调用 {st['calls']} 次，单次平均上下文 {st['avg_ctx']}，最大 {st['max_ctx']}"
-              + ("，超限已结束" if st["capped"] else ""), flush=True)
+              + ("，超限已结束" if st["capped"] else "")
+              + (f"，一单调用满 {MAX_CALLS} 次已结束" if total["call_capped"] else ""), flush=True)
+        if total["call_capped"] or (MAX_CALLS and total["calls"] >= MAX_CALLS):
+            break
         if not st["capped"] or "待测试" not in pr_labels(pr):
             break
     total["avg_ctx"] = ctx_sum // total["calls"] if total["calls"] else 0
     (logdir / "usage.json").write_text(json.dumps(total, ensure_ascii=False), encoding="utf-8")
     print(f"STATS: 会话 {total['sessions']} 个，调用 {total['calls']} 次，单次平均上下文 {total['avg_ctx']}，"
-          f"最大 {total['max_ctx']}", flush=True)
+          f"最大 {total['max_ctx']}" + ("（未读到逐次用量，上下文与调用次数上限未生效）" if not total["calls"] else ""),
+          flush=True)
     return total
 
 
@@ -491,7 +507,11 @@ def finish(st: dict) -> None:
                    f"等它跑完人工写结论或停掉后删 state.json 的 held.{env} 再派，日志 {job['log']}")
             continue
         reason = tail.split("——", 1)[-1].strip() if "——" in tail else ""
-        if tail.startswith("RESULT: 环境问题未测"):
+        if tail.startswith("RESULT: 调用额度用完"):
+            # 额度用完不自动重派本 HEAD（否则每轮 cron 再烧一遍），人工看部分结论后清 state.json 的 fails 再派
+            st["fails"][key] = MAX_FAILS
+            notify(f"#{pr} 调用额度 {MAX_CALLS} 次用完（环境 {env}），部分结论已贴评论，标签留 待测试，不自动重派")
+        elif tail.startswith("RESULT: 环境问题未测"):
             # 环境问题不算 PR 缺陷：不重试本 HEAD，等人工修好环境后清 state.json 的 fails 再派
             st["fails"][key] = MAX_FAILS
             notify(f"#{pr} 环境问题未测（环境 {env}）{('：' + reason) if reason else ''}；标签留 待测试，修好环境后人工重派")
@@ -591,13 +611,16 @@ def run_one(env: str, pr: int, head: str, logdir: Path) -> int:
     prompt = build_prompt(env, pr, head, logdir, verdict, why, keep, body, rechecks)
     before = summary.read_text(encoding="utf-8") if summary.exists() else ""
     print(f"起模型会话：{why or verdict}", flush=True)
+    total: dict = {}
     try:
-        agent_sessions(env, pr, head, logdir, prompt)
+        total = agent_sessions(env, pr, head, logdir, prompt)
     finally:
         if keep == "1":
             down(env, pr)
     if salvage(pr, summary, before):
         print("会话未换标签，已把 summary 部分结论贴评论（未改标签）", flush=True)
+    if total.get("call_capped") and "待测试" in pr_labels(pr):
+        print(f"RESULT: 调用额度用完 —— 一单 {MAX_CALLS} 次模型调用已用完，部分结论已贴评论，标签留 待测试", flush=True)
     return 0
 
 
