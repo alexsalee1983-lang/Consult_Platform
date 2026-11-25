@@ -6,6 +6,7 @@ import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Evidence from "../components/Evidence.jsx";
 import Members from "../components/Members.jsx";
+import Panorama from "../components/Panorama.jsx";
 import Retention from "../components/Retention.jsx";
 import RunPanel from "../components/RunPanel.jsx";
 import StrictCards from "../components/StrictCards.jsx";
@@ -58,6 +59,7 @@ export default function Overview({ code }) {
       </div>
       <div className="grid-main">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+          <Panorama code={p.code} confirmations={p.confirmations} onChange={load} reload={p} />
           <section className="pnl pad" aria-label="阶段">
             <div className="sb"><h2 className="h2">交付阶段</h2><span className="sub">下一个里程碑：{p.next_milestone}</span></div>
             <PhaseBar phase={p.phase} />
