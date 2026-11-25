@@ -26,6 +26,12 @@
                     每个占位符保持为一个参数）：{prompt} 提示词全文、{prompt_file} 提示词文件、
                     {session} 本单会话名 pr<号>-<提交前 7 位>（同一提交重试复用同一会话）、{model} RUNNER_MODEL。
                     例（OpenClaw，每单新会话）：openclaw agent --session-id {session} --message {prompt}
+    RUNNER_CTX_MAX  单次调用总上下文上限（输入 + 缓存，token），默认 30000：超限立即结束本会话，
+                    PR 仍是“待测试”就开新会话只带 summary.md 接着测（负责人 2026-11-25 费用要求，#450）。
+                    要读到用量，代理命令须输出逐次调用 usage 的 JSON 行（默认 claude -p 已加 stream-json）
+    RUNNER_MAX_SESSIONS 一单最多换几次会话，默认 3
+    RUNNER_TOOL_OUTPUT_MAX 单次工具输出字符上限，默认 4000：写进提示词，并作为 BASH_MAX_OUTPUT_LENGTH
+                    传给 claude；模板里可用 {tool_max} 传给其他代理（OpenClaw 无单次工具输出硬上限配置项）
     RUNNER_SETSID   默认 1：会话进程放进独立进程组，超时整组停掉。WSL 调 Windows 程序时 setsid 会让互操作超时，设 0
     PR_RECHECK_ONLY 默认 1：PR 上最近一次测试结论之后有“复核说明”时只测点名项（冒烟、迁移头、数据保护照跑不可裁；
                     PR 命令块只跑点名的；点名项无人工/真实模型项则不起会话）。设 0 恢复全量
@@ -64,6 +70,11 @@ MAX_FAILS = 2
 # 会话进程退出但代理网关侧那一轮可能仍在跑（CLI 与网关断连），此时不能释放环境
 DETACHED_MARKS = ("may still be running this turn", "Lost the connection")
 SETSID = os.environ.get("RUNNER_SETSID", "1") != "0"
+CTX_MAX = int(os.environ.get("RUNNER_CTX_MAX", "30000"))
+MAX_SESSIONS = int(os.environ.get("RUNNER_MAX_SESSIONS", "3"))
+TOOL_OUTPUT_MAX = int(os.environ.get("RUNNER_TOOL_OUTPUT_MAX", "4000"))
+RUNNER_AGENT_TMPL = os.environ.get("RUNNER_AGENT_CMD") or (
+    "claude -p {prompt} --model {model} --dangerously-skip-permissions --output-format stream-json --verbose")
 GH = os.environ.get("RUNNER_GH", "gh")
 
 PROMPT = """你是测试机上的测试助手，这是一次性会话：只测 PR #{pr}，测完即结束。
@@ -87,6 +98,8 @@ PR 描述“怎么测”段（全文 {logdir}/howto.md，超长时下面只给�
 - 不改代码、不推送、不写数据库（只经平台接口和 app.cli）；需要清库、删数据卷先停下，评论里写明需要负责人决定。
 - 命令输出一律重定向到 {logdir}/ 下的文件，只用 tail -50 / grep 看；不用 tmux、screen、nohup、& 等后台方式。
 - 同一项试两次不达预期就记现象、测下一项；数据保护或冒烟失败如实写，不为通过而改动。
+- 上限：单次调用上下文超 {ctx_max} token 调度脚本直接结束本会话、开新会话只带 summary.md 接着测；
+  单次工具输出不超过 {tool_max} 字符（先落文件再 tail / grep）。
 - 防上下文超限：每测完一项立刻把结果写进 summary.md；文件只按需 grep / 按行号读，不整份读入；
   觉得上下文快满时先发 PR 评论（已测项 + 未测项写“未测，会话上下文将满”）再结束。
 - 结束前必须：`{gh} pr comment {pr} --body-file - < {logdir}/summary.md`（正文走标准输入，Windows 版 gh 读不到 WSL 路径）；再换标签
@@ -242,16 +255,123 @@ def build_prompt(env: str, pr: int, head: str, logdir: Path, verdict: str, why: 
         failed = tail[-FAILED_MAX:]
     prompt = PROMPT.format(
         pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
+        ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX,
         why=why or "脚本项有失败，需定位原因",
         up="仍在线（KEEP_UP=1），会话结束后由调度脚本 down" if keep == "1" else "已 down，需要时自己 docker compose up -d",
         howto=_clip(howto_full, HOWTO_MAX, hfile), recheck=recheck, failed=failed)
     if len(prompt) > PROMPT_MAX:  # 兜底：仍超长就去掉失败日志和“怎么测”摘要，只留文件路径
         prompt = PROMPT.format(
             pr=pr, env=env, dir=cfg["dir"], web=cfg["web"], head=head[:7], logdir=logdir, verdict=verdict, gh=GH,
+        ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX,
             why=why or "脚本项有失败，需定位原因", up="见 docker compose ps",
             howto=f"（过长，见 {hfile}）", recheck=f"\n复核说明见 {logdir / 'recheck.md'}\n" if rechecks else "",
             failed=f"（见 {ffile}）")
     return prompt[:PROMPT_MAX]
+
+
+CONTINUE = """你是测试机上的测试助手，PR #{pr}（环境 {env}，头提交 {head}）的第 {n} 个会话：
+上一会话单次调用上下文超 {ctx_max} token，被调度脚本结束。不要重跑 pr_test.sh。
+先 grep 看 {logdir}/summary.md（已测项结论在里面），只接着测仍是“（待填）”的项，测完一项立刻写回 summary.md；
+“怎么测”全文 {logdir}/howto.md，首个会话的要做的事与规则在 {logdir}/prompt.txt，都只按需 grep / 按行号读。
+规则同首个会话：不改代码、不推送、不写数据库；命令输出落 {logdir}/ 下文件只看 tail -50 / grep，
+单次工具输出不超过 {tool_max} 字符。
+结束前：`{gh} pr comment {pr} --body-file - < {logdir}/summary.md`，再换标签
+`{gh} pr edit {pr} --remove-label 待测试 --add-label 测试通过`（或 测试未通过）。
+最后一行只输出：RESULT: 通过 / RESULT: 不通过 / RESULT: 环境问题未测 —— 一句话原因。"""
+
+
+def continue_prompt(env: str, pr: int, head: str, logdir: Path, n: int) -> str:
+    return CONTINUE.format(pr=pr, env=env, head=head[:7], n=n, logdir=logdir, gh=GH,
+                           ctx_max=CTX_MAX, tool_max=TOOL_OUTPUT_MAX)
+
+
+def context_of(line: str) -> int | None:
+    """代理输出的一行 JSON 里单次调用的总上下文（输入 + 缓存读写）；result 行是累计值，不算。"""
+    line = line.strip()
+    if not line.startswith("{"):
+        return None
+    try:
+        obj = json.loads(line)
+    except ValueError:
+        return None
+    if not isinstance(obj, dict) or obj.get("type") == "result":
+        return None
+    msg = obj.get("message")
+    usage = (msg.get("usage") if isinstance(msg, dict) else None) or obj.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    keys = ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "prompt_tokens")
+    vals = [usage.get(k) for k in keys if isinstance(usage.get(k), int)]
+    return sum(vals) if vals else None
+
+
+def agent_env(base: dict) -> dict:
+    return {**base, "BASH_MAX_OUTPUT_LENGTH": str(TOOL_OUTPUT_MAX)}
+
+
+def _stop(proc: subprocess.Popen) -> None:
+    try:
+        if SETSID and hasattr(os, "killpg"):
+            os.killpg(proc.pid, signal.SIGTERM)
+        else:
+            proc.terminate()
+        proc.wait(timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        proc.kill()
+        proc.wait()
+
+
+def run_agent(cmd: list[str], cwd: str, env: dict, out: Path, cap: int) -> dict:
+    """起一个代理会话，输出全部落 out；逐行读 usage，单次上下文超 cap 立即结束会话。"""
+    ctxs: list[int] = []
+    capped = False
+    with out.open("w", encoding="utf-8") as fh:
+        proc = subprocess.Popen(cmd, cwd=cwd, env=env or None, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+                                start_new_session=SETSID)
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            fh.write(line)
+            fh.flush()
+            c = context_of(line)
+            if c is None:
+                continue
+            ctxs.append(c)
+            if c > cap:
+                capped = True
+                _stop(proc)
+                break
+        proc.wait()
+    return {"calls": len(ctxs), "max_ctx": max(ctxs, default=0),
+            "avg_ctx": sum(ctxs) // len(ctxs) if ctxs else 0, "capped": capped}
+
+
+def agent_sessions(env: str, pr: int, head: str, logdir: Path, prompt: str) -> dict:
+    """首个会话超限且 PR 仍待测试就换新会话接着测，最多 MAX_SESSIONS 个；用量写 usage.json。"""
+    total = {"sessions": 0, "calls": 0, "max_ctx": 0, "avg_ctx": 0, "capped": False}
+    ctx_sum = 0
+    for n in range(1, MAX_SESSIONS + 1):
+        text = prompt if n == 1 else continue_prompt(env, pr, head, logdir, n)
+        pfile = logdir / ("prompt.txt" if n == 1 else f"prompt{n}.txt")
+        pfile.write_text(text, encoding="utf-8")
+        sid = session_id(pr, head, logdir) + ("" if n == 1 else f"-s{n}")
+        sub = {"prompt": text, "prompt_file": str(pfile), "session": sid, "model": MODEL, "tool_max": TOOL_OUTPUT_MAX}
+        cmd = [part.format(**sub) for part in shlex.split(RUNNER_AGENT_TMPL)]
+        st = run_agent(cmd, ENVS[env]["dir"], agent_env(dict(os.environ)), logdir / f"agent{n}.jsonl", CTX_MAX)
+        total["sessions"] = n
+        total["calls"] += st["calls"]
+        total["max_ctx"] = max(total["max_ctx"], st["max_ctx"])
+        ctx_sum += st["avg_ctx"] * st["calls"]
+        total["capped"] = st["capped"]
+        print(f"会话 {n}：调用 {st['calls']} 次，单次平均上下文 {st['avg_ctx']}，最大 {st['max_ctx']}"
+              + ("，超限已结束" if st["capped"] else ""), flush=True)
+        if not st["capped"] or "待测试" not in pr_labels(pr):
+            break
+    total["avg_ctx"] = ctx_sum // total["calls"] if total["calls"] else 0
+    (logdir / "usage.json").write_text(json.dumps(total, ensure_ascii=False), encoding="utf-8")
+    print(f"STATS: 会话 {total['sessions']} 个，调用 {total['calls']} 次，单次平均上下文 {total['avg_ctx']}，"
+          f"最大 {total['max_ctx']}", flush=True)
+    return total
 
 
 def salvage(pr: int, summary: Path, before: str) -> bool:
@@ -469,14 +589,10 @@ def run_one(env: str, pr: int, head: str, logdir: Path) -> int:
         print("RESULT: 通过 —— 脚本项全部通过，无人工核对项（未起模型会话）", flush=True)
         return 0
     prompt = build_prompt(env, pr, head, logdir, verdict, why, keep, body, rechecks)
-    pfile = logdir / "prompt.txt"
-    pfile.write_text(prompt, encoding="utf-8")
-    sub = {"prompt": prompt, "prompt_file": str(pfile), "session": session_id(pr, head, logdir), "model": MODEL}
     before = summary.read_text(encoding="utf-8") if summary.exists() else ""
-    tmpl = os.environ.get("RUNNER_AGENT_CMD") or "claude -p {prompt} --model {model} --dangerously-skip-permissions"
     print(f"起模型会话：{why or verdict}", flush=True)
     try:
-        subprocess.run([part.format(**sub) for part in shlex.split(tmpl)], cwd=cfg["dir"], stdin=subprocess.DEVNULL)
+        agent_sessions(env, pr, head, logdir, prompt)
     finally:
         if keep == "1":
             down(env, pr)
