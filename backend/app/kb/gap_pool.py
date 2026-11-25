@@ -212,6 +212,35 @@ def import_return(db: Session, batch: Path, *, actor: str = "cli") -> tuple[acq.
     return report, closed
 
 
+
+PUBLISH_COLUMNS = ["文件名", "名称", "发布机关", "原网址", "现行状态", "获取方式", "sha256"]
+
+
+def publish_manifest(db: Session, batch: Path) -> tuple[str, list[str]]:
+    """回传批次 → 下载清单 CSV（供 kb-source-publish）：名称、发布机关取来源登记表里网址前缀最长匹配的正式来源。
+
+    找不到登记来源的文件不进清单，返回文件名列表，由人登记来源后再导；现行状态先记“现行”，生命周期由 B26 跟踪。
+    """
+    import csv
+    import io
+
+    rows = json.loads((batch / acq.RETURN_MANIFEST).read_text(encoding="utf-8"))["files"]
+    srcs = list(db.scalars(select(KbSource).where(KbSource.status == "active")))  # 与 whitelist() 同口径
+    out = io.StringIO()
+    w = csv.DictWriter(out, fieldnames=PUBLISH_COLUMNS, lineterminator=chr(10))
+    w.writeheader()
+    unmatched: list[str] = []
+    for r in rows:
+        url = str(r.get("url", ""))
+        hits = [s for s in srcs if acq.in_whitelist(url, (s.url,))]
+        if not hits:
+            unmatched.append(str(r.get("file", "")))
+            continue
+        s = max(hits, key=lambda x: len(x.url))
+        w.writerow({"文件名": r["file"], "名称": s.name, "发布机关": s.publisher, "原网址": url,
+                    "现行状态": "现行", "获取方式": "已下载", "sha256": str(r.get("sha256", "")).lower()})
+    return out.getvalue(), unmatched
+
 @jobs.handler(JOB_KIND)
 def _job(payload: dict, ctx: jobs.JobContext | None) -> None:
     from ..core.db import SessionLocal

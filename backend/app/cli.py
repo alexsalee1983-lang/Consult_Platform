@@ -895,12 +895,27 @@ def kb_acquire_import(args: argparse.Namespace) -> int:
     if not batch.is_dir():
         print("回传批次目录不存在", file=sys.stderr)
         return 1
+    if (args.manifest or args.auto_manifest) and not args.as_user:
+        print("带 --manifest / --auto-manifest 入库时必须指定 --as", file=sys.stderr)
+        return 1
     with SessionLocal() as db:
         report, closed = gap_pool.import_return(db, batch)
     if not report.ok:
         print("回传批次核对未通过，整批不入库：" + "；".join(report.problems[:20]), file=sys.stderr)
         return 2
     print(f"回传批次核对通过：{report.count} 个文件，关闭缺口 {closed} 个")
+    if args.auto_manifest:
+        import tempfile
+
+        with SessionLocal() as db:
+            text, unmatched = gap_pool.publish_manifest(db, batch)
+        if unmatched:
+            print(f"{len(unmatched)} 个文件找不到正式来源，未入库（先在来源登记表登记后重导）：" + "、".join(unmatched[:20]))
+        if len(text.splitlines()) <= 1:
+            return 0
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8") as fh:
+            fh.write(text)
+        args.manifest = fh.name
     if not args.manifest:
         return 0
     if not args.as_user:
@@ -1295,6 +1310,8 @@ def main(argv: list[str] | None = None) -> int:
     kai = sub.add_parser("kb-acquire-import", help="导入采集回传批次：核对清单、哈希、白名单，通过才关缺口并可接着自动核验发布")
     kai.add_argument("batch", help="回传批次目录（含 manifest.json）")
     kai.add_argument("--manifest", default="", help="下载清单；给了就接着走 kb-source-publish")
+    kai.add_argument("--auto-manifest", action="store_true",
+                     help="按来源登记表自动生成下载清单（名称、发布机关取正式来源）再走 kb-source-publish；须带 --as")
     kai.add_argument("--as", dest="as_user", default="", help="导入人（知识专家或知识管理员）")
     kai.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     kai.set_defaults(func=kb_acquire_import)
