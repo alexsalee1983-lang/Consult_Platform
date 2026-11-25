@@ -49,6 +49,42 @@ function V4({ v4 }) {
   );
 }
 
+// 四期 F5：自动化验收三条与自适应抽检，口径见 backend/app/services/automation_ledger.py
+const SPOT = { tight: "收紧（退回人工）", normal: "常规", relaxed: "放开" };
+function Automation({ a }) {
+  const rows = [
+    [a.soc_manual, a.soc_manual.value ?? "—", `≤ ${a.soc_manual.threshold} 次（SOC 项目 ${a.soc_manual.projects} 个，取最多）`],
+    [a.fact_auto, pct(a.fact_auto.value), `≥ ${pct(a.fact_auto.threshold)}（自动 ${a.fact_auto.auto}、人工 ${a.fact_auto.manual}）`],
+    [a.spot_error, pct(a.spot_error.value), `≤ ${pct(a.spot_error.threshold)}（抽检 ${a.spot_error.checks} 条）`],
+    [a.daily_manual, a.daily_manual.value ?? "—", `≤ ${a.daily_manual.threshold} 件`],
+  ];
+  return (
+    <section className="pnl pad" aria-label="自动化验收">
+      <h2 className="h2">自动化验收</h2>
+      <table className="tbl">
+        <thead><tr><th>指标</th><th>当前</th><th>目标</th><th>状态</th></tr></thead>
+        <tbody>
+          {rows.map(([m, v, goal]) => {
+            const st = STATUS[m.status] || STATUS.na;
+            return (
+              <tr key={m.label}>
+                <td>{m.label}</td>
+                <td className="mono">{v}</td>
+                <td className="sub">{goal}</td>
+                <td><span className={`chip ${st.cls}`}>{st.label}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="sub">
+        事实抽检比例 <span className="mono">{pct(a.spot.rate)}</span>：{SPOT[a.spot.state] || a.spot.state}（连续通过 {a.spot.streak} 条）。
+        发现差错即每条都抽，连续通过 20 条恢复常规，连续 100 条无差错减半。
+      </div>
+    </section>
+  );
+}
+
 function show(m) {
   if (m.value === null || m.value === undefined) return "—";
   if (m.unit === "比例") return `${Math.round(m.value * 1000) / 10}%`;
@@ -101,6 +137,7 @@ export default function Indicators() {
         </section>
       )}
       {data?.v4 && <V4 v4={data.v4} />}
+      {data?.automation && <Automation a={data.automation} />}
     </div>
   );
 }
