@@ -47,6 +47,8 @@ def upload(db: Session, user: User, gap_id: int, filename: str, data: bytes, tit
     if not rv.is_knowledge_user(db, user):
         raise reg.SourceError(403, "只有知识专家、知识管理员能上传原件")
     row = db.get(KbGap, gap_id)
+    if row is not None and row.status == "closed" and row.close_reason == "collected":
+        raise reg.SourceError(409, "这个缺口的原件已上传并入库")
     if row is None or row.status != "open" or row.plan not in gap_pool.HELD:
         raise reg.SourceError(404, "没有这个需人工下载的缺口")
     if row.plan == gap_pool.UPLOADED:
