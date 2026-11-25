@@ -9,10 +9,15 @@
   封闭题程序直转“待确认事实”，“不清楚”只给题目计数；开放题过 guard，严格档还须有有效客户同意、
   按摘要卡规则检查（受访角色同样检查）。同一题不同角色答案不一致标“矛盾”。
 - 确认单：确认一条事实只记确认人角色；同题其他条转“被取代”，矛盾解除。
-审计只记计数、包号和哈希，不记答案原文。
+- 答案池（四期 E3①，迁移 0057）：每条答案记来源渠道（资料预填 / 客户自评包 / 现场题卡 / 开放讨论）和可信度来源
+  （现场证据 > 客户资料 > 现场口述 > 客户自评）。自动确认只在：非关键控制项、同题无矛盾、有高可信来源（客户资料或现场证据）；
+  取可信度最高的一条为 auto，其余一致的转“被取代”。只有客户自评或现场口述的、矛盾的、关键控制项的留给人。
+  已自动确认的题来了不一致答案 → 退回待确认并标矛盾。自动确认按 spot_rate() 比例进抽检队列，抽检不通过退回人工。
+审计只记计数、包号、哈希和答案编号，不记答案原文。
 """
 import hashlib
 import json
+import random
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +27,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..core import audit
+from ..core.config import get_settings
 from ..core.db import utcnow
 from ..models import Project, User
 from ..models.survey import SurveyAnswer, SurveyPack, SurveyQuestion
@@ -36,6 +42,11 @@ INDUSTRY_CODES = {"BANK": "银行", "POWER": "电力"}   # E1 行业变体代码
 KINDS = ("closed", "open")
 MAX_RESPONSES = 50
 PACK_VERSION = 1
+# 答案池：渠道 → 允许的可信度来源（第一个是默认）；可信度数值越大越可信
+CHANNELS = {"prefill": ("document",), "self_assess": ("self",), "onsite": ("oral", "evidence"),
+            "discussion": ("oral",)}
+CREDIBILITY = {"evidence": 4, "document": 3, "oral": 2, "self": 1}
+HIGH_SOURCES = {"evidence", "document"}
 
 
 class SurveyError(ValueError):
@@ -50,6 +61,7 @@ class AnswerIn:
     qid: str
     value: str = ""
     text: str = ""
+    source: str = ""
 
 
 @dataclass
@@ -93,7 +105,7 @@ def _validate(q: dict) -> dict:
         raise SurveyError(422, f"{qid} 题面或选项含机密级内容")
     return {"qid": qid, "control": ",".join(controls)[:64], "kind": kind, "text": text, "options": options,
             "products": [product], "industries": [], "variants": variants,
-            "enabled": not q.get("problem", False)}
+            "enabled": not q.get("problem", False), "key_control": bool(q.get("key_control", False))}
 
 
 def import_bank(db: Session, questions: list[dict]) -> tuple[int, int]:
@@ -196,26 +208,69 @@ def _check_text(db: Session, user: User, project: Project, text: str, what: str)
 
 def _flag_conflicts(db: Session, project: Project) -> int:
     rows = list(db.scalars(select(SurveyAnswer).where(SurveyAnswer.project_id == project.id,
-                                                      SurveyAnswer.fact_status == "pending")))
+                                                      SurveyAnswer.fact_status.in_(("pending", "auto")))))
     by_q: dict[str, list[SurveyAnswer]] = {}
     for a in rows:
         by_q.setdefault(a.qid, []).append(a)
     conflicts = 0
     for group in by_q.values():
-        clash = len({a.value for a in group}) > 1 and len({a.respondent_role for a in group}) > 1
+        clash = len({a.value for a in group}) > 1 and len({(a.respondent_role, a.channel) for a in group}) > 1
         for a in group:
             a.conflict = clash
+            if clash and a.fact_status == "auto":          # 自动确认后来了不一致答案：退回人工
+                a.fact_status, a.spot_check = "pending", ""
         conflicts += clash
     return conflicts
 
 
+def spot_rate(db: Session, project: Project | None) -> float:
+    """自动确认进抽检队列的比例。F5（#473）自适应调比替换这里，调用方不变。"""
+    return get_settings().survey_spot_rate
+
+
+def _auto_confirm(db: Session, user: User, project: Project) -> int:
+    """按答案池规则自动确认，返回本次新自动确认的题数；审计只记题号、答案编号和抽检数。"""
+    rows = list(db.scalars(select(SurveyAnswer).where(SurveyAnswer.project_id == project.id,
+                                                      SurveyAnswer.kind == "closed",
+                                                      SurveyAnswer.fact_status.in_(("pending", "auto")))
+                           .order_by(SurveyAnswer.id)))
+    by_q: dict[str, list[SurveyAnswer]] = {}
+    for a in rows:
+        by_q.setdefault(a.qid, []).append(a)
+    key = set(db.scalars(select(SurveyQuestion.qid).where(SurveyQuestion.qid.in_(by_q),
+                                                         SurveyQuestion.key_control.is_(True))))
+    rate = spot_rate(db, project)
+    picked: list[SurveyAnswer] = []
+    for qid, group in by_q.items():
+        if (qid in key or not {a.source for a in group} & HIGH_SOURCES
+                or any(a.conflict or a.spot_check == "failed" for a in group)):   # 抽检不通过的题不再自动确认
+            continue
+        best = next((a for a in group if a.fact_status == "auto"), None)
+        if best is None:
+            best = max(group, key=lambda a: CREDIBILITY.get(a.source, 0))
+            best.fact_status, best.confirmed_at = "auto", utcnow()
+            best.spot_check = "pending" if random.random() < rate else ""
+            picked.append(best)
+        for a in group:
+            if a is not best:
+                a.fact_status = "superseded"
+    if picked:
+        db.flush()
+        audit.record(db, actor=user.username, action="survey.auto_confirm", result="ok", project_code=project.code,
+                     answer_ids=[a.id for a in picked], qids=[a.qid for a in picked],
+                     sampled=sum(a.spot_check == "pending" for a in picked))
+    return len(picked)
+
+
 def import_results(db: Session, user: User, project: Project, pack_code: str, given_hash: str,
-                   responses: list[ResponseIn]) -> dict:
+                   responses: list[ResponseIn], channel: str = "onsite") -> dict:
     pack = db.scalar(select(SurveyPack).where(SurveyPack.project_id == project.id, SurveyPack.code == pack_code))
     if pack is None:
         raise SurveyError(404, "调研包不存在")
     if given_hash != pack.pack_hash:
         raise _reject(db, user, project, "hash_mismatch", "调研包哈希不符：回传的不是本平台下发的这份包")
+    if channel not in CHANNELS:
+        raise SurveyError(422, "来源渠道只能是 prefill / self_assess / onsite / discussion")
     if not responses or len(responses) > MAX_RESPONSES:
         raise SurveyError(422, f"回传须有 1～{MAX_RESPONSES} 份答卷")
     if project.tier == "strict" and cards.active_consent(db, project) is None:
@@ -232,8 +287,11 @@ def import_results(db: Session, user: User, project: Project, pack_code: str, gi
             q = qs.get(a.qid)
             if q is None:
                 raise _reject(db, user, project, "unknown_question", f"{a.qid[:32]} 不在本调研包里")
+            source = a.source or CHANNELS[channel][0]
+            if source not in CHANNELS[channel]:
+                raise SurveyError(422, f"渠道 {channel} 的来源只能是 " + " / ".join(CHANNELS[channel]))
             base = {"project_id": project.id, "pack_id": pack.id, "qid": q.qid, "control": q.control,
-                    "respondent_role": role, "kind": q.kind}
+                    "respondent_role": role, "kind": q.kind, "channel": channel, "source": source}
             if q.kind == "closed":
                 if a.value == UNCLEAR:
                     unclear.append(q.qid)
@@ -253,11 +311,12 @@ def import_results(db: Session, user: User, project: Project, pack_code: str, gi
     pack.returned += 1
     db.flush()
     conflicts = _flag_conflicts(db, project)
+    auto = _auto_confirm(db, user, project)
     db.commit()
     out = {"facts": sum(a.kind == "closed" for a in rows), "unclear": len(unclear),
-           "open": sum(a.kind == "open" for a in rows), "conflicts": conflicts}
+           "open": sum(a.kind == "open" for a in rows), "conflicts": conflicts, "auto_confirmed": auto}
     audit.record(db, actor=user.username, action="survey.results", result="ok", project_code=project.code,
-                 pack=pack.code, pack_hash=pack.pack_hash, responses=len(responses), **out)
+                 pack=pack.code, pack_hash=pack.pack_hash, responses=len(responses), channel=channel, **out)
     return out
 
 
@@ -289,10 +348,58 @@ def confirm_fact(db: Session, user: User, project: Project, fact: SurveyAnswer, 
     for o in others:
         o.fact_status, o.conflict = "superseded", False
     fact.fact_status, fact.conflict = "confirmed", False
+    if fact.spot_check == "pending":                       # 人工确认后不用再抽检
+        fact.spot_check = ""
     fact.confirmed_role, fact.confirmed_at = role, utcnow()
     db.commit()
     audit.record(db, actor=user.username, action="survey.confirm", result="ok", project_code=project.code,
                  answer_id=fact.id, qid=fact.qid)
+    return fact
+
+
+# ---------- 答案池与抽检 ----------
+
+def pool(db: Session, project: Project) -> list[dict]:
+    """按题号汇聚答案。题状态：conflict 冲突 > confirmed 人工确认 > auto 自动确认 > pending 待确认；开放题为空。"""
+    by_q: dict[str, list[SurveyAnswer]] = {}
+    for a in list_answers(db, project):
+        by_q.setdefault(a.qid, []).append(a)
+    key = set(db.scalars(select(SurveyQuestion.qid).where(SurveyQuestion.qid.in_(by_q),
+                                                         SurveyQuestion.key_control.is_(True))))
+    out = []
+    for qid, group in by_q.items():
+        closed = [a for a in group if a.kind == "closed"]
+        status = next((s for s in ("conflict", "confirmed", "auto", "pending")
+                       if any(a.conflict if s == "conflict" else a.fact_status == s for a in closed)), "")
+        fact = next((a for a in closed if a.fact_status in ("confirmed", "auto")), None)
+        out.append({"qid": qid, "control": group[0].control, "key_control": qid in key, "status": status,
+                    "value": fact.value if fact and status != "conflict" else "", "answers": group})
+    return out
+
+
+def spot_queue(db: Session, project: Project) -> list[SurveyAnswer]:
+    return list(db.scalars(select(SurveyAnswer).where(SurveyAnswer.project_id == project.id,
+                                                      SurveyAnswer.fact_status == "auto",
+                                                      SurveyAnswer.spot_check == "pending")
+                           .order_by(SurveyAnswer.qid)))
+
+
+def spot_verdict(db: Session, user: User, project: Project, fact: SurveyAnswer, passed: bool) -> SurveyAnswer:
+    """抽检结论：通过保持自动确认；不通过退回待确认，同题被它取代的答案一并退回，由人确认。"""
+    if fact.fact_status != "auto" or fact.spot_check != "pending":
+        raise SurveyError(422, "只有待抽检的自动确认事实能下抽检结论")
+    fact.spot_check = "passed" if passed else "failed"
+    if not passed:
+        fact.fact_status = "pending"
+        for o in db.scalars(select(SurveyAnswer).where(SurveyAnswer.project_id == project.id,
+                                                       SurveyAnswer.qid == fact.qid,
+                                                       SurveyAnswer.fact_status == "superseded")):
+            o.fact_status = "pending"
+        db.flush()
+        _flag_conflicts(db, project)
+    db.commit()
+    audit.record(db, actor=user.username, action="survey.spot_check", result="ok" if passed else "failed",
+                 project_code=project.code, answer_id=fact.id, qid=fact.qid)
     return fact
 
 

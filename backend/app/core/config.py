@@ -94,6 +94,8 @@ class Settings(BaseSettings):
     kb_sample_rate_src: float = 0.0
     kb_sample_rate_src_partial: float = 0.4   # 有条款被机密级检测退回的那几份（负责人 2026-11-16）
     kb_sample_fail_max: float = 0.1
+    # 四期 E3① 答案池：自动确认的事实按此比例随机进人工抽检队列；自适应调比由 F5（#473）替换 survey.spot_rate()
+    survey_spot_rate: float = 0.1
     # 知识审核 Agent（二期 B11，二期开发计划第十二节第二级）：公开资料的解读、映射、方法和只含公开资料的案例、异议应答，
     # 提交后由程序规则 + 知识审核 Agent（经网关）逐项检查，全部通过的自动发布并按比例抽检，存疑的进人工队列。
     # 最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX 时暂停；超过一半时抽检比例加倍。
