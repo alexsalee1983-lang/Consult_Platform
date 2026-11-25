@@ -169,3 +169,48 @@ def test_import_ok_closes_collected_gaps(tmp_path):
         assert g.status == "closed" and g.close_reason == "collected"
         a = db.scalar(select(AuditLog).where(AuditLog.action == "kb.gap.return").order_by(AuditLog.id.desc()))
         assert a.result == "allowed" and json.loads(a.detail)["files"] == 1 and json.loads(a.detail)["closed"] == 1
+
+
+def test_publish_manifest_built_from_registry_and_unmatched_listed(tmp_path):
+    import csv
+    import io
+
+    with SessionLocal() as db:
+        url = _planned_direct(db)
+        src = db.scalar(select(KbSource).where(KbSource.url == GP))
+        src.publisher = "虚拟发布机关"
+        db.commit()
+        b = _batch(tmp_path, url)
+        text, unmatched = gap_pool.publish_manifest(db, b)
+    rows = list(csv.DictReader(io.StringIO(text)))
+    assert unmatched == []
+    assert rows == [{"文件名": "a.html", "名称": "测试来源", "发布机关": "虚拟发布机关", "原网址": url,
+                     "现行状态": "现行", "获取方式": "已下载",
+                     "sha256": hashlib.sha256(b"<html>public</html>").hexdigest()}]
+
+
+def test_publish_manifest_skips_files_without_registered_source(tmp_path):
+    with SessionLocal() as db:
+        _planned_direct(db)
+        src = db.scalar(select(KbSource).where(KbSource.url == GP))
+        src.status = "candidate"                                    # 候选来源不算登记，不能自动入库
+        db.commit()
+        text, unmatched = gap_pool.publish_manifest(db, _batch(tmp_path, GP + "law/1.html"))
+    assert unmatched == ["a.html"] and text.count("\n") == 1          # 只有表头
+
+
+def test_import_auto_manifest_needs_as_and_hands_csv_to_publish(tmp_path, monkeypatch):
+    with SessionLocal() as db:
+        url = _planned_direct(db)
+    b = _batch(tmp_path, url)
+    assert cli.main(["kb-acquire-import", str(b), "--auto-manifest"]) == 1
+    seen: dict = {}
+
+    def fake_publish(args):
+        seen["csv"] = open(args.manifest, encoding="utf-8").read()
+        seen["dir"] = args.dir
+        return 0
+
+    monkeypatch.setattr(cli, "kb_source_publish", fake_publish)
+    assert cli.main(["kb-acquire-import", str(b), "--auto-manifest", "--as", "kbadmin"]) == 0
+    assert "测试来源" in seen["csv"] and seen["dir"] == str(b)
