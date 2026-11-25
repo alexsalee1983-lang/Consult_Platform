@@ -136,7 +136,8 @@ jobs:
           export E2E_USER="$(env_val TEST_ACCOUNT_USERNAME)" E2E_PASS="$(env_val TEST_ACCOUNT_PASSWORD)"
           echo "::add-mask::$E2E_PASS"
           sleep $(( 31 - $(date +%s) % 30 ))   # 冒烟测试刚用过当前窗口的动态码，换新窗口防重放
-          export E2E_TOTP="$(cd .. && docker compose exec -T backend python -c 'import pyotp, sys; print(pyotp.TOTP(sys.argv[1]).now())' "$(env_val TEST_ACCOUNT_TOTP_SECRET)")"
+          secret="$(env_val TEST_ACCOUNT_TOTP_SECRET)"
+          export E2E_TOTP="$(cd .. && docker compose exec -T backend python -c 'import pyotp, sys; print(pyotp.TOTP(sys.argv[1]).now())' "$secret")"
           npx playwright test
       - name: 上传端到端失败截图与 trace
         if: failure()
