@@ -90,7 +90,8 @@ def test_finalize_summary_fills_manual_row() -> None:
 
 def test_prompt_formats_with_all_fields() -> None:
     txt = R.PROMPT.format(pr=1, env="A", dir="/d", web="8180", head="abc1234", logdir="/l", verdict="不通过",
-                          why="x", up="已 down", howto="h", recheck="", failed="", gh="gh")
+                          why="x", up="已 down", howto="h", recheck="", failed="", gh="gh",
+                          ctx_max=30000, tool_max=4000)
     assert "RESULT:" in txt
 
 
@@ -230,3 +231,78 @@ def test_pr_test_sh_skips_unnamed_blocks_but_not_smoke_or_data_protection() -> N
     assert "PR_CMD_ONLY" in sh
     skip = sh.index("PR_CMD_ONLY")
     assert sh.index("冒烟测试") < skip and sh.index("数据保护检查") < skip  # 冒烟与数据保护在裁剪之前、无条件执行
+
+
+# —— #450：单次上下文 ≤3 万 token 换会话、工具输出截断配置 ——
+
+def test_context_of_reads_per_call_usage_and_skips_cumulative_result() -> None:
+    line = ('{"type":"assistant","message":{"usage":{"input_tokens":12,'
+            '"cache_read_input_tokens":20000,"cache_creation_input_tokens":988,"output_tokens":50}}}')
+    assert R.context_of(line) == 21000
+    assert R.context_of('{"type":"result","usage":{"input_tokens":999999}}') is None
+    assert R.context_of('{"usage":{"prompt_tokens":4321,"completion_tokens":9}}') == 4321
+    assert R.context_of("普通文本输出") is None
+    assert R.context_of("{坏 json") is None
+
+
+def _fake_agent(tmp_path: Path, contexts: list[int]) -> list[str]:
+    script = tmp_path / "agent.py"
+    lines = [f'{{"type":"assistant","message":{{"usage":{{"input_tokens":{c}}}}}}}' for c in contexts]
+    script.write_text("import sys, time\n" + "".join(
+        f"print({ln!r}, flush=True)\ntime.sleep(0.05)\n" for ln in lines) + "time.sleep(30)\n", encoding="utf-8")
+    import sys as _sys
+    return [_sys.executable, str(script)]
+
+
+def test_run_agent_kills_session_over_context_cap(tmp_path: Path) -> None:
+    out = tmp_path / "agent.jsonl"
+    stats = R.run_agent(_fake_agent(tmp_path, [5000, 18000, 31000, 40000]), str(tmp_path), {}, out, 30000)
+    assert stats["capped"] is True
+    assert stats["calls"] == 3 and stats["max_ctx"] == 31000
+    assert "40000" not in out.read_text(encoding="utf-8")  # 超限即停，后面的调用没发生
+
+
+def test_run_agent_under_cap_runs_to_end(tmp_path: Path) -> None:
+    script = tmp_path / "ok.py"
+    script.write_text('print(\'{"usage":{"input_tokens":1000}}\')\nprint(\'{"usage":{"input_tokens":3000}}\')\n',
+                      encoding="utf-8")
+    import sys as _sys
+    stats = R.run_agent([_sys.executable, str(script)], str(tmp_path), {}, tmp_path / "a.jsonl", 30000)
+    assert stats == {"calls": 2, "max_ctx": 3000, "avg_ctx": 2000, "capped": False}
+
+
+def test_agent_env_caps_tool_output(monkeypatch) -> None:
+    monkeypatch.setattr(R, "TOOL_OUTPUT_MAX", 3000)
+    env = R.agent_env({"PATH": "x"})
+    assert env["BASH_MAX_OUTPUT_LENGTH"] == "3000" and env["PATH"] == "x"
+
+
+def test_prompt_states_caps_and_continue_prompt_is_short(tmp_path: Path) -> None:
+    p = R.build_prompt("A", 7, "abcdef123", tmp_path, "不通过", "", "0", BODY_HUMAN, [])
+    assert str(R.TOOL_OUTPUT_MAX) in p and str(R.CTX_MAX) in p
+    c = R.continue_prompt("A", 7, "abcdef123", tmp_path, 2)
+    assert len(c) < 1500 and "summary.md" in c and "第 2 个会话" in c
+
+
+def test_sessions_rotate_until_label_changes(tmp_path: Path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_run(cmd: list[str], cwd: str, env: dict, out: Path, cap: int) -> dict:
+        calls.append(cmd[-1])
+        return {"calls": 4, "max_ctx": 31000, "avg_ctx": 20000, "capped": True}
+
+    labels = iter([["待测试"], ["测试通过"]])
+    monkeypatch.setattr(R, "run_agent", fake_run)
+    monkeypatch.setattr(R, "pr_labels", lambda pr: next(labels))
+    monkeypatch.setattr(R, "RUNNER_AGENT_TMPL", "agent --session-id {session} --message {prompt}")
+    stats = R.agent_sessions("A", 7, "abcdef123", tmp_path, "首个提示")
+    assert len(calls) == 2 and calls[0] == "首个提示" and "第 2 个会话" in calls[1]
+    assert stats["sessions"] == 2 and stats["calls"] == 8 and stats["max_ctx"] == 31000
+    assert (tmp_path / "usage.json").exists()
+
+
+def test_sessions_stop_at_max(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(R, "run_agent", lambda *a: {"calls": 1, "max_ctx": 30001, "avg_ctx": 30001, "capped": True})
+    monkeypatch.setattr(R, "pr_labels", lambda pr: ["待测试"])
+    monkeypatch.setattr(R, "MAX_SESSIONS", 3)
+    assert R.agent_sessions("A", 7, "abcdef123", tmp_path, "p")["sessions"] == 3
