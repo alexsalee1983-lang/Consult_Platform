@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
+import { Navigate, Outlet, Route, Routes, useParams, useSearchParams } from "react-router";
 import { api } from "./api.js";
 import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireLead, RequireSysAdmin } from "./auth.jsx";
 import { Loading } from "./components/common.jsx";
@@ -26,6 +26,7 @@ import Login from "./pages/Login.jsx";
 import Overview from "./pages/Overview.jsx";
 import Password from "./pages/Password.jsx";
 import Projects from "./pages/Projects.jsx";
+import { AnalysisPage, InputPage, OutputPage, ProjectLayout, SettingsPage, SurveyFull } from "./pages/ProjectPages.jsx";
 import Models from "./pages/Models.jsx";
 import RuntimeConfig from "./pages/RuntimeConfig.jsx";
 import Users from "./pages/Users.jsx";
@@ -48,8 +49,19 @@ function Business() {
 
 function OverviewPage() {
   const { code } = useParams();
-  return <Overview code={code} />;
+  const [q] = useSearchParams();
+  return <Overview key={`${code}:${q.get("focus") || ""}`} code={code} focus={q.get("focus") || undefined} />;
 }
+
+// 项目内导航页：路由参数 code 传给页面组件（页面组件不依赖路由，便于组件测试）
+function withCode(Page) {
+  return function ProjectRoute() {
+    const { code } = useParams();
+    return <Page code={code} />;
+  };
+}
+const Input = withCode(InputPage), Analysis = withCode(AnalysisPage), Output = withCode(OutputPage),
+  Settings = withCode(SettingsPage), SurveyPage = withCode(SurveyFull);
 
 function DeliverablePage() {
   const { code, dcode } = useParams();
@@ -81,15 +93,22 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/project/:code/survey" element={<RequireAuth><RequireBusiness><SurveyPage /></RequireBusiness></RequireAuth>} />
       <Route element={<Shell />}>
         <Route index element={<HomeRedirect />} />
         <Route element={<Business />}>
           <Route path="/workbench" element={<Workbench />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/projects" element={<Projects />} />
-          <Route path="/project/:code" element={<OverviewPage />} />
-          <Route path="/project/:code/deliverables" element={<DeliverableHome />} />
-          <Route path="/project/:code/deliverables/:dcode" element={<DeliverablePage />} />
+          <Route path="/project/:code" element={<ProjectLayout />}>
+            <Route index element={<OverviewPage />} />
+            <Route path="input" element={<Input />} />
+            <Route path="analysis" element={<Analysis />} />
+            <Route path="output" element={<Output />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="deliverables" element={<DeliverableHome />} />
+            <Route path="deliverables/:dcode" element={<DeliverablePage />} />
+          </Route>
           <Route path="/chat/:code" element={<ChatPage />} />
           <Route path="/deletions" element={<RequireLead><Deletions /></RequireLead>} />
           <Route path="/portfolio" element={<RequireLead><Portfolio /></RequireLead>} />

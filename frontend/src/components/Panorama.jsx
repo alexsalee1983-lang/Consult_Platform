@@ -1,10 +1,9 @@
 // 项目全景（四期 A25①）：列 = 产品阶段、行 = 泳道，数据由 GET /api/projects/{code}/panorama 按产品配置生成。
 // 当前阶段展开、已完成阶段折叠、未来阶段只列要做的事；视图：全部 / 只看我的 / 只看例外 / 回放。
-// 点节点：页面路由直接跳转；drawer:card:{id} 就地展开已有确认卡；drawer:run 滚到交付链面板（抽屉体系留给 A25②）。
+// A25②：数据由驾驶舱取好传入；默认“只看例外”，已自动完成的折叠成一行；点节点：drawer:* 交给驾驶舱开抽屉，
+// 页面路由直接跳转；focus = 节点 id 时（各页“⌖ 全景”）切到全部视图并闪烁高亮该节点。
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { api } from "../api.js";
-import ConfirmCard from "./ConfirmCard.jsx";
 
 const COLOR = { ok: "var(--ok)", ai: "var(--vio)", cur: "var(--cyan)", blk: "var(--crim)", todo: "var(--tx3)" };
 const LABEL = { ok: "已完成", ai: "AI 在做", cur: "进行中", blk: "卡住", todo: "未开始" };
@@ -12,16 +11,37 @@ const VIEWS = [["all", "全部"], ["mine", "只看我的"], ["exc", "只看例�
 const WIDTH = { done: 96, cur: 250, next: 180, later: 180 };
 const LANE_W = 76, HEAD = 30, NODE_H = 32, GAP = 6, PAD = 8;
 
-export default function Panorama({ code, confirmations, onChange, reload }) {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-  const [view, setView] = useState("all");
+// 例外 = 卡住或进行中、需要人处理的节点；AI 已自动办完的（AI 泳道 ok）计入“自动完成”折叠行
+export const isException = (n) => n.status === "blk" || n.status === "cur";
+export const autoDone = (data) => data.nodes.filter((n) => n.lane === "ai" && n.status === "ok").length;
+
+// 影响面 = 沿连线下游能到达的节点数（卡住 D3 的卡也卡住第 4 步、D4……）
+export function impact(data, id) {
+  const seen = new Set();
+  const stack = [id];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const e of data.edges) if (e.from === cur && !seen.has(e.to)) { seen.add(e.to); stack.push(e.to); }
+  }
+  return seen.size;
+}
+
+// 待你处理：未处理的确认卡 + 待签署的交付件，按影响面从大到小；同影响面确认卡在前
+export function todos(data) {
+  const rows = data.nodes
+    .filter((n) => n.type === "card" || (n.type === "signoff" && n.status === "cur"))
+    .map((n) => ({ ...n, impact: impact(data, n.id) }));
+  return rows.sort((a, b) => b.impact - a.impact || (a.type === "card" ? 0 : 1) - (b.type === "card" ? 0 : 1));
+}
+
+export default function Panorama({ code, data, focus, onOpen }) {
+  const [view, setView] = useState(focus ? "all" : "exc");
   const [step, setStep] = useState(-1);          // 回放：已显示到第几列
-  const [card, setCard] = useState(null);
   const timer = useRef(null);
+  const focusRef = useRef(null);
   const navigate = useNavigate();
 
-  useEffect(() => { api.panorama(code).then(setData).catch(setError); }, [code, reload]);
+  useEffect(() => { focusRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" }); }, [focus, data]);
   useEffect(() => {
     clearInterval(timer.current);
     if (view !== "replay" || !data) return undefined;
@@ -30,7 +50,6 @@ export default function Panorama({ code, confirmations, onChange, reload }) {
     return () => clearInterval(timer.current);
   }, [view, data]);
 
-  if (error) return <section className="pnl pad"><div className="err">{error.message}</div></section>;
   if (!data) return null;
 
   // 布局：已完成列折叠成每条泳道一个汇总块；其余列逐个列节点
@@ -66,18 +85,16 @@ export default function Panorama({ code, confirmations, onChange, reload }) {
   }
 
   const visible = (b) => view !== "replay" || cols.find((c) => c.id === b.col).i <= step;
-  const dim = (b) => (view === "mine" && !data.my_lanes.includes(b.lane)) || (view === "exc" && b.status !== "blk");
+  const dim = (b) => (view === "mine" && !data.my_lanes.includes(b.lane)) || (view === "exc" && !isException(b));
   const open = (b) => {
     if (b.folded || !b.target) return;
-    if (b.target.startsWith("drawer:card:")) {
-      setCard(confirmations.find((c) => `drawer:card:${c.id}` === b.target) || null);
-    } else if (b.target === "drawer:run") {
-      document.querySelector('section[aria-label="交付链"]')?.scrollIntoView({ behavior: "smooth" });
-    } else {
-      navigate(b.target);
-    }
+    if (b.target.startsWith("drawer:")) onOpen(b.target);
+    else if (b.type === "evidence") navigate(`/project/${encodeURIComponent(code)}/input`);   // 资料在“输入”页
+    else navigate(b.target);
   };
   const cur = cols.find((c) => c.id === data.current);
+  const lit = focus ? pos[focus] : null;
+  const done = autoDone(data);
 
   return (
     <section className="pnl pad" aria-label="项目全景">
@@ -115,7 +132,8 @@ export default function Panorama({ code, confirmations, onChange, reload }) {
               style={{ fill: "none", stroke: "var(--ln2)", opacity: dim(a) || dim(b) ? 0.2 : 0.8 }} />;
           })}
           {boxes.filter(visible).map((b) => (
-            <g key={b.id} onClick={() => open(b)} style={{ cursor: b.folded ? "default" : "pointer", opacity: dim(b) ? 0.2 : 1 }}>
+            <g key={b.id} data-node={b.id} ref={b === lit ? focusRef : undefined} className={b === lit ? "flash" : undefined}
+              onClick={() => open(b)} style={{ cursor: b.folded ? "default" : "pointer", opacity: dim(b) ? 0.2 : 1 }}>
               <title>{`${b.title}${b.subtitle ? ` · ${b.subtitle}` : ""} · ${LABEL[b.status]}`}</title>
               <rect x={b.x} y={b.y} width={b.w} height={NODE_H} rx={5} style={{ fill: "var(--s3)", stroke: COLOR[b.status] }} />
               <circle cx={b.x + 10} cy={b.y + NODE_H / 2} r={4} style={{ fill: COLOR[b.status] }} />
@@ -129,10 +147,11 @@ export default function Panorama({ code, confirmations, onChange, reload }) {
       <div className="sub" style={{ display: "flex", gap: 12 }}>
         {Object.entries(LABEL).map(([k, t]) => <span key={k}><span style={{ color: COLOR[k] }}>●</span> {t}</span>)}
       </div>
-      {card && (
-        <ul className="lst">
-          <ConfirmCard c={card} onDone={() => { setCard(null); onChange(); }} />
-        </ul>
+      {view === "exc" && done > 0 && (
+        <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setView("all")}
+          title="暂按交付链已自动完成的步骤计；本周口径待 F5 自动化账本接入">
+          <span style={{ color: "var(--ok)" }}>✓</span> 本周自动完成 {done} 项 · 展开
+        </button>
       )}
     </section>
   );
