@@ -10,7 +10,7 @@ from app.kb import autopublish, transfer
 from app.kb import review as rv
 from app.kb.files import format_entry, parse_entry
 from app.kb.importer import import_entry
-from app.models import AuditLog, KbItem, User
+from app.models import AuditLog, KbItem, KbVersion, User
 
 from .conftest import create_user
 from .test_kb_autopublish import LAW, _batch
@@ -126,15 +126,15 @@ def test_rule_failures_metadata():
 
 
 def _published_pair(tmp_path, op):
-    """发布一条公开来源的依据原文，再另造一条公司做法类（来源改为专家、已去标识）；返回两者 doc_id 和公司类 doc_id。"""
+    """发布一批公开来源的依据原文，返回本批新发布且可导出的一条 doc_id（共享库下只挑本测试新增的条目）。"""
     manifest, src, titles = _batch(tmp_path, [("ok.txt", LAW, {})])
     with SessionLocal() as db:
+        before = {i.doc_id for i, _ in transfer.exportable(db)}
         autopublish.run(db, db.merge(op), manifest, src)
-        pubs = [(i, i.versions[-1]) for i in db.scalars(select(KbItem)) if i.versions and i.current_version_id
-                and i.versions[-1].status == "published" and i.versions[-1].source_type == "public"
-                and i.versions[-1].deid_status == "not_needed" and i.doc_type == "SRC"]
-        item = pubs[-1][0]
-        return item.doc_id
+        new = sorted(i.doc_id for i, _ in transfer.exportable(db)
+                     if i.doc_id not in before and i.doc_type == "SRC")
+        assert new
+        return new[-1]
 
 
 def test_export_include_company(tmp_path, monkeypatch):
@@ -142,7 +142,7 @@ def test_export_include_company(tmp_path, monkeypatch):
     doc_id = _published_pair(tmp_path, op)
     with SessionLocal() as db:
         item = db.scalar(select(KbItem).where(KbItem.doc_id == doc_id))
-        v = db.get(type(item.versions[-1]), item.current_version_id)
+        v = db.get(KbVersion, item.current_version_id)
         v.source_type, v.deid_status, v.source_detail = "expert", "passed", "公司做法：示范"
         db.commit()
         assert doc_id not in {i.doc_id for i, _ in transfer.exportable(db)}
