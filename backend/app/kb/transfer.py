@@ -2,6 +2,7 @@
 
 导出（python -m app.cli kb-export <目录> --as <知识专家或知识管理员>）：
 - 只导出未下线、现行版本已发布、来源为公开资料（无需去标识）的条目；抽检或复查不通过的不导出。
+- 加 include_company（--include-company，四期 B25 试用机快照）另含非公开来源且已去标识通过的公司做法类条目；生产环境拒绝。
 - 每条一个条目文件（files.format_entry 格式），另写 manifest.json：每条的文件 sha256、原 doc_id、版本、作者、
   审核记录（审核人、审核项、结论、时间；不带意见原文和 Agent 问题清单）、自动发布方式、抽检状态、生效和复审日期。
 - 打印 manifest.json 的 sha256，导入时必须原样提供（经测试机以外的渠道交给生产运维），用来发现清单被改动。
@@ -30,6 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
 
 from ..core import audit
+from ..core.config import get_settings
 from ..core.db import utcnow
 from ..models import KbItem, KbItemAlias, KbReview, KbVersion, User
 from . import citations, importer, refs
@@ -75,10 +77,13 @@ def _iso(d: date | datetime | None) -> str:
     return d.isoformat() if d else ""
 
 
-def exportable(db: Session) -> list[tuple[KbItem, KbVersion]]:
-    rows = db.execute(select(KbItem, KbVersion).join(KbVersion, KbVersion.id == KbItem.current_version_id)
-                      .where(KbItem.retired.is_(False), KbVersion.status == "published",
-                             KbVersion.source_type == "public", KbVersion.deid_status == "not_needed")).all()
+def exportable(db: Session, include_company: bool = False) -> list[tuple[KbItem, KbVersion]]:
+    """默认只导公开来源；include_company 另含公司做法类（非公开来源且已去标识通过，试用机快照用，B25）。"""
+    q = select(KbItem, KbVersion).join(KbVersion, KbVersion.id == KbItem.current_version_id).where(
+        KbItem.retired.is_(False), KbVersion.status == "published")
+    pub = (KbVersion.source_type == "public") & (KbVersion.deid_status == "not_needed")
+    comp = (KbVersion.source_type != "public") & KbVersion.deid_status.in_(("passed", "not_needed"))
+    rows = db.execute(q.where(pub | comp if include_company else pub)).all()
     rows = [(i, v) for i, v in rows if v.sample_state != "failed" and v.recheck_state != "failed"]
     return sorted(rows, key=lambda r: (r[0].doc_type != "SRC", r[0].doc_id))
 
@@ -97,13 +102,15 @@ def _entry(item: KbItem, v: KbVersion) -> Entry:
     return Entry(key=item.import_key or item.doc_id.lower(), meta=m, content=c)
 
 
-def export(db: Session, user: User, out: Path) -> ExportReport:
+def export(db: Session, user: User, out: Path, include_company: bool = False) -> ExportReport:
     rv.require_knowledge(db, user)
+    if include_company and get_settings().is_prod:
+        raise TransferError("生产环境禁止导出公司做法类知识（--include-company 只限测试 / 试用环境）")
     if out.exists() and any(out.iterdir()):
         raise TransferError(f"目录不是空的：{out}")
     out.mkdir(parents=True, exist_ok=True)
     entries = []
-    for n, (item, v) in enumerate(exportable(db), 1):
+    for n, (item, v) in enumerate(exportable(db, include_company), 1):
         e = _entry(item, v)
         name = f"{n:04d}-{e.key}.md"
         data = format_entry(e).encode("utf-8")
@@ -124,7 +131,8 @@ def export(db: Session, user: User, out: Path) -> ExportReport:
     (out / MANIFEST).write_bytes(data)
     r = ExportReport(out=out, count=len(entries), manifest_sha256=sha256(data))
     audit.record(db, actor=user.username, action="kb.export", result="allowed", count=r.count,
-                 manifest_sha256=r.manifest_sha256)
+                 manifest_sha256=r.manifest_sha256,
+                 include_company=include_company)
     return r
 
 
