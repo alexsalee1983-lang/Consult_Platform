@@ -826,6 +826,55 @@ def kb_source_registry(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_source_seed(args: argparse.Namespace) -> int:
+    """来源批量登记（四期 B25）：按资料仓的已批准来源清单（CSV）登记为候选或试用，规则与审计同页面登记。
+
+    已登记的地址跳过；坏行报行号、不影响其他行。转正式仍须另一位知识管理员在页面批准，本命令不做。
+    """
+    import csv
+    from pathlib import Path
+
+    from .kb import review as rv
+    from .kb import source_registry as sr
+    from .models import KbSource
+
+    path = Path(args.csv)
+    if not path.is_file():
+        print("来源清单文件不存在", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == args.as_user))
+        if user is None or not user.is_active:
+            print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
+            return 1
+        if not rv.is_knowledge_user(db, user):
+            print("只有知识专家、知识管理员能登记来源", file=sys.stderr)
+            return 1
+        made = skipped = 0
+        bad: list[str] = []
+        with path.open(encoding="utf-8-sig", newline="") as f:
+            for n, row in enumerate(csv.DictReader(f), start=2):
+                url = (row.get("url") or "").strip()
+                if url and db.scalar(select(KbSource.id).where(KbSource.url == url)) is not None:
+                    skipped += 1
+                    continue
+                try:
+                    src = sr.create(db, user, name=row.get("name") or "", url=url, license=row.get("license") or "",
+                                    authority_kind=(row.get("authority_kind") or "").strip(),
+                                    publisher=row.get("publisher") or "", note=row.get("note") or "")
+                    if args.to == "trial":
+                        sr.transition(db, user, src.code, "trial", "批量登记（资料仓已批准来源清单）")
+                except sr.SourceError as e:
+                    db.rollback()
+                    bad.append(f"第 {n} 行：{e.detail}")
+                    continue
+                made += 1
+    print(f"来源批量登记：新登记 {made} 个（{sr.STATUS_LABELS[args.to]}），跳过 {skipped} 个已登记，坏行 {len(bad)} 个")
+    for line in bad:
+        print(line, file=sys.stderr)
+    return 3 if bad else 0
+
+
 def kb_acquire_sources(args: argparse.Namespace) -> int:
     """知识源清单（三期 B25①）：来源确认队列的缺口经网关交 kb-builder 列清单，程序核对后写成 JSON 供来源确认。"""
     import json
@@ -1318,6 +1367,11 @@ def main(argv: list[str] | None = None) -> int:
     ksr = sub.add_parser("kb-source-registry", help="导出来源登记表里试用、正式的来源（CSV，供采集机按表抓取）")
     ksr.add_argument("--json", action="store_true", help="输出 JSON")
     ksr.set_defaults(func=kb_source_registry)
+    kss = sub.add_parser("kb-source-seed", help="按资料仓已批准来源清单（CSV）批量登记为候选或试用；转正式仍须知识管理员在页面批准")
+    kss.add_argument("csv", help="来源清单 CSV（列：name,url,publisher,license,authority_kind,note）")
+    kss.add_argument("--as", dest="as_user", required=True, help="登记人（知识专家或知识管理员）")
+    kss.add_argument("--to", choices=("candidate", "trial"), default="candidate", help="登记后的状态，默认候选")
+    kss.set_defaults(func=kb_source_seed)
     sub.add_parser("kb-reconfirm-scan", help="立即扫描复审到期的公开知识条目，排知识审核 Agent 复查（worker 每小时自动执行）")         .set_defaults(func=kb_reconfirm_scan)
     ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
