@@ -207,3 +207,27 @@ strict:
   - 数据全生命周期安全
   - 数据出境与共享
   - 监测与事件处置
+# 四期 C21（草稿，待产品专家复核）：资料需求清单、受访角色画像、客户自评问卷，全景客户行与答案池（A25/E3）读取。
+# 受访角色、预填来源与题库同一词表（docs/题库格式.md）；资料只要统计与配置摘要，不收机密级内容。
+inputs:
+  materials:
+  - {id: M-01, name: 数据安全组织与职责文件, provider: 数据负责人, blocks: {step: facts, deliverables: [D3, D4]}, prefill: org_chart, required: true}
+  - {id: M-02, name: 数据资产清单（系统、数据类别与数量，不含数据内容）, provider: 数据负责人, blocks: {step: design, deliverables: [D3, D5]}, prefill: data_inventory, required: true}
+  - {id: M-03, name: 现行数据安全与分类分级制度清单, provider: 合规风控, blocks: {step: facts, deliverables: [D3, D6]}, prefill: policy_docs, required: true}
+  - {id: M-04, name: 数据共享、委托处理与出境情况统计（对象类别与次数）, provider: 法务, blocks: {step: gap, deliverables: [D4]}, prefill: data_inventory, required: true}
+  - {id: M-05, name: 承载重要数据的系统清单（类别与数量）, provider: IT运维, blocks: {step: gap, deliverables: [D4, D5]}, prefill: asset_list, required: false}
+  - {id: M-06, name: 近一年数据安全事件与处置记录摘要（去标识）, provider: 安全负责人, blocks: {step: gap, deliverables: [D4]}, prefill: incident_record, required: false}
+  - {id: M-07, name: 以往数据安全评估或检查的问题清单, provider: 合规风控, blocks: {step: gap, deliverables: [D4]}, prefill: prior_report, required: false}
+  personas:
+  - {id: P-01, role: 数据负责人, focus: [数据安全组织与职责, 数据资产与分类分级, 数据全生命周期安全], depth: [quick, full, deep], minutes: 60}
+  - {id: P-02, role: 法务, focus: [数据出境与共享], depth: [full, deep], minutes: 45}
+  - {id: P-03, role: 合规风控, focus: [数据安全组织与职责, 数据出境与共享], depth: [full, deep], minutes: 45}
+  - {id: P-04, role: IT运维, focus: [数据全生命周期安全, 监测与事件处置], depth: [full, deep], minutes: 45}
+  - {id: P-05, role: 业务负责人, focus: [数据资产与分类分级, 数据全生命周期安全], depth: [quick, full, deep], minutes: 30}
+  - {id: P-06, role: 安全负责人, focus: [监测与事件处置], depth: [full, deep], minutes: 45}
+  questionnaire:
+    channels: [self]
+    kinds: [closed]
+    domains: [数据安全组织与职责, 数据资产与分类分级, 数据全生命周期安全, 数据出境与共享, 监测与事件处置]
+    max_questions: 30
+    due_days: 5

@@ -68,6 +68,7 @@ questions:
     stem: 安全监控工作在信通、调控中心和各厂站之间如何分工？
     followups:
     - 生产控制区的监控由谁负责？
+  channel: self
   problem: false
 - id: SOC-PRC-001
   product: SOC
@@ -116,6 +117,7 @@ questions:
   prefill:
   - source: runbooks
   - source: siem_stats
+  channel: prefill
   problem: false
 - id: SOC-TEC-001
   product: SOC
@@ -173,6 +175,7 @@ questions:
     stem: 生产控制区、管理信息区的监控数据分别如何接入？是否有单向传输或隔离要求？
     followups:
     - 厂站侧设备的数据采集有什么限制？
+  channel: prefill
   problem: false
 - id: SOC-MET-001
   product: SOC
@@ -221,4 +224,5 @@ questions:
   prefill:
   - source: siem_stats
   - source: prior_report
+  channel: prefill
   problem: false

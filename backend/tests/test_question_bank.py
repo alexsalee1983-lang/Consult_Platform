@@ -23,12 +23,13 @@ CONTROLS = {c["id"]: c for c in CATALOG["controls"]}
 CHECKPOINTS = {f"{c['id']}.{cp['id']}": c["id"] for c in CATALOG["controls"] for cp in c.get("checkpoints") or []}
 
 DEPTHS = {"quick", "full", "deep"}
-ROLES = {"安全负责人", "运营值班", "安全分析", "IT运维", "业务负责人", "合规风控", "管理层"}
+ROLES = {"安全负责人", "运营值班", "安全分析", "IT运维", "业务负责人", "合规风控", "管理层", "数据负责人", "法务", "人力行政"}
 PREFILL = {"asset_list", "org_chart", "policy_docs", "siem_stats", "ticket_export", "runbooks",
-           "prior_report", "incident_record", "self_assessment", "none"}
+           "prior_report", "incident_record", "self_assessment", "data_inventory", "risk_register", "none"}
+CHANNELS = {"prefill", "self", "onsite", "discussion"}  # 资料预填 / 客户自评 / 现场题卡 / 开放讨论
 INDUSTRIES = {"BANK", "POWER"}
 REQUIRED = ["id", "product", "domain", "control_ids", "checkpoints", "kind", "stem", "anchors", "followups",
-            "depth", "respondent_roles", "prefill", "problem"]
+            "depth", "respondent_roles", "prefill", "channel", "problem"]
 BANNED = ["不合格", "测评结论", "认证结论", "通过测评", "审计发现"]
 
 
@@ -90,6 +91,10 @@ def _check_question(q: dict, product: str, data: dict) -> None:
     assert q["respondent_roles"] and set(q["respondent_roles"]) <= ROLES
     assert isinstance(q["followups"], list) and isinstance(q["prefill"], list)
     assert q["prefill"] and {p["source"] for p in q["prefill"]} <= PREFILL
+    assert q["channel"] in CHANNELS, f"{qid} 获取渠道不对"
+    assert (q["kind"] == "open") == (q["channel"] == "discussion"), f"{qid} 开放题且只有开放题走开放讨论"
+    if q["channel"] == "prefill":
+        assert {p["source"] for p in q["prefill"]} - {"none", "self_assessment"}, f"{qid} 资料预填题须有资料来源"
     levels = [a["level"] for a in q["anchors"]]
     assert levels == list(range(1, len(levels) + 1)) and all(a["state"].strip() for a in q["anchors"])
     if q["kind"] == "closed":
