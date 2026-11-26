@@ -168,7 +168,7 @@ def in_whitelist(url: str, whitelist: tuple[str, ...] | list[str]) -> bool:
 
 def plan_week(gaps: list[Gap], today: date, *, thresholds: dict[str, int], whitelist: tuple[str, ...],
               cap: int, weights: Weights | None = None) -> WeekPlan:
-    """阈值缺省 1。白名单内外部变化直接采集，其余进来源确认；两路合计不超过 cap，超出的顺延。"""
+    """阈值缺省 1。白名单内的外部变化、定时巡检直接采集，其余进来源确认；两路合计不超过 cap，超出的顺延。"""
     plan = WeekPlan()
     ready: list[Gap] = []
     for g in gaps:
@@ -180,7 +180,7 @@ def plan_week(gaps: list[Gap], today: date, *, thresholds: dict[str, int], white
     for g in ready:
         if len(plan.direct) + len(plan.confirm) >= cap:
             plan.deferred.append(g)
-        elif "external" in g.kinds and in_whitelist(g.key, whitelist):
+        elif ("external" in g.kinds or "schedule" in g.kinds) and in_whitelist(g.key, whitelist):
             plan.direct.append(g)
         else:
             plan.confirm.append(g)

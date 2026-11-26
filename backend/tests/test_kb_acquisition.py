@@ -90,6 +90,16 @@ def test_whitelisted_revision_goes_direct_others_to_confirm() -> None:
     assert [g.key for g in plan.confirm] == ["https://new.example.org/law"]
 
 
+def test_whitelisted_schedule_patrol_goes_direct() -> None:
+    gaps = acq.merge_signals([
+        sig("https://www.gov.cn/zhengce/", "schedule", "patrol-2026W49"),
+        sig("GB/T 99999", "schedule", "patrol-2026W49"),
+    ])
+    plan = acq.plan_week(gaps, TODAY, thresholds={}, whitelist=("https://www.gov.cn/zhengce/",), cap=10)
+    assert [g.key for g in plan.direct] == ["https://www.gov.cn/zhengce/"]
+    assert [g.key for g in plan.confirm] == ["GB/T 99999"]
+
+
 def test_weekly_cap_defers_without_losing() -> None:
     gaps = acq.merge_signals([sig(f"K{i}", "schedule", f"e{i}", impact=i) for i in range(5)])
     plan = acq.plan_week(gaps, TODAY, thresholds={}, whitelist=(), cap=2)
