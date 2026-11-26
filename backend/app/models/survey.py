@@ -4,11 +4,13 @@ survey_questions 题库：全局，不连项目、不含客户信息（E1 题库
 survey_packs 调研包：按项目画像选题生成，存题号清单和包哈希，不存回传原文。
 survey_answers 回传答案：封闭题程序直转“事实”（fact_status pending 待确认 / auto 自动确认 / confirmed 人工确认 /
 superseded 被同题另一条确认取代）；0057 起即答案池：每条记来源渠道 channel、可信度来源 source、抽检状态 spot_check；
+survey_selfeval_packs 客户自评包（0058）：从调研包按受访角色派生，记版本、包哈希、截止日、发出时间、提醒阶段和导入的答案编号；
+口令和答卷原文不存。
 “不清楚”只计数不成事实；开放题只存过了检查的文字（严格档按摘要卡规则检查）。确认只记确认人角色，不记姓名。
 """
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import false as sql_false
 from sqlalchemy.sql import true as sql_true
@@ -68,4 +70,27 @@ class SurveyAnswer(Base):
     conflict: Mapped[bool] = mapped_column(Boolean, server_default=sql_false())
     confirmed_role: Mapped[str] = mapped_column(String(32), server_default="")
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SelfEvalPack(Base):
+    __tablename__ = "survey_selfeval_packs"
+    __table_args__ = (UniqueConstraint("project_id", "code", name="uq_survey_selfeval_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    pack_id: Mapped[int] = mapped_column(ForeignKey("survey_packs.id"), index=True)
+    code: Mapped[str] = mapped_column(String(16))                 # S-01
+    version: Mapped[int] = mapped_column(Integer, server_default="1")   # 同一调研包同一角色第几版
+    respondent_role: Mapped[str] = mapped_column(String(32))
+    pack_hash: Mapped[str] = mapped_column(String(64))            # 自评包明文（不含哈希）的 SHA-256
+    qids: Mapped[list] = mapped_column(JSON, default=list)
+    due_date: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(16), server_default="issued")   # issued / sent / imported / superseded
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    remind_stage: Mapped[int] = mapped_column(Integer, server_default="0")    # 0 / 1 前一天 / 2 当天 / 3 逾期升级
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    answer_ids: Mapped[list] = mapped_column(JSON, default=list)              # 本次导入的答案编号（撤销用）
+    unclear_qids: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

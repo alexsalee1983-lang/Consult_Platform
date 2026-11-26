@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
+import SelfEval from "./SelfEval.jsx";
 import { clampInterval, registerShell, REMIND_CHOICES, REMIND_DEFAULT_MIN, reminderState } from "../survey/offline.js";
 import { clashes, itemsByQid, PHASES, phases, REASONS, sourceLabel } from "../survey/agenda.js";
 import { canPersist, checkResponses, clearDraft, listDrafts, loadDraft, progress, resultsBody, saveDraft } from "../survey/draft.js";
@@ -246,6 +247,7 @@ export default function Survey({ code, tier }) {
         </div>
       )}
 
+      {persist && packs && <SelfEval code={code} packs={packs} />}
       {agenda && agenda.counts.questions > 0 && (
         <div style={{ display: "grid", gap: 6 }} aria-label="现场议程">
           <span className="cap">现场议程（按受访角色，平台自动生成）</span>

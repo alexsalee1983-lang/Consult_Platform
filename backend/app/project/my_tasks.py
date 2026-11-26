@@ -2,7 +2,8 @@
 
 四期试用反馈（负责人 11-25）：原“工作台”并入这里，平台只剩一个待办入口、一套计数口径；/api/workbench 只做兼容。
 类别（KINDS，顺序即筛选条顺序）：确认卡、待签署、知识内容审核、知识合规审核、待复审、去标识确认、资料删除确认，
-以及抽检、公司做法确认、来源确认。
+以及抽检、公司做法确认、来源确认、客户自评（四期 E3②：自评包到期前一天、当天提醒发包人，逾期 2 天升级项目经理，
+阶段由 worker 的 selfeval.scan_reminders 推进）。
 - 只列本人有权处理的（项目类只看本人是成员的项目；待签署只给项目经理；知识类按知识角色；
   去标识给知识管理员；资料删除给项目负责人，不必是成员，只给项目代号）；
   本人按规则不能处理的（作者不能审自己的版本、上传者不能确认去标识、发起人不能确认删除）照样列出、
@@ -32,6 +33,7 @@ from ..kb import review as rv
 from ..models import (Confirmation, Deliverable, DeliverableSection, Project, ProjectDeletion, ProjectMember,
                       SectionVersion, TaskReturn, User)
 from ..models.kb import KbItem, KbUpload, KbVersion
+from ..models.survey import SelfEvalPack
 from ..services import jobs
 
 KINDS: dict[str, str] = {
@@ -45,6 +47,7 @@ KINDS: dict[str, str] = {
     "sample": "抽检",
     "practice": "公司做法确认",
     "source_confirm": "来源确认",
+    "selfeval": "客户自评",
 }
 UNAVAILABLE = {"practice", "source_confirm"}           # 接口未合并（#283、#297），先留空位
 KB_REVIEW_KINDS = ("kb_content", "kb_compliance")
@@ -206,6 +209,18 @@ def collect(db: Session, user: User) -> list[Task]:
                               uncertainty=1.0 if unsure else 0.0, created_ts=_ts(c.created_at),
                               fields=[_field("recommendation", "推荐选项", c.recommendation),
                                       _field("deliverable_code", "关联交付件", c.deliverable_code)]))
+    if codes:
+        from .selfeval import OPEN, STAGE_TEXT
+
+        for sp in db.scalars(select(SelfEvalPack).where(SelfEvalPack.project_id.in_(codes),
+                                                        SelfEvalPack.status.in_(OPEN), SelfEvalPack.remind_stage > 0)):
+            if sp.created_by != me and not (sp.remind_stage == 3 and sp.project_id in managed):
+                continue
+            code = codes[sp.project_id]
+            tasks.append(Task(kind="selfeval", ref_id=sp.id, project_code=code, link=f"/project/{code}",
+                              title=f"客户自评包 {sp.code}（{sp.respondent_role}）{STAGE_TEXT[sp.remind_stage]}",
+                              impact=2.0 if sp.remind_stage == 3 else 1.0, created_ts=_ts(sp.created_at),
+                              fields=[_field("due_date", "截止日", sp.due_date.isoformat())]))
     if managed:
         for d in db.scalars(select(Deliverable).where(Deliverable.status == "review",
                                                       Deliverable.project_id.in_(managed))):

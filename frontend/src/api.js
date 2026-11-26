@@ -205,6 +205,23 @@ export const api = {
   surveyAgenda: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/agenda`),   // 四期 E3③ 现场议程
   confirmSurveyFact: (code, id, confirmed_role) =>
     request(`/api/projects/${encodeURIComponent(code)}/survey/facts/${id}/confirm`, { method: "POST", body: JSON.stringify({ confirmed_role }) }),
+  // 四期 E3②：客户自评包（生成返回口令只这一次；答卷在浏览器本机解密后导入，口令不上传）
+  selfevalPacks: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval`),
+  createSelfeval: (code, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval`, { method: "POST", body: JSON.stringify(body) }),
+  selfevalSent: (code, s) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/sent`, { method: "POST" }),
+  selfevalTemplate: (code, s) => download(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/template.xlsx`),
+  selfevalImport: (code, s, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/import`, { method: "POST", body: JSON.stringify(body) }),
+  selfevalImportXlsx: (code, s, file, confirm = false) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("confirm", confirm ? "true" : "false");
+    return request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/import-xlsx`, { method: "POST", body: fd });
+  },
+  selfevalUndo: (code, s) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/import`, { method: "DELETE" }),
   withdrawCard: (code, card) =>
     request(`/api/projects/${encodeURIComponent(code)}/summary-cards/${encodeURIComponent(card)}/withdraw`, { method: "POST" }),
   // 项目资料删除（M4 ②）：项目经理发起提前删除、标记客户不同意回流；项目负责人确认
