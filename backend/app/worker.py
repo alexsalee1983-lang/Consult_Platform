@@ -25,7 +25,7 @@ from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .kb import agent_review, batches, candidate, deid_flow, gap_manual, gap_pool, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review、kb.candidate_promote、kb.batch_* 等任务处理器
-from .project import autoflow, deletion, evidence, my_tasks, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
+from .project import autoflow, deletion, evidence, my_tasks, quality, runs, stages  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs, ops, runtime_config
 
 POLL_SECONDS = 5
@@ -118,8 +118,9 @@ def _auto_flow() -> None:
         with SessionLocal() as db:
             started = autoflow.scan_runs(db)
             reviewed = autoflow.scan_reviews(db)
-        if started or reviewed:
-            log.info("自动发起交付链 %d 个、质量评审 %d 个", len(started), len(reviewed))
+            moved = stages.scan(db)                     # 四期 A27：本阶段交付件全部签署即进入下一阶段
+        if started or reviewed or moved:
+            log.info("自动发起交付链 %d 个、质量评审 %d 个、阶段推进 %d 个", len(started), len(reviewed), len(moved))
     except Exception as e:  # noqa: BLE001
         log.warning("交付流程自动推进出错：%s", type(e).__name__)
 
