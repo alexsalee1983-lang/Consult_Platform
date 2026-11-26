@@ -3,9 +3,13 @@ name: CI
 on:
   push:
     branches: [main, "feat/**"]
+    tags: ["v*"]
   pull_request:
   schedule:
-    - cron: "0 1 * * 1"   # 每周一 09:00（北京时间）重跑，及时发现新公布的依赖漏洞
+    - cron: "0 1 * * *"   # 每天 09:00（北京时间）严格扫 main：及时发现新公布的依赖和镜像漏洞，镜像有问题自动开 issue（四期 G8）
+
+permissions:
+  contents: read
 
 jobs:
   backend:
@@ -93,6 +97,9 @@ jobs:
   compose:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
+    permissions:
+      contents: read
+      issues: write   # 仅每日定时扫描开、更新、关闭镜像漏洞 issue 用
     steps:
       - uses: actions/checkout@v4
       - name: 生成 .env（测试账号每次随机生成，不写死口令）
@@ -335,9 +342,13 @@ jobs:
             "select count(*) from audit_logs where action in ('backup.create','backup.restore')" | grep -qx 1   # 恢复的是备份时的库，只有恢复这一条
           bash scripts/smoke_test.sh http://localhost:8080
           rm -rf /tmp/bk /tmp/bk.pass /tmp/wrong.pass
-      - name: 镜像漏洞扫描（trivy，整套已构建镜像；有修复版本的高危、严重漏洞即失败）
+      # 分层规则（docs/安全扫描.md）：push 到 main、tag、定时：整套严格阻断；PR：只阻断本 PR 改动的镜像，其余照扫只告警
+      - name: 镜像漏洞扫描（trivy，分层：main、tag、定时严格；PR 只阻断改动的镜像）
         env:
           TRIVY_VERSION: "0.76.2"
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
           tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
@@ -347,12 +358,25 @@ jobs:
           grep " $tarball\$" trivy_checksums.txt | sha256sum -c -
           tar -xzf "$tarball" trivy
           # 模拟模型只用于 CI 和测试机，不扫；误报或暂无法修复的写进 .trivyignore.yaml 并注明理由（docs/安全扫描.md）
-          fail=0
-          for img in $(docker compose --profile monitoring config --images | sort -u); do
-            echo "== $img"
-            ./trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --ignorefile .trivyignore.yaml --exit-code 1 "$img" || fail=1
-          done
-          exit $fail
+          bash -n scripts/trivy_tiered.sh
+          bash scripts/trivy_tiered.sh
+      - name: 每日扫描：镜像有可修复高危、严重漏洞时开或更新 issue，清零后关闭
+        if: always() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title="镜像漏洞：每日扫描发现可修复的高危、严重漏洞"
+          num=$(gh issue list --state open --search "\"$title\" in:title" --json number,title --jq "[.[] | select(.title==\"$title\")][0].number // empty")
+          test -f /tmp/trivy_report.fail || { echo "扫描没有产出报告，不动 issue"; exit 0; }
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ "$(cat /tmp/trivy_report.fail 2>/dev/null)" = 1 ]; then
+            { echo "每日定时扫描（main 整套镜像，严格模式）发现有修复版本的高危、严重漏洞。运行：$run_url"; echo; cat /tmp/trivy_report.md
+              echo; echo "处理办法见 docs/安全扫描.md：升级基础镜像或系统包；确认不影响本平台时写入 .trivyignore.yaml 并注明理由和复查日期。"; } > /tmp/issue_body.md
+            if [ -n "$num" ]; then gh issue edit "$num" --body-file /tmp/issue_body.md; else gh issue create --title "$title" --body-file /tmp/issue_body.md; fi
+          elif [ -n "$num" ]; then
+            gh issue close "$num" --comment "最近一次每日扫描已无可修复的高危、严重漏洞：$run_url"
+          fi
       - if: failure()
         run: docker compose --profile mock-llm --profile monitoring logs --no-color | tail -200
       - if: always()
