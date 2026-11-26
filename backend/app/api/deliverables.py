@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..agents.knowledge import product_code
 from ..core import audit
 from ..core.auth import current_user
 from ..core.db import get_db
@@ -32,6 +33,7 @@ from ..project import export as export_svc
 from ..project import export_pptx
 from ..project import forms as forms_svc
 from ..project import kb_impact
+from ..products import config as product_config
 from ..services import quality_incidents
 
 router = APIRouter(prefix="/api/projects", tags=["deliverables"], dependencies=[Depends(require_business)])
@@ -206,11 +208,15 @@ def put_outline(code: str, dcode: str, body: OutlineIn, db: Session = Depends(ge
 @router.get("/{code}/deliverables/{dcode}/form")
 def get_form(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     """四期 A14：D1、D2 表单定义；writable=False 表示已有正文，表单只读（之后在编辑器里改）。"""
-    _, d = _load(db, code, dcode, user)
+    p, d = _load(db, code, dcode, user)
     form = forms_svc.load_form(d.code)
     if form is None:
         raise HTTPException(404, f"{d.code} 没有表单")
-    return {**forms_svc.schema(form), "writable": not any(s.current_version for s in d.sections)}
+    try:
+        prod = product_config.product(product_code(p.service))
+    except product_config.CatalogError:
+        prod = None                                     # 产品配置不可用时不预填，表单照常可填
+    return {**forms_svc.schema(form, p.tier, prod), "writable": not any(s.current_version for s in d.sections)}
 
 
 @router.post("/{code}/deliverables/{dcode}/form", response_model=DeliverableDetail, status_code=201)

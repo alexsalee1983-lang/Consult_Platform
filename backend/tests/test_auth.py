@@ -83,6 +83,9 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/survey/packs/P-01/results"),
     ("GET", "/api/projects/BANK-A/survey/facts"),
     ("POST", "/api/projects/BANK-A/survey/facts/1/confirm"),
+    ("GET", "/api/projects/BANK-A/survey/pool"),
+    ("GET", "/api/projects/BANK-A/survey/spot-checks"),
+    ("POST", "/api/projects/BANK-A/survey/facts/1/spot-check"),
     ("GET", "/api/projects/BANK-A/deliverables/D4"),
     ("GET", "/api/projects/BANK-A/knowledge-updates"),
     ("GET", "/api/projects/BANK-A/assessment"),
@@ -101,6 +104,9 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D4/sections/1/assist"),   # 三期 A15 写稿助手
     ("GET", "/api/projects/BANK-A/deliverables/D4/export"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/export?format=pptx"),
+    ("GET", "/api/projects/BANK-A/stages"),
+    ("GET", "/api/projects/BANK-A/stages/分析/pack"),
+    ("GET", "/api/projects/BANK-A/weekly-brief"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/reviews"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/reviews"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/reviews/1"),
@@ -223,7 +229,7 @@ def test_every_api_route_is_protected_or_public(client):
                 .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1") \
                 .replace("{rid}", "1").replace("{deletion_id}", "1").replace("{incident_id}", "1") \
                 .replace("{consent_id}", "1").replace("{card}", "S-01") \
-                .replace("{version}", "abc")
+                .replace("{version}", "abc").replace("{phase}", "分析")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 

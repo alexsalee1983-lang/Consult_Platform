@@ -12,6 +12,7 @@ from .api import revision_mining as revision_mining_api   # 三期 F4
 from .api import revision_features as revision_features_api   # 四期 F4②
 from .api import extraction as extraction_api   # 四期 F4③
 from .api import agent_md as agent_md_api   # 四期 F3②e
+from .api import stages as stages_api   # 四期 A27
 from .core import audit as core_audit
 from .core.auth import authenticate
 from .core.bootstrap import check_db_accounts, check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
@@ -20,7 +21,7 @@ from .core.db import SessionLocal, engine, kb_engine
 from .core.errors import out_of_range_handler, reject_control_chars, validation_error_handler
 from .core.metrics import MetricsMiddleware, register_state_collector, start_server
 from .core.migrate import upgrade_to_head
-from .services import runtime_config, storage
+from .services import jobs, runtime_config, storage
 from .project import configs as project_configs
 from .seed import seed, seed_signed_sample
 
@@ -30,6 +31,7 @@ check_settings(_settings)  # 配置不安全时直接拒绝启动
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    jobs.validate_handlers()   # 处理器签名不一致直接拒绝启动（四期 G7）
     check_db_accounts(_settings, [engine, kb_engine])  # 生产不用超级用户连库，迁移之前检查
     upgrade_to_head()
     with SessionLocal() as db:
@@ -103,3 +105,4 @@ app.include_router(kb_sources.router)
 app.include_router(tasks.router)
 app.include_router(expert_bench.router)
 app.include_router(survey.router)
+app.include_router(stages_api.router)

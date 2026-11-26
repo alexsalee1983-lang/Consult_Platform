@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { api } from "../api.js";
 import { TopBar } from "../components/common.jsx";
 import { applyPreview, buildAnswer, CHOICE_LABELS, previewTexts, problems } from "../bench/answers.js";
 
-// 专家工作台（四期 B23①②）：审核问答化 + 按类型填空卡 + 大白话 + 冲突处理卡 + 去标识预览。只给知识专家；回答换成审核决定，规则以后端为准
+// 专家工作台（四期 B23①②；试用反馈 11-25 起侧栏不再单列，从“我的任务”的知识内容审核项一键进入，?v= 定位到对应卡）：审核问答化 + 按类型填空卡 + 大白话 + 冲突处理卡 + 去标识预览。只给知识专家；回答换成审核决定，规则以后端为准
 function Question({ q, a, onChange }) {
   const choice = a?.choice || "";
   const needValue = q.kind === "field" && (choice === "no" || (q.empty && choice === "yes"));
@@ -163,17 +164,22 @@ export default function ExpertBench() {
   const [error, setError] = useState(null);
   const [done, setDone] = useState([]);
   const [showFolded, setShowFolded] = useState(false);
+  const [params] = useSearchParams();
+  const focus = Number(params.get("v")) || 0;
   const load = useCallback(() => { api.benchCards().then(setD).catch((e) => setError(e.message)); }, []);
   useEffect(load, [load]);
   if (error) return <section className="pnl pad err" role="alert">{error}</section>;
   if (!d) return <section className="pnl pad sub">加载中…</section>;
   const finished = (id, outcome) => { setDone([...done, { id, outcome }]); setD({ ...d, cards: d.cards.filter((c) => c.version_id !== id) }); };
-  const today = d.cards.filter((c) => !c.folded);
-  const later = d.cards.filter((c) => c.folded);
+  const picked = d.cards.filter((c) => c.version_id === focus);      // 从我的任务点进来的那张卡排最前，不受额度折叠
+  const today = [...picked, ...d.cards.filter((c) => !c.folded && c.version_id !== focus)];
+  const later = d.cards.filter((c) => c.folded && c.version_id !== focus);
   const list = (rows) => rows.map((c) => <BenchCard key={c.version_id} card={c} plain={d.plain} onDone={finished} />);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <TopBar cap="一题一答，Agent 已经起好草稿，你只做判断" title="专家工作台" />
+      <div className="row"><Link className="btn sm" to="/my-tasks">回我的任务</Link>
+        {focus > 0 && !picked.length && <span className="sub">这条已处理或已不在你的待审里。</span>}</div>
       <div className="sub">今天先看这 {today.length} 条（每日 {d.quota} 条）。不确定的就选“不确定”，这条会留着不定。</div>
       {done.length > 0 && <div className="sub">刚交的：{done.map((x) => `#${x.id} ${x.outcome}`).join("，")}</div>}
       {today.length ? list(today) : <section className="pnl pad sub">今天没有要你看的。</section>}
