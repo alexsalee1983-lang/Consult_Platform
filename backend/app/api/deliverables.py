@@ -10,6 +10,8 @@ GET  /api/projects/{code}/knowledge-updates                             引用�
 GET  /api/projects/{code}/deliverables/{dcode}/export                   导出 Word（各章当前版本，套模板；规则见 app/project/export.py）
      ?format=pptx 导出 PowerPoint（二期 A9，规则见 app/project/export_pptx.py）
      挂本交付件、未关闭且已“冻结导出”的质量事件存在时 409（四期 F3②）
+POST /api/projects/{code}/deliverables/{dcode}/form/import              上传合同（multipart：file），后台 Agent 抽取表单要点（四期 A28②，202）
+GET  /api/projects/{code}/deliverables/{dcode}/form/import              最近一次合同导入的状态与抽取结果（回填表单，顾问核对后提交）
 
 严格档项目只收占位符版本（真名、IP、系统名 422）；已签署的交付件写入 409；机密级命中 422（不保存）。规则见 app/project/deliverables.py。
 """
@@ -17,7 +19,7 @@ from datetime import datetime
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -32,6 +34,7 @@ from ..project import assessment
 from ..project import deliverables as svc
 from ..project import export as export_svc
 from ..project import export_pptx
+from ..project import form_import
 from ..project import forms as forms_svc
 from ..project import kb_impact
 from ..products import config as product_config
@@ -236,6 +239,28 @@ def post_form(code: str, dcode: str, body: FormIn, db: Session = Depends(get_db)
     except (svc.DeliverableError, forms_svc.FormError) as e:
         raise HTTPException(e.status, e.detail) from e
     return _detail(db, d)
+
+
+@router.post("/{code}/deliverables/{dcode}/form/import", status_code=202)
+def import_form(code: str, dcode: str, file: UploadFile | None = File(default=None), db: Session = Depends(get_db),
+                user: User = Depends(current_user)) -> dict:
+    """四期 A28②：上传合同，后台由 Agent 抽取表单要点；严格档 422，机密级命中 422（文件不保存）。"""
+    p, d = _load(db, code, dcode, user)             # 先判成员（非成员 404），再看文件
+    if file is None:
+        raise HTTPException(422, "请选择合同文件")
+    data = file.file.read(form_import.evidence.NOTE_FILE_MAX + 1)
+    try:
+        job_id = form_import.start(db, user, p, d, file.filename or "", data)
+    except form_import.ImportError_ as e:
+        raise HTTPException(e.status, e.detail) from e
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/{code}/deliverables/{dcode}/form/import")
+def import_form_state(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """最近一次合同导入的状态；done 时 values 为抽取结果，前端回填表单待顾问核对。"""
+    p, d = _load(db, code, dcode, user)
+    return form_import.state(db, p, d)
 
 
 @router.get("/{code}/deliverables/{dcode}/sections/{seq}", response_model=SectionDetail)

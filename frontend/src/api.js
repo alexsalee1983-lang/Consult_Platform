@@ -324,6 +324,12 @@ export const api = {
   deliverableForm: (code, dcode) => request(`${dpath(code, dcode)}/form`),
   postDeliverableForm: (code, dcode, values) =>
     request(`${dpath(code, dcode)}/form`, { method: "POST", body: JSON.stringify({ values }) }),
+  importContract: (code, dcode, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request(`${dpath(code, dcode)}/form/import`, { method: "POST", body: fd });
+  },
+  contractImport: (code, dcode) => request(`${dpath(code, dcode)}/form/import`),
   putOutline: (code, dcode, titles) =>
     request(`${dpath(code, dcode)}/outline`, { method: "PUT", body: JSON.stringify({ titles }) }),
   section: (code, dcode, seq, version) =>

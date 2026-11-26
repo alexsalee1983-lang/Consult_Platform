@@ -1,6 +1,6 @@
 // 四期 A14②：D1、D2“按表单成稿”。顾问填表，平台按模板程序成稿（不调模型）；
 // 资质边界段落由平台固定写入，Agent 起草的章节只进大纲。成稿后表单只读，之后在编辑器里改。
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api.js";
 import { checkForm, emptyValues, joinRows, listCount, MAX_LIST_ITEMS, splitRows } from "../editor/form.js";
 
@@ -50,6 +50,36 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel })
   const [error, setError] = useState("");
   const errors = useMemo(() => checkForm(form, values), [form, values]);
   const bad = Object.keys(errors).length > 0;
+  // A28②：从合同导入——后台由 Agent 抽取要点，回填后顾问逐项核对，再按表单成稿（成稿仍由程序生成）
+  const [imp, setImp] = useState({ busy: false, msg: "", err: "" });
+  const [gen, setGen] = useState(0);       // 回填后重建表格字段
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
+
+  async function importContract(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImp({ busy: true, msg: "合同已上传，正在抽取要点…", err: "" });
+    try {
+      await api.importContract(code, dcode, file);
+      for (let i = 0; i < 60 && alive.current; i++) {
+        if (i) await new Promise((r) => setTimeout(r, 3000));
+        const st = await api.contractImport(code, dcode);
+        if (st.status === "failed") throw new Error(st.error || "抽取失败，可直接填表");
+        if (st.status === "done") {
+          const got = Object.entries(st.values || {}).filter(([k, v]) => v && k in values);
+          setValues((x) => ({ ...x, ...Object.fromEntries(got) }));
+          setGen((g) => g + 1);
+          setImp({ busy: false, err: "", msg: got.length ? `已从合同回填 ${got.length} 项，请逐项核对后再成稿` : "合同里没有抽到可回填的内容，请直接填表" });
+          return;
+        }
+      }
+      if (alive.current) setImp({ busy: false, msg: "", err: "抽取还没完成，稍后可重新导入或直接填表" });
+    } catch (x) {
+      if (alive.current) setImp({ busy: false, msg: "", err: x.message });
+    }
+  }
 
   async function submit() {
     setTouched(true);
@@ -72,6 +102,15 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel })
         <span className="cap">按表单成稿 · {form.code} {form.title}</span>
         <button className="btn sm" onClick={onCancel} disabled={busy}>收起</button>
       </div>
+      {form.code === "D1" && (
+        <div className="sb" style={{ marginBottom: 8 }}>
+          <label className="btn sm" aria-disabled={imp.busy}>
+            {imp.busy ? "抽取中…" : "从合同导入"}
+            <input type="file" hidden disabled={imp.busy || busy} onChange={importContract} accept=".docx,.pdf,.md,.txt" aria-label="合同文件" />
+          </label>
+          <span className="sub">{imp.err ? <span className="err">{imp.err}</span> : imp.msg || "上传合同，Agent 抽取目标、周期、范围、角色等回填表单；严格档项目不收合同原文"}</span>
+        </div>
+      )}
       <p className="sub">填好后平台按模板直接成稿（不调模型），每章生成第 1 版；之后在编辑器里逐章修改。内容先过机密级检测，不要填口令、IP、个人信息和客户原文。</p>
       {form.sections.map((s) => {
         const body = (
@@ -85,7 +124,7 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel })
                 return (
                   <div key={f.key} className="field" style={{ marginTop: 8 }}>
                     <span>{f.label}{f.required ? " *" : ""}</span>
-                    <TableField f={f} value={v} onChange={put} />
+                    <TableField key={`${f.key}-${gen}`} f={f} value={v} onChange={put} />
                     <span className="sub">{f.hint}{err ? <span className="err"> · {err}</span> : null}</span>
                     <Example text={f.example} />
                   </div>
