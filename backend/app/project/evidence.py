@@ -179,14 +179,20 @@ NOTE_FILE_KINDS = ("docx", "markdown", "text")
 def extract_note(db: Session, user: User, project: Project, filename: str, data: bytes) -> str:
     """纪要文件（.docx / .md / .txt，≤2MB）→ 正文，填进录入框由顾问核对后再提交；文件不保存，不分配编号。
     小文件、无 OCR，解析在毫秒级，所以在请求里做（大文件资料仍走后台解析）。审计只记格式和字数。"""
-    action = "project.note_extract"
+    return extract_text(db, user, project, filename, data, action="project.note_extract", label="纪要文件",
+                        kinds=NOTE_FILE_KINDS, kinds_msg=" Word（.docx）、Markdown（.md）和纯文本（.txt）")
+
+
+def extract_text(db: Session, user: User, project: Project, filename: str, data: bytes, *, action: str,
+                 label: str, kinds: tuple[str, ...], kinds_msg: str, **meta) -> str:
+    """小文件 → 正文（严格档拒收、格式与大小限制、机密级检测）；文件不保存。纪要导入与合同导入（A28②）共用。"""
     _refuse_strict(db, user, project, action)
     if len(data) > NOTE_FILE_MAX:
-        raise EvidenceError(413, f"纪要文件超过 {NOTE_FILE_MAX // 1024 // 1024}MB")
+        raise EvidenceError(413, f"{label}超过 {NOTE_FILE_MAX // 1024 // 1024}MB")
     try:
         kind = parse.detect_kind(filename, data)
-        if kind not in NOTE_FILE_KINDS:
-            raise parse.ParseError("纪要文件只支持 Word（.docx）、Markdown（.md）和纯文本（.txt）")
+        if kind not in kinds:
+            raise parse.ParseError(f"{label}只支持{kinds_msg}")
         doc = parse.parse(filename, data)
     except parse.ParseError as e:
         raise EvidenceError(422, str(e)) from None
@@ -195,7 +201,7 @@ def extract_note(db: Session, user: User, project: Project, filename: str, data:
         raise EvidenceError(422, f"正文超过 {MAX_NOTE_CHARS // 10000} 万字，请分条录入")
     _guard(db, user, project, action, text, "文件没有保存", file_kind=kind, chars=len(text))
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
-                 file_kind=kind, chars=len(text))
+                 file_kind=kind, chars=len(text), **meta)
     return text
 
 

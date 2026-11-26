@@ -275,6 +275,28 @@ test("按表单成稿：每个输入框下有填写示例；已预填章节收�
   expect(el.querySelector('table[aria-label="主要风险与应对"] input').value).toBe("访谈难排期");
 });
 
+test("按表单成稿：从合同导入后回填表单（含表格），等顾问核对再成稿", async () => {
+  const { default: DeliverableForm } = await import("../components/DeliverableForm.jsx");
+  const sent = [];
+  stub.importContract = async (code, dcode, file) => { sent.push([code, dcode, file.name]); return { job_id: 1, status: "queued" }; };
+  stub.contractImport = async () => ({ status: "done", error: "", values: { goal: "建立 BANK-A 安全运营体系", risks: "资料滞后｜每周跟踪", nope: "x" } });
+  const form = { code: "D1", title: "启动包", writable: true, sections: [
+    { title: "项目概况", fixed: "", fields: [{ key: "goal", label: "项目目标", type: "textarea", required: true, max: 2000, default: "" }] },
+    { title: "风险与变更管理", fixed: "", fields: [
+      { key: "risks", label: "主要风险与应对", type: "table", columns: ["风险", "应对"], required: false, max: 4000, default: "" }] },
+  ] };
+  const el = await render(<DeliverableForm code="BANK-A" dcode="D1" form={form} onDone={() => {}} onCancel={() => {}} />);
+  const input = el.querySelector('input[aria-label="合同文件"]');
+  const file = new File(["合同"], "合同.docx");
+  Object.defineProperty(input, "files", { value: [file] });
+  await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(sent).toEqual([["BANK-A", "D1", "合同.docx"]]);
+  expect(el.querySelector("textarea").value).toBe("建立 BANK-A 安全运营体系");
+  expect(el.querySelector('table[aria-label="主要风险与应对"] input').value).toBe("资料滞后");
+  expect(el.textContent).toContain("已从合同回填 2 项");
+});
+
 test("项目成员：项目经理不用输入就能看到全部可加入的同事，勾选后一次添加", async () => {
   const added = [];
   stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
