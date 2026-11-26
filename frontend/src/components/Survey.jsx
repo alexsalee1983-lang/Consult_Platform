@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
+import SelfEval from "./SelfEval.jsx";
 import { clampInterval, registerShell, REMIND_CHOICES, REMIND_DEFAULT_MIN, reminderState } from "../survey/offline.js";
 import { canPersist, checkResponses, clearDraft, listDrafts, loadDraft, progress, resultsBody, saveDraft } from "../survey/draft.js";
 
@@ -213,6 +214,8 @@ export default function Survey({ code, tier }) {
           </div>
         </div>
       )}
+
+      {persist && packs && <SelfEval code={code} packs={packs} />}
 
       {facts.length > 0 && (
         <div style={{ display: "grid", gap: 6 }}>
