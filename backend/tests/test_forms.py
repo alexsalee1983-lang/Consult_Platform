@@ -222,3 +222,41 @@ def test_table_cells_normalized():
     with pytest.raises(forms.FormError):
         forms.render(form, {"t": "\n".join("x" for _ in range(51))})
 
+
+
+def test_d1_kickoff_pptx_and_milestone_writeback(proj):
+    """A28③：D1 成稿即可导出启动会 PPT（复用 A9），里程碑表回写项目“下一个里程碑”和总周数。"""
+    import io
+
+    from pptx import Presentation
+
+    code, c = proj
+    values = D1_VALUES | {"period": "共 10 周（起止日期以合同约定为准）",
+                          "milestones": "启动｜第 1 周｜启动包、启动会\n调研｜第 2–4 周｜调研包"}
+    r = c.post(f"{_base(code, 'D1')}/form", json={"values": values})
+    assert r.status_code == 201, r.text
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        assert p.next_milestone == "启动（第 1 周）：启动包、启动会" and p.total_weeks == 10
+        logs = list(db.scalars(select(AuditLog).where(AuditLog.project_code == code,
+                                                      AuditLog.action == "project.plan_writeback")))
+    assert len(logs) == 1 and "启动包" not in str(logs[0].detail)          # 审计不记正文
+    r = c.get(f"{_base(code, 'D1')}/export?format=pptx")
+    assert r.status_code == 200
+    titles = [s.shapes.title.text for s in Presentation(io.BytesIO(r.content)).slides if s.shapes.title]
+    for t in ("项目概况", "范围确认", "工作分解与里程碑", "组织与沟通", "启动会议程与下一步"):
+        assert any(t in x for x in titles), t
+
+
+def test_milestone_follows_phase():
+    from app.project import stages
+
+    body = "| 阶段 | 时间 | 产出 |\n| --- | --- | --- |\n| 启动 | 第 1 周 | 启动包 |\n| 调研 | 第 2–4 周 | 调研包 |\n" \
+           "| 落地辅导 | 第 8 周 | 辅导记录 |"
+    rows = stages.milestone_rows(body)
+    assert rows == [("启动", "第 1 周", "启动包"), ("调研", "第 2–4 周", "调研包"), ("落地辅导", "第 8 周", "辅导记录")]
+    assert stages.pick_milestone(rows, 0) == "启动（第 1 周）：启动包"
+    assert stages.pick_milestone(rows, 2) == "落地辅导（第 8 周）：辅导记录"     # 分析段没有行，取下一段
+    assert stages.pick_milestone(rows, 5) == ""
+    assert stages.weeks_of("2027-01-05 至 2027-03-31") == 12 and stages.weeks_of("共 8 周") == 8
+    assert stages.weeks_of("合同约定") is None
