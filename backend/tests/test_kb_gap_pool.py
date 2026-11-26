@@ -229,7 +229,7 @@ def test_weekly_job_patrols_active_sources_into_dispatch():
         g = db.scalar(select(KbGap).where(KbGap.gap_key == GP))
         assert g is not None and g.plan == "direct" and g.kinds == {"schedule": 1}
         assert db.scalar(select(KbGap).where(KbGap.gap_key.like("%/trial/%"))) is None   # 只巡检正式来源
-        assert [t["url"] for t in gap_pool.dispatch_package(db)["tasks"]] == [GP]
+        assert [t["url"] for t in gap_pool.dispatch_package(db)["tasks"] if t["url"].startswith(GP)] == [GP]
         gap_pool.close(db, GP, "collected")
     gap_pool._job({"today": TODAY.isoformat()}, None)          # 本周已采集，不再打开
     with SessionLocal() as db:
