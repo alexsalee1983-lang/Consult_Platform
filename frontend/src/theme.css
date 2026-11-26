@@ -269,3 +269,6 @@ section[aria-label="项目全景"] { animation: rise .5s .2s cubic-bezier(.2,.7,
 
 /* 项目成员勾选列表：最多显示约 8 行，多了在框内滚动 */
 .pick { max-height: 300px; overflow-y: auto; border: 1px solid var(--ln); border-radius: 8px; padding: 0 10px; }
+
+/* A28①：表单填写示例（多行示例按行显示） */
+.form-ex { white-space: pre-line; color: var(--tx3); margin-top: 2px; }

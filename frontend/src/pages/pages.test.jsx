@@ -259,6 +259,22 @@ test("D3 批量签：只能勾选门禁 0 问题的，签后逐份回报", async
   expect(c.textContent).toContain("BANK-A 已签");
 });
 
+test("按表单成稿：每个输入框下有填写示例；已预填章节收起，表格逐格编辑", async () => {
+  const { default: DeliverableForm } = await import("../components/DeliverableForm.jsx");
+  const form = { code: "D1", title: "启动包", writable: true, sections: [
+    { title: "项目概况", fixed: "", fields: [
+      { key: "goal", label: "项目目标", type: "textarea", required: true, max: 2000, default: "", example: "帮助 BANK-A 建立安全运营体系" }] },
+    { title: "风险与变更管理", fixed: "", fields: [
+      { key: "risks", label: "主要风险与应对", type: "table", columns: ["风险", "应对"], required: false, max: 4000,
+        default: "访谈难排期｜提前锁定", example: "资料滞后｜每周跟踪" }] },
+  ] };
+  const el = await render(<DeliverableForm code="BANK-A" dcode="D1" form={form} onDone={() => {}} onCancel={() => {}} />);
+  const ex = [...el.querySelectorAll(".form-ex")].map((x) => x.textContent);
+  expect(ex).toEqual(["示例：帮助 BANK-A 建立安全运营体系", "示例：资料滞后｜每周跟踪"]);
+  expect(el.querySelector("details summary").textContent).toContain("已预填");
+  expect(el.querySelector('table[aria-label="主要风险与应对"] input').value).toBe("访谈难排期");
+});
+
 test("项目成员：项目经理不用输入就能看到全部可加入的同事，勾选后一次添加", async () => {
   const added = [];
   stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
