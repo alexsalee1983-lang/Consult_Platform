@@ -53,7 +53,15 @@ button { font: inherit; cursor: pointer; }
 .content { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .grid-main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.kpi-v { font-family: "JetBrains Mono", monospace; font-size: 28px; font-weight: 700; line-height: 1.2; }
+.kpi-v { font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+/* 驾驶舱状态条：一行排开，窄屏自动折行；数字用正文字体 + 等宽数字 */
+.strip { display: flex; flex-wrap: wrap; align-items: stretch; padding: 4px 6px; }
+.st { display: flex; flex-direction: column; gap: 1px; padding: 6px 12px; min-width: 0; flex: 1 1 110px; border-left: 1px solid var(--ln); }
+.st:first-child { border-left: 0; }
+.st-v { font-size: 17px; font-weight: 700; line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-s { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-btn { background: none; border: 0; border-left: 1px solid var(--ln); text-align: left; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }
+.st-btn:hover { background: var(--s2); }
 .lst { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .lst > li { padding: 9px 0; border-top: 1px solid var(--ln); }
 .bar { height: 4px; border-radius: 2px; background: var(--s3); overflow: hidden; }

@@ -10,12 +10,13 @@ import RunPanel from "../components/RunPanel.jsx";
 // 全景（四期 A25②）：页头 + 行动条 + 泳道全景图；确认卡、交付链、待办在右侧抽屉里办，资料、交付件等跳到对应导航页。
 // 证据、调研、评估、交付件、成员与保留期已挪到 输入 / 分析 / 输出 / 设置 页。
 
-function Kpi({ cap, value, sub, color }) {
+// 状态条一项：标签 + 数值 + 说明，一行排开；说明悬停看全文（负责人 2026-11-26：八个大方块太占地方、把全景压到下面）。
+function Stat({ cap, value, sub, color }) {
   return (
-    <div className="pnl pad" style={{ gap: 4 }}>
-      <div className="cap">{cap}</div>
-      <div className="kpi-v" style={{ color: color || "var(--tx)" }}>{value}</div>
-      <div className="sub">{sub}</div>
+    <div className="st" title={sub}>
+      <span className="cap">{cap}</span>
+      <b className="st-v" style={{ color: color || "var(--tx)" }}>{value}</b>
+      {sub && <span className="sub st-s">{sub}</span>}
     </div>
   );
 }
@@ -59,24 +60,22 @@ export default function Overview({ code, focus }) {
         <Link className="btnp" to={`/chat/${encodeURIComponent(p.code)}`} style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>打开顾问对话</Link>
       </TopBar>
       {error && <div className="err">{error.message}</div>}
-      <section className="kpis" aria-label="行动条">
-        <Kpi cap="下一步" value={p.phase_name} sub={`下一个里程碑：${p.next_milestone}`} />
-        <button type="button" className="pnl pad" style={{ gap: 4, textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}
-          onClick={() => setDrawer("todo")}>
-          <span className="cap">待你处理 · 按影响排序</span>
-          <span className="kpi-v" style={{ color: todo.length ? "var(--amber)" : "var(--ok)" }}>{todo.length}</span>
-          <span className="sub">{todo[0] ? `最先：${todo[0].title}` : "没有待你处理的事项"}</span>
+      <section className="pnl strip" aria-label="行动条">
+        <Stat cap="下一步" value={p.phase_name} sub={`里程碑：${p.next_milestone}`} />
+        <button type="button" className="st st-btn" title={todo[0] ? `最先：${todo[0].title}` : "没有待你处理的事项"} onClick={() => setDrawer("todo")}>
+          <span className="cap">待你处理</span>
+          <b className="st-v" style={{ color: todo.length ? "var(--amber)" : "var(--ok)" }}>{todo.length}</b>
+          <span className="sub st-s">{todo[0] ? `最先：${todo[0].title}` : "没有待你处理的事项"}</span>
         </button>
-        <Kpi cap="卡点" value={blocked} sub="全景里标红的节点" color={blocked ? "var(--crim)" : "var(--ok)"} />
-        <Kpi cap="本周自动处理" value={pano ? autoDone(pano) : "—"} sub="暂按交付链已完成步骤计" color="var(--ok)" />
-      </section>
-      <div className="kpis">
-        <Kpi cap="证据" value={evs ? evs.length : "—"} sub={strict ? "严格档只收摘要卡 S-xx" : `访谈 ${count("interview")} · 资料 ${count("document")} · 观察 ${count("observation")}`} />
-        <Kpi cap="交付件已签署" value={`${signed} / ${p.deliverables.length}`} 
+        <Stat cap="卡点" value={blocked} color={blocked ? "var(--crim)" : "var(--ok)"} sub="全景里标红的节点" />
+        <Stat cap="本周自动处理" value={pano ? autoDone(pano) : "—"} color="var(--ok)" sub="暂按交付链已完成步骤计" />
+        <Stat cap="证据" value={evs ? evs.length : "—"} sub={strict ? "严格档只收摘要卡 S-xx" : `访谈 ${count("interview")} · 资料 ${count("document")} · 观察 ${count("observation")}`} />
+        <Stat cap="已签署" value={`${signed}/${p.deliverables.length}`}
           sub={[pending.length && `${pending.join("、")} 待签署`, drafting.length && `${drafting.join("、")} 起草中`].filter(Boolean).join(" · ") || "按本项目交付件统计"} />
-        <Kpi cap="待你确认" value={p.open_confirmations} sub="Agent 需要你判断的事项" color={p.open_confirmations ? "var(--amber)" : "var(--ok)"} />
-        <Kpi cap="数据档位" value={tier.label} sub={p.tier === "strict" ? "资料不出场 · 只收摘要卡" : (external ? "当前为外部测试模型 · 只用虚拟数据" : "模型在公司内部 · 资料不出公司")} color={p.tier === "strict" ? "var(--crim)" : "var(--cyan)"} />
-      </div>
+        <Stat cap="待你确认" value={p.open_confirmations} color={p.open_confirmations ? "var(--amber)" : "var(--ok)"} sub="Agent 需要你判断的事项" />
+        <Stat cap="档位" value={tier.label} color={p.tier === "strict" ? "var(--crim)" : "var(--cyan)"}
+          sub={p.tier === "strict" ? "资料不出场 · 只收摘要卡" : (external ? "当前为外部测试模型 · 只用虚拟数据" : "模型在公司内部 · 资料不出公司")} />
+      </section>
       <Panorama code={p.code} data={pano} focus={focus} onOpen={setDrawer} />
       <section className="pnl pad" aria-label="阶段">
         <div className="sb"><h2 className="h2">交付阶段</h2><span className="sub">下一个里程碑：{p.next_milestone}</span></div>

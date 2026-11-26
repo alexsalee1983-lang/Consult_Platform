@@ -99,6 +99,16 @@ test("全景：行动条、默认只看例外、已自动完成折叠成一行",
   expect([...c.querySelectorAll("button[aria-pressed=true]")].map((b) => b.textContent)).toEqual(["全部"]);
 });
 
+test("全景：概况压成一行状态条，全景图紧跟其后，不再用两排大方块", async () => {
+  stubOverview();
+  const c = await render(<Overview code="BANK-A" />);
+  expect(c.querySelectorAll(".kpis").length).toBe(0);
+  const strip = c.querySelector('section[aria-label="行动条"]');
+  expect(strip.classList.contains("strip")).toBe(true);
+  expect(strip.querySelectorAll(".st").length).toBe(8);
+  expect(strip.nextElementSibling.textContent).toContain("只看例外");
+});
+
 test("全景抽屉：待你处理按影响排，点确认卡就地打开，Esc 关闭", async () => {
   stubOverview();
   const c = await render(<Overview code="BANK-A" />);
