@@ -794,7 +794,7 @@ def kb_export(args: argparse.Namespace) -> int:
         if user is None:
             return 1
         try:
-            r = transfer.export(db, user, Path(args.out))
+            r = transfer.export(db, user, Path(args.out), include_company=args.include_company)
         except transfer.TransferError as e:
             print(str(e), file=sys.stderr)
             return 1
@@ -1349,6 +1349,7 @@ def main(argv: list[str] | None = None) -> int:
     ke = sub.add_parser("kb-export", help="导出已发布的公开知识及审核记录、哈希，交生产环境导入")
     ke.add_argument("out", help="导出目录（必须为空或不存在）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份导出")
+    ke.add_argument("--include-company", action="store_true", help="另含已发布的公司做法类条目（只限测试 / 试用环境，生产拒绝）")
     ke.set_defaults(func=kb_export)
     kx = sub.add_parser("kb-import-export", help="导入 kb-export 的导出包：校验哈希、自动核验，通过的保留原审核人发布")
     kx.add_argument("dir", help="导出目录")

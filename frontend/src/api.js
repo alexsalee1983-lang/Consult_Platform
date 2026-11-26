@@ -124,6 +124,7 @@ export const api = {
   createProject: (body) => request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   assessment: (code) => request(`/api/projects/${encodeURIComponent(code)}/assessment`),
+  panorama: (code) => request(`/api/projects/${encodeURIComponent(code)}/panorama`),   // 四期 A25① 全景
   confirmations: () => request("/api/confirmations"),
   // 处理确认卡：选一个选项（choice）或写意见（resolution），或两者都有
   resolve: (id, { choice = "", resolution = "" }) =>
@@ -223,7 +224,6 @@ export const api = {
   agentMdVersions: (code) => request(`/api/agent-md/${encodeURIComponent(code)}/versions`),
   agentMdUnpin: (code, reason) =>
     request(`/api/agent-md/${encodeURIComponent(code)}/unpin`, { method: "POST", body: JSON.stringify({ reason }) }),
-  workbench: () => request("/api/workbench"),
   myTasks: () => request("/api/my-tasks"),
   benchCards: () => request("/api/expert-bench/cards"),
   benchAnswer: (versionId, body) =>
@@ -294,7 +294,8 @@ export const api = {
   kbSubmit: (id) => request(`/api/kb/versions/${id}/submit`, { method: "POST" }),
   kbReview: (id, role, decision, comment) =>
     request(`/api/kb/versions/${id}/review`, { method: "POST", body: JSON.stringify({ role, decision, comment }) }),
-  kbQueue: () => request("/api/kb/review-queue"),
+  kbQueue: (p = {}) => request(`/api/kb/review-queue?${new URLSearchParams(p)}`),
+  kbRecheckQueue: (p = {}) => request(`/api/kb/recheck-queue?${new URLSearchParams(p)}`),
   kbSamples: () => request("/api/kb/samples"),
   kbConfirmQueue: () => request("/api/kb/sources/confirm-queue"),
   kbConfirmDecide: (gapIds, decision, source = null) => request("/api/kb/sources/confirm-queue/decide", { method: "POST", body: JSON.stringify({ gap_ids: gapIds, decision, ...(source ? { source } : {}) }) }),

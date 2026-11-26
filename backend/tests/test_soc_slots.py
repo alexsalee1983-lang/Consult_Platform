@@ -56,3 +56,29 @@ def test_soc_slots_reach_snapshot():
     snap = config.compose_codes("SOC")
     draft = next(s for s in snap["chain"] if s["key"] == "draft")
     assert all(s["chapter"].startswith("SOC.D4.") for s in draft["slots"])
+
+
+# 四期 #461：D3、D6、D7、D8 章节清单与槽位规格 v0（D1、D2 由表单成稿，不在交付链里，只配章节清单）
+STEP_OF = {"D3": "facts", "D6": "policy", "D7": "roadmap", "D8": "briefing"}
+
+
+def test_soc_every_deliverable_has_outline():
+    prod = config.product("SOC")
+    for d in prod.deliverables:
+        if d.code != "D4":   # D4 章节由槽位 chapter SOC.D4.ch1～4 给出，大纲另议
+            assert len(d.outline) >= 3, d.code
+
+
+def test_soc_d3_d6_d7_d8_slots_follow_outline():
+    prod = config.product("SOC")
+    outlines = {d.code: d.outline for d in prod.deliverables}
+    for code, step_key in STEP_OF.items():
+        by = _chapters(step_key)
+        assert by, code
+        n = len(outlines[code])
+        for key, slots in by.items():
+            assert key.startswith(f"SOC.{code}.ch"), key
+            assert 1 <= int(key.rsplit("ch", 1)[1]) <= n, key       # 章号落在大纲范围内
+            assert all(s["expert_review"] == "pending" and s["required"] is False for s in slots), key
+        assert any({s["type"] for s in slots} & METHOD_TYPES for slots in by.values()), code
+        assert len(by) >= 3, code                                    # 至少覆盖三章

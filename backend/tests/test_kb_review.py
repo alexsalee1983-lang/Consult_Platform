@@ -221,8 +221,42 @@ def test_restricted_items_hidden_from_consultants(people):
 def test_review_queue(people):
     v = people["author"].post("/api/kb/items", json=_payload(title="待审队列测试")).json()
     people["author"].post(f"/api/kb/versions/{v['id']}/submit")
-    assert v["id"] in [x["id"] for x in people["admin"].get("/api/kb/review-queue").json()]
+    page = people["admin"].get("/api/kb/review-queue").json()
+    assert v["id"] in [x["id"] for x in page["items"]] and page["total"] >= 1
     assert people["consultant"].get("/api/kb/review-queue").status_code == 403
+
+
+def test_review_queue_is_light_and_paged(people):
+    """列表只给轻量字段（不算 diff、相似检索、引用核对，不带正文）；limit/offset 生效，total 是全部待审数。"""
+    for i in range(3):
+        v = people["author"].post("/api/kb/items", json=_payload(title=f"分页测试{i}")).json()
+        people["author"].post(f"/api/kb/versions/{v['id']}/submit")
+    page = people["admin"].get("/api/kb/review-queue").json()
+    assert page["total"] >= 3
+    row = page["items"][0]
+    for heavy in ("body", "diff", "similar", "citations", "reviews", "summary"):
+        assert heavy not in row
+    for light in ("id", "doc_id", "version", "title", "status", "created_by", "submitted_by", "created_at"):
+        assert light in row
+    p1 = people["admin"].get("/api/kb/review-queue", params={"limit": 2, "offset": 0}).json()
+    p2 = people["admin"].get("/api/kb/review-queue", params={"limit": 2, "offset": 2}).json()
+    assert len(p1["items"]) == 2 and p1["total"] == page["total"] and p1["limit"] == 2
+    assert {x["id"] for x in p1["items"]}.isdisjoint(x["id"] for x in p2["items"])
+    assert people["admin"].get("/api/kb/review-queue", params={"limit": 0}).status_code == 422
+    lst = people["admin"].get("/api/kb/versions", params={"status": "in_review", "limit": 1}).json()
+    assert len(lst) == 1 and "body" not in lst[0] and "diff" not in lst[0] and lst[0]["doc_id"]
+
+
+def test_recheck_queue(people):
+    v = people["author"].post("/api/kb/items", json=_payload(title="待复审列表测试")).json()
+    with SessionLocal() as db:
+        row = db.get(KbVersion, v["id"])
+        row.status, row.single_review = "published", True
+        db.commit()
+    page = people["expert2"].get("/api/kb/recheck-queue").json()
+    assert v["id"] in [x["id"] for x in page["items"]] and "body" not in page["items"][0]
+    assert v["id"] not in [x["id"] for x in people["admin"].get("/api/kb/review-queue").json()["items"]]
+    assert people["consultant"].get("/api/kb/recheck-queue").status_code == 403
 
 
 @on_postgres

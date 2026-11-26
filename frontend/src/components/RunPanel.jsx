@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, RUN_ACTIVE, RUN_STATUS } from "../api.js";
 
 // 交付链步骤来自 GET /api/projects/{code}/chain（项目立项时的配置快照，二期 A5）
@@ -24,6 +24,8 @@ export default function RunPanel({ code, strict, onChange }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [steps, setSteps] = useState([]);
+  const changed = useRef(onChange);   // onChange 每次渲染都是新函数：放进 ref，不进轮询依赖，免得重复加载
+  useEffect(() => { changed.current = onChange; });
 
   useEffect(() => { api.chain(code).then(setSteps).catch(setError); }, [code]);
 
@@ -37,14 +39,14 @@ export default function RunPanel({ code, strict, onChange }) {
         if (!alive) return;
         setRun(r);
         const sig = r ? `${r.id}:${r.status}:${r.next_step}` : "";
-        if (last && sig !== last) onChange();
+        if (last && sig !== last) changed.current();
         last = sig;
         if (r && RUN_ACTIVE.has(r.status)) timer = setTimeout(tick, 3000);
       })
       .catch((e) => alive && setError(e));
     tick();
     return () => { alive = false; clearTimeout(timer); };
-  }, [code, busy]);   // onChange 每次渲染都是新函数，不放进依赖
+  }, [code, busy]);
 
   const act = (fn) => {
     setBusy(true);

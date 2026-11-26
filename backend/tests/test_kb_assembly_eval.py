@@ -88,10 +88,10 @@ def test_unknown_step_rejected(published):
 def test_baseline_reports_readiness_hits_and_missing(published):
     with SessionLocal() as db:
         rep = ae.run(db, db.merge(published), _evalset())
-    assert rep.strategy == "baseline" and rep.expected == 13 and len(rep.chapters) == 4
+    assert rep.strategy == "baseline" and rep.expected == 16 and len(rep.chapters) == 5
     d502 = next(c for c in rep.chapters if c.id == "SOC-D5-02")
     assert d502.missing == [PREFIX + "soc-ransomware-playbook"]       # 库里没有 → 缺槽，不算就绪
-    assert rep.readiness == round(12 / 13, 4)
+    assert rep.readiness == round(15 / 16, 4)
     for c in rep.chapters:
         assert set(c.hit) <= set(c.ready) <= set(c.expect)
     # 基线同一步的两章查询相同，装配结果一样
