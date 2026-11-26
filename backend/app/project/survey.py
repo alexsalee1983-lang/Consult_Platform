@@ -19,6 +19,7 @@ import hashlib
 import json
 import random
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,7 +31,7 @@ from ..core import audit
 from ..core.config import get_settings
 from ..core.db import utcnow
 from ..models import Project, User
-from ..models.survey import SurveyAnswer, SurveyPack, SurveyQuestion
+from ..models.survey import SelfEvalPack, SurveyAnswer, SurveyPack, SurveyQuestion
 from ..services import guard
 from ..agents.knowledge import product_code
 from . import cards
@@ -50,7 +51,7 @@ HIGH_SOURCES = {"evidence", "document"}
 
 
 class SurveyError(ValueError):
-    def __init__(self, status: int, detail: str):
+    def __init__(self, status: int, detail: str | dict):
         super().__init__(detail)
         self.status = status
         self.detail = detail
@@ -263,7 +264,9 @@ def _auto_confirm(db: Session, user: User, project: Project) -> int:
 
 
 def import_results(db: Session, user: User, project: Project, pack_code: str, given_hash: str,
-                   responses: list[ResponseIn], channel: str = "onsite") -> dict:
+                   responses: list[ResponseIn], channel: str = "onsite",
+                   on_rows: Callable[[list[SurveyAnswer], list[str]], None] | None = None) -> dict:
+    """on_rows(新答案, “不清楚”题号)：校验全过、答案落库后在同一事务里调用（E3② 自评包记导入的答案编号）。"""
     pack = db.scalar(select(SurveyPack).where(SurveyPack.project_id == project.id, SurveyPack.code == pack_code))
     if pack is None:
         raise SurveyError(404, "调研包不存在")
@@ -310,6 +313,8 @@ def import_results(db: Session, user: User, project: Project, pack_code: str, gi
         qs[qid].unclear_count += 1
     pack.returned += 1
     db.flush()
+    if on_rows is not None:
+        on_rows(rows, unclear)
     conflicts = _flag_conflicts(db, project)
     auto = _auto_confirm(db, user, project)
     db.commit()
@@ -405,5 +410,6 @@ def spot_verdict(db: Session, user: User, project: Project, fact: SurveyAnswer, 
 
 def delete_for_project(db: Session, project_id: int) -> int:
     n = db.execute(delete(SurveyAnswer).where(SurveyAnswer.project_id == project_id)).rowcount or 0
+    db.execute(delete(SelfEvalPack).where(SelfEvalPack.project_id == project_id))   # 四期 E3② 客户自评包
     db.execute(delete(SurveyPack).where(SurveyPack.project_id == project_id))
     return n
