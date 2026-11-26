@@ -35,13 +35,15 @@ fi
 
 # 镜像 -> 构建上下文（相对路径；非自建镜像为空）
 mapfile -t rows < <(docker compose "${PROFILE_ARGS[@]}" config --format json \
-  | jq -r --arg pwd "$PWD" '.services[] | [.image, ((.build.context // "") | sub("^" + $pwd + "/?"; ""))] | @tsv' | sort -u)
+  | jq -r --arg pwd "$PWD" '.name as $p | .services | to_entries[] | [(.value.image // ($p + "-" + .key)), ((.value.build.context // "") | sub("^" + $pwd + "/?"; ""))] | @tsv' | sort -u)
+# 没写 image 的自建服务按 compose 默认名 <项目>-<服务>；仍取不到镜像名的直接报错，不静默跳过
+for row in "${rows[@]}"; do [ -n "${row%%$'	'*}" ] || { echo "镜像名为空：$row"; exit 1; }; done
 
 is_changed() {  # $1 镜像 $2 构建上下文
   [ "$mode" = strict ] && return 0
   [ "$all_changed" = 1 ] && return 0
   # 基础镜像或镜像标签在 docker-compose.yml 里被改动
-  if [ -n "$compose_added" ] && printf '%s\n' "$compose_added" | grep -qF "$1"; then return 0; fi
+  if [ -n "$1" ] && [ -n "$compose_added" ] && printf '%s\n' "$compose_added" | grep -qF "$1"; then return 0; fi
   [ -n "$2" ] || return 1
   local ctx="$2"
   if [ "$ctx" = "" ] || [ "$ctx" = "." ]; then   # 以仓库根为上下文的镜像（backend、worker）：Dockerfile、源码、agents/、.dockerignore
