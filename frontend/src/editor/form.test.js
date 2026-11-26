@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkForm, emptyValues, formFields, listCount } from "./form.js";
+import { checkForm, emptyValues, formFields, joinRows, listCount, splitRows } from "./form.js";
 
 const FORM = {
   code: "D1", title: "启动包", writable: true,
@@ -51,4 +51,14 @@ test("产品配置预填：default 作初值，没有 default 的为空串（iss
   ] }] };
   assert.deepEqual(emptyValues(form), { frameworks: "等保 2.0", approach: "" });
   assert.deepEqual(checkForm(form, emptyValues(form)), {});
+});
+
+test("A28 表格字段：每行一条、格间用全角竖线，按列数补齐；空行去掉", () => {
+  assert.deepEqual(splitRows("a｜b\n\nc", 3), [["a", "b", ""], ["c", "", ""]]);
+  assert.deepEqual(splitRows("", 2), []);
+  assert.equal(joinRows([["a", "b", ""], ["", "", ""], ["c", "d", "e"]]), "a｜b｜\nc｜d｜e");
+  const form = { sections: [{ fields: [{ key: "t", label: "表", type: "table", columns: ["甲", "乙"], required: true, max: 4000 }] }] };
+  assert.deepEqual(checkForm(form, { t: "" }), { t: "必填" });
+  assert.deepEqual(checkForm(form, { t: "｜\n" }), { t: "必填" });
+  assert.deepEqual(checkForm(form, { t: "x｜y" }), {});
 });

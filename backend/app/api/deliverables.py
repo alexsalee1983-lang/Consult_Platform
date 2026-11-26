@@ -19,14 +19,15 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..agents.knowledge import product_code
 from ..core import audit
 from ..core.auth import current_user
 from ..core.db import get_db
-from ..core.permissions import project_for_member, require_business
-from ..models import Deliverable, User
+from ..core.permissions import PROJECT_MANAGER, PROJECT_ROLES, project_for_member, require_business
+from ..models import Deliverable, ProjectMember, User
 from ..project import assessment
 from ..project import deliverables as svc
 from ..project import export as export_svc
@@ -216,7 +217,11 @@ def get_form(code: str, dcode: str, db: Session = Depends(get_db), user: User = 
         prod = product_config.product(product_code(p.service))
     except product_config.CatalogError:
         prod = None                                     # 产品配置不可用时不预填，表单照常可填
-    return {**forms_svc.schema(form, p.tier, prod), "writable": not any(s.current_version for s in d.sections)}
+    rows = db.execute(select(User.display_name, User.username, ProjectMember.project_role)
+                      .join(ProjectMember, ProjectMember.user_id == User.id).where(ProjectMember.project_id == p.id)
+                      .order_by(ProjectMember.project_role != PROJECT_MANAGER, User.username)).all()
+    members = [(dn or un, PROJECT_ROLES.get(r, r)) for dn, un, r in rows]   # A28① 角色与职责按项目成员预填
+    return {**forms_svc.schema(form, p.tier, prod, p, members), "writable": not any(s.current_version for s in d.sections)}
 
 
 @router.post("/{code}/deliverables/{dcode}/form", response_model=DeliverableDetail, status_code=201)
