@@ -264,4 +264,9 @@ def submit(db: Session, user: User, project: Project, d: Deliverable, form: Form
         if body:
             dsvc.write_section(db, user, project, d, seq, body, note=NOTE)
     db.refresh(d)
+    if form.code == "D1":                              # A28③：里程碑与周期回写项目
+        from . import stages                           # stages 引用交付件服务，延迟导入免循环
+        db.refresh(project)
+        stages.plan_writeback(db, project, user.username)
+        db.refresh(d)
     return d
