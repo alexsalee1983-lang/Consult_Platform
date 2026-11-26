@@ -33,6 +33,8 @@ MATRIX = [
     (("GET", "/api/projects", None),                    (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A", None),             (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
+    # 项目全景（四期 A25①）：项目成员可看，非成员 404
+    (("GET", "/api/projects/BANK-A/panorama", None),    (200, 404, 403, 403, 403)),
     # 项目总览（方案 A）：只给项目负责人；顾问 403（负责人 200 在 test_portfolio 里测）
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
     # 指标看板（三期 F2）：只给项目负责人（负责人 200 在 test_indicators 里测）
@@ -110,6 +112,8 @@ MATRIX = [
      (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/summary-cards/S-01/withdraw", None), (404, 404, 403, 403, 403)),
     # 调研助手（四期 E2①）：成员看题目、包、确认单 200；不存在的包 / 事实 404；GRID-B 非成员 404
+    (("GET", "/api/projects/BANK-A/automation", None), (200, 404, 403, 403, 403)),   # 四期 F5
+    (("GET", "/api/projects/GRID-B/automation", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/survey/questions", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/survey/packs", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/survey/facts", None), (200, 404, 403, 403, 403)),

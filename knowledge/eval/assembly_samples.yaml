@@ -35,3 +35,9 @@ chapters:
     title: 告警分级与处置流程
     query: SOC 告警分级 告警阈值 处置剧本 钓鱼邮件
     expect: [soc-alert-grading, pit-default-alert-threshold, soc-phishing-playbook, soc-ransomware-playbook]
+  # 四期 #461：policy 步骤评测集不覆盖槽位，回归“槽位取产品配置 products/soc.yaml”这条路径
+  - id: SOC-D6-02
+    step: policy
+    title: 流程规范与记录表单
+    query: SOC 交接班 处置剧本 告警分级 流程规范
+    expect: [soc-shift-handover, soc-phishing-playbook, soc-alert-grading]

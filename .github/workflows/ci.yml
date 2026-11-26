@@ -15,6 +15,8 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 改动行覆盖率要和 origin/main 比
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -43,12 +45,25 @@ jobs:
           docker run -d --name tests3 -e MINIO_ROOT_USER=ci-storage -e MINIO_ROOT_PASSWORD="$sk"             -e MINIO_KMS_SECRET_KEY="$kms" -e MINIO_KMS_AUTO_ENCRYPTION=on -e MINIO_BROWSER=off -e MINIO_UPDATE=off             -p 127.0.0.1:9000:9000 consult-platform-minio:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:9000/minio/health/live && exit 0; sleep 2; done
           docker logs tests3; exit 1
-      - run: pytest -q
+      - run: pytest -q --cov=app --cov-report=xml --cov-report=html
         env:
           TEST_DATABASE_URL: postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_test
           TEST_KB_DATABASE_URL: postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_kb_test   # 知识区表在单独的库
           TEST_S3_ENDPOINT: 127.0.0.1:9000
           TEST_S3_ACCESS_KEY: ci-storage
+      # 四期 质量：PR 改动的后端代码行（相对 origin/main）至少 80% 被测试执行到；全量报告作 artifact
+      - name: 改动行覆盖率（diff-cover，低于 80% 即失败）
+        if: github.event_name == 'pull_request'
+        run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=80
+      - name: 上传覆盖率报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: |
+            backend/coverage.xml
+            backend/htmlcov/
+          if-no-files-found: ignore
       - name: 本地快速测试（SQLite）也要能通过
         run: pytest -q -x
       - name: SQLite 分库（知识区表在第二个文件）也要能通过
@@ -67,10 +82,12 @@ jobs:
         with:
           node-version: "20"
       - run: npm ci
+      - name: ESLint（推荐规则、React Hooks、禁止硬编码颜色）
+        run: npm run lint
       - run: npm run build
       - name: 现场工具测试（离线页面的规则、加密、回填）
         run: node --test ../field-tool/test/core.test.mjs
-      - name: 交付件编辑器内核测试（往返无损、来源标签、整体删除）
+      - name: 前端单元与组件测试（node --test：编辑器内核等；Vitest + jsdom：页面组件 *.test.jsx）
         run: npm test
 
   compose:
@@ -107,6 +124,28 @@ jobs:
       - run: bash scripts/smoke_test.sh http://localhost:8080
         env:
           SMOKE_EXPECT_LLM: ok
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # 四期 质量：浏览器端到端冒烟，用 runner 自带的 Google Chrome（不下载浏览器），只用虚拟项目 BANK-A
+      - name: 浏览器端到端冒烟（登录 → 我的项目 → BANK-A 驾驶舱，无 console error）
+        working-directory: frontend
+        run: |
+          npm ci
+          env_val() { grep -E "^$1=" ../.env | tail -1 | cut -d= -f2-; }
+          export E2E_USER="$(env_val TEST_ACCOUNT_USERNAME)" E2E_PASS="$(env_val TEST_ACCOUNT_PASSWORD)"
+          echo "::add-mask::$E2E_PASS"
+          sleep $(( 31 - $(date +%s) % 30 ))   # 冒烟测试刚用过当前窗口的动态码，换新窗口防重放
+          secret="$(env_val TEST_ACCOUNT_TOTP_SECRET)"
+          export E2E_TOTP="$(cd .. && docker compose exec -T backend python -c 'import pyotp, sys; print(pyotp.TOTP(sys.argv[1]).now())' "$secret")"
+          npx playwright test
+      - name: 上传端到端失败截图与 trace
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-trace
+          path: frontend/test-results/
+          if-no-files-found: ignore
       - name: 后端容器重建后，前端不重启也能连上（nginx 重新解析后端地址）
         run: |
           before=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker compose ps -q backend))
