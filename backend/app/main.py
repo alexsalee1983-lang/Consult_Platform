@@ -20,7 +20,7 @@ from .core.db import SessionLocal, engine, kb_engine
 from .core.errors import out_of_range_handler, reject_control_chars, validation_error_handler
 from .core.metrics import MetricsMiddleware, register_state_collector, start_server
 from .core.migrate import upgrade_to_head
-from .services import runtime_config, storage
+from .services import jobs, runtime_config, storage
 from .project import configs as project_configs
 from .seed import seed, seed_signed_sample
 
@@ -30,6 +30,7 @@ check_settings(_settings)  # 配置不安全时直接拒绝启动
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    jobs.validate_handlers()   # 处理器签名不一致直接拒绝启动（四期 G7）
     check_db_accounts(_settings, [engine, kb_engine])  # 生产不用超级用户连库，迁移之前检查
     upgrade_to_head()
     with SessionLocal() as db:
