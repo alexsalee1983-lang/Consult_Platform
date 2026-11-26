@@ -20,6 +20,7 @@ const { default: Overview } = await import("./Overview.jsx");
 const { OutputPage, ProjectLayout } = await import("./ProjectPages.jsx");
 const { default: Drawer } = await import("../components/Drawer.jsx");
 const { todos } = await import("../components/Panorama.jsx");
+const { default: Members } = await import("../components/Members.jsx");
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 vi.stubGlobal("localStorage", globalThis.jsdom.window.localStorage);   // Node 25+ 自带的 localStorage 会盖住 jsdom 的
@@ -256,4 +257,21 @@ test("D3 批量签：只能勾选门禁 0 问题的，签后逐份回报", async
   await act(async () => { btn.click(); });
   expect(signed).toEqual([[{ project: "BANK-A", deliverable: "D3" }]]);
   expect(c.textContent).toContain("BANK-A 已签");
+});
+
+test("项目成员：项目经理不用输入就能看到全部可加入的同事，勾选后一次添加", async () => {
+  const added = [];
+  stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
+  stub.lookupUsers = async (q) => [{ username: "u1", display_name: "经理甲" }, { username: "u2", display_name: "顾问乙" },
+    { username: "u3", display_name: "顾问丙" }].filter((u) => !q || u.display_name.includes(q));
+  stub.putMember = async (code, username, role) => { added.push([username, role]); return [{ username: "u1", display_name: "经理甲", project_role: "manager" }]; };
+  const c = await render(<Members code="BANK-A" />);
+  await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+  const pick = c.querySelector('[aria-label="可添加的同事"]');
+  expect([...pick.querySelectorAll("label")].map((l) => l.textContent)).toEqual(["顾问乙u2", "顾问丙u3"]);
+  const boxes = pick.querySelectorAll("input[type=checkbox]");
+  await act(async () => { boxes[0].click(); boxes[1].click(); });
+  const btn = [...c.querySelectorAll("button")].find((b) => b.textContent.startsWith("添加选中的 2 人"));
+  await act(async () => btn.click());
+  expect(added).toEqual([["u2", "member"], ["u3", "member"]]);
 });

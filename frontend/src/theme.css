@@ -266,3 +266,6 @@ section[aria-label="项目全景"] { animation: rise .5s .2s cubic-bezier(.2,.7,
 @keyframes breathe { 50% { opacity: .35; transform: scale(1.35); } }
 @keyframes sheen { 0%, 60% { background-position: 150% 0; } 100% { background-position: -50% 0; } }
 @media (prefers-reduced-motion: reduce) { .act-card, .act-next::after, .live, .pn circle, section[aria-label="项目全景"] { animation: none !important; } .act-card:hover { transform: none; } }
+
+/* 项目成员勾选列表：最多显示约 8 行，多了在框内滚动 */
+.pick { max-height: 300px; overflow-y: auto; border: 1px solid var(--ln); border-radius: 8px; padding: 0 10px; }
