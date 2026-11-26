@@ -121,6 +121,13 @@ MATRIX = [
      (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/survey/facts/999999/confirm", {"confirmed_role": "负责人"}),
      (404, 404, 403, 403, 403)),
+    # 答案池（四期 E3①）：成员看池子和抽检队列 200；不存在的事实 404；GRID-B 非成员 404
+    (("GET", "/api/projects/BANK-A/survey/pool", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/survey/spot-checks", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/survey/facts/999999/spot-check", {"passed": True}), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/survey/pool", None), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/survey/facts/999999/spot-check", {"passed": False}),
+     (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/survey/packs", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B/survey/facts", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B/consents", None), (404, 404, 403, 403, 403)),
