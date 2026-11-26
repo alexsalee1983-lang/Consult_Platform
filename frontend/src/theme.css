@@ -54,14 +54,16 @@ button { font: inherit; cursor: pointer; }
 .grid-main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi-v { font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
-/* 驾驶舱状态条：一行排开，窄屏自动折行；数字用正文字体 + 等宽数字 */
-.strip { display: flex; flex-wrap: wrap; align-items: stretch; padding: 4px 6px; }
-.st { display: flex; flex-direction: column; gap: 1px; padding: 6px 12px; min-width: 0; flex: 1 1 110px; border-left: 1px solid var(--ln); }
-.st:first-child { border-left: 0; }
-.st-v { font-size: 17px; font-weight: 700; line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-s { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-btn { background: none; border: 0; border-left: 1px solid var(--ln); text-align: left; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }
-.st-btn:hover { background: var(--s2); }
+/* 驾驶舱行动条（设计稿 07 .act）：下一步加宽高亮，其余四张小卡 */
+.act { display: grid; grid-template-columns: 2.4fr 1fr 1fr 1fr 1.1fr; gap: 10px; }
+.act-card { display: flex; flex-direction: column; gap: 3px; padding: 12px 16px; min-width: 0; }
+.act-btn { text-align: left; cursor: pointer; font: inherit; color: inherit; transition: border-color .15s, background .15s; }
+.act-btn:hover { border-color: var(--ln2); background: var(--s2); }
+.act-v { font-size: 24px; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.act-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act-next { border-color: var(--amber); background: var(--amber-d); }
+.act-next-t { font-size: 15px; font-weight: 600; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+@media (max-width: 1100px) { .act { grid-template-columns: repeat(2, minmax(0, 1fr)); } .act-next { grid-column: 1 / -1; } }
 .lst { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .lst > li { padding: 9px 0; border-top: 1px solid var(--ln); }
 .bar { height: 4px; border-radius: 2px; background: var(--s3); overflow: hidden; }
@@ -235,8 +237,10 @@ select.sm { height: 28px; padding: 0 6px; border: 1px solid var(--ln2); border-r
 .assist-diff del { color: var(--crim); background: var(--crim-d); }
 .assist-diff ins { color: var(--ok); background: var(--ok-d); text-decoration: none; }
 /* 四期 A25②：项目内五个导航、右侧抽屉、“⌖ 全景”定位闪烁 */
-.tabs a { color: var(--tx3); padding: 6px 10px; font-size: 13.5px; border-bottom: 2px solid transparent; text-decoration: none; }
-.tabs a.on { color: var(--tx); border-bottom-color: var(--amber); }
+.tabs a { color: var(--tx3); padding: 9px 20px; font-size: 14px; border-bottom: 2px solid transparent; text-decoration: none; transition: color .15s; }
+.tabs a:hover { color: var(--tx); }
+.tabs a.on { color: var(--cyan); border-bottom-color: var(--cyan); font-weight: 700; }
+nav.tabs[aria-label="项目导航"] { position: sticky; top: 0; z-index: 5; background: var(--obs); margin-bottom: 4px; }
 .drawer { position: fixed; inset: 0 0 0 auto; width: min(440px, 100vw); height: 100vh; margin: 0; max-height: none; z-index: 20; border-radius: 0; color: var(--tx); overflow-y: auto; box-shadow: -12px 0 32px var(--obs); }
 .drawer-body { display: flex; flex-direction: column; gap: 10px; }
 .locate { color: var(--cyan); text-decoration: none; font-size: 12.5px; white-space: nowrap; }

@@ -10,15 +10,18 @@ import RunPanel from "../components/RunPanel.jsx";
 // 全景（四期 A25②）：页头 + 行动条 + 泳道全景图；确认卡、交付链、待办在右侧抽屉里办，资料、交付件等跳到对应导航页。
 // 证据、调研、评估、交付件、成员与保留期已挪到 输入 / 分析 / 输出 / 设置 页。
 
-// 状态条一项：标签 + 数值 + 说明，一行排开；说明悬停看全文（负责人 2026-11-26：八个大方块太占地方、把全景压到下面）。
-function Stat({ cap, value, sub, color }) {
-  return (
-    <div className="st" title={sub}>
+// 行动条一张卡（设计稿 07 .act）：标签 + 大数字 + 一行说明；负责人 2026-11-26：原八个方块太占地方、字体不统一。
+function Card({ cap, value, sub, color, onClick }) {
+  const body = (
+    <>
       <span className="cap">{cap}</span>
-      <b className="st-v" style={{ color: color || "var(--tx)" }}>{value}</b>
-      {sub && <span className="sub st-s">{sub}</span>}
-    </div>
+      <b className="act-v" style={{ color: color || "var(--tx)" }}>{value}</b>
+      {sub && <span className="sub act-s" title={sub}>{sub}</span>}
+    </>
   );
+  return onClick
+    ? <button type="button" className="pnl act-card act-btn" onClick={onClick}>{body}</button>
+    : <div className="pnl act-card">{body}</div>;
 }
 
 export default function Overview({ code, focus }) {
@@ -60,21 +63,23 @@ export default function Overview({ code, focus }) {
         <Link className="btnp" to={`/chat/${encodeURIComponent(p.code)}`} style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>打开顾问对话</Link>
       </TopBar>
       {error && <div className="err">{error.message}</div>}
-      <section className="pnl strip" aria-label="行动条">
-        <Stat cap="下一步" value={p.phase_name} sub={`里程碑：${p.next_milestone}`} />
-        <button type="button" className="st st-btn" title={todo[0] ? `最先：${todo[0].title}` : "没有待你处理的事项"} onClick={() => setDrawer("todo")}>
-          <span className="cap">待你处理</span>
-          <b className="st-v" style={{ color: todo.length ? "var(--amber)" : "var(--ok)" }}>{todo.length}</b>
-          <span className="sub st-s">{todo[0] ? `最先：${todo[0].title}` : "没有待你处理的事项"}</span>
-        </button>
-        <Stat cap="卡点" value={blocked} color={blocked ? "var(--crim)" : "var(--ok)"} sub="全景里标红的节点" />
-        <Stat cap="本周自动处理" value={pano ? autoDone(pano) : "—"} color="var(--ok)" sub="暂按交付链已完成步骤计" />
-        <Stat cap="证据" value={evs ? evs.length : "—"} sub={strict ? "严格档只收摘要卡 S-xx" : `访谈 ${count("interview")} · 资料 ${count("document")} · 观察 ${count("observation")}`} />
-        <Stat cap="已签署" value={`${signed}/${p.deliverables.length}`}
-          sub={[pending.length && `${pending.join("、")} 待签署`, drafting.length && `${drafting.join("、")} 起草中`].filter(Boolean).join(" · ") || "按本项目交付件统计"} />
-        <Stat cap="待你确认" value={p.open_confirmations} color={p.open_confirmations ? "var(--amber)" : "var(--ok)"} sub="Agent 需要你判断的事项" />
-        <Stat cap="档位" value={tier.label} color={p.tier === "strict" ? "var(--crim)" : "var(--cyan)"}
-          sub={p.tier === "strict" ? "资料不出场 · 只收摘要卡" : (external ? "当前为外部测试模型 · 只用虚拟数据" : "模型在公司内部 · 资料不出公司")} />
+      <div className="row" aria-label="项目概况" style={{ flexWrap: "wrap", gap: 6 }}>
+        <span className={`chip ${p.tier === "strict" ? "c-r" : "c-c"}`}>{tier.label} · {p.tier === "strict" ? "资料不出场" : (external ? "当前为外部测试模型 · 只用虚拟数据" : "模型在公司内部")}</span>
+        <span className="chip c-n">已签署 {signed} / {p.deliverables.length}{pending.length ? ` · ${pending.join("、")} 待签` : ""}{drafting.length ? ` · ${drafting.join("、")} 起草中` : ""}</span>
+        <span className={`chip ${p.open_confirmations ? "c-a" : "c-n"}`}>待你确认 {p.open_confirmations}</span>
+        <span className="chip c-n">证据 {evs ? evs.length : "—"}{strict ? " · 只收摘要卡" : ` · 访谈 ${count("interview")} · 资料 ${count("document")} · 观察 ${count("observation")}`}</span>
+      </div>
+      <section className="act" aria-label="行动条">
+        <div className="pnl act-card act-next">
+          <span className="cap">下一步 · 现在在 <span style={{ color: "var(--amber)" }}>{p.phase_name}</span></span>
+          <span className="act-next-t">{todo[0] ? todo[0].title : "当前没有卡住的事项，按计划推进"}</span>
+          <span className="sub">下一个里程碑：{p.next_milestone}</span>
+        </div>
+        <Card cap="待你处理" value={todo.length} color={todo.length ? "var(--amber)" : "var(--ok)"}
+          sub={todo[0] ? `最先：${todo[0].title}` : "没有待你处理的事项"} onClick={() => setDrawer("todo")} />
+        <Card cap="卡点" value={blocked} color={blocked ? "var(--crim)" : "var(--ok)"} sub="全景里标红的节点" />
+        <Card cap="本周自动处理" value={pano ? autoDone(pano) : "—"} color="var(--ok)" sub="按交付链已完成步骤计" />
+        <Card cap="交付件" value={`${signed} / ${p.deliverables.length}`} sub="已签署 / 全部" />
       </section>
       <Panorama code={p.code} data={pano} focus={focus} onOpen={setDrawer} />
       <section className="pnl pad" aria-label="阶段">
