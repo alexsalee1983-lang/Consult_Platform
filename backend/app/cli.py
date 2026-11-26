@@ -1066,7 +1066,7 @@ def agent_eval_lint(args: argparse.Namespace) -> int:
 
     from .agents import evalgate
 
-    n, issues, extras = evalgate.run(Path(args.path))
+    n, issues, extras = evalgate.run(Path(args.path), [Path(d) for d in args.entries or []])
     for i in issues:
         print(f"  {i}")
     print(f"评测门：{n} 个文件，问题 {len(issues)} 处；扩展：{'、'.join(extras) or '无（A24 未接入）'}")
@@ -1437,7 +1437,8 @@ def main(argv: list[str] | None = None) -> int:
     ae.add_argument("--answers", default="", help="把每题答案原文写到目录（<题号>.md，只限开发、测试环境，回放核对用）")
     ae.set_defaults(func=agent_eval)
     al = sub.add_parser("agent-eval-lint", help="评测门（三期 C8，CI 跑，不连模型）：评测集格式、红线、资质用语，全部通过时退出码 0")
-    al.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
+    al.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）；装配评测集（有 chapters）也可")
+    al.add_argument("--entries", action="append", help="条目目录（可多次）：核对装配评测集 expect 的 key 都存在（四期 F6）")
     al.set_defaults(func=agent_eval_lint)
     am3 = sub.add_parser("agent-eval-majority", help="真模型多轮判定（三期 C8，测试机用）：多份 agent-eval --out 结果按每题多数判定，红线题一轮失败即不通过")
     am3.add_argument("reports", nargs="+", help="各轮 agent-eval --out 写出的 JSON")

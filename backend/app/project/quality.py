@@ -329,6 +329,62 @@ def qualification_hits(text: str) -> int:
     return len(qualification_matches(text))
 
 
+# 四期 F6：资质用语公共判定（评测、评测门、Agent 输出兜底共用，规则同上面的 _QUALIF / _NEGATION）。
+# 类别只用于审计和报告（不记原文）；只有“××结论”能程序化改写成允许用语，其余（通过测评、测评合格、等保达标）拦下。
+QUALIF_CATEGORIES = ("结论用语", "通过测评", "测评合格", "等保达标")
+_CONCLUSION = re.compile(r"(?:测评|认证|密评|合规)结论")     # 评测题 must_not 里常见的裸词（含“合规结论”）
+_QUOTED = re.compile(r"“[^”\n]{0,120}”|「[^」\n]{0,120}」|『[^』\n]{0,120}』|‘[^’\n]{0,120}’|\"[^\"\n]{0,120}\"")
+REWRITE_TO = "符合性初判"
+# 评测门自检与 lint 用的否定式免责句样例：任何禁词规则都不得命中这些句子。
+NEGATED_SAMPLES = ("本回答为依据梳理，不构成测评结论。", "本报告为差距分析，不构成等保测评结论。",
+                   "平台不出具认证结论。", "以上并非密评结论。", "本结果不代表测评结论。", "这不是合规结论。")
+
+
+def unquoted(text: str) -> str:
+    """去掉引号里的内容（引用原话），换成同长度空格，保持否定词距离不变。"""
+    return _QUOTED.sub(lambda m: " " * len(m.group()), text)
+
+
+def qualification_negated(text: str, pos: int) -> bool:
+    """text[pos:] 开头的资质用语前面紧跟否定或设问（只看本分句）。"""
+    return bool(_NEGATION.search(text[max(0, pos - 20):pos]))
+
+
+def qualification_category(phrase: str) -> str:
+    if phrase.endswith("结论"):
+        return "结论用语"
+    if phrase.startswith("通过"):
+        return "通过测评"
+    if phrase.endswith(("合格", "通过")) and phrase.startswith(("测评", "认证", "密评")):
+        return "测评合格"
+    return "等保达标"
+
+
+def must_not_hit(pattern: str, text: str) -> bool:
+    """评测题 must_not 判定：命中处若含资质用语且该用语处于否定句里（“不构成测评结论”），不算命中（#436）。"""
+    for m in re.finditer(pattern, text):
+        inner = _QUALIF.search(m.group(0)) or _CONCLUSION.search(m.group(0))
+        if inner is None or not qualification_negated(text, m.start() + inner.start()):
+            return True
+    return False
+
+
+def rewrite_qualification(text: str) -> tuple[str, int, list[str]]:
+    """Agent 输出兜底：引号外、非否定的“××结论”改写为“符合性初判”。
+    返回 (改写后文本, 改写处数, 无法安全改写的命中类别列表)。"""
+    plain = unquoted(text)
+    spans = [m for m in _QUALIF.finditer(plain) if not qualification_negated(plain, m.start())]
+    out, last, n, left = [], 0, 0, []
+    for m in spans:
+        cat = qualification_category(m.group(0))
+        if cat != "结论用语":
+            left.append(cat)
+            continue
+        out += [text[last:m.start()], REWRITE_TO]
+        last, n = m.end(), n + 1
+    return "".join(out) + text[last:], n, left
+
+
 def rule_issues(d: Deliverable, versions: dict,
                 local_only: set[str] | frozenset[str] | dict[str, str] = frozenset(),
                 strict: bool = False, kb_states: dict[str, str] | None = None) -> tuple[list[dict], bool]:
