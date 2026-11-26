@@ -171,6 +171,14 @@ MATRIX = [
     (("POST", "/api/projects/BANK-A/deliverables/D7/signoff/return", {"comment": "退回理由"}),
      (409, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/deliverables/D2/signoff/sign", {}), (404, 404, 403, 403, 403)),
+    # 交付件页四模式（四期 A26）：D3 合并签、一键修订、客户意见、批量签；非成员 404，规则在 test_a26_deliv 里测
+    (("POST", "/api/projects/GRID-B/deliverables/D3/signoff/merged", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7/revise", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D2/revise", None), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D2/client-feedback", {"items": [{"text": "意见"}]}),
+     (404, 404, 403, 403, 403)),
+    (("GET", "/api/deliverables/batch-sign", None), (200, 200, 403, 403, 403)),
+    (("POST", "/api/deliverables/batch-sign", {"items": [{"project": "GRID-B"}]}), (200, 200, 403, 403, 403)),
     # 驳回评审 Agent 的阻断（M3 ⑧）：评审不存在 404；非成员 404；驳回规则在 test_quality 里测
     (("POST", "/api/projects/BANK-A/deliverables/D7/reviews/999999/waivers", {"issue": 0, "reason": "理由"}),
      (404, 404, 403, 403, 403)),

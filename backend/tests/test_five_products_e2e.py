@@ -261,13 +261,17 @@ def test_product_d1_to_d8(product: str, modules: list[str], client: str, materia
         rv = _review(mgr, code, "D4")
         assert rv["blocking"] == 0 and _state(mgr, code, "D4")["gate"], rv["issues"]
 
-        # L2 交付件由项目经理看过后提交；全部 8 份由项目经理签署
+        # L2 交付件由项目经理看过后提交；全部 8 份由项目经理签署。写签分离（四期 A26）：交付链按发起人 mgr 写入，
+        # 对客户交付件由另一位项目经理签，D3 对内件豁免、mgr 自己签
+        signer = logged_in_client(app, create_user((CONSULTANT,), {code: "manager"}))
         for dcode in ("D3", "D4", "D5", "D7"):
             r = mgr.post(_url(code, dcode, "signoff/submit"), json={"comment": "已逐章核对评审标出的问题"})
             assert r.status_code == 200 and r.json()["status"] == "review", (dcode, r.text)
+        assert mgr.post(_url(code, "D4", "signoff/sign"), json={}).status_code == 403
         for dcode in declared:
-            r = mgr.post(_url(code, dcode, "signoff/sign"), json={"comment": "同意"})
+            r = (mgr if dcode == "D3" else signer).post(_url(code, dcode, "signoff/sign"), json={"comment": "同意"})
             assert r.status_code == 200 and r.json()["status"] == "signed", (dcode, r.text)
+        signer.__exit__(None, None, None)
 
         with SessionLocal() as db:
             p = db.scalar(select(Project).where(Project.code == code))
