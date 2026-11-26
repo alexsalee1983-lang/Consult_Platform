@@ -30,6 +30,9 @@ jobs:
       # 模拟模型逐题跑通在 tests/test_eval_gate.py（随下面 pytest 跑）；真模型回归在测试机攒批跑（docs/测试交接规范.md 第 5 节）。
       - name: Agent 评测门（格式、红线、资质用语）
         run: python -m app.cli agent-eval-lint ../knowledge/eval/agents
+      # 四期 F6：装配评测集 expect 的 key 必须在条目里（#463）
+      - name: 装配评测集 key 核对
+        run: python -m app.cli agent-eval-lint ../knowledge/eval/assembly_samples.yaml --entries ../knowledge/samples
       # 接口测试跑在平台数据库镜像上（PostgreSQL 16 + pgvector + zhparser），与生产一致
       - name: 构建并启动测试数据库
         working-directory: .

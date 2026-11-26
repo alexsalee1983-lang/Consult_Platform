@@ -2,6 +2,7 @@
 # 真实评测集（每章 3～5 条应命中知识，规划会话起草 v0、专家复核）放私有资料仓，不进代码仓。
 # soc-ransomware-playbook 故意不存在，用来验证“缺槽”报告。
 product: SOC
+absent: [soc-ransomware-playbook]   # 故意缺槽的 key（评测门 --entries 核对时放行，四期 F6）
 modules: []
 # A12 程序门用的槽位草稿（格式同产品配置的 slots；C10 槽位规格写进 products/soc.yaml 后可删掉这段，改用配置）
 slots:

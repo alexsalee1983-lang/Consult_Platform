@@ -12,9 +12,14 @@
 以后公司模型支持工具调用（二期 A7），工具循环只加在这里，入口仍是 tools.invoke。
 stream()（三期 A15 写稿助手）：同样的公共部分，经 gateway.stream 逐段返回；level_override 为顾问显式选的快慢档，
 优先于 md 的 model_tier；拦截与开始前失败照原样抛出，调用方负责审计。
+资质边界兜底（四期 F6）：生成类调用（role="generate"）的输出经 quality.rewrite_qualification，引号外、非否定的
+“测评 / 认证 / 密评结论”改写为“符合性初判”；改写不了的（通过测评、测评合格、等保达标）带 QUALIF_NOTE 重试一次，
+仍有则抛 QualificationBlocked（GatewayError 子类，调用方按模型调用失败处理）。审计 agent.qualification_guard
+只记 Agent 代号、改写处数、命中类别和输出长度，不记原文。评审、仲裁调用要点名问题原话，不改写。
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 from collections.abc import Callable, Iterable, Iterator
@@ -23,12 +28,18 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from ..core import audit
 from ..core.db import SessionLocal
 from ..models import Agent, Project
 from ..services import gateway, usage
 from . import registry
 
 RETRY_NOTE = "（平台说明：上一次输出不符合要求的格式，无法解析。请严格按上面要求的格式重新输出全部内容，不要附加其他说明。）"
+
+
+QUALIF_ACTION = "agent.qualification_guard"
+QUALIF_NOTE = ("（平台说明：上一次输出含测评、认证或密评结论性用语（如“通过测评”“测评合格”“等保达标”），"
+               "平台和 Agent 不出具这类结论。请改用“差距分析、符合性初判、整改建议”的说法重新输出全部内容。）")
 
 
 class AgentUnavailable(Exception):
@@ -39,6 +50,14 @@ class OutputInvalid(Exception):
     def __init__(self, completion: gateway.Completion):
         self.completion = completion
         super().__init__("Agent 输出格式无法解析")
+
+
+class QualificationBlocked(gateway.GatewayError):
+    """输出含无法安全改写的资质结论用语，重试后仍有：不交给调用方。"""
+
+    def __init__(self, hits: int, categories: list[str]):
+        super().__init__("输出含资质结论用语，已拦下")
+        self.hits, self.categories = hits, categories
 
 
 @dataclass
@@ -101,12 +120,31 @@ def call(db: Session, code: str, message: str, *, actor: str, doc: registry.Agen
                      completion=c, agent_code=code)
         return c
 
-    c = once(message)
+    def guarded(msg: str) -> gateway.Completion:
+        c = once(msg)
+        if role != "generate" or c.demo:
+            return c
+        from ..project import quality      # 延迟导入：quality 依赖本模块
+
+        for retry in (False, True):
+            if retry:
+                c = once(f"{msg}\n\n{QUALIF_NOTE}")
+            text, n, left = quality.rewrite_qualification(c.text)
+            if not left:
+                if n:
+                    audit.record(db, actor=actor, action=QUALIF_ACTION, result="rewritten", project_code=pcode,
+                                 agent=code, rewritten=n, categories=["结论用语"], length=len(c.text))
+                return dataclasses.replace(c, text=text)
+        audit.record(db, actor=actor, action=QUALIF_ACTION, result="blocked", project_code=pcode, agent=code,
+                     rewritten=n, categories=sorted(set(left)), hits=len(left), length=len(c.text))
+        raise QualificationBlocked(len(left) + n, sorted(set(left)))
+
+    c = guarded(message)
     if parse is None or c.demo:
         return Result(c, None, doc.version, lv)
     for retry in (False, True):
         if retry:
-            c = once(f"{message}\n\n{RETRY_NOTE}")
+            c = guarded(f"{message}\n\n{RETRY_NOTE}")
         try:
             return Result(c, parse(c.text), doc.version, lv)
         except ValueError:
