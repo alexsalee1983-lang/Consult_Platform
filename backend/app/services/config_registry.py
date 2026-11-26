@@ -34,6 +34,7 @@ RUNTIME: dict[str, bool] = {
     "llm_model_reasoning": True, "llm_model_standard": True, "llm_model_light": True, "llm_model_tools": True,
     "embed_model": True, "rerank_model": True, "llm_model_catalog": True,
     "kb_src_auto_publish": True, "kb_agent_auto_publish": True, "auto_flow": True, "auto_submit_deliverables": True,
+    "sign_separation_exempt": True, "merged_sign_deliverables": True, "revise_max_rounds": False,
     "kb_vector_min_similarity": False, "kb_basis_min_similarity": False, "kb_basis_min_rerank": False,
     "kb_search_min_rerank": False, "kb_rerank_candidates": False, "kb_citation_gate": False,
     "kb_single_reviewer_public": False, "kb_sample_rate_src": False, "kb_sample_rate_src_partial": False,

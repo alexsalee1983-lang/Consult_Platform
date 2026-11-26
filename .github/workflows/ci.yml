@@ -3,9 +3,13 @@ name: CI
 on:
   push:
     branches: [main, "feat/**"]
+    tags: ["v*"]
   pull_request:
   schedule:
-    - cron: "0 1 * * 1"   # 每周一 09:00（北京时间）重跑，及时发现新公布的依赖漏洞
+    - cron: "0 1 * * *"   # 每天 09:00（北京时间）严格扫 main：及时发现新公布的依赖和镜像漏洞，镜像有问题自动开 issue（四期 G8）
+
+permissions:
+  contents: read
 
 jobs:
   backend:
@@ -15,6 +19,8 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # 改动行覆盖率要和 origin/main 比
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -24,6 +30,9 @@ jobs:
       # 模拟模型逐题跑通在 tests/test_eval_gate.py（随下面 pytest 跑）；真模型回归在测试机攒批跑（docs/测试交接规范.md 第 5 节）。
       - name: Agent 评测门（格式、红线、资质用语）
         run: python -m app.cli agent-eval-lint ../knowledge/eval/agents
+      # 四期 F6：装配评测集 expect 的 key 必须在条目里（#463）
+      - name: 装配评测集 key 核对
+        run: python -m app.cli agent-eval-lint ../knowledge/eval/assembly_samples.yaml --entries ../knowledge/samples
       # 接口测试跑在平台数据库镜像上（PostgreSQL 16 + pgvector + zhparser），与生产一致
       - name: 构建并启动测试数据库
         working-directory: .
@@ -43,12 +52,25 @@ jobs:
           docker run -d --name tests3 -e MINIO_ROOT_USER=ci-storage -e MINIO_ROOT_PASSWORD="$sk"             -e MINIO_KMS_SECRET_KEY="$kms" -e MINIO_KMS_AUTO_ENCRYPTION=on -e MINIO_BROWSER=off -e MINIO_UPDATE=off             -p 127.0.0.1:9000:9000 consult-platform-minio:ci
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:9000/minio/health/live && exit 0; sleep 2; done
           docker logs tests3; exit 1
-      - run: pytest -q
+      - run: pytest -q --cov=app --cov-report=xml --cov-report=html
         env:
           TEST_DATABASE_URL: postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_test
           TEST_KB_DATABASE_URL: postgresql+psycopg://consult:consult@127.0.0.1:5432/consult_kb_test   # 知识区表在单独的库
           TEST_S3_ENDPOINT: 127.0.0.1:9000
           TEST_S3_ACCESS_KEY: ci-storage
+      # 四期 质量：PR 改动的后端代码行（相对 origin/main）至少 80% 被测试执行到；全量报告作 artifact
+      - name: 改动行覆盖率（diff-cover，低于 80% 即失败）
+        if: github.event_name == 'pull_request'
+        run: diff-cover coverage.xml --compare-branch=origin/main --fail-under=80
+      - name: 上传覆盖率报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: |
+            backend/coverage.xml
+            backend/htmlcov/
+          if-no-files-found: ignore
       - name: 本地快速测试（SQLite）也要能通过
         run: pytest -q -x
       - name: SQLite 分库（知识区表在第二个文件）也要能通过
@@ -67,15 +89,20 @@ jobs:
         with:
           node-version: "20"
       - run: npm ci
+      - name: ESLint（推荐规则、React Hooks、禁止硬编码颜色）
+        run: npm run lint
       - run: npm run build
       - name: 现场工具测试（离线页面的规则、加密、回填）
         run: node --test ../field-tool/test/core.test.mjs
-      - name: 交付件编辑器内核测试（往返无损、来源标签、整体删除）
+      - name: 前端单元与组件测试（node --test：编辑器内核等；Vitest + jsdom：页面组件 *.test.jsx）
         run: npm test
 
   compose:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
+    permissions:
+      contents: read
+      issues: write   # 仅每日定时扫描开、更新、关闭镜像漏洞 issue 用
     steps:
       - uses: actions/checkout@v4
       - name: 生成 .env（测试账号每次随机生成，不写死口令）
@@ -107,6 +134,28 @@ jobs:
       - run: bash scripts/smoke_test.sh http://localhost:8080
         env:
           SMOKE_EXPECT_LLM: ok
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # 四期 质量：浏览器端到端冒烟，用 runner 自带的 Google Chrome（不下载浏览器），只用虚拟项目 BANK-A
+      - name: 浏览器端到端冒烟（登录 → 我的项目 → BANK-A 驾驶舱，无 console error）
+        working-directory: frontend
+        run: |
+          npm ci
+          env_val() { grep -E "^$1=" ../.env | tail -1 | cut -d= -f2-; }
+          export E2E_USER="$(env_val TEST_ACCOUNT_USERNAME)" E2E_PASS="$(env_val TEST_ACCOUNT_PASSWORD)"
+          echo "::add-mask::$E2E_PASS"
+          sleep $(( 31 - $(date +%s) % 30 ))   # 冒烟测试刚用过当前窗口的动态码，换新窗口防重放
+          secret="$(env_val TEST_ACCOUNT_TOTP_SECRET)"
+          export E2E_TOTP="$(cd .. && docker compose exec -T backend python -c 'import pyotp, sys; print(pyotp.TOTP(sys.argv[1]).now())' "$secret")"
+          npx playwright test
+      - name: 上传端到端失败截图与 trace
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-trace
+          path: frontend/test-results/
+          if-no-files-found: ignore
       - name: 后端容器重建后，前端不重启也能连上（nginx 重新解析后端地址）
         run: |
           before=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker compose ps -q backend))
@@ -296,9 +345,13 @@ jobs:
             "select count(*) from audit_logs where action in ('backup.create','backup.restore')" | grep -qx 1   # 恢复的是备份时的库，只有恢复这一条
           bash scripts/smoke_test.sh http://localhost:8080
           rm -rf /tmp/bk /tmp/bk.pass /tmp/wrong.pass
-      - name: 镜像漏洞扫描（trivy，整套已构建镜像；有修复版本的高危、严重漏洞即失败）
+      # 分层规则（docs/安全扫描.md）：push 到 main、tag、定时：整套严格阻断；PR：只阻断本 PR 改动的镜像，其余照扫只告警
+      - name: 镜像漏洞扫描（trivy，分层：main、tag、定时严格；PR 只阻断改动的镜像）
         env:
           TRIVY_VERSION: "0.76.2"
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
           tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
@@ -308,12 +361,25 @@ jobs:
           grep " $tarball\$" trivy_checksums.txt | sha256sum -c -
           tar -xzf "$tarball" trivy
           # 模拟模型只用于 CI 和测试机，不扫；误报或暂无法修复的写进 .trivyignore.yaml 并注明理由（docs/安全扫描.md）
-          fail=0
-          for img in $(docker compose --profile monitoring config --images | sort -u); do
-            echo "== $img"
-            ./trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed               --ignorefile .trivyignore.yaml --exit-code 1 "$img" || fail=1
-          done
-          exit $fail
+          bash -n scripts/trivy_tiered.sh
+          bash scripts/trivy_tiered.sh
+      - name: 每日扫描：镜像有可修复高危、严重漏洞时开或更新 issue，清零后关闭
+        if: always() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title="镜像漏洞：每日扫描发现可修复的高危、严重漏洞"
+          num=$(gh issue list --state open --search "\"$title\" in:title" --json number,title --jq "[.[] | select(.title==\"$title\")][0].number // empty")
+          test -f /tmp/trivy_report.fail || { echo "扫描没有产出报告，不动 issue"; exit 0; }
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ "$(cat /tmp/trivy_report.fail 2>/dev/null)" = 1 ]; then
+            { echo "每日定时扫描（main 整套镜像，严格模式）发现有修复版本的高危、严重漏洞。运行：$run_url"; echo; cat /tmp/trivy_report.md
+              echo; echo "处理办法见 docs/安全扫描.md：升级基础镜像或系统包；确认不影响本平台时写入 .trivyignore.yaml 并注明理由和复查日期。"; } > /tmp/issue_body.md
+            if [ -n "$num" ]; then gh issue edit "$num" --body-file /tmp/issue_body.md; else gh issue create --title "$title" --body-file /tmp/issue_body.md; fi
+          elif [ -n "$num" ]; then
+            gh issue close "$num" --comment "最近一次每日扫描已无可修复的高危、严重漏洞：$run_url"
+          fi
       - if: failure()
         run: docker compose --profile mock-llm --profile monitoring logs --no-color | tail -200
       - if: always()

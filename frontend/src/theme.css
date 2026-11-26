@@ -41,7 +41,8 @@ button { font: inherit; cursor: pointer; }
 .btnp { height: 32px; padding: 0 14px; border: 0; border-radius: 6px; background: var(--amber); color: #0a0d12; font-size: 13.5px; font-weight: 700; }
 .btnp:disabled { opacity: .5; cursor: not-allowed; }
 
-.side { display: flex; flex-direction: column; gap: 16px; padding: 16px 14px; position: sticky; top: 14px; height: calc(100vh - 28px); }
+.side { display: flex; flex-direction: column; gap: 16px; padding: 16px 14px; position: sticky; top: 14px; height: calc(100vh - 28px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--ln2) transparent; }
+.side > * { flex-shrink: 0; }   /* 矮屏整体滚动：logo、导航、系统状态都不被压缩或裁切 */
 .logo { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
 .logo-mark { width: 30px; height: 30px; border-radius: 7px; background: linear-gradient(135deg, var(--amber), #c9781a); display: flex; align-items: center; justify-content: center; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
@@ -225,3 +226,12 @@ select.sm { height: 28px; padding: 0 6px; border: 1px solid var(--ln2); border-r
 .assist-diff { white-space: pre-wrap; font-size: 13px; line-height: 1.7; max-height: 40vh; overflow: auto; color: var(--tx2); }
 .assist-diff del { color: var(--crim); background: var(--crim-d); }
 .assist-diff ins { color: var(--ok); background: var(--ok-d); text-decoration: none; }
+/* 四期 A25②：项目内五个导航、右侧抽屉、“⌖ 全景”定位闪烁 */
+.tabs a { color: var(--tx3); padding: 6px 10px; font-size: 13.5px; border-bottom: 2px solid transparent; text-decoration: none; }
+.tabs a.on { color: var(--tx); border-bottom-color: var(--amber); }
+.drawer { position: fixed; inset: 0 0 0 auto; width: min(440px, 100vw); height: 100vh; margin: 0; max-height: none; z-index: 20; border-radius: 0; color: var(--tx); overflow-y: auto; box-shadow: -12px 0 32px var(--obs); }
+.drawer-body { display: flex; flex-direction: column; gap: 10px; }
+.locate { color: var(--cyan); text-decoration: none; font-size: 12.5px; white-space: nowrap; }
+.flash rect { animation: flash 0.6s ease-in-out 4; stroke-width: 2; }
+@keyframes flash { 50% { stroke: var(--amber); fill: var(--amber-d); } }
+.full { padding: 14px; display: flex; flex-direction: column; gap: 14px; min-height: 100%; }

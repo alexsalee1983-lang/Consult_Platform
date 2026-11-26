@@ -7,10 +7,12 @@ from sqlalchemy.exc import DataError
 
 from .api import (admin, agents, assist, audit, auth, cards, chat, conversations, deletions, deliverables, directory, evidence, expert_bench, health, indicators, portfolio,
                   tasks, workbench, kb, kb_batches, kb_feedback, kb_items, kb_sources, projects, quality, quality_incidents, readiness, runs, survey)
+from .api import panorama   # 四期 A25①
 from .api import revision_mining as revision_mining_api   # 三期 F4
 from .api import revision_features as revision_features_api   # 四期 F4②
 from .api import extraction as extraction_api   # 四期 F4③
 from .api import agent_md as agent_md_api   # 四期 F3②e
+from .api import stages as stages_api   # 四期 A27
 from .core import audit as core_audit
 from .core.auth import authenticate
 from .core.bootstrap import check_db_accounts, check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
@@ -19,7 +21,7 @@ from .core.db import SessionLocal, engine, kb_engine
 from .core.errors import out_of_range_handler, reject_control_chars, validation_error_handler
 from .core.metrics import MetricsMiddleware, register_state_collector, start_server
 from .core.migrate import upgrade_to_head
-from .services import runtime_config, storage
+from .services import jobs, runtime_config, storage
 from .project import configs as project_configs
 from .seed import seed, seed_signed_sample
 
@@ -29,6 +31,7 @@ check_settings(_settings)  # 配置不安全时直接拒绝启动
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    jobs.validate_handlers()   # 处理器签名不一致直接拒绝启动（四期 G7）
     check_db_accounts(_settings, [engine, kb_engine])  # 生产不用超级用户连库，迁移之前检查
     upgrade_to_head()
     with SessionLocal() as db:
@@ -73,6 +76,7 @@ app.include_router(projects.router)
 app.include_router(portfolio.router)
 app.include_router(indicators.router)
 app.include_router(workbench.router)
+app.include_router(panorama.router)
 app.include_router(deletions.router)
 app.include_router(evidence.router)
 app.include_router(cards.router)
@@ -80,6 +84,7 @@ app.include_router(deliverables.router)
 app.include_router(assist.router)
 app.include_router(runs.router)
 app.include_router(quality.router)
+app.include_router(quality.batch_router)   # 四期 A26 D3 批量签
 app.include_router(revision_mining_api.router)
 app.include_router(revision_features_api.router)
 app.include_router(extraction_api.router)
@@ -100,3 +105,4 @@ app.include_router(kb_sources.router)
 app.include_router(tasks.router)
 app.include_router(expert_bench.router)
 app.include_router(survey.router)
+app.include_router(stages_api.router)

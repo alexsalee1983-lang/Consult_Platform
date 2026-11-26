@@ -6,7 +6,7 @@ export function formFields(form) {
 }
 
 export function emptyValues(form) {
-  return Object.fromEntries(formFields(form).map((f) => [f.key, ""]));
+  return Object.fromEntries(formFields(form).map((f) => [f.key, f.default || ""]));   // #468 产品配置预填
 }
 
 export function listCount(v) {

@@ -1,0 +1,558 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>项目驾驶舱整体示意 v3</title><style>
+:root{--obs:#0a0d12;--s1:#10151c;--s2:#161d27;--s3:#1d2633;--ln:#232d3b;--ln2:#2e3a4b;--tx:#e6ebf2;--tx2:#a3aebe;--tx3:#6b7789;--amber:#f5a524;--cyan:#22d3ee;--ok:#3dd68c;--vio:#b49cff;--crim:#f0454f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--obs);color:var(--tx);font:13px/1.55 "Microsoft YaHei",sans-serif;display:flex;min-width:1440px}
+a{color:inherit;text-decoration:none;cursor:pointer}
+.side{width:168px;background:var(--s1);border-right:1px solid var(--ln);padding:16px 12px;color:var(--tx3);min-height:100vh;flex-shrink:0;position:sticky;top:0;align-self:flex-start}
+.logo{color:var(--tx);font-weight:700;font-size:15px;margin-bottom:14px}
+.side .it{display:block;padding:6px 8px;border-radius:6px}.side .on{color:var(--tx);background:var(--s3)}.side .grp{font-size:11px;margin:12px 0 4px 8px}
+.main{flex:1;padding:14px 20px 80px;min-width:0}
+.crumb{color:var(--tx3);font-size:12px;margin-bottom:2px}
+.hd{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}.hd h1{font-size:21px;margin:0}
+.chip{font-size:12px;border-radius:10px;padding:1px 9px;border:1px solid var(--ln2);color:var(--tx2);white-space:nowrap}
+.c-ok{border-color:rgba(61,214,140,.5);color:var(--ok)}.c-am{border-color:rgba(245,165,36,.6);color:var(--amber)}.c-cy{border-color:var(--cyan);color:var(--cyan)}
+.btn{background:var(--cyan);color:#06222a;border-radius:7px;padding:6px 14px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block}
+.btn2{border:1px solid var(--ln2);border-radius:7px;padding:5px 13px;color:var(--tx2);cursor:pointer;white-space:nowrap;display:inline-block}
+.btn2:hover{border-color:var(--cyan);color:var(--cyan)}.sm{font-size:12px;padding:2px 9px}
+.pnav{display:flex;gap:2px;border-bottom:1px solid var(--ln);margin:0 0 14px;position:sticky;top:0;background:var(--obs);z-index:5}
+.pnav a{padding:9px 20px;color:var(--tx3);font-size:14px;border-bottom:2px solid transparent}
+.pnav a:hover{color:var(--tx)}.pnav a.on{color:var(--cyan);border-bottom-color:var(--cyan);font-weight:700}
+.pnav .n{font-size:11px;background:var(--s3);border-radius:8px;padding:0 6px;margin-left:5px;color:var(--tx2);font-weight:400}
+.pnav .n.r{background:rgba(240,69,79,.18);color:var(--crim)}.pnav .n.a{background:rgba(245,165,36,.18);color:var(--amber)}
+.pnav .right{margin-left:auto;align-self:center;display:flex;gap:8px}
+.card{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:10px 14px}
+.cap{color:var(--tx3);font-size:12px}.big{font-size:24px;font-weight:700;line-height:1.3}
+.am{color:var(--amber)}.cr{color:var(--crim)}.ok{color:var(--ok)}.cy{color:var(--cyan)}.vio{color:var(--vio)}
+u{color:var(--cyan);text-underline-offset:3px;cursor:pointer}
+.act{display:grid;grid-template-columns:2.4fr 1fr 1fr 1fr 1.2fr;gap:10px;margin-bottom:12px}
+.act .card{cursor:pointer}.act .card:hover{border-color:var(--ln2)}
+.page{display:none}.page.on{display:block;animation:fi .25s ease}@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+h2{font-size:16px;margin:0 0 8px}h3{font-size:14px;margin:0 0 6px;color:var(--tx2)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.g3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:12px}
+.lay{display:grid;grid-template-columns:190px 1fr;gap:14px}
+.flt{position:sticky;top:50px;align-self:start}.flt a{display:flex;justify-content:space-between;padding:6px 10px;border-radius:7px;color:var(--tx2)}.flt a:hover{background:var(--s3)}
+.flt .h{font-size:11px;color:var(--tx3);margin:12px 0 4px 10px}
+table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--tx3);font-weight:400;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--ln2)}
+td{padding:7px 8px;border-bottom:1px solid var(--ln);vertical-align:middle}
+tr.hl td{background:rgba(245,165,36,.07)}tr.blk td{background:rgba(240,69,79,.06)}
+.mono{font-family:Consolas,monospace;color:var(--tx3)}
+.st{font-size:12px;border-radius:9px;padding:0 8px;white-space:nowrap;display:inline-block}
+.s-ok{background:rgba(61,214,140,.12);color:var(--ok)}.s-am{background:rgba(245,165,36,.14);color:var(--amber)}.s-cr{background:rgba(240,69,79,.15);color:var(--crim)}.s-g{background:var(--s3);color:var(--tx3)}.s-cy{background:rgba(34,211,238,.12);color:var(--cyan)}.s-vio{background:rgba(180,156,255,.14);color:var(--vio)}
+.src{font-size:11px;border:1px solid var(--ln2);border-radius:5px;padding:0 5px;margin-right:4px;white-space:nowrap;color:var(--tx2)}
+.src.d{border-color:rgba(34,211,238,.5)}.src.z{border-color:rgba(180,156,255,.5)}.src.x{border-color:rgba(245,165,36,.5)}.src.o{border-color:rgba(61,214,140,.5)}
+.loc{font-size:11.5px;color:var(--tx3);cursor:pointer;white-space:nowrap}.loc:hover{color:var(--cyan)}
+.new{font-size:11px;color:var(--vio);border:1px dashed var(--vio);border-radius:4px;padding:0 5px;margin-left:6px;font-weight:400;white-space:nowrap}
+.mflow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;margin-bottom:12px}
+.mflow span.b{border:1px solid var(--ln2);border-radius:6px;padding:2px 9px;background:var(--s1)}
+.mflow .h{border-color:var(--vio)!important;color:var(--vio)}.mflow .here{border-color:var(--cyan)!important;color:var(--cyan);background:rgba(34,211,238,.08)!important}
+.stage{margin-bottom:12px}.stage .sh{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.stage table{table-layout:fixed}
+.bar{height:6px;border-radius:3px;background:var(--s3);overflow:hidden;width:120px;display:inline-block;vertical-align:middle}.bar i{display:block;height:100%;background:var(--ok)}
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:460px;background:var(--s2);border-left:1px solid var(--cyan);padding:18px;box-shadow:-20px 0 60px rgba(0,0,0,.6);transform:translateX(105%);transition:transform .25s ease;z-index:21;overflow:auto}
+.open .mask{display:block}.open .drawer{transform:none}
+.drawer .x{float:right;cursor:pointer;color:var(--tx3);font-size:16px}
+.drawer .t{font-size:15px;font-weight:700}
+.opt{border:1px solid var(--ln2);border-radius:8px;padding:8px 10px;margin:6px 0;cursor:pointer}.opt.sel{border-color:var(--amber);background:rgba(245,165,36,.08)}
+.tag{font-size:11px;border-radius:8px;padding:0 6px;background:rgba(245,165,36,.15);color:var(--amber);margin-left:6px}
+.dfoot{border-top:1px solid var(--ln);margin-top:14px;padding-top:10px;display:flex;justify-content:space-between;align-items:center}
+textarea{width:100%;background:var(--s1);border:1px solid var(--ln2);border-radius:7px;color:var(--tx);font:inherit;padding:8px;min-height:80px}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:4px 10px;margin:8px 0}.kv div:nth-child(odd){color:var(--tx3)}
+.steps3{display:flex;gap:6px;margin:10px 0}.steps3 span{flex:1;text-align:center;border:1px solid var(--ln2);border-radius:6px;padding:3px;font-size:12px;color:var(--tx3)}.steps3 .on{border-color:var(--cyan);color:var(--cyan)}.steps3 .dn{border-color:var(--ok);color:var(--ok)}
+.menu{position:absolute;background:var(--s2);border:1px solid var(--ln2);border-radius:8px;padding:6px 0;width:280px;box-shadow:0 10px 30px rgba(0,0,0,.6);display:none;z-index:15}
+.menu div{padding:6px 14px;cursor:pointer}.menu div:hover{background:var(--s3)}.menu .dis{color:var(--tx3);cursor:default}.menu .hh{font-size:11px;color:var(--tx3);cursor:default}
+.toast{position:fixed;left:50%;bottom:60px;transform:translateX(-50%);background:var(--s3);border:1px solid var(--ln2);padding:8px 18px;border-radius:20px;display:none;z-index:30}
+.guide{position:fixed;left:180px;bottom:10px;right:20px;background:rgba(16,21,28,.96);border:1px solid var(--ln2);border-radius:10px;padding:6px 14px;font-size:12px;color:var(--tx3);z-index:12;display:flex;gap:14px;align-items:center}
+.guide b{color:var(--tx2)}
+/* panorama */
+.pano{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:6px 8px}
+#pv text{font-family:"Microsoft YaHei",sans-serif}
+.flow{stroke-dasharray:7 6;animation:run 1s linear infinite}@keyframes run{to{stroke-dashoffset:-13}}
+.pulse{animation:pl 1.8s ease-in-out infinite}@keyframes pl{0%,100%{opacity:.9}50%{opacity:.25}}
+.spin{animation:sp 1.4s linear infinite;transform-box:fill-box;transform-origin:center}@keyframes sp{to{transform:rotate(360deg)}}
+g.nd{cursor:pointer;transition:opacity .3s}g.nd:hover rect.cd{stroke-width:2.4}
+g.nd.dim{opacity:.18}g.nd.hid{opacity:0}
+g.nd.flash rect.cd{animation:fls .45s ease 6}@keyframes fls{50%{stroke-width:4;opacity:.4}}
+.vbtn{cursor:pointer}
+@media (prefers-reduced-motion:reduce){.flow,.pulse,.spin{animation:none}}
+/* survey */
+.full .side,.full .hd,.full .pnav,.full .crumb,.full .guide{display:none!important}.full .main{padding:0}
+.sv{min-height:100vh;display:flex;flex-direction:column}
+.svtop{display:flex;align-items:center;gap:12px;padding:10px 20px;background:var(--s1);border-bottom:1px solid var(--ln)}
+.svbody{flex:1;display:grid;grid-template-columns:260px 1fr 400px;gap:16px;padding:16px 20px}
+.qd a{display:flex;justify-content:space-between;padding:7px 10px;border-radius:7px;color:var(--tx2)}.qd a.on{background:var(--s3);color:var(--tx)}
+.qd .sec{font-size:12px;color:var(--tx2);margin:12px 10px 4px;font-weight:700}
+.qcard{background:var(--s1);border:1px solid var(--ln2);border-radius:14px;padding:20px 26px}
+.qopt{border:1px solid var(--ln2);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:15px;display:flex;gap:12px;align-items:center;cursor:pointer}
+.qopt b{width:26px;height:26px;border-radius:13px;border:1px solid var(--ln2);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
+.qopt.sel{border-color:var(--cyan);background:rgba(34,211,238,.08)}.qopt.sel b{background:var(--cyan);color:#06222a;border-color:var(--cyan)}
+.qopt .who{margin-left:auto;display:flex;gap:4px}
+.qopt.x{color:var(--tx3);border-style:dashed}
+.alert{border:1px solid var(--crim);background:rgba(240,69,79,.08);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.hint{border:1px solid var(--ln2);background:var(--s1);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.seg{display:flex;gap:4px;margin-bottom:12px}.seg span{border:1px solid var(--ln2);border-radius:8px;padding:6px 14px;color:var(--tx2);cursor:pointer}.seg .on{border-color:var(--amber);color:var(--amber);background:rgba(245,165,36,.08)}.seg .dn{border-color:var(--ok);color:var(--ok)}
+/* map */
+.mp{display:grid;grid-template-columns:1fr;gap:12px}
+.tree{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.tree .col{border:1px solid var(--ln2);border-radius:10px;padding:8px 10px;background:var(--s1)}
+.tree .col b{display:block;color:var(--cyan);margin-bottom:4px;cursor:pointer}
+.tree .col div{font-size:12px;color:var(--tx2);padding:2px 0}.tree .col .sub{padding-left:12px;color:var(--tx3)}
+.chain{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.chain .stg{border:1px solid var(--ln2);border-radius:10px;padding:8px 10px;background:var(--s1)}
+.chain .stg>b{display:block;margin-bottom:6px}
+.chain .it{font-size:12px;padding:3px 8px;border-left:3px solid var(--ln2);margin:4px 0;background:var(--s2);border-radius:0 6px 6px 0}
+.chain .it.h{border-color:var(--amber)}.chain .it.a{border-color:var(--cyan)}.chain .it.s{border-color:var(--vio)}.chain .it.c{border-color:var(--tx2)}
+.chain .ar{color:var(--tx3);font-size:11px;padding-left:8px}
+</style></head><body>
+<div class="side"><div class="logo">安全咨询平台</div><a class="it" onclick="drawer('todo')">我的任务 <span class="tag">3</span></a><a class="it" onclick="toast('我的项目列表（示意）')">我的项目</a><a class="it on" href="#pano">项目驾驶舱</a><a class="it" onclick="toast('顾问对话：项目级问答（示意）')">顾问对话</a><div class="grp">知识库</div><a class="it">知识检索</a><a class="it">知识地图</a><div class="grp">管理</div><a class="it">指标看板</a></div>
+<div class="main">
+ <div class="crumb" id="crumb"></div>
+ <div class="hd"><h1>BANK-A · SOC 运营咨询</h1><span class="chip">金融 · 股份制银行</span><span class="chip">标准档 · 模型在公司内部</span><span class="chip">第 5 / 12 周 · ② 调研</span>
+  <span class="chip c-am">预计调研延后 2 天<span class="new">新</span></span><span class="chip c-ok" style="cursor:pointer" onclick="drawer('auto')">本周自动 23 · 人工 6 · 抽检差错 0<span class="new">新</span></span><span class="chip">项目经理 张某 · 成员 4</span>
+  <span style="margin-left:auto" class="btn2" onclick="drawer('weekly')">本周简报<span class="new">新</span></span>
+  <span class="btn2" onclick="menu(event)">导出 ▾</span>
+  <span class="btn2" onclick="drawer('chain')">交付链：运行中</span>
+  <span class="btn" onclick="toast('顾问对话：项目级问答（示意）')">顾问对话</span></div>
+ <div class="pnav" id="pnav">
+  <a href="#pano" data-r="pano">全景</a>
+  <a href="#input" data-r="input">输入<span class="n r">缺 2</span></a>
+  <a href="#analysis" data-r="analysis">分析<span class="n a">待确认 3</span></a>
+  <a href="#output" data-r="output">输出<span class="n">2 / 8 已签</span></a>
+  <a href="#settings" data-r="settings">设置</a>
+  <span class="right"><span class="btn2 sm" onclick="go('survey')">▶ 调研助手（现场）</span><span class="btn2 sm" style="border-color:var(--vio);color:var(--vio)" onclick="go('map')">整体逻辑图</span></span>
+ </div>
+
+<!-- ============ 全景 ============ -->
+<div class="page" id="p-pano">
+ <div class="act">
+  <div class="card" style="border-color:var(--amber);background:rgba(245,165,36,.06);cursor:default"><div class="cap">下一步 · 现在在 <span class="am">② 调研 · 离场</span></div>
+   <div style="font-size:14px;margin-top:4px"><u onclick="drawer('blk')">催运维部：交自评 + 约访谈</u>（最晚 11-27）→ <u onclick="go('survey')">P-03 访谈带议程 5 项</u> → 平台重跑第 3 步 → <u onclick="go('deliv')">经理批量签 D3</u></div>
+   <div class="cap" style="margin-top:2px">并行：<u onclick="go('analysis')">确认事实 3 条</u>　<u onclick="drawer('fb')">录入 D2 客户意见 2 条</u>　· 证据不足 2 张已自动放进 P-03 议程<span class="new">新</span></div></div>
+  <div class="card" onclick="drawer('todo')"><div class="cap">待你处理</div><div class="big am">3</div><div class="cap">催办 1 · 事实确认 3 条 · 客户意见 1</div></div>
+  <div class="card" onclick="drawer('blk')"><div class="cap">卡点</div><div class="big cr">1</div><div class="cap">运维部未交自评、未约访谈 · 3 天</div></div>
+  <div class="card" onclick="drawer('auto')"><div class="cap">本周平台自动处理<span class="new">新</span></div><div class="big ok">23 <span style="font-size:15px;color:var(--tx3)">项 / 人工 6</span></div><div class="cap">抽检 8 条 · 差错 0 · 阈值正常</div></div>
+  <div class="card" onclick="go('input')"><div class="cap">调研</div><div class="big">2 <span style="font-size:15px;color:var(--tx3)">/ 3 角色完成</span></div><div class="cap">自评 2/3 · 访谈 2/3 · 资料 20/22</div></div>
+ </div>
+ <div class="card" style="margin-bottom:8px;display:flex;gap:12px;align-items:center;cursor:pointer;padding:6px 14px" onclick="drawer('auto')"><span class="ok">✓ 本周平台自动完成 23 项（已折叠，默认只显示例外）</span><span class="cap">资料解析预填 · 事实自动确认 · 自评导入入池 · 议程更新 · 证据不足分流 · 到期提醒 · 周报</span><span class="cap" style="margin-left:auto">展开 ▸</span><span class="new">新</span></div><div class="pano"><svg id="pv" viewBox="0 0 1890 640" width="100%"></svg></div>
+ <div class="cap" style="margin-top:8px">全景只回答三件事：走到哪、该干什么、卡在哪。列 = 产品配置的阶段（SOC 五段；IRE、DSM 自动多一段“落地辅导”）；行 = 谁来做。点节点：轻的事在右侧抽屉办，重的事进对应页面。</div>
+</div>
+
+<!-- ============ 输入 ============ -->
+<div class="page" id="p-input">
+ <div class="mflow"><b style="margin-right:6px">输入页管什么：</b><span class="b">资料需求清单（按产品配置）</span>→<span class="b here">调研（调研包 → 客户自评 → 现场访谈 → 答卷）</span>→<span class="b">证据库</span>→<span class="b" style="cursor:pointer" onclick="go('analysis')">答案池与事实确认单在“分析”页 →</span><span class="cap" style="margin-left:auto">客户意见也从这里进</span></div>
+ <div class="lay">
+  <div class="flt card">
+   <div class="h">本页</div><a onclick="jump('i-survey')">调研（按受访角色） <span class="cr">1</span></a><a onclick="jump('i-req')">资料需求清单 <span class="cr">2</span></a><a onclick="jump('i-ev')">证据库 <span>20</span></a><a onclick="jump('i-fb')">客户意见收件 <span class="am">1</span></a><a style="color:var(--tx3)">严格档摘要卡 <span>不适用</span></a>
+   <div class="h">去别处</div><a onclick="go('survey')">调研助手（现场） →</a><a onclick="go('analysis')">事实确认单 →</a>
+  </div>
+  <div>
+   <div class="card" id="i-survey" style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px"><h2 style="margin:0">调研（按受访角色）</h2><span class="cap">一个角色一份调研包；客户自评包、现场议程、答卷都从调研包派生</span><span style="margin-left:auto" class="btn2 sm" onclick="toast('新增受访角色：按角色画像从题库选题，资料能答的题先预填（示意）')">＋ 新增受访角色</span><span class="btn2 sm" onclick="toast('3 份调研包一键发布；只需看顾问改过的 2 题')">一键发布<span class="new">新</span></span></div>
+    <div class="mflow" style="margin:6px 0 8px"><span class="b">① 场前：调研包（选题 + 资料预填 + 顾问发布）</span>→<span class="b">② 场前：客户自评包（附件发出 → 导入）</span>→<span class="b">③ 场前：现场议程（自动比对生成）</span>→<span class="b">④ 现场：调研助手访谈</span>→<span class="b">⑤ 离场：答卷回传 → 答案池</span></div>
+    <table><tr><th style="width:150px">受访角色</th><th>① 调研包</th><th>② 客户自评</th><th>③ 现场议程</th><th>④ 现场访谈</th><th>⑤ 答卷</th><th style="width:220px"></th></tr>
+     <tr><td><span class="mono">P-01</span> 安全部负责人</td><td><span class="st s-ok">已发布</span> <span class="cap">22 题 · 预填 9</span></td><td><span class="st s-ok">已导入</span> <span class="cap">11-20 · 校验全过自动入池</span></td><td class="cap">4 项</td><td><span class="st s-ok">11-21 完成</span></td><td><span class="st s-ok">已回传</span> <span class="cap">事实 17</span></td><td><span class="loc" onclick="go('analysis')">看答案 →</span></td></tr>
+     <tr><td><span class="mono">P-02</span> SOC 值班长</td><td><span class="st s-ok">已发布</span> <span class="cap">16 题 · 预填 6</span></td><td><span class="st s-cy">顾问代录</span> <span class="cap">邮件 11-19</span></td><td class="cap">3 项</td><td><span class="st s-ok">11-22 完成</span></td><td><span class="st s-ok">已回传</span> <span class="cap">事实 12 · <span class="cr">矛盾 1</span></span></td><td><span class="loc" onclick="go('analysis')">看答案 →</span></td></tr>
+     <tr class="blk"><td><span class="mono">P-03</span> 运维部负责人</td><td><span class="st s-ok">已发布</span> <span class="cap">18 题 · 预填 7</span></td><td><span class="st s-cr">今天到期 · 未交</span> <span class="cap">已自动提醒 · 明天升级经理</span><span class="new">新</span></td><td><span class="am">5 项</span> <span class="cap">待自评后更新</span></td><td><span class="st s-cr">待约 · 最晚 11-27</span></td><td class="cap">—</td><td><u onclick="drawer('self')">客户自评</u>　<u onclick="drawer('blk')">催办</u>　<u onclick="go('survey')">调研助手</u>　<span class="loc" onclick="locate('k-self')">⌖ 全景</span></td></tr>
+    </table>
+    <div class="cap" style="margin-top:6px">客户自评包在平台生成（加密离线网页 + Excel 兜底），顾问下载后用公司邮箱作附件发出，口令另行告知；客户交回的答卷在本行“客户自评”里导入。到期前一天和当天自动提醒顾问，逾期 2 天升级项目经理；导入校验全过直接入池，异常才弹预览。</div>
+   </div>
+   <div class="card" id="i-req" style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><h2 style="margin:0">资料需求清单<span class="new">新</span></h2><span class="cap">按 SOC 产品配置生成 · 已收 20 / 22 · 每个缺口写明卡住哪一步</span>
+     <span style="margin-left:auto" class="btn2 sm" onclick="drawer('upload')">上传资料</span><span class="btn2 sm" onclick="toast('已生成《资料需求与催办清单》Word（示意）')">导出催办清单 ⬇</span></div>
+    <table><tr><th>编号</th><th>名称</th><th>谁提供</th><th>状态</th><th>卡住什么</th><th></th></tr>
+     <tr class="blk"><td class="mono">I-05</td><td>运维部负责人访谈（= P-03）</td><td>客户约人 · 顾问访谈</td><td><span class="st s-cr">缺 · 3 天</span></td><td>答案池“组织与人员” → 第 3 步 → D3 第 2 章、D4</td><td><u onclick="drawer('blk')">催办</u>　<span class="loc" onclick="locate('k-blk')">⌖ 全景</span></td></tr>
+     <tr class="hl"><td class="mono">D-13</td><td>数据源接入清单</td><td>客户</td><td><span class="st s-am">未交</span></td><td>第 4 步“数据源接入”打分 · 也是 P-03 议程项</td><td><u onclick="drawer('blk')">催办</u></td></tr>
+     <tr><td class="mono">D-12</td><td>SOC 值班制度（PDF）</td><td>客户</td><td><span class="st s-ok">已解析 · 预填 5 题</span></td><td class="cap">—</td><td><span class="loc">查看</span></td></tr>
+     <tr><td class="mono">D-11</td><td>告警分级规范（Word）</td><td>客户</td><td><span class="st s-ok">已解析 · 预填 3 题</span></td><td class="cap">—</td><td><span class="loc">查看</span></td></tr></table>
+   </div>
+   <div class="card" id="i-ev" style="margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">证据库</h2><span class="cap">资料 12 · 访谈纪要 5（开放题自动整理）· 现场观察 3 · 客户系统统计摘要 0</span><span style="margin-left:auto" class="btn2 sm" onclick="drawer('note')">录入纪要 / 观察</span></div>
+    <div class="cap" style="margin-top:6px">机密级内容（口令、密钥、完整拓扑与 IP 规划、业务数据样本）上传时自动拦截，不入库；客户系统只收统计与配置摘要。</div></div>
+   <div class="card" id="i-fb"><h2>客户意见收件<span class="cap" style="font-weight:400;margin-left:8px">对已签交付件的意见；录入后自动生成修订稿（v1.1），v1.0 留存</span></h2>
+    <table><tr><th>交付件</th><th>来源</th><th>条数</th><th>状态</th><th></th></tr>
+     <tr class="hl"><td>D2 调研计划 v1.0</td><td>客户邮件 · 11-24</td><td>2</td><td><span class="st s-am">待录入</span></td><td><u onclick="drawer('fb')">录入意见</u>　<span class="loc" onclick="locate('k-fb')">⌖ 全景</span></td></tr>
+     <tr><td>D1 启动方案 v1.0</td><td>启动会纪要</td><td>0</td><td><span class="st s-ok">客户已确认</span></td><td></td></tr></table></div>
+  </div></div>
+</div>
+
+<!-- ============ 分析 ============ -->
+<div class="page" id="p-analysis">
+ <div class="mflow"><b style="margin-right:6px">分析页的前后关系：</b><span class="b">答案池（资料预填 · 客户自评 · 现场 · 观察）</span>→<span class="b here">事实确认单（顾问确认）</span>→<span class="b" style="cursor:pointer" onclick="go('deliv')">第 3 步 → D3 事实清单</span>→<span class="b">第 4 步 差距分析</span>→<span class="b h">发现表（顾问确认）<span class="new">新</span></span>→<span class="b" style="cursor:pointer" onclick="go('output')">D4～D7 只引用已确认发现 →</span></div>
+ <div class="card" style="margin-bottom:12px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><h2 style="margin:0">事实确认单</h2><span class="cap">自动确认 24（多来源一致 17 · 单一高可信来源 7<span class="new">新</span>）· 待你 3 · 抽检 5 条差错 0</span><span class="cap" style="margin-left:10px">可信度：<span class="src o">现场证据</span>＞<span class="src d">客户资料</span>＞<span class="src x">现场口述</span>＞<span class="src z">客户自评</span></span>
+   <span style="margin-left:auto" class="btn2 sm" onclick="toast('只看待你确认的 3 条')">只看待你 3</span></div>
+  <table><tr><th style="width:110px">题号</th><th style="width:200px">问题</th><th>各来源答案</th><th style="width:170px">结论</th><th style="width:200px"></th></tr>
+   <tr class="blk"><td class="mono">SOC-ORG-003</td><td>夜间告警由谁研判</td><td><span class="src d">资料 D-12</span>值班表夜间为空　<span class="src z">自评 P-01</span>A 专人逐条研判　<span class="src x">现场 P-02</span>C 自动派单</td><td><span class="st s-cr">矛盾</span> <span class="cap">推荐 C</span></td><td><span class="ok">已自动进 P-03 议程</span><span class="new">新</span></td></tr>
+   <tr><td class="mono">SOC-PRC-005</td><td>告警分级有无书面规范</td><td><span class="src d">资料 D-11</span>四级、有规范　<span class="src z">自评 P-01</span>有</td><td><span class="st s-ok">一致 · 自动确认</span></td><td class="cap">抽检 1/10</td></tr><tr><td class="mono">SOC-DAT-005</td><td>日志留存时长</td><td><span class="src d">资料 D-11</span>180 天</td><td><span class="st s-ok">单一高可信 · 自动确认</span><span class="new">新</span></td><td class="cap">抽检 1/5</td></tr>
+   <tr class="hl"><td class="mono">SOC-DAT-002</td><td>核心数据库日志是否接入</td><td><span class="src x">现场 P-02</span>未接入　<span class="src d">资料 D-13</span><span class="cr">未交</span></td><td><span class="st s-am">仅现场口述 · 待你</span></td><td><u onclick="toast('已确认，来源：现场口述')">确认</u>　<span class="cap">或等 D-13</span></td></tr>
+   <tr><td class="mono">SOC-TI-001</td><td>威胁情报来源</td><td><span class="src z">自评 P-01</span>不清楚</td><td><span class="st s-am">不清楚</span></td><td><u onclick="go('input')">已进资料需求 / 议程</u></td></tr></table><div class="cap" style="margin-top:6px">规则（11-25 已定）：只有客户资料、现场证据可以单一来源自动确认；只有客户自评或现场口述的，以及关键控制项，一律人确认。抽检发现差错，这一类自动收紧、退回人工。</div>
+ </div>
+ <div class="g3">
+  <div class="card"><div style="display:flex;align-items:center;gap:10px"><h2 style="margin:0">发现表</h2><span class="cap">第 4 步后生成 · 现为上一版草稿示意</span><span class="cap" style="margin-left:auto">依据全是已确认事实的自动确认 4 · 待你 1<span class="new">新</span></span></div>
+   <table><tr><th>编号</th><th>发现</th><th>依据事实</th><th>置信度</th><th>用于</th></tr>
+    <tr class="hl"><td class="mono">F-09</td><td>夜班无人工研判，告警仅自动派单</td><td class="mono">SOC-ORG-003</td><td><span class="st s-cr">低 · 矛盾未决</span></td><td>D4 · D5</td></tr>
+    <tr><td class="mono">F-11</td><td>核心数据库日志未接入集中分析</td><td class="mono">SOC-DAT-002</td><td><span class="st s-am">中</span></td><td>D4 · D7</td></tr>
+    <tr><td class="mono">F-01</td><td>值班制度已建立，交接班记录完整</td><td class="mono">SOC-PRC-001</td><td><span class="st s-ok">高</span></td><td>D4</td></tr></table>
+   <div style="margin-top:6px"><span class="loc" onclick="locate('k-find')">⌖ 在全景中定位“确认发现表”</span></div></div>
+  <div class="card"><h2>成熟度（符合性初判）</h2><svg viewBox="0 0 300 250" width="100%" height="230" id="radar"></svg><div class="cap">实线 = 现状初判　虚线 = 目标 · 不构成测评或认证结论</div></div>
+  <div class="card"><h2>差距 TOP 5</h2><table><tr><td>1</td><td>数据源接入</td><td class="cr">差 2.0</td></tr><tr><td>2</td><td>组织与人员</td><td class="cr">差 1.6 <span class="cap">（含矛盾未决）</span></td></tr><tr><td>3</td><td>威胁检测</td><td class="am">差 1.4</td></tr><tr><td>4</td><td>流程与制度</td><td class="am">差 1.0</td></tr><tr><td>5</td><td>技术平台</td><td class="am">差 0.8</td></tr></table>
+   <div class="cap" style="margin-top:8px">图表同时进分析阶段汇报 PPT（原生图表，可编辑）。</div></div>
+ </div>
+</div>
+
+<!-- ============ 输出 ============ -->
+<div class="page" id="p-output">
+ <div class="mflow"><b style="margin-right:6px">依赖链：</b><span class="b" style="border-color:var(--ok);color:var(--ok)">D1</span>→<span class="b" style="border-color:var(--ok);color:var(--ok)">D2</span>→<span class="b">调研答案 → 事实确认单</span>→<span class="b here">D3 事实清单</span>→<span class="b">发现表</span>→<span class="b">D4</span>→<span class="b">D5 · D6 · D7</span>→<span class="b">D8</span><span class="cap" style="margin-left:auto">上游一变，受影响的交付件自动标“需更新”<span class="new">新</span></span></div>
+ <div class="stage card"><div class="sh"><h2 style="margin:0">① 启动</h2><span class="bar"><i style="width:100%"></i></span><span class="cap">已完成</span><span style="margin-left:auto" class="btn2 sm" onclick="drawer('pack')">⬇ 启动阶段包（Word + PPT）</span></div>
+  <table><tr><th style="width:22%">交付件</th><th style="width:12%">状态</th><th style="width:12%">版本</th><th style="width:9%">门禁</th><th style="width:11%">客户确认</th><th style="width:11%">写 / 签</th><th style="width:13%">提醒</th><th></th></tr>
+   <tr><td>D1 启动方案 <span class="cap">表单预填 70%</span><span class="new">新</span></td><td><span class="st s-ok">已签署</span></td><td>v1.0</td><td class="ok">0 阻断</td><td><span class="st s-ok">已确认</span></td><td class="cap">李某 / 张某</td><td></td><td><u onclick="go('deliv')">打开</u></td></tr>
+   <tr><td>启动会汇报 PPT<span class="new">新</span></td><td><span class="st s-ok">已生成</span></td><td>v1.0</td><td class="cap">—</td><td class="cap">—</td><td class="cap">平台 / 张某</td><td></td><td><u>预览</u></td></tr></table></div>
+ <div class="stage card"><div class="sh"><h2 style="margin:0">② 调研</h2><span class="bar"><i style="width:45%"></i></span><span class="cap">进行中</span><span style="margin-left:auto" class="btn2 sm" onclick="toast('调研阶段包：已签的 D2 v1.0；D3 未签，带“草稿”页眉')">⬇ 调研阶段包</span></div>
+  <table><tr><th style="width:22%">交付件</th><th style="width:12%">状态</th><th style="width:12%">版本</th><th style="width:9%">门禁</th><th style="width:11%">客户确认</th><th style="width:11%">写 / 签</th><th style="width:13%">提醒</th><th></th></tr>
+   <tr class="hl"><td>D2 调研计划</td><td><span class="st s-am">v1.1 修订中</span></td><td>v1.0 已签 · v1.1 稿</td><td class="am">1 待处理</td><td><span class="st s-am">意见 2 条</span></td><td class="cap">李某 / 张某</td><td class="am">客户意见回路</td><td><u onclick="go('deliv')">打开</u>　<span class="loc" onclick="locate('k-fb')">⌖ 全景</span></td></tr>
+   <tr class="hl"><td>D3 事实清单（L2）</td><td><span class="st s-am">起草中 · 第 2 版</span></td><td>草稿</td><td class="am">卡 2</td><td class="cap">不对客户</td><td class="cap">AI / 张某</td><td class="cap">门禁 0 问题 → 经理批量签<span class="new">新</span></td><td><u onclick="go('deliv')">打开</u>　<span class="loc" onclick="locate('k-d3')">⌖ 全景</span></td></tr></table></div>
+ <div class="stage card"><div class="sh"><h2 style="margin:0">③ 分析</h2><span class="bar"><i style="width:5%"></i></span><span class="cap">下一步 · D3 签署后自动进入，阶段包草稿自动生成<span class="new">新</span></span><span style="margin-left:auto" class="btn2 sm" style="opacity:.6">⬇ 分析阶段包</span></div>
+  <table><tr><th style="width:22%">交付件</th><th style="width:12%">状态</th><th style="width:12%">版本</th><th style="width:9%">门禁</th><th style="width:11%">客户确认</th><th style="width:11%">写 / 签</th><th style="width:13%">提醒</th><th></th></tr>
+   <tr><td>D4 现状评估报告（L2）</td><td><span class="st s-cy">AI 预起草<span class="new">新</span></span></td><td>草稿</td><td class="cap">—</td><td class="cap">—</td><td class="cap">AI+李某 / 张某</td><td class="am">引用条目已更新</td><td><u onclick="go('deliv')">打开</u>　<u onclick="toast('已生成修订稿，进入 D4 修订模式')">一键修订</u></td></tr>
+   <tr><td>分析汇报 PPT<span class="new">新</span></td><td><span class="st s-g">未开始</span></td><td></td><td></td><td></td><td class="cap">平台 / 张某</td><td class="cap">含雷达图、TOP5</td><td></td></tr></table></div>
+ <div class="stage card"><div class="sh"><h2 style="margin:0">④ 设计 · ⑤ 验收</h2><span class="bar"><i style="width:0"></i></span><span class="cap">未开始 · D4 签署后自动起草</span></div><div class="cap">D5 目标架构 · D6 运营流程 · D7 实施路线 · D8 验收报告 · 终期汇报 PPT</div></div>
+ <div class="card" style="display:flex;align-items:center;gap:12px"><b>项目交付包</b><span class="cap">全部已签交付件 + 汇报 PPT + 交付清单，结项时一次导出；带草稿的不进包</span><span style="margin-left:auto" class="btn2 sm" style="opacity:.5">⬇ 结项后可用</span></div>
+</div>
+
+<!-- ============ 交付件 ============ -->
+<div class="page" id="p-deliv">
+ <div class="cap" style="margin-bottom:6px">所有交付件共用这一页（示意统一用 D4）：① 起草 → ② 评审与修订 → ③ 定稿签署 → ④ 客户确认；右侧页签 问题清单 / 写稿助手 / 客户意见 / 版本。<span class="loc" onclick="locate('k-d4')">⌖ 在全景中定位</span>　<span class="loc" onclick="go('output')">← 回输出列表</span></div>
+ <iframe id="fdeliv" style="border:0;width:100%;height:1200px;display:block" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;zh&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style&gt;
+:root{--obs:#0a0d12;--s1:#10151c;--s2:#161d27;--s3:#1d2633;--ln:#232d3b;--ln2:#2e3a4b;--tx:#e6ebf2;--tx2:#a3aebe;--tx3:#6b7789;--amber:#f5a524;--cyan:#22d3ee;--ok:#3dd68c;--vio:#b49cff;--crim:#f0454f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--obs);color:var(--tx);font:13px/1.6 &quot;Microsoft YaHei&quot;,sans-serif;width:1840px;display:flex}
+.side{width:170px;background:var(--s1);border-right:1px solid var(--ln);padding:16px 12px;color:var(--tx3);flex-shrink:0}
+.logo{color:var(--tx);font-weight:700;font-size:15px;margin-bottom:14px}.side .it{padding:6px 8px;border-radius:6px}.side .on{color:var(--tx);background:var(--s3)}
+.main{flex:1;padding:16px 20px;min-width:0}
+.crumb{color:var(--tx3);font-size:12px}.hd{display:flex;align-items:center;gap:10px;margin:2px 0 12px}.hd h1{font-size:21px;margin:0}
+.chip{font-size:12px;border-radius:10px;padding:1px 9px;border:1px solid var(--ln2);color:var(--tx2)}
+.btn{background:var(--cyan);color:#06222a;border-radius:7px;padding:6px 14px;font-weight:700}.btn.dis{background:var(--s3);color:var(--tx3)}
+.btn2{border:1px solid var(--ln2);border-radius:7px;padding:6px 14px;color:var(--tx2)}
+.steps{display:flex;align-items:center;gap:0;margin-bottom:12px;background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:10px 16px}
+.sp{display:flex;align-items:center;gap:8px;color:var(--tx3)}.sp i{font-style:normal;width:24px;height:24px;border-radius:12px;border:2px solid var(--ln2);display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.sp.done{color:var(--ok)}.sp.done i{background:var(--ok);border-color:var(--ok);color:var(--obs)}
+.sp.cur{color:var(--amber);font-weight:700}.sp.cur i{border-color:var(--amber);box-shadow:0 0 10px rgba(245,165,36,.6)}
+.line{flex:1;height:2px;background:var(--ln2);margin:0 14px}.line.ok{background:var(--ok)}
+.sum{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr .8fr 1.6fr;gap:10px;margin-bottom:12px}
+.card{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:9px 13px}
+.cap{color:var(--tx3);font-size:12px}.big{font-size:21px;font-weight:700;line-height:1.3}
+.am{color:var(--amber)}.cr{color:var(--crim)}.ok{color:var(--ok)}.cy{color:var(--cyan)}.vio{color:var(--vio)}
+u{color:var(--cyan);text-underline-offset:3px}
+.body3{display:grid;grid-template-columns:210px 1fr 470px;gap:12px}
+.toc .ch{padding:7px 10px;border-radius:7px;display:flex;justify-content:space-between}.toc .on{background:var(--s3)}
+.bd{font-size:11px;border-radius:8px;padding:0 6px}.b-r{background:rgba(240,69,79,.15);color:var(--crim)}.b-a{background:rgba(245,165,36,.15);color:var(--amber)}.b-g{background:rgba(61,214,140,.12);color:var(--ok)}
+.doc{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:18px 26px;font-size:14px;line-height:1.9}
+.doc h2{font-size:17px;margin:0 0 10px}.doc h3{font-size:15px;margin:14px 0 6px;color:var(--tx2)}
+del{color:var(--crim);background:rgba(240,69,79,.10);text-decoration:line-through}
+ins{color:var(--ok);background:rgba(61,214,140,.10);text-decoration:none;border-bottom:1px dashed var(--ok)}
+.src{font-family:Consolas,monospace;font-size:12px;color:var(--cyan)}
+.mk{font-size:11px;border-radius:5px;padding:0 5px;margin:0 3px;vertical-align:2px}
+.mk.a{background:rgba(61,214,140,.15);color:var(--ok)}.mk.q{background:rgba(245,165,36,.18);color:var(--amber)}
+.inl{display:inline-flex;gap:4px;margin-left:6px;vertical-align:1px}.inl span{font-size:11px;border:1px solid var(--ln2);border-radius:5px;padding:0 6px;color:var(--tx2)}
+.inl .y{border-color:var(--ok);color:var(--ok)}
+.hl{background:rgba(245,165,36,.10);outline:1px solid rgba(245,165,36,.5);border-radius:3px}
+.rp .tabs{display:flex;border-bottom:1px solid var(--ln);margin:-9px -13px 10px;padding:0 6px}.rp .tabs span{padding:8px 12px;color:var(--tx3)}.rp .tabs .on{color:var(--cyan);border-bottom:2px solid var(--cyan)}
+.iss{border:1px solid var(--ln);border-radius:9px;padding:9px 11px;margin-bottom:8px;background:var(--s2)}
+.iss.act{border-color:var(--amber)}
+.iss .t{display:flex;gap:6px;align-items:center}.mono{font-family:Consolas,monospace;color:var(--tx3);font-size:12px}
+.fix{margin:6px 0;padding:6px 8px;border-left:2px solid var(--cyan);background:rgba(34,211,238,.06);font-size:12.5px}
+.bt{display:flex;gap:6px;margin-top:6px}.bt span{font-size:12px;border:1px solid var(--ln2);border-radius:6px;padding:1px 10px;color:var(--tx2)}.bt .p{background:var(--ok);color:var(--obs);border-color:var(--ok);font-weight:700}
+.sec{margin:26px 0 10px;font-size:16px;font-weight:700;color:var(--vio);border-top:1px dashed var(--ln2);padding-top:16px}
+.sign{display:grid;grid-template-columns:1fr 520px;gap:12px}
+.row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--ln)}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;
+&lt;div class=&quot;side&quot;&gt;&lt;div class=&quot;logo&quot;&gt;安全咨询平台&lt;/div&gt;&lt;div class=&quot;it&quot;&gt;我的任务&lt;/div&gt;&lt;div class=&quot;it&quot;&gt;我的项目&lt;/div&gt;&lt;div class=&quot;it on&quot;&gt;项目驾驶舱&lt;/div&gt;&lt;div class=&quot;it&quot;&gt;顾问对话&lt;/div&gt;&lt;/div&gt;
+&lt;div class=&quot;main&quot;&gt;
+ &lt;div class=&quot;crumb&quot;&gt;BANK-A / 驾驶舱 / 交付件&lt;/div&gt;
+ &lt;div class=&quot;hd&quot;&gt;&lt;h1&gt;D4 现状评估报告&lt;/h1&gt;&lt;span class=&quot;chip&quot;&gt;对客&lt;/span&gt;&lt;span class=&quot;chip&quot;&gt;L2 · 顾问看过再提交&lt;/span&gt;&lt;span class=&quot;chip&quot;&gt;第 3 版 · 草稿&lt;/span&gt;&lt;span class=&quot;chip&quot;&gt;最后修改：修订 Agent · 10 分钟前&lt;/span&gt;
+  &lt;span style=&quot;margin-left:auto&quot; class=&quot;btn2&quot;&gt;导出 Word&lt;/span&gt;&lt;span class=&quot;btn2&quot;&gt;导出 PPT&lt;/span&gt;&lt;span class=&quot;btn2&quot;&gt;⌖ 在全景中定位&lt;/span&gt;&lt;/div&gt;
+ &lt;div class=&quot;steps&quot;&gt;&lt;span class=&quot;sp done&quot;&gt;&lt;i&gt;✓&lt;/i&gt;① 起草&lt;/span&gt;&lt;span class=&quot;line ok&quot;&gt;&lt;/span&gt;&lt;span class=&quot;sp cur&quot;&gt;&lt;i&gt;2&lt;/i&gt;② 评审与修订&lt;/span&gt;&lt;span class=&quot;line&quot;&gt;&lt;/span&gt;&lt;span class=&quot;sp&quot;&gt;&lt;i&gt;3&lt;/i&gt;③ 定稿签署&lt;/span&gt;&lt;span class=&quot;line&quot;&gt;&lt;/span&gt;&lt;span class=&quot;sp&quot;&gt;&lt;i&gt;4&lt;/i&gt;④ 客户确认&lt;/span&gt;&lt;span class=&quot;cap&quot; style=&quot;margin-left:24px&quot;&gt;客户有意见 → 生成 v1.1 回到 ②&lt;/span&gt;&lt;/div&gt;
+ &lt;div class=&quot;sum&quot;&gt;
+  &lt;div class=&quot;card&quot;&gt;&lt;div class=&quot;cap&quot;&gt;质量门禁 · 第 2 轮&lt;/div&gt;&lt;div class=&quot;big&quot;&gt;&lt;span class=&quot;cr&quot;&gt;阻断 1&lt;/span&gt; · &lt;span class=&quot;am&quot;&gt;重要 3&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;cap&quot;&gt;清零阻断才能提交&lt;/div&gt;&lt;/div&gt;
+  &lt;div class=&quot;card&quot;&gt;&lt;div class=&quot;cap&quot;&gt;已自动修&lt;/div&gt;&lt;div class=&quot;big ok&quot;&gt;12 处&lt;/div&gt;&lt;div class=&quot;cap&quot;&gt;&lt;u&gt;查看&lt;/u&gt; · &lt;u&gt;全部回退&lt;/u&gt;&lt;/div&gt;&lt;/div&gt;
+  &lt;div class=&quot;card&quot; style=&quot;border-color:var(--amber)&quot;&gt;&lt;div class=&quot;cap&quot;&gt;待你定&lt;/div&gt;&lt;div class=&quot;big am&quot;&gt;3&lt;/div&gt;&lt;div class=&quot;cap&quot;&gt;AI 改法，接受 / 拒绝&lt;/div&gt;&lt;/div&gt;
+  &lt;div class=&quot;card&quot;&gt;&lt;div class=&quot;cap&quot;&gt;待补信息&lt;/div&gt;&lt;div class=&quot;big am&quot;&gt;1&lt;/div&gt;&lt;div class=&quot;cap&quot;&gt;已转确认卡&lt;/div&gt;&lt;/div&gt;
+  &lt;div class=&quot;card&quot;&gt;&lt;div class=&quot;cap&quot;&gt;已豁免&lt;/div&gt;&lt;div class=&quot;big&quot;&gt;0&lt;/div&gt;&lt;div class=&quot;cap&quot;&gt;需写理由&lt;/div&gt;&lt;/div&gt;
+  &lt;div class=&quot;card&quot; style=&quot;display:flex;flex-direction:column;justify-content:center;gap:6px&quot;&gt;&lt;span class=&quot;btn&quot; style=&quot;text-align:center&quot;&gt;处理完 → 自动复查（只查改过的章）&lt;/span&gt;&lt;span class=&quot;btn dis&quot; style=&quot;text-align:center&quot;&gt;提交签署（还有 1 个阻断）&lt;/span&gt;&lt;/div&gt;
+ &lt;/div&gt;
+ &lt;div class=&quot;body3&quot;&gt;
+  &lt;div class=&quot;card toc&quot;&gt;&lt;div class=&quot;cap&quot; style=&quot;margin-bottom:6px&quot;&gt;章节&lt;/div&gt;
+   &lt;div class=&quot;ch&quot;&gt;1 评估范围与方法&lt;span class=&quot;bd b-g&quot;&gt;✓&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;ch on&quot;&gt;2 主要差距与业务影响&lt;span class=&quot;bd b-r&quot;&gt;2&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;ch&quot;&gt;3 依据说明&lt;span class=&quot;bd b-a&quot;&gt;1&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;ch&quot;&gt;4 成熟度初判&lt;span class=&quot;bd b-a&quot;&gt;1&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;ch&quot;&gt;5 后续建议方向&lt;span class=&quot;bd b-g&quot;&gt;✓&lt;/span&gt;&lt;/div&gt;
+   &lt;div class=&quot;cap&quot; style=&quot;margin-top:14px&quot;&gt;显示：&lt;u&gt;修订痕迹&lt;/u&gt; · 干净稿&lt;/div&gt;&lt;/div&gt;
+  &lt;div class=&quot;doc&quot;&gt;&lt;h2&gt;2 主要差距与业务影响&lt;/h2&gt;
+   &lt;h3&gt;2.1 监测覆盖&lt;/h3&gt;
+   &lt;p&gt;现有&lt;del&gt;安全运营平台&lt;/del&gt;&lt;ins&gt;安全运营中心（SOC）&lt;/ins&gt;&lt;span class=&quot;mk a&quot;&gt;自动 · 口径统一&lt;/span&gt;接入的日志源覆盖核心业务系统约六成，网络边界与终端日志尚未纳入集中分析 &lt;span class=&quot;src&quot;&gt;[D-12]&lt;/span&gt;&lt;span class=&quot;src&quot;&gt;[I-04]&lt;/span&gt;。&lt;/p&gt;
+   &lt;p class=&quot;hl&quot;&gt;告警处置及时率偏低，&lt;del&gt;严重影响业务连续性&lt;/del&gt;&lt;ins&gt;夜间时段高等级告警的平均响应时间明显长于日间 &lt;span class=&quot;src&quot;&gt;[D-11]&lt;/span&gt;，存在处置延误风险&lt;/ins&gt;&lt;span class=&quot;mk q&quot;&gt;Q-005 待你定&lt;/span&gt;&lt;span class=&quot;inl&quot;&gt;&lt;span class=&quot;y&quot;&gt;✓ 接受&lt;/span&gt;&lt;span&gt;✕ 拒绝&lt;/span&gt;&lt;/span&gt;&lt;/p&gt;
+   &lt;h3&gt;2.2 依据对照&lt;/h3&gt;
+   &lt;p&gt;按照&lt;ins&gt;《网络安全等级保护基本要求》&lt;/ins&gt;&lt;span class=&quot;mk a&quot;&gt;自动 · 补全依据名称&lt;/span&gt;中安全管理中心的相关要求 &lt;span class=&quot;src&quot;&gt;[L4-GB22239-…]&lt;/span&gt;，&lt;del&gt;该行已不符合要求&lt;/del&gt;&lt;ins&gt;当前做法与要求存在差距，属符合性初判&lt;/ins&gt;&lt;span class=&quot;mk a&quot;&gt;自动 · 资质用语&lt;/span&gt;。&lt;/p&gt;
+   &lt;p&gt;日志留存周期：&lt;span class=&quot;mk q&quot;&gt;Q-007 待补信息&lt;/span&gt;&lt;span class=&quot;cap&quot;&gt;（已发确认卡给顾问：客户 SIEM 日志保留天数）&lt;/span&gt;&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class=&quot;card rp&quot;&gt;&lt;div class=&quot;tabs&quot;&gt;&lt;span class=&quot;on&quot;&gt;问题清单 4&lt;/span&gt;&lt;span&gt;写稿助手&lt;/span&gt;&lt;span&gt;客户意见 0&lt;/span&gt;&lt;span&gt;版本 3&lt;/span&gt;&lt;/div&gt;
+   &lt;div class=&quot;iss act&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;span class=&quot;bd b-r&quot;&gt;阻断&lt;/span&gt;&lt;span class=&quot;mono&quot;&gt;Q-005&lt;/span&gt;&lt;b&gt;结论无证据&lt;/b&gt;&lt;span class=&quot;cap&quot; style=&quot;margin-left:auto&quot;&gt;2.1&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;cap&quot;&gt;“严重影响业务连续性”没有证据支撑，且语气过重&lt;/div&gt;
+    &lt;div class=&quot;fix&quot;&gt;AI 改法：改为有证据的事实表述，引用 [D-11] 告警统计&lt;/div&gt;
+    &lt;div class=&quot;bt&quot;&gt;&lt;span class=&quot;p&quot;&gt;✓ 接受&lt;/span&gt;&lt;span&gt;✕ 拒绝&lt;/span&gt;&lt;span&gt;让助手换个写法&lt;/span&gt;&lt;span&gt;豁免…&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
+   &lt;div class=&quot;iss&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;span class=&quot;bd b-a&quot;&gt;重要&lt;/span&gt;&lt;span class=&quot;mono&quot;&gt;Q-006&lt;/span&gt;&lt;b&gt;建议与差距对不上&lt;/b&gt;&lt;span class=&quot;cap&quot; style=&quot;margin-left:auto&quot;&gt;4&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;fix&quot;&gt;AI 改法：在第 4 章为“终端日志未纳入”补一条对应建议方向&lt;/div&gt;
+    &lt;div class=&quot;bt&quot;&gt;&lt;span class=&quot;p&quot;&gt;✓ 接受&lt;/span&gt;&lt;span&gt;✕ 拒绝&lt;/span&gt;&lt;span&gt;让助手换个写法&lt;/span&gt;&lt;span&gt;豁免…&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
+   &lt;div class=&quot;iss&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;span class=&quot;bd b-a&quot;&gt;重要&lt;/span&gt;&lt;span class=&quot;mono&quot;&gt;Q-007&lt;/span&gt;&lt;b&gt;缺信息&lt;/b&gt;&lt;span class=&quot;cap&quot; style=&quot;margin-left:auto&quot;&gt;2.2&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;cap&quot;&gt;只有客户知道 → 已发确认卡，回答后自动补进正文 · &lt;u&gt;去回答&lt;/u&gt;&lt;/div&gt;&lt;/div&gt;
+   &lt;div class=&quot;iss&quot; style=&quot;opacity:.75&quot;&gt;&lt;div class=&quot;t&quot;&gt;&lt;span class=&quot;bd b-g&quot;&gt;已自动修&lt;/span&gt;&lt;span class=&quot;mono&quot;&gt;Q-001～Q-004 等 12 处&lt;/span&gt;&lt;/div&gt;
+    &lt;div class=&quot;cap&quot;&gt;口径统一 6 · 补依据名称 3 · 资质用语 2 · 补来源 1 · 已复查通过 · &lt;u&gt;逐条查看&lt;/u&gt; · &lt;u&gt;回退&lt;/u&gt;&lt;/div&gt;&lt;/div&gt;
+  &lt;/div&gt;
+ &lt;/div&gt;
+
+ &lt;div class=&quot;sec&quot;&gt;③ 定稿签署模式（项目经理打开看到的）&lt;/div&gt;
+ &lt;div class=&quot;sign&quot;&gt;
+  &lt;div class=&quot;doc&quot; style=&quot;padding:14px 22px&quot;&gt;&lt;h2&gt;2 主要差距与业务影响 &lt;span class=&quot;cap&quot; style=&quot;font-weight:400&quot;&gt;干净稿 · 不显示修订痕迹&lt;/span&gt;&lt;/h2&gt;
+   &lt;p&gt;现有安全运营中心（SOC）接入的日志源覆盖核心业务系统约六成，网络边界与终端日志尚未纳入集中分析 &lt;span class=&quot;src&quot;&gt;[D-12]&lt;/span&gt;&lt;span class=&quot;src&quot;&gt;[I-04]&lt;/span&gt;。告警处置及时率偏低，夜间时段高等级告警的平均响应时间明显长于日间 &lt;span class=&quot;src&quot;&gt;[D-11]&lt;/span&gt;，存在处置延误风险。&lt;/p&gt;&lt;/div&gt;
+  &lt;div class=&quot;card&quot;&gt;&lt;b&gt;变更摘要 · 第 1 版 → 第 4 版&lt;/b&gt;
+   &lt;div class=&quot;row&quot;&gt;&lt;span&gt;门禁结论&lt;/span&gt;&lt;span class=&quot;ok&quot;&gt;阻断 0 · 重要 0 · 第 3 轮通过&lt;/span&gt;&lt;/div&gt;
+   &lt;div class=&quot;row&quot;&gt;&lt;span&gt;AI 自动修改&lt;/span&gt;&lt;span&gt;12 处（已复查）&lt;/span&gt;&lt;/div&gt;
+   &lt;div class=&quot;row&quot;&gt;&lt;span&gt;顾问接受 / 拒绝 AI 改法&lt;/span&gt;&lt;span&gt;2 / 1&lt;/span&gt;&lt;/div&gt;
+   &lt;div class=&quot;row&quot;&gt;&lt;span&gt;豁免&lt;/span&gt;&lt;span&gt;1 条 · &lt;u&gt;看理由&lt;/u&gt;&lt;/span&gt;&lt;/div&gt;
+   &lt;div class=&quot;row&quot;&gt;&lt;span&gt;确认卡补充的信息&lt;/span&gt;&lt;span&gt;1 条&lt;/span&gt;&lt;/div&gt;
+   &lt;div class=&quot;row&quot;&gt;&lt;span&gt;最后修改人 / 签署人&lt;/span&gt;&lt;span&gt;顾问 李某 / 项目经理 张某 &lt;span class=&quot;ok&quot;&gt;✓ 写签分离&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;
+   &lt;div style=&quot;display:flex;gap:8px;margin-top:12px&quot;&gt;&lt;span class=&quot;btn&quot;&gt;签署&lt;/span&gt;&lt;span class=&quot;btn2&quot;&gt;退回（写理由 → 自动变成问题条目）&lt;/span&gt;&lt;/div&gt;
+   &lt;div class=&quot;cap&quot; style=&quot;margin-top:8px&quot;&gt;签署后：主按钮变为“导出发客户（Word / PPT）”，步骤条进入 ④ 客户确认；客户有意见 → “录入客户意见”生成 v1.1&lt;/div&gt;&lt;/div&gt;
+ &lt;/div&gt;
+&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;
+"></iframe>
+</div>
+
+<!-- ============ 设置 ============ -->
+<div class="page" id="p-settings"><div class="g2">
+ <div class="card"><h2>成员与分工</h2><table><tr><th>成员</th><th>项目角色</th><th>写 / 签<span class="new">新</span></th></tr><tr><td>张某</td><td>项目经理</td><td>签署 D1～D8</td></tr><tr><td>李某</td><td>项目成员</td><td>起草 D1～D4、调研 P-01/P-03</td></tr><tr><td>王某</td><td>项目成员</td><td>起草 D5～D7</td></tr><tr><td>赵某</td><td>项目成员</td><td>调研 P-02、现场观察</td></tr></table><div class="cap" style="margin-top:8px">对客户的交付件写签分离：起草人不能签自己写的（D3 内部件除外）。</div></div>
+ <div class="card"><h2>产品、档位与保留</h2><table><tr><td>产品</td><td>SOC 运营体系设计 · 阶段与交付件读产品配置</td></tr><tr><td>档位</td><td>标准档 · 模型在公司内部</td></tr><tr><td>保留期</td><td>结项后 180 天，到期前 30 天提醒</td></tr><tr><td>结项与删除</td><td><span class="btn2 sm">发起结项</span> <span class="cap">删除须双人确认，出具删除记录</span></td></tr></table></div>
+</div></div>
+
+<!-- ============ 调研助手（全屏） ============ -->
+<div class="page" id="p-survey"><div class="sv">
+ <div class="svtop"><b style="font-size:16px">调研助手</b><span class="chip">BANK-A</span><span class="chip c-cy">P-03 · 运维部负责人</span><span class="chip">标准档 · 草稿存本机</span><span class="chip c-ok">● 离线可用 · 已保存</span><span class="cap">访谈 32 分钟</span>
+  <span style="margin-left:auto" class="btn2" onclick="go('input')">← 回项目</span><span class="btn" onclick="toast('已回传：事实 13、开放题 3、不清楚 1；现场定案矛盾 1 → 答案池');setTimeout(()=>go('analysis'),1600)">结束并回传</span></div>
+ <div class="svbody">
+  <div class="card qd">
+   <div class="cap" style="margin:0 10px 4px">本场 18 题 · 分三段，按顺序走</div>
+   <div class="sec">① 快速确认 <span class="ok">7 / 7 ✓</span></div><div class="cap" style="margin:0 10px">资料预填和客户自评已有答案，对方点头或改</div>
+   <div class="sec">② 议程 <span class="am">2 / 5</span></div>
+   <a class="on">⚠ 矛盾 · 夜间告警研判 <span>进行中</span></a><a>⚠ 矛盾 · 变更审批 <span class="ok">✓</span></a><a>? 不清楚 · 情报来源 <span class="ok">✓</span></a><a>✎ 开放 · 外包二线分工</a><a>✎ 开放 · 最想改进的一件事</a>
+   <div class="sec">③ 补问 <span>0 / 6</span></div><div class="cap" style="margin:0 10px">需要顾问判断或亲眼看的题，如“请演示一次告警处置”</div>
+  </div>
+  <div>
+   <div class="seg"><span class="dn">① 快速确认 ✓</span><span class="on">② 议程 · 矛盾 1 / 2</span><span>③ 补问</span></div>
+   <div class="qcard">
+    <div class="cap">议程 · 跨角色矛盾 · <span class="mono">SOC-ORG-003</span>　现场只谈矛盾、痛点和证据</div>
+    <div style="font-size:19px;font-weight:700;margin:6px 0 2px">夜间（22:00～次日 8:00）的安全告警，现在由谁做研判？</div>
+    <div class="cap">请对方描述最近一次夜间告警怎么处理的，能看记录就看记录</div>
+    <div class="qopt"><b>A</b>有专人在岗，逐条人工研判后再派单<span class="who"><span class="src z">自评 P-01</span></span></div>
+    <div class="qopt"><b>B</b>有人在岗，只看高等级告警，其余次日处理</div>
+    <div class="qopt sel"><b>C</b>无人在岗，系统按规则自动派单，次日人工复核<span class="who"><span class="src x">现场 P-02</span><span class="src o">本场 P-03</span></span></div>
+    <div class="qopt"><b>D</b>无人在岗，也不派单，次日统一处理</div>
+    <div class="qopt x"><b>X</b>不清楚（会进补证）</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+     <div><div class="cap">现场证据</div><div class="opt" style="margin:4px 0;border-color:var(--ok)">✓ 已看 11-18 夜间派单记录（只看不带走）· 关联 <span class="mono">D-12</span></div></div>
+     <div><div class="cap">补充说明（开放 → 进访谈纪要）</div><textarea style="min-height:48px">夜间派单给外包二线，次日 9 点复核。</textarea></div></div>
+    <div style="display:flex;gap:10px;margin-top:12px"><span class="btn" onclick="toast('现场定案：C（现场证据）；P-01 自评答案标为被取代')">按证据定案 C</span><span class="btn2" onclick="toast('回传后转确认卡')">定不了，回去再确认</span><span class="cap" style="margin-left:auto;align-self:center">口令、IP、业务数据不要写进答卷，保存时自动检测</span></div>
+   </div></div>
+  <div>
+   <div class="alert"><b class="cr">⚠ 这条为什么在议程里</b><div style="margin:6px 0">安全部负责人自评选 A，SOC 值班长现场答 C，资料 D-12 值班表夜间为空，三方不一致。</div><div class="cap" style="color:var(--tx2)">推荐按现场证据定案。拿到记录就能当场定，不用回去再约。</div></div>
+   <div class="hint"><b>实时提示</b><span class="new">新</span><div class="cap" style="color:var(--tx2);margin-top:4px">选了 C：接着问“自动派单规则谁维护、多久更新”，已排进补问。</div></div>
+   <div class="hint"><b>可以当面要</b><div class="cap" style="color:var(--tx2);margin-top:4px">资料需求清单里的 D-13 数据源接入清单（还缺）</div></div>
+   <div class="hint"><b>回传后去哪</b><div class="cap" style="color:var(--tx2);margin-top:4px;line-height:1.8">全部答案 → 答案池 → 事实确认单（分析页）→ 第 3 步 → D3<br>没定案的矛盾 → 确认卡（全景抽屉）<br>不清楚 → 资料需求清单 · 开放题 → 访谈纪要<br>I-05 自动销账，全景卡点自动解除</div></div>
+  </div></div>
+ <div style="padding:10px 20px;background:var(--s1);border-top:1px solid var(--ln);font-size:12px;color:var(--tx3)"><b style="color:var(--tx2)">严格档</b>用同一套题卡，答卷不落盘，只导出去标识摘要卡（加密）带回平台，在“输入 → 严格档摘要卡”上传。</div>
+</div></div>
+
+<!-- ============ 整体逻辑图 ============ -->
+<div class="page" id="p-map"><div class="mp">
+ <div class="card"><h2>一、包含关系：平台 → 项目 → 5 个导航页 → 模块</h2>
+  <div class="tree">
+   <div class="col"><b onclick="go('pano')">全景（驾驶舱）</b><div>页头：阶段、进度预测、本周简报、导出、交付链</div><div>行动条：下一步、待你处理、卡点</div><div>泳道图：列 = 产品阶段，行 = 客户 / 顾问 / 项目经理 / AI</div><div class="sub">点节点 → 抽屉或对应页面</div></div>
+   <div class="col"><b onclick="go('input')">输入</b><div>调研（按受访角色）</div><div class="sub">调研包 ⊃ 客户自评包、现场议程</div><div class="sub">→ 调研助手（全屏，现场用）</div><div>资料需求清单（按产品配置）</div><div>证据库：资料 / 纪要 / 观察</div><div>客户意见收件</div><div>严格档摘要卡</div></div>
+   <div class="col"><b onclick="go('analysis')">分析</b><div>事实确认单（答案池）</div><div>发现表（确认检查点）</div><div>成熟度初判、差距 TOP 5</div></div>
+   <div class="col"><b onclick="go('output')">输出</b><div>按阶段列 D1～D8 + 阶段汇报 PPT</div><div class="sub">→ 交付件页（四模式 + 写稿助手）</div><div>阶段包、项目交付包导出</div><div>影响面提示</div></div>
+   <div class="col"><b onclick="go('settings')">设置</b><div>成员与写签分工</div><div>产品、档位、保留期</div><div>结项与删除</div></div>
+  </div></div>
+ <div class="card"><h2>二、前后关系：一个项目从头到尾（<span class="am">黄 = 人输入</span>　<span class="cy">蓝 = AI / 平台</span>　<span class="vio">紫 = 人确认、签署（担责）</span>　灰 = 客户）</h2>
+  <div class="chain">
+   <div class="stg"><b>① 启动</b><div class="it h">顾问填 D1 表单</div><div class="it a">程序成稿 → 立即评审 → 自动修订</div><div class="it s">项目经理签 D1</div><div class="it c">启动会 · 客户确认</div><div class="it a">启动阶段包（Word + PPT）</div></div>
+   <div class="stg"><b>② 调研</b><div class="it h">D2 表单 → 签 D2（定受访角色）</div><div class="ar">场前</div><div class="it a">每角色生成调研包：选题 + 资料预填</div><div class="it s">顾问发布调研包</div><div class="it c">客户自评（附件发出 → 交回 → 导入）</div><div class="it a">比对 → 现场议程</div><div class="ar">现场</div><div class="it h">调研助手：快速确认 → 议程 → 补问</div><div class="ar">离场</div><div class="it a">答卷 → 答案池 → 事实确认单</div><div class="it s">顾问确认事实（一致的自动）</div><div class="it a">第 3 步 → D3 · 证据不足卡</div><div class="it s">核对 D3 → 签 D3</div></div>
+   <div class="stg"><b>③ 分析</b><div class="it a">第 4 步 差距分析 → 发现表</div><div class="it s">顾问确认发现表（新）</div><div class="it a">起草 D4（前移）→ 评审修订</div><div class="it s">签 D4（写签分离）</div><div class="it a">分析汇报 PPT（原生图表）</div><div class="it c">汇报 · 客户意见 → v1.1</div></div>
+   <div class="stg"><b>④ 设计</b><div class="it a">起草 D5～D7（只引用已确认发现）</div><div class="it h">方案取舍卡</div><div class="it s">签 D5～D7</div><div class="it c">客户审阅</div></div>
+   <div class="stg"><b>⑤ 验收</b><div class="it a">起草 D8 · 终期汇报 PPT</div><div class="it s">签 D8</div><div class="it c">验收 · 客户确认</div><div class="it a">项目交付包 → 结项 → 保留期到期删除</div></div>
+  </div>
+  <div class="cap" style="margin-top:8px">贯穿各阶段的三条回路：签署人退回 → 自动变成问题条目 → 回到修订；客户意见 → v1.1 → 重签（v1.0 留存）；上游变更（事实、发现、知识条目）→ 受影响交付件标“需更新” → 一键修订。</div></div>
+ <div class="card"><h2>三、跳转关系</h2>
+  <table><tr><th style="width:24%">从</th><th style="width:30%">点什么</th><th>到哪（怎么回）</th></tr>
+   <tr><td>全景 · 轻节点</td><td>确认卡、卡点、客户意见、客户自评、AI 步骤、阶段包</td><td>右侧抽屉就地办完；抽屉底部“查看全部”→ 对应子页面并自动筛选</td></tr>
+   <tr><td>全景 · 交付件节点、产出行</td><td>D1～D8、签署、核对</td><td>交付件页（路径：BANK-A / 输出 / Dx）</td></tr>
+   <tr><td>全景 · 调研节点</td><td>现场访谈、调研包、事实确认单</td><td>调研助手（全屏）/ 输入页调研区 / 分析页</td></tr>
+   <tr><td>任何子页面条目</td><td>“⌖ 全景”</td><td>回全景并闪烁高亮对应节点</td></tr>
+   <tr><td>行动条、我的任务</td><td>任一待办</td><td>直接到办事的地方（抽屉或具体页面），不绕路</td></tr>
+   <tr><td>调研助手</td><td>结束并回传</td><td>答案进答案池 → 自动跳分析页事实确认单；矛盾 → 全景确认卡</td></tr>
+   <tr><td>交付件页</td><td>问题条目“让助手改写”</td><td>同页右侧写稿助手页签（带着问题和段落）</td></tr></table></div>
+ <div class="card"><h2>四、自动化分工（自动化优先：平台默认自动，人只处理例外和担责的事）</h2><table><tr><th style="width:16%">环节</th><th style="width:46%">平台自动</th><th>人只做</th></tr>
+ <tr><td>D1、D2 表单</td><td>从立项信息、产品配置、同类模板预填</td><td>补空白项、签署</td></tr>
+ <tr><td>调研包</td><td>按角色选题、资料预填，一键批量发布</td><td>只看改过的题</td></tr>
+ <tr><td>客户自评</td><td>生成自评包和邮件正文；到期提醒，逾期 2 天升级经理；校验全过直接入池 <span class="st s-vio">11-25 已定</span></td><td>用公司邮箱发出、电话告知口令、导入时输入口令</td></tr>
+ <tr><td>访谈</td><td>算最晚访谈日、生成议程、现场实时提示</td><td>约人、访谈、矛盾现场定案</td></tr>
+ <tr><td>事实确认</td><td>多来源一致的、单一高可信来源（客户资料 / 现场证据）的自动确认 <span class="st s-vio">11-25 已定</span></td><td>矛盾、只有自评或口述的、关键控制项</td></tr>
+ <tr><td>证据不足</td><td>还有访谈可补的，自动放进议程</td><td>没有渠道可补的才出卡</td></tr>
+ <tr><td>D3</td><td>门禁 0 问题且每条可追溯 → 核对与签署合并 <span class="st s-vio">11-25 已定</span></td><td>项目经理批量签</td></tr>
+ <tr><td>发现表</td><td>依据全是已确认事实的自动确认</td><td>低置信、有矛盾的</td></tr>
+ <tr><td>阶段推进</td><td>关口满足自动进入下一阶段，生成阶段包和汇报 PPT 草稿</td><td>审汇报、签署</td></tr>
+ <tr><td>简报、待办</td><td>每周五自动生成简报；我的任务跨项目按影响排序</td><td>改两句发客户</td></tr>
+ <tr><td>质量保险</td><td>自动化账本 + 自适应抽检：发现差错自动收紧、退回人工</td><td>看账本异常</td></tr>
+ <tr><td>对外通知</td><td colspan="2">平台不对外发信；内部邮件、即时通讯暂不接，生产部署前再议 <span class="st s-vio">11-25 已定</span></td></tr></table></div>
+</div></div>
+</div>
+
+<div class="menu" id="menu"><div class="hh">阶段包（Word + 汇报 PPT）</div><div onclick="drawer('pack')">① 启动 · 已签 ⬇</div><div onclick="toast('调研阶段包：D2 v1.0 已签；D3 带草稿页眉')">② 调研 · 部分已签 ⬇</div><div class="dis">③ 分析 · 未开始</div><div class="hh">其他</div><div onclick="drawer('weekly')">本周简报（Word）</div><div class="dis">项目交付包 · 结项后可用</div><div onclick="go('output')">在“输出”页管理全部导出 →</div></div>
+<div id="dw"><div class="mask" onclick="closeD()"></div><div class="drawer" id="drawer"></div></div>
+<div class="toast" id="toast"></div>
+<div class="guide"><b>怎么看：</b>顶部 全景 / 输入 / 分析 / 输出 / 设置 切页　·　点泳道节点 → 抽屉或页面　·　“⌖ 全景”回到全景高亮　·　<u onclick="go('map')">整体逻辑图</u>　·　紫色虚线“新”= 新建议　·　全部为虚拟客户 BANK-A 数据</div>
+
+<script>
+const R={pano:'全景',input:'输入',analysis:'分析',output:'输出',deliv:'输出 / D4 现状评估报告',settings:'设置',survey:'调研助手',map:'整体逻辑图'};
+function go(r){if(location.hash=='#'+r)route();else location.hash=r}
+function route(){let r=(location.hash||'#pano').slice(1);if(!R[r])r='pano';document.body.classList.toggle('full',r=='survey');
+ document.querySelectorAll('.page').forEach(p=>p.classList.toggle('on',p.id=='p-'+r));
+ document.querySelectorAll('#pnav a').forEach(a=>a.classList.toggle('on',a.dataset.r==(r=='deliv'?'output':r)));
+ document.getElementById('crumb').innerHTML='我的项目 / <a href="#pano">BANK-A</a> / '+R[r];closeD();window.scrollTo(0,0);if(r=='deliv')fitD();}
+window.addEventListener('hashchange',route);
+function jump(id){document.getElementById(id).scrollIntoView({behavior:'smooth',block:'start'})}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2800)}
+function menu(ev){const m=document.getElementById('menu');const b=ev.target.getBoundingClientRect();m.style.left=(b.right-280)+'px';m.style.top=(b.bottom+4+window.scrollY)+'px';m.style.display=m.style.display=='block'?'none':'block';ev.stopPropagation()}
+document.addEventListener('click',()=>document.getElementById('menu').style.display='none');
+function closeD(){document.getElementById('dw').classList.remove('open')}
+function fitD(){const f=document.getElementById('fdeliv');try{f.style.height=(f.contentDocument.documentElement.scrollHeight+10)+'px'}catch(e){}}
+document.getElementById('fdeliv').addEventListener('load',function(){const d=this.contentDocument;const s=d.createElement('style');s.textContent='.side,.crumb{display:none!important}body{width:auto!important;min-width:0!important}.main{padding:0!important}';d.head.appendChild(s);setTimeout(fitD,60)});
+function locate(k){go('pano');setTimeout(()=>{const g=document.querySelector('g.nd[data-k="'+k+'"]');if(g){g.classList.remove('flash');void g.getBBox();g.classList.add('flash');g.scrollIntoView({block:'center'})}},200)}
+const F=(t,c)=>'<div class="dfoot"><span class="cap">'+t+'</span>'+(c||'')+'</div>';
+const D={
+card:'<span class="x" onclick="closeD()">✕</span><div class="t">证据不足 · 1 / 2 · 已自动分流</div><div class="cap" style="margin:4px 0 10px">第 3 步 · D3 第 2 章“组织与人员” · 来自事实确认单 SOC-ORG-003</div><div style="font-size:14px">夜间告警研判方式三方不一致（自评 A、现场 C、值班表夜间为空）。</div><div class="cap" style="margin:8px 0">推荐<span class="tag">推荐</span>：在 P-03 访谈时按现场证据定案。理由：影响“组织与人员”打分，按推断写会降低 D4 可信度。</div><div class="opt sel" style="border-color:var(--ok);background:rgba(61,214,140,.06)">✓ 平台已自动放进 P-03 现场议程（P-03 还没访谈）<span class="new">新</span></div><div class="cap" style="margin:6px 0">相关角色都访谈完、没有渠道可补时，才出卡让人选。需要的话也可以改成：</div><div class="opt" onclick="toast(\'已改为先写并标【待核实】\')">○ 按推荐 C 先写，正文标【待核实】</div>'+F('定案后自动重跑第 3 步，不用再点','<u onclick="go(\'analysis\')">事实确认单 →</u>'),
+blk:'<span class="x" onclick="closeD()">✕</span><div class="t cr">卡点 · 运维部（P-03）</div><div class="cap" style="margin:4px 0 10px">已等 3 天 · 卡住 答案池“组织与人员”→ 第 3 步 → D3 第 2 章、D4</div><div class="kv"><div>客户自评</div><div>11-20 已发出，未交回</div><div>现场访谈</div><div>未约</div><div>同时可要</div><div>D-13 数据源接入清单</div></div><div class="cap" style="margin:6px 0">平台起草的催办话术（复制后用公司邮箱或电话发给客户接口人）：</div><textarea>您好，SOC 运营咨询调研还差运维部：①自评问卷（11-20 已发，约 20 分钟）；②负责人访谈约 45 分钟；③数据源接入清单。烦请本周内安排，谢谢。</textarea><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><span class="btn" onclick="toast(\'已复制，记录催办时间\')">复制并记录催办</span><span class="btn2" onclick="drawer(\'self\')">导入自评答卷</span><span class="btn2" onclick="go(\'survey\')">约好了 → 调研助手</span></div>'+F('谁：顾问联系客户','<u onclick="go(\'input\')">输入页调研区 →</u>'),
+self:'<span class="x" onclick="closeD()">✕</span><div class="t">客户自评 · P-03 运维部负责人</div><div class="steps3"><span class="dn">① 生成</span><span class="dn">② 发出</span><span class="on">③ 导入</span><span>④ 比对 → 议程</span></div><div class="kv"><div>自评包</div><div>S-03 · v1 · 12 题（调研包里客户能自答的事实题）</div><div>形式</div><div>加密离线网页（双击即开、不联网）+ Excel 兜底</div><div>发出</div><div>11-20 顾问下载，公司邮箱附件发出；口令电话告知</div><div>截止</div><div class="am">11-25 今天到期 · 已自动提醒 2 次 · 明天升级项目经理</div></div><div class="card" style="text-align:center;padding:22px;border-style:dashed;margin:10px 0">拖入客户交回的答卷文件（加密答卷或 Excel）<br><span class="cap">输入口令在本机解密，口令不上传</span></div><div class="cap">输入口令后自动核对包号与版本、完整性、机密级检测、重复导入；全部通过直接进答案池（来源“客户自评”）并更新 P-03 议程，不用再点确认；有异常（未答过多、与资料大面积不一致、命中机密级）才弹预览。<span class="new">11-25 已定</span></div><div style="display:flex;gap:8px;margin-top:10px"><span class="btn" onclick="drawer(\'imp\')">导入（示意）</span><span class="btn2" onclick="toast(\'重新生成自评包 v2：口令重新生成，v1 作废\')">重新生成</span><span class="btn2" onclick="toast(\'顾问代录：在调研助手里逐题点选，来源标“顾问代录”\')">顾问代录</span></div>'+F('谁：顾问 · 平台不直接对外发邮件','<u onclick="go(\'input\')">输入页调研区 →</u>'),
+imp:'<span class="x" onclick="closeD()">✕</span><div class="t">导入结果 · S-03 v1 · 校验全过，已自动入池</div><div class="steps3"><span class="dn">① 生成</span><span class="dn">② 发出</span><span class="on">③ 导入</span><span>④ 比对 → 议程</span></div><div class="kv"><div>校验</div><div class="ok">包号、版本一致 · 机密级检测通过</div><div>已答</div><div>11 / 12（1 题未答）</div><div>不清楚</div><div>1 题 → 进议程 / 资料需求</div><div>与资料预填不一致</div><div class="am">2 题 → 进议程</div><div>与其他角色矛盾</div><div class="cr">1 题（SOC-ORG-003）→ 进议程</div><div>一致</div><div class="ok">7 题 → 自动确认，现场只快速过</div></div><div style="display:flex;gap:8px;margin-top:10px"><span class="btn2" onclick="toast(\'已撤销本次导入，答案移出答案池\')">撤销本次导入</span><span class="btn2" onclick="drawer(\'self\')">返回</span></div>'+F('审计只记包号、题数、命中类别，不记答案原文；原文件不留存'),
+fb:'<span class="x" onclick="closeD()">✕</span><div class="t">录入客户意见 · D2 调研计划 v1.0</div><div class="cap" style="margin:4px 0 10px">已签版只读；录入后自动生成 v1.1 修订稿 → 评审修订 → 重签，v1.0 留存</div><textarea placeholder="粘贴客户邮件，AI 拆成条目并对到章节，人只核对拆分">意见 1：访谈对象增加数据中心值班长。意见 2：现场观察改到第 4 周周三。</textarea><div class="opt">① 第 3 章 · 增加受访角色“数据中心值班长” → 将新增调研包 P-04</div><div class="opt">② 第 4 章 · 现场观察时间调整</div><span class="btn" onclick="toast(\'已生成 D2 v1.1 修订稿，正在自动评审；P-04 调研包已起草待发布\')">生成 v1.1 修订稿</span>'+F('谁：顾问录入 · 项目经理重签','<u onclick="go(\'input\')">客户意见收件 →</u>'),
+ai3:'<span class="x" onclick="closeD()">✕</span><div class="t cy">AI · 第 3 步 D3 事实清单</div><div class="kv"><div>输入</div><div>已确认事实 29 条（答案池）+ 证据 20</div><div>产出</div><div>D3 第 2 版（7 章）</div><div>等待</div><div>证据不足卡 2 张</div><div>下一步</div><div>答完卡 → 自动重跑 → 自动评审修订 → 顾问核对</div></div><div class="cap">历史运行 #9～#11，可对比每次的输入与产出。</div>'+F('','<u onclick="go(\'deliv\')">看 D3 →</u>'),
+gen:'<span class="x" onclick="closeD()">✕</span><div class="t">调研包 · 3 个角色</div><div class="kv"><div>来源</div><div>D2 定的受访角色 × 角色画像 × SOC 题库</div><div>资料预填</div><div>41 题（D-11、D-12 等）</div><div>发布</div><div>顾问签名发布 11-14</div></div>'+F('','<u onclick="go(\'input\')">输入页调研区 →</u>'),
+agenda:'<span class="x" onclick="closeD()">✕</span><div class="t">P-03 现场议程（自动生成）</div><div class="cap" style="margin:4px 0 10px">由资料预填、客户自评和其他角色答卷比对得出；自评交回后自动更新</div><div class="opt">⚠ 矛盾 · 夜间告警研判（SOC-ORG-003）</div><div class="opt">⚠ 矛盾 · 变更审批是否经安全部</div><div class="opt">? 不清楚 · 威胁情报来源</div><div class="opt">✎ 开放 · 外包二线分工</div><div class="opt">✎ 开放 · 最想改进的一件事</div>'+F('','<u onclick="go(\'survey\')">打开调研助手 →</u>'),
+weekly:'<span class="x" onclick="closeD()">✕</span><div class="t">本周简报（自动生成）<span class="new">新</span></div><div class="cap" style="margin:4px 0 10px">每周五自动生成，已放进项目经理待办，改两句就能发客户 · 第 5 周</div><b>本周完成</b><div class="cap" style="color:var(--tx2)">· 安全部、值班长访谈完成，事实 29 条已确认<br>· 事实清单第 2 版起草</div><b>需要客户配合</b><div class="cap" style="color:var(--tx2)">· 运维部自评与访谈（已等 3 天）<br>· 数据源接入清单</div><b>下周计划</b><div class="cap" style="color:var(--tx2)">· 签署 D3，开始差距分析</div><div style="display:flex;gap:8px;margin-top:12px"><span class="btn" onclick="toast(\'已导出 Word（示意）\')">导出 Word</span><span class="btn2">复制文本</span></div>',
+pack:'<span class="x" onclick="closeD()">✕</span><div class="t">① 启动阶段包</div><div class="cap" style="margin:6px 0 10px">全部已签署，无草稿页眉</div><div class="opt">D1 启动方案 v1.0 · Word</div><div class="opt">启动会汇报 · PPT（原生图表，可编辑）</div><span class="btn" onclick="toast(\'已打包下载\')">下载阶段包</span>'+F('','<u onclick="go(\'output\')">输出页 →</u>'),
+chain:'<span class="x" onclick="closeD()">✕</span><div class="t">交付链</div><table style="margin-top:8px"><tr><td>3 事实清单</td><td><span class="st s-cy">运行中 · 等卡</span></td></tr><tr><td>4 差距分析</td><td><span class="st s-g">等 D3 签署</span></td></tr><tr><td>D4 起草</td><td><span class="st s-vio">建议前移到第 4 步后</span></td></tr><tr><td>5～7</td><td><span class="st s-g">等待</span></td></tr></table><div style="margin-top:12px;display:flex;gap:8px"><span class="btn2">暂停</span><span class="btn2">取消整条链</span></div>',
+todo:'<span class="x" onclick="closeD()">✕</span><div class="t">待你处理 · 3 · 按影响排序<span class="new">新</span></div><div class="opt" onclick="drawer(\'blk\')">1　! 催运维部（卡住 D3、D4）· 抽屉办</div><div class="opt" onclick="go(\'analysis\')">2　✓ 事实确认 3 条 · 分析页</div><div class="opt" onclick="drawer(\'fb\')">3　↩ D2 客户意见 2 条 · 抽屉办</div><div class="cap" style="margin-top:10px">跨项目按卡点影响面、截止日、离签署还差几步排序；点哪件直接到办事的地方。</div>',
+upload:'<span class="x" onclick="closeD()">✕</span><div class="t">上传客户资料</div><div class="card" style="margin:12px 0;text-align:center;padding:30px;border-style:dashed">拖入文件，或点击选择<br><span class="cap">上传时先过机密级检测；解析后能回答的调研题自动预填</span></div>'+F('','<u onclick="go(\'input\')">输入页 →</u>'),
+note:'<span class="x" onclick="closeD()">✕</span><div class="t">录入纪要 / 观察</div><textarea style="min-height:160px;margin-top:10px" placeholder="现场访谈的开放题会自动整理成纪要，这里补录其他会议或观察"></textarea><span class="btn" style="margin-top:8px" onclick="toast(\'已保存\')">保存</span>',
+auto:'<span class="x" onclick="closeD()">✕</span><div class="t ok">自动化账本 · 本周<span class="new">新</span></div><div class="kv"><div>平台自动</div><div>23 项任务（共 39 条）</div><div>人工</div><div>6 项（签署 2 · 访谈 2 · 事实确认 1 批 · 意见录入 1）</div><div>抽检</div><div>8 条 · 差错 0</div></div><table><tr><th>类别</th><th>自动条数</th><th>抽检比例</th><th>状态</th></tr><tr><td>资料解析预填</td><td>12</td><td>1/10</td><td><span class="st s-ok">正常</span></td></tr><tr><td>事实自动确认</td><td>24</td><td>1/5</td><td><span class="st s-ok">正常</span></td></tr><tr><td>自评导入入池</td><td>1</td><td>逐份</td><td><span class="st s-ok">正常</span></td></tr><tr><td>证据不足分流</td><td>2</td><td>—</td><td><span class="st s-ok">正常</span></td></tr></table><div class="cap" style="margin-top:8px">抽检发现差错 → 该类自动收紧阈值、退回人工；连续无差错再逐步放开。数据同步进指标看板。</div>',
+later:'<span class="x" onclick="closeD()">✕</span><div class="t">还没到这一步</div><div class="cap" style="margin-top:8px">后续阶段只显示要做的事；到了会自动展开成节点。</div>'
+};
+function drawer(k){document.getElementById('drawer').innerHTML=D[k];document.getElementById('dw').classList.add('open')}
+function act(a){if(!a)return;if(a[0]=='#')return go(a.slice(1));drawer(a)}
+
+/* ---------- 全景泳道图：按产品配置生成（示意数据） ---------- */
+(function(){
+const T={obs:'#0a0d12',s1:'#10151c',s2:'#161d27',s3:'#1d2633',ln:'#232d3b',ln2:'#2e3a4b',tx:'#e6ebf2',tx2:'#a3aebe',tx3:'#6b7789',am:'#f5a524',cy:'#22d3ee',ok:'#3dd68c',vio:'#b49cff',cr:'#f0454f'};
+const L=100;const COLS=[['① 启动','第 1–2 周',150,'done'],['② 调研','第 3–6 周 · 进行中',990,'cur'],['③ 分析','第 7–8 周 · 下一步',320,'next'],['④ 设计','第 9–10 周',160,'later'],['⑤ 验收','第 11–12 周',160,'later']];
+const cx=[];let x=L;COLS.forEach(c=>{cx.push(x);x+=c[2]});const W=x;
+const lanes=[['客户',T.tx2],['顾问',T.am],['项目经理',T.vio],['AI · 平台',T.cy]];
+const Y0=118,LH=100,ly=i=>Y0+LH*i+LH/2;
+let h='<defs><filter id="sh" x="-10%" y="-20%" width="120%" height="160%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity=".5"/></filter><linearGradient id="gc" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#f5a524" stop-opacity=".09"/><stop offset="1" stop-color="#f5a524" stop-opacity=".02"/></linearGradient>'+['cy','am','cr','g','vio'].map(k=>'<marker id="m'+k+'" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,1L9,5L0,9z" fill="'+(k=='g'?'#4a5668':T[k])+'"/></marker>').join('')+'</defs>';
+h+='<text x="0" y="20" fill="'+T.tx+'" font-size="17" font-weight="700">交付全景</text><text x="86" y="20" fill="'+T.tx3+'" font-size="12">列 = 产品阶段（读 SOC 产品配置）　行 = 谁来做　点节点 → 抽屉或页面</text>';
+[['全部','all'],['只看我的（顾问）','me'],['只看例外','blk'],['▶ 回放','play']].forEach(([t,v],i)=>{const bx=1430+i*112;h+='<g class="vbtn" data-v="'+v+'"><rect x="'+bx+'" y="4" width="104" height="24" rx="12" fill="'+(i==0?'rgba(34,211,238,.12)':'none')+'" stroke="'+(i==0?T.cy:T.ln2)+'"/><text x="'+(bx+52)+'" y="20" text-anchor="middle" fill="'+(i==0?T.cy:T.tx2)+'" font-size="12">'+t+'</text></g>'});
+// rail
+const RY=58,today=cx[1]+560;h+='<rect x="'+L+'" y="'+(RY-3)+'" width="'+(W-L)+'" height="6" rx="3" fill="'+T.s3+'"/><rect x="'+L+'" y="'+(RY-3)+'" width="'+(today-L)+'" height="6" rx="3" fill="'+T.ok+'" opacity=".85"/><rect x="'+cx[1]+'" y="'+(RY-3)+'" width="'+(today-cx[1])+'" height="6" fill="'+T.am+'"/>';
+COLS.forEach((c,i)=>{const X=cx[i];const col=c[3]=='done'?T.ok:c[3]=='cur'?T.am:T.tx3;h+='<circle cx="'+(X+8)+'" cy="'+RY+'" r="7" fill="'+(c[3]=='done'?T.ok:T.obs)+'" stroke="'+col+'" stroke-width="2"/><text x="'+(X+22)+'" y="'+(RY-10)+'" fill="'+col+'" font-size="14" font-weight="700">'+c[0]+'</text><text x="'+(X+22)+'" y="'+(RY+20)+'" fill="'+(c[3]=='cur'?T.am:T.tx3)+'" font-size="11">'+c[1]+'</text>';if(c[3]=='done')h+='<text x="'+(X+70)+'" y="'+(RY-10)+'" fill="'+T.cy+'" font-size="11" text-decoration="underline" class="nd-link" data-a="pack" style="cursor:pointer">⬇ 阶段包</text>'});
+// current column bg + bands
+const X2=cx[1];h+='<rect x="'+(X2+2)+'" y="'+(Y0-30)+'" width="'+(COLS[1][2]-4)+'" height="'+(LH*4+76)+'" rx="12" fill="url(#gc)" stroke="'+T.am+'" stroke-opacity=".35"/>';
+const B=[['场前 · 调研包与客户自评',X2,300],['现场 · 调研助手',X2+300,250],['离场 · 答案 → 事实 → D3',X2+550,290],['并行 · D2 客户意见回路',X2+840,150]];
+B.forEach(([t,bx,bw],i)=>{h+='<text x="'+(bx+12)+'" y="'+(Y0-12)+'" fill="'+(i==3?T.am:T.tx2)+'" font-size="11.5" font-weight="700">'+t+'</text>';if(i)h+='<line x1="'+bx+'" y1="'+(Y0-24)+'" x2="'+bx+'" y2="'+(Y0+LH*4+30)+'" stroke="'+T.ln2+'" stroke-dasharray="3 4"/>'});
+// lanes
+lanes.forEach(([n,c],i)=>{const y=Y0+LH*i;h+='<rect x="0" y="'+y+'" width="'+W+'" height="'+LH+'" fill="'+(i%2?'rgba(255,255,255,.012)':'none')+'"/><rect x="2" y="'+(y+8)+'" width="3" height="'+(LH-16)+'" rx="2" fill="'+c+'"/><circle cx="18" cy="'+(y+LH/2)+'" r="3.5" fill="'+c+'"/><text x="28" y="'+(y+LH/2+5)+'" fill="'+T.tx+'" font-size="13.5" font-weight="700">'+n+'</text>'});
+for(let i=1;i<COLS.length;i++)if(i!=1&&i!=2)h+='<line x1="'+cx[i]+'" y1="'+(Y0-4)+'" x2="'+cx[i]+'" y2="'+(Y0+LH*4)+'" stroke="'+T.ln+'"/>';
+// today
+h+='<line x1="'+today+'" y1="'+(RY+8)+'" x2="'+today+'" y2="'+(Y0+LH*4+40)+'" stroke="'+T.cr+'" stroke-dasharray="2 4" opacity=".7"/><rect x="'+(today-20)+'" y="'+(Y0+LH*4+30)+'" width="40" height="17" rx="8" fill="'+T.cr+'"/><text x="'+today+'" y="'+(Y0+LH*4+43)+'" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">今天</text>';
+const N={};let ord=0;const nodes=[];
+function node(id,X,ln,ic,t,sub,st,a,w){w=w||136;const y=ly(ln),H=50;const c={ok:T.ok,ai:T.cy,cur:T.am,blk:T.cr,todo:T.ln2,new:T.vio}[st];const tc={ok:T.ok,ai:T.cy,cur:T.am,blk:T.cr,todo:T.tx,new:T.vio}[st];const bg={ok:'rgba(61,214,140,.07)',ai:'rgba(34,211,238,.09)',cur:'rgba(245,165,36,.12)',blk:'rgba(240,69,79,.12)',todo:T.s2,new:T.s2}[st];
+ let g='<g class="nd" data-k="'+id+'" data-a="'+(a||'')+'" data-ln="'+ln+'" data-st="'+st+'" data-o="'+(ord++)+'">';if(st=='cur'||st=='blk')g+='<rect x="'+(X-4)+'" y="'+(y-H/2-4)+'" width="'+(w+8)+'" height="'+(H+8)+'" rx="14" fill="none" stroke="'+c+'" stroke-width="2" class="pulse"/>';
+ g+='<rect class="cd" x="'+X+'" y="'+(y-H/2)+'" width="'+w+'" height="'+H+'" rx="11" fill="'+bg+'" stroke="'+c+'" stroke-width="1.4" '+(st=='new'?'stroke-dasharray="5 4"':'')+' filter="url(#sh)"/>';
+ g+='<circle cx="'+(X+20)+'" cy="'+y+'" r="12" fill="'+T.obs+'" stroke="'+c+'"/><text x="'+(X+20)+'" y="'+(y+4.5)+'" text-anchor="middle" fill="'+tc+'" font-size="12">'+ic+'</text>';
+ g+='<text x="'+(X+38)+'" y="'+(y-3)+'" fill="'+tc+'" font-size="12.5" font-weight="700">'+t+'</text><text x="'+(X+38)+'" y="'+(y+14)+'" fill="'+(st=='blk'?T.cr:st=='new'?T.vio:T.tx3)+'" font-size="10.5">'+sub+'</text>';
+ if(st=='ai')g+='<circle cx="'+(X+w-14)+'" cy="'+y+'" r="6" fill="none" stroke="'+T.cy+'" stroke-width="2" stroke-dasharray="22 16" class="spin"/>';
+ nodes.push(g+'</g>');N[id]={X,y,w,H};return N[id]}
+let edges='';const P=(d,col,anim)=>{const k=col==T.cy?'cy':col==T.cr?'cr':col==T.am?'am':col==T.vio?'vio':'g';edges+='<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+(anim?1.8:1.3)+'" stroke-linejoin="round" class="'+(anim?'flow':'')+'" marker-end="url(#m'+k+')"/>'};
+function E(a,b,col,anim,dx){a=N[a];b=N[b];col=col||'#4a5668';if(b.X>=a.X+a.w-2){const sx=a.X+a.w,ex=b.X-3,mx=dx?sx+dx:(sx+ex)/2;P(a.y==b.y?'M'+sx+','+a.y+' L'+ex+','+b.y:'M'+sx+','+a.y+' L'+mx+','+a.y+' L'+mx+','+b.y+' L'+ex+','+b.y,col,anim)}else{const vx=(dx!=null?a.X+dx:Math.max(a.X,b.X)+30);const up=b.y<a.y;P('M'+vx+','+(up?a.y-a.H/2:a.y+a.H/2)+' L'+vx+','+(up?b.y+b.H/2+3:b.y-b.H/2-3),col,anim)}}
+// 启动（已完成，折叠）
+[[0,'启动会 · 确认 D1'],[1,'填 D1 表单'],[2,'签署 D1'],[3,'D1 成稿 · 评审']].forEach(([ln,t])=>{const X=cx[0]+8,y=ly(ln);h+='<g class="nd" data-a="#deliv" data-ln="'+ln+'" data-st="ok" data-o="'+(ord++)+'"><rect class="cd" x="'+X+'" y="'+(y-14)+'" width="132" height="28" rx="14" fill="rgba(61,214,140,.06)" stroke="'+T.ok+'" stroke-opacity=".5"/><text x="'+(X+12)+'" y="'+(y+4)+'" fill="'+T.ok+'" font-size="11">✓</text><text x="'+(X+26)+'" y="'+(y+4)+'" fill="'+T.tx2+'" font-size="11.5">'+t+'</text></g>'});
+// 调研 · 场前
+const s0=X2+10;
+node('k-dsign',s0,2,'✓','签署 D2','定受访角色 3 个','ok','#deliv');
+node('k-gen',s0,3,'◆','生成调研包 ×3','选题 + 资料预填 41 题','ok','gen');
+node('k-pub',s0,1,'✓','发布调研包','顾问签名 · 11-14','ok','gen');
+node('k-self',s0+150,0,'?','客户自评','回收 2/3 · 已自动提醒','cur','self',146);
+node('k-agenda',s0+150,3,'◆','比对→议程','矛盾 2 · 不清楚 1','ai','agenda',140);
+// 现场
+const s1=X2+310;
+node('k-blk',s1,0,'!','约运维部访谈','卡点 · 已等 3 天','blk','blk',150);
+node('k-iv12',s1,1,'✓','访谈 P-01/02','已回传','ok','#survey',112);
+node('k-iv3',s1+120,1,'▶','访谈 P-03','带议程 5 项','todo','#survey',112);
+node('k-live',s1+60,3,'◆','现场实时提示','矛盾 · 追问 · 补证','todo','#survey',150);
+// 离场
+const s2=X2+560;
+node('k-pool',s2,3,'◆','答卷 → 答案池','封闭题程序转事实','ok','#analysis');
+node('k-fact',s2,1,'✓','确认事实','自动 24 · 待你 3','cur','#analysis');
+node('k-d3ai',s2+146,3,'◆','第 3 步 D3','等证据不足卡','ai','ai3');
+node('k-card',s2+146,1,'◆','证据不足 ×2','自动进 P-03 议程','new','card');
+node('k-d3',s2+146,2,'签','批量签 D3','门禁 0 问题即签','todo','#deliv');
+node('k-d13',s2,0,'!','补资料 D-13','数据源清单 · 催办','todo','blk');
+// 回路
+const s3=X2+848;
+node('k-fb',s3,0,'↩','D2 客户意见','2 条 · 11-24','todo','fb',134);
+node('k-fbin',s3,1,'?','录入意见','轮到你','cur','fb',134);
+node('k-v11',s3,3,'◆','D2 v1.1 修订稿','自动起草 + 评审','todo','#deliv',134);
+node('k-resign',s3,2,'签','重签 D2','v1.0 留存','todo','#deliv',134);
+// 分析
+const X3=cx[2]+10;
+node('k-gap',X3,3,'◆','第 4 步 差距分析','以已确认事实为输入','todo','#analysis',146);
+node('k-find',X3,1,'✓','确认发现表','自动 4 · 低置信给人','new','#analysis',146);
+node('k-d4',X3+156,3,'◆','起草 D4','建议从第 7 步前移','new','#deliv',146);
+node('k-d4s',X3+156,2,'签','签署 D4','写签分离','todo','#deliv',146);
+node('k-rep',X3+156,0,'▶','分析汇报','汇报 PPT · 客户意见','todo','#output',146);
+// edges
+E('k-gen','k-pub','#4a5668',0,60);E('k-pub','k-self',T.tx3,0,40);E('k-self','k-agenda',T.cy,1,70);
+E('k-agenda','k-iv3',T.cy,1);E('k-blk','k-iv3',T.cr,1,130);
+E('k-iv12','k-pool','#4a5668',0,30);E('k-pool','k-fact',T.cy,1,60);E('k-fact','k-d3ai',T.cy,1,20);
+E('k-d3ai','k-card',T.cy,1,40);E('k-card','k-d3','#4a5668',0,96);E('k-d13','k-pool','#4a5668',0,20);
+E('k-fb','k-fbin',T.am,1,40);
+edges+='<path d="M'+(s3)+','+(ly(1)+14)+' L'+(s3-6)+','+(ly(1)+14)+' L'+(s3-6)+','+ly(3)+' L'+(s3-3)+','+ly(3)+'" fill="none" stroke="#4a5668" stroke-width="1.3" marker-end="url(#mg)"/>';
+E('k-v11','k-resign','#4a5668',0,70);
+edges+='<path d="M'+(s3+134)+','+ly(2)+' L'+(s3+141)+','+ly(2)+' L'+(s3+141)+','+ly(0)+' L'+(s3+137)+','+ly(0)+'" fill="none" stroke="'+T.am+'" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#mam)"/>';
+edges+='<path d="M'+(N['k-d3'].X+N['k-d3'].w)+','+ly(2)+' L'+(s3-14)+','+ly(2)+' L'+(s3-14)+','+(ly(2)+40)+' L'+(X3+60)+','+(ly(2)+40)+' L'+(X3+60)+','+(ly(3)-28)+'" fill="none" stroke="#4a5668" stroke-width="1.3" stroke-dasharray="2 3" marker-end="url(#mg)"/>';
+E('k-gap','k-find','#4a5668',0,60);E('k-find','k-d4','#4a5668',0,18);E('k-d4','k-d4s','#4a5668',0,60);E('k-d4s','k-rep','#4a5668',0,100);
+// later columns
+[[[0,'审阅 D5–D7'],[1,'方案取舍卡'],[2,'签署 D5–D7'],[3,'起草 D5–D7']],[[0,'验收 · 客户确认'],[1,'回填客户意见'],[2,'签 D8 · 结项'],[3,'D8 · 交付包']]].forEach((arr,k)=>arr.forEach(([ln,t])=>{const ci=3+k,X=cx[ci]+8,y=ly(ln);h+='<g class="nd" data-a="later" data-ln="'+ln+'" data-st="todo" data-o="'+(ord++)+'"><rect class="cd" x="'+X+'" y="'+(y-14)+'" width="'+(COLS[ci][2]-18)+'" height="28" rx="14" fill="none" stroke="'+T.ln2+'" stroke-dasharray="3 3"/><circle cx="'+(X+14)+'" cy="'+y+'" r="4.5" fill="none" stroke="'+T.tx3+'"/><text x="'+(X+26)+'" y="'+(y+4)+'" fill="'+T.tx3+'" font-size="11.5">'+t+'</text></g>'}));
+// output row
+const OY=Y0+LH*4+52;h+='<text x="10" y="'+(OY+18)+'" fill="'+T.ok+'" font-size="13" font-weight="700">产出</text>';
+[[cx[0]+8,132,'启动包 ⬇','已签','ok','pack'],[X2+10,170,'调研包 / 自评包','3 + 3 份','ok','#input'],[X2+560,280,'D3 事实清单','起草中 · 第 2 版','am','#deliv'],[X2+848,134,'D2 v1.1','修订中','am','#deliv'],[X3,300,'D4 · 分析汇报 PPT','未开始','g','#output'],[cx[3]+8,142,'D5 · D6 · D7','未开始','g','#output'],[cx[4]+8,142,'D8 · 交付包','未开始','g','#output']].forEach(([X,w,t,s,k,a])=>{const c=k=='ok'?T.ok:k=='am'?T.am:T.tx3;h+='<g class="nd" data-a="'+a+'" data-ln="9" data-st="'+k+'"><rect class="cd" x="'+X+'" y="'+OY+'" width="'+w+'" height="28" rx="6" fill="'+(k=='g'?'none':k=='ok'?'rgba(61,214,140,.08)':'rgba(245,165,36,.10)')+'" stroke="'+(k=='g'?T.ln2:c)+'"/><text x="'+(X+10)+'" y="'+(OY+18)+'" fill="'+(k=='g'?T.tx3:T.tx)+'" font-size="12" '+(k!='g'?'text-decoration="underline"':'')+'>'+t+'</text><text x="'+(X+w-8)+'" y="'+(OY+18)+'" text-anchor="end" fill="'+c+'" font-size="11">'+s+'</text></g>'});
+// legend
+const LY=OY+56;[['◆ AI 在做',T.cy],['? 轮到人',T.am],['! 卡点',T.cr],['✓ 已完成',T.ok],['↩ 客户意见回路',T.am],['虚线框 = 建议新增',T.vio],['红虚线 = 今天',T.cr]].forEach(([t,c],i)=>{h+='<text x="'+(L+i*170)+'" y="'+LY+'" fill="'+c+'" font-size="12">'+t+'</text>'});
+const sv=document.getElementById('pv');sv.setAttribute('viewBox','0 0 '+(W+6)+' '+(LY+10));sv.innerHTML=h+edges+nodes.join('');
+sv.querySelectorAll('g.nd,.nd-link').forEach(g=>g.addEventListener('click',()=>act(g.dataset.a)));
+sv.querySelectorAll('g.vbtn').forEach(b=>b.addEventListener('click',()=>{const v=b.dataset.v;sv.querySelectorAll('g.vbtn rect').forEach(r=>{r.setAttribute('fill','none');r.setAttribute('stroke',T.ln2)});b.querySelector('rect').setAttribute('fill','rgba(34,211,238,.12)');b.querySelector('rect').setAttribute('stroke',T.cy);
+ const all=[...sv.querySelectorAll('g.nd')];all.forEach(g=>g.classList.remove('dim','hid'));
+ if(v=='me')all.forEach(g=>{if(g.dataset.ln!='1')g.classList.add('dim')});
+ if(v=='blk')all.forEach(g=>{if(!/cur|blk/.test(g.dataset.st))g.classList.add('dim')});
+ if(v=='play'){const seq=all.filter(g=>g.dataset.o).sort((a,b)=>a.dataset.o-b.dataset.o);seq.forEach(g=>g.classList.add('hid'));seq.forEach((g,i)=>setTimeout(()=>g.classList.remove('hid'),250*i))}}));
+})();
+// radar
+(function(){const ax=['组织与人员','流程与制度','技术平台','数据源接入','威胁检测','响应处置'],cur=[1.8,2.6,2.8,1.5,1.9,2.9],tgt=[3.4,3.6,3.6,3.5,3.3,3.6];const cx=150,cy=125,R=90;let s='';const pt=(i,v)=>{const a=-Math.PI/2+i*Math.PI/3;return[cx+R*v/4*Math.cos(a),cy+R*v/4*Math.sin(a)]};
+ for(let k=1;k<=4;k++)s+='<polygon points="'+ax.map((_,i)=>pt(i,k).join(',')).join(' ')+'" fill="none" stroke="#232d3b"/>';
+ ax.forEach((n,i)=>{const[p,q]=pt(i,4.7);s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+pt(i,4)[0]+'" y2="'+pt(i,4)[1]+'" stroke="#232d3b"/><text x="'+p+'" y="'+(q+4)+'" text-anchor="middle" fill="#a3aebe" font-size="11">'+n+'</text>'});
+ s+='<polygon points="'+tgt.map((v,i)=>pt(i,v).join(',')).join(' ')+'" fill="none" stroke="#6b7789" stroke-dasharray="4 3"/><polygon points="'+cur.map((v,i)=>pt(i,v).join(',')).join(' ')+'" fill="rgba(34,211,238,.15)" stroke="#22d3ee" stroke-width="2"/>';
+ document.getElementById('radar').innerHTML=s})();
+route();
+</script></body></html>

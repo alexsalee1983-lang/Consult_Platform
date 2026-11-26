@@ -20,6 +20,8 @@ function swPlugin() {
 // 本地开发：npm run dev，/api 转发到本机 8000 端口的后端
 export default defineConfig({
   plugins: [react(), swPlugin()],
+  // 组件测试（Vitest + jsdom）：只收 *.test.jsx；*.test.js 仍由 node --test 跑
+  test: { include: ["src/**/*.test.jsx"], environment: "jsdom" },
   server: {
     port: 5173,
     proxy: { "/api": "http://127.0.0.1:8000" },

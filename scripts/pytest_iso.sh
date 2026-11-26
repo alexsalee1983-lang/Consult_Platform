@@ -15,7 +15,9 @@
 #
 # 选项（同名环境变量可替代，括号内为默认值）：
 #   --pg                 用 PostgreSQL 跑（默认 SQLite）
-#   --python PATH        (PYTEST_PY=/home/pc/venv-b/bin/python)
+#   --host-python        不用容器，改用宿主机 python（默认在容器里跑，依赖与生产镜像一致；四期 G7）
+#   --python PATH        (PYTEST_PY=/home/pc/venv-b/bin/python) 只在 --host-python 时有效
+#   --image NAME         (PT_IMAGE) 容器模式的测试镜像名，默认 cp-pytest:<requirements 哈希>，没有时自动构建
 #   --pg-port N          (PT_PG_PORT=55432)       宿主机 PG 端口
 #   --pg-container NAME  (PT_PG_CONTAINER=prtest-pg) 建库/删库用的容器
 #   --db-prefix P        (PT_DB_PREFIX=pt)        库名前缀，库名为 P_<标签>_<时间戳>
@@ -25,7 +27,7 @@
 #   --keep               排障用：保留 worktree 和数据库
 set -uo pipefail
 
-REPO=""; TAG=""; PG=0; KEEP=0
+REPO=""; TAG=""; PG=0; KEEP=0; HOSTPY=0; IMAGE="${PT_IMAGE:-}"
 PY="${PYTEST_PY:-/home/pc/venv-b/bin/python}"
 PG_PORT="${PT_PG_PORT:-55432}"
 PGC="${PT_PG_CONTAINER:-prtest-pg}"
@@ -39,7 +41,9 @@ while [ $# -gt 0 ]; do
     --repo) REPO="$2"; shift 2;;
     --tag) TAG="$2"; shift 2;;
     --pg) PG=1; shift;;
-    --python) PY="$2"; shift 2;;
+    --python) PY="$2"; HOSTPY=1; shift 2;;
+    --host-python) HOSTPY=1; shift;;
+    --image) IMAGE="$2"; shift 2;;
     --pg-port) PG_PORT="$2"; shift 2;;
     --pg-container) PGC="$2"; shift 2;;
     --db-prefix) DB_PREFIX="$2"; shift 2;;
@@ -56,7 +60,11 @@ done
 [ -n "$REPO" ] || { echo "用法: $0 --repo <环境目录> --tag <标签> [--pg] -- <pytest 参数>" >&2; exit 2; }
 [ -d "$REPO/.git" ] || [ -f "$REPO/.git" ] || { echo "不是 git 目录: $REPO" >&2; exit 2; }
 [ -n "$TAG" ] || TAG="$(basename "$REPO")"
-[ -x "$PY" ] || { echo "python 不可执行: $PY（用 --python 指定）" >&2; exit 2; }
+if [ "$HOSTPY" = 1 ]; then
+  [ -x "$PY" ] || { echo "python 不可执行: $PY（用 --python 指定）" >&2; exit 2; }
+else
+  command -v docker >/dev/null 2>&1 || { echo "没有 docker；要用宿主机 python 请加 --host-python" >&2; exit 2; }
+fi
 
 STAMP="$(date +%m%d%H%M%S)_$$"
 SAFE="$(printf '%s' "$TAG" | tr -c 'A-Za-z0-9_.-' '_')"
@@ -115,7 +123,26 @@ if [ "$PG" = 1 ]; then
 fi
 
 cd "$RUN/wt/backend" || exit 2
-"$PY" -m pytest -p no:cacheprovider "$@"
-rc=$?
+if [ "$HOSTPY" = 1 ]; then
+  "$PY" -m pytest -p no:cacheprovider "$@"
+  rc=$?
+else
+  # 容器里跑：基础镜像与后端生产镜像相同（python:3.12-slim），依赖按 requirements-dev.txt 固定版本安装；
+  # 镜像名带依赖文件哈希，依赖不变时复用，不用每次重装。--network host 让容器能连宿主机上的 PG。
+  if [ -z "$IMAGE" ]; then
+    H="$(cat requirements.txt requirements-dev.txt | sha256sum | cut -c1-12)"
+    IMAGE="cp-pytest:$H"
+  fi
+  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    printf 'FROM python:3.12-slim
+ENV PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1
+COPY requirements.txt requirements-dev.txt /tmp/
+ARG PIP_INDEX_URL=https://pypi.org/simple
+RUN pip install -i ${PIP_INDEX_URL} -r /tmp/requirements-dev.txt
+'       | docker build -q -t "$IMAGE" --build-arg "PIP_INDEX_URL=${PIP_INDEX_URL:-https://pypi.org/simple}" -f - .       || { echo "构建测试镜像失败: $IMAGE" >&2; exit 2; }
+  fi
+  docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -e PYTHONDONTWRITEBYTECODE=1     -e TMPDIR=/tmp -e TEST_DATABASE_URL -e TEST_KB_DATABASE_URL     -v "$RUN/wt:/w" -w /w/backend "$IMAGE" python -m pytest -p no:cacheprovider "$@"
+  rc=$?
+fi
 echo "ISO_RUN tag=$TAG rc=$rc db=${PGDB:-sqlite:$RUN/wt/backend/tests/test.db}"
 exit $rc

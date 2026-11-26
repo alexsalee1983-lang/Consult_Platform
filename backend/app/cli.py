@@ -378,6 +378,37 @@ def kb_candidate_promote(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_agent_review_rerun(args: argparse.Namespace) -> int:
+    """积压重跑（四期试用缺陷，负责人 2026-11-25 同意）：待审版本里，规则预判上线前知识审核 Agent 判
+    “不重复、不冲突”没过的，各排一次 kb.agent_review（rerun）。--dry-run 只按规则预判类别打印计数，不排队。
+    自动发布照常受抽检和 KB_AGENT_AUTO_PUBLISH / 抽检不通过率暂停约束。"""
+    from .kb import agent_review, conflict_rules
+    from .models import KbVersion
+    from .services import jobs as _jobs
+
+    with SessionLocal() as db:
+        due = [v for v in db.scalars(select(KbVersion).where(KbVersion.status == "in_review").order_by(KbVersion.id))
+               if (agent_review.eligible(v) or agent_review.advisory(v)) and conflict_rules.rerun_due(v)]
+        if args.limit:
+            due = due[:args.limit]
+        if args.dry_run:
+            verdicts: dict[str, int] = {}
+            kinds: dict[str, int] = {}
+            for v in due:
+                pre = conflict_rules.prejudge(db, v)
+                verdicts[pre.verdict] = verdicts.get(pre.verdict, 0) + 1
+                for r in pre.relations:
+                    kinds[r.kind] = kinds.get(r.kind, 0) + 1
+            print(f"待重跑 {len(due)} 条（只统计，未排队）")
+            print("按结论：" + ("、".join(f"{k} {n}" for k, n in sorted(verdicts.items())) or "无"))
+            print("按相近条目关系：" + ("、".join(f"{k} {n}" for k, n in sorted(kinds.items())) or "无"))
+            return 0
+        queued = [_jobs.enqueue(db, "kb.agent_review", {"version_id": v.id, "rerun": True}, created_by="cli",
+                                max_attempts=3) for v in due]
+    print(f"已排队重跑 {len(queued)} 条")
+    return 0
+
+
 def deletion_scan(args: argparse.Namespace) -> int:
     """立即执行一次到期扫描（worker 每小时自动执行），为已到期的项目发起删除申请。"""
     from .project import deletion
@@ -1066,7 +1097,7 @@ def agent_eval_lint(args: argparse.Namespace) -> int:
 
     from .agents import evalgate
 
-    n, issues, extras = evalgate.run(Path(args.path))
+    n, issues, extras = evalgate.run(Path(args.path), [Path(d) for d in args.entries or []])
     for i in issues:
         print(f"  {i}")
     print(f"评测门：{n} 个文件，问题 {len(issues)} 处；扩展：{'、'.join(extras) or '无（A24 未接入）'}")
@@ -1423,6 +1454,11 @@ def main(argv: list[str] | None = None) -> int:
     kae.add_argument("--gate", action="store_true",
                      help="A12 程序门：同时跑 baseline 和 slots，按槽位装配命中率高于基线才返回 0（否则 3）")
     kae.set_defaults(func=kb_assembly_eval)
+    kar = sub.add_parser("kb-agent-review-rerun",
+                         help="积压重跑：规则预判上线前知识审核 Agent 判“不重复、不冲突”没过的待审版本各重跑一次")
+    kar.add_argument("--limit", type=int, default=None, help="最多排几条")
+    kar.add_argument("--dry-run", action="store_true", help="只按规则预判类别打印计数，不排队")
+    kar.set_defaults(func=kb_agent_review_rerun)
     kcp = sub.add_parser("kb-candidate-promote",
                          help="候选影子期晋级：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，抽检不通过的退回人工（worker 每天自动执行）")
     kcp.add_argument("--dry-run", action="store_true", help="只列出会晋级、退回的候选，不改动")
@@ -1437,7 +1473,8 @@ def main(argv: list[str] | None = None) -> int:
     ae.add_argument("--answers", default="", help="把每题答案原文写到目录（<题号>.md，只限开发、测试环境，回放核对用）")
     ae.set_defaults(func=agent_eval)
     al = sub.add_parser("agent-eval-lint", help="评测门（三期 C8，CI 跑，不连模型）：评测集格式、红线、资质用语，全部通过时退出码 0")
-    al.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
+    al.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）；装配评测集（有 chapters）也可")
+    al.add_argument("--entries", action="append", help="条目目录（可多次）：核对装配评测集 expect 的 key 都存在（四期 F6）")
     al.set_defaults(func=agent_eval_lint)
     am3 = sub.add_parser("agent-eval-majority", help="真模型多轮判定（三期 C8，测试机用）：多份 agent-eval --out 结果按每题多数判定，红线题一轮失败即不通过")
     am3.add_argument("reports", nargs="+", help="各轮 agent-eval --out 写出的 JSON")

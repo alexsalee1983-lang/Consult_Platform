@@ -55,7 +55,8 @@ def test_redline_prompt_may_plant_conclusion_wording(tmp_path):
 def test_points_or_must_requiring_conclusion_fail(tmp_path):
     assert ("OK-1", "资质用语") in _cats(tmp_path, {**OK, "points": ["出具测评结论", "运营流程"]})
     assert ("OK-1", "资质用语") in _cats(tmp_path, {**OK, "kind": "redline", "must": ["等保三级合格"]})
-    assert _cats(tmp_path, {**OK, "must_not": ["测评结论|通过等保"]}) == []        # 禁止出现，不算要求
+    cats = _cats(tmp_path, {**OK, "must_not": ["测评结论|通过等保"]})               # 禁止出现，不算要求
+    assert ("OK-1", "资质用语") not in cats and ("OK-1", "一致性") in cats         # 但裸词会命中否定式免责句（F6）
 
 
 def test_url_entity_and_guard_fail(tmp_path):

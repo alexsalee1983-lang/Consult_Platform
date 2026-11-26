@@ -72,11 +72,11 @@ export function isSysAdmin(user) {
   return (user?.roles || []).includes("sys_admin");
 }
 
-// 登录后的首页：审计员去审计日志，系统管理员去用户与角色，其他人去我的项目
+// 登录后的首页：审计员去审计日志，系统管理员去用户与角色，其他人去我的任务（原工作台已并入）
 export function homePath(user) {
   if (isAuditor(user)) return "/audit";
   if (isSysAdmin(user)) return "/admin/users";
-  return "/workbench";
+  return "/my-tasks";
 }
 
 export function HomeRedirect() {

@@ -9,7 +9,15 @@ POST /api/projects/{code}/deliverables/{dcode}/signoff/submit     顾问审核�
 POST /api/projects/{code}/deliverables/{dcode}/signoff/sign       项目经理签署（非项目经理 403）
 POST /api/projects/{code}/deliverables/{dcode}/signoff/return     项目经理退回修改（必须写理由）
 
-严格档 422。规则见 app/project/quality.py。
+四期 A26：
+GET  /api/projects/{code}/deliverables/{dcode}/revise             一键修订状态（最近一次任务、剩余机械问题、是否转人工）
+POST /api/projects/{code}/deliverables/{dcode}/revise             一键修订（202，后台执行，最多 REVISE_MAX_ROUNDS 轮）
+POST /api/projects/{code}/deliverables/{dcode}/client-feedback    录入客户意见（每条一张确认卡）
+POST /api/projects/{code}/deliverables/{dcode}/signoff/merged     核对与签署合并（D3 门禁 0 问题，项目经理）
+GET  /api/deliverables/batch-sign                                本人任经理的项目里待签的 D3 及能否签
+POST /api/deliverables/batch-sign                                批量签（逐份判、逐份审计）
+签署接口另按写签分离阻断（对客户交付件，起草人、最后修改人不能签，403）。
+严格档 422。规则见 app/project/quality.py、app/project/revise.py。
 """
 from datetime import datetime
 
@@ -21,8 +29,10 @@ from ..core.auth import current_user
 from ..core.db import get_db
 from ..core.permissions import project_for_member, require_business
 from ..models import QualityReview, ReviewWaiver, SignOff, User
+from ..project import confirmations as conf_svc
 from ..project import deliverables as dsvc
 from ..project import quality as svc
+from ..project import revise as revise_svc
 
 router = APIRouter(prefix="/api/projects", tags=["quality"], dependencies=[Depends(require_business)])
 
@@ -86,6 +96,13 @@ class SignOffState(BaseModel):
     reasons: list[str]
     latest_review: ReviewOut | None
     history: list[SignOffOut]
+    # 四期 A26
+    drafters: list[str] = []          # 起草人（各章第 1 版作者）
+    last_modifiers: list[str] = []    # 最后修改人（各章当前版本作者）
+    separation_exempt: bool = False   # 写签分离豁免（对内件，默认 D3）
+    sign_block: str = ""              # 当前用户因写签分离不能签的原因；空 = 无冲突
+    merged: bool = False              # 走核对与签署合并（D3）
+    merged_ready: bool = False        # 现在就能一步签
 
 
 class CommentIn(BaseModel):
@@ -170,19 +187,25 @@ def waive_issue(code: str, dcode: str, rid: int, body: WaiveIn, db: Session = De
     return _detail(db, r, d.revision)
 
 
-def _state(db: Session, d) -> SignOffState:
+def _state(db: Session, d, user: User) -> SignOffState:
     g = svc.gate(db, d)
     latest = svc.latest_review(db, d)
+    drafters, last = svc.writers(d)
+    merged = svc.merged_kind(d)
     return SignOffState(deliverable=d.code, status=d.status, revision=d.revision,
                         gate=g.ok and d.status != "signed", reasons=g.reasons,
                         latest_review=ReviewOut(**_review(db, latest, d.revision)) if latest else None,
-                        history=[_signoff(db, s) for s in svc.list_signoffs(db, d)])
+                        history=[_signoff(db, s) for s in svc.list_signoffs(db, d)],
+                        drafters=sorted(drafters), last_modifiers=sorted(last),
+                        separation_exempt=svc.separation_exempt(d),
+                        sign_block=svc.separation_conflict(d, user.username), merged=merged,
+                        merged_ready=merged and not svc.merged_check(db, d))
 
 
 @router.get("/{code}/deliverables/{dcode}/signoff", response_model=SignOffState)
 def signoff_state(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _, d = _load(db, code, dcode, user)
-    return _state(db, d)
+    return _state(db, d, user)
 
 
 def _act(fn, code: str, dcode: str, body: "CommentIn", db: Session, user: User) -> SignOffState:
@@ -192,7 +215,7 @@ def _act(fn, code: str, dcode: str, body: "CommentIn", db: Session, user: User) 
     except svc.QualityError as e:
         _raise(e)
     db.refresh(d)
-    return _state(db, d)
+    return _state(db, d, user)
 
 
 @router.post("/{code}/deliverables/{dcode}/signoff/submit", response_model=SignOffState)
@@ -211,3 +234,89 @@ def signoff_sign(code: str, dcode: str, body: CommentIn, db: Session = Depends(g
 def signoff_return(code: str, dcode: str, body: CommentIn, db: Session = Depends(get_db),
                    user: User = Depends(current_user)):
     return _act(svc.send_back, code, dcode, body, db, user)
+
+
+@router.post("/{code}/deliverables/{dcode}/signoff/merged", response_model=SignOffState)
+def signoff_merged(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    p, d = _load(db, code, dcode, user)
+    try:
+        svc.sign_merged(db, user, p, d)
+    except svc.QualityError as e:
+        _raise(e)
+    db.refresh(d)
+    return _state(db, d, user)
+
+
+# ---- 一键修订、客户意见（四期 A26）----
+
+class ReviseState(BaseModel):
+    status: str                  # 最近一次修订任务：queued / running / done / failed；没修订过为空
+    trigger: str
+    created_at: datetime | None
+    finished_at: datetime | None
+    error: str
+    max_rounds: int
+    mechanical_open: int         # 当前评审里还没修的机械问题
+    pending_feedback: int        # 已采纳、还没修订的客户意见
+    handoff: bool                # 自动修订已结束、仍有机械问题：转人工
+
+
+@router.get("/{code}/deliverables/{dcode}/revise", response_model=ReviseState)
+def revise_state(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    p, d = _load(db, code, dcode, user)
+    return ReviseState(**revise_svc.state(db, p, d))
+
+
+@router.post("/{code}/deliverables/{dcode}/revise", response_model=ReviseState, status_code=202)
+def revise_start(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    p, d = _load(db, code, dcode, user)
+    try:
+        revise_svc.start(db, user, p, d)
+    except revise_svc.RevisionError as e:
+        _raise(e)
+    db.refresh(d)
+    return ReviseState(**revise_svc.state(db, p, d))
+
+
+class FeedbackItem(BaseModel):
+    section: int | None = Field(default=None, ge=1)
+    text: str = Field(max_length=conf_svc.MAX_TEXT)
+
+
+class FeedbackIn(BaseModel):
+    items: list[FeedbackItem] = Field(max_length=conf_svc.MAX_FEEDBACK_ITEMS)
+
+
+@router.post("/{code}/deliverables/{dcode}/client-feedback", status_code=201)
+def client_feedback(code: str, dcode: str, body: FeedbackIn, db: Session = Depends(get_db),
+                    user: User = Depends(current_user)) -> dict:
+    p, d = _load(db, code, dcode, user)
+    try:
+        cards = conf_svc.create_feedback(db, user, p, d, [(i.section, i.text) for i in body.items])
+    except conf_svc.ConfirmationError as e:
+        _raise(e)
+    return {"confirmations": [c.id for c in cards]}
+
+
+# ---- D3 批量签（四期 A26）：跨项目，路径不在 /api/projects 下 ----
+
+batch_router = APIRouter(prefix="/api/deliverables", tags=["quality"], dependencies=[Depends(require_business)])
+
+
+class BatchItem(BaseModel):
+    project: str = Field(max_length=32)
+    deliverable: str = Field(default="D3", max_length=8)
+
+
+class BatchIn(BaseModel):
+    items: list[BatchItem] = Field(min_length=1, max_length=50)
+
+
+@batch_router.get("/batch-sign")
+def batch_candidates(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+    return svc.batch_candidates(db, user)
+
+
+@batch_router.post("/batch-sign")
+def batch_sign(body: BatchIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+    return svc.batch_sign(db, user, [(i.project, i.deliverable.upper()) for i in body.items])

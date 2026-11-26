@@ -124,6 +124,7 @@ export const api = {
   createProject: (body) => request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   assessment: (code) => request(`/api/projects/${encodeURIComponent(code)}/assessment`),
+  panorama: (code) => request(`/api/projects/${encodeURIComponent(code)}/panorama`),   // 四期 A25① 全景
   confirmations: () => request("/api/confirmations"),
   // 处理确认卡：选一个选项（choice）或写意见（resolution），或两者都有
   resolve: (id, { choice = "", resolution = "" }) =>
@@ -223,7 +224,6 @@ export const api = {
   agentMdVersions: (code) => request(`/api/agent-md/${encodeURIComponent(code)}/versions`),
   agentMdUnpin: (code, reason) =>
     request(`/api/agent-md/${encodeURIComponent(code)}/unpin`, { method: "POST", body: JSON.stringify({ reason }) }),
-  workbench: () => request("/api/workbench"),
   myTasks: () => request("/api/my-tasks"),
   benchCards: () => request("/api/expert-bench/cards"),
   benchAnswer: (versionId, body) =>
@@ -338,6 +338,14 @@ export const api = {
   signoff: (code, dcode) => request(`${dpath(code, dcode)}/signoff`),
   signoffAction: (code, dcode, action, comment = "") =>   // submit / sign / return
     request(`${dpath(code, dcode)}/signoff/${action}`, { method: "POST", body: JSON.stringify({ comment }) }),
+  // 四期 A26：D3 核对与签署合并、一键修订、客户意见回路、D3 批量签
+  signMerged: (code, dcode) => request(`${dpath(code, dcode)}/signoff/merged`, { method: "POST" }),
+  reviseState: (code, dcode) => request(`${dpath(code, dcode)}/revise`),
+  revise: (code, dcode) => request(`${dpath(code, dcode)}/revise`, { method: "POST" }),
+  clientFeedback: (code, dcode, items) =>   // items: [{section: 章号或 null, text}]
+    request(`${dpath(code, dcode)}/client-feedback`, { method: "POST", body: JSON.stringify({ items }) }),
+  batchCandidates: () => request("/api/deliverables/batch-sign"),
+  batchSign: (items) => request("/api/deliverables/batch-sign", { method: "POST", body: JSON.stringify({ items }) }),
   exportWord: (code, dcode) => download(`${dpath(code, dcode)}/export`),
   exportPpt: (code, dcode) => download(`${dpath(code, dcode)}/export?format=pptx`),   // 二期 A9
   verifyAudit: (expectHead) =>
