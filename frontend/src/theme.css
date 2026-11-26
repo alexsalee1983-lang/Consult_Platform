@@ -41,7 +41,8 @@ button { font: inherit; cursor: pointer; }
 .btnp { height: 32px; padding: 0 14px; border: 0; border-radius: 6px; background: var(--amber); color: #0a0d12; font-size: 13.5px; font-weight: 700; }
 .btnp:disabled { opacity: .5; cursor: not-allowed; }
 
-.side { display: flex; flex-direction: column; gap: 16px; padding: 16px 14px; position: sticky; top: 14px; height: calc(100vh - 28px); }
+.side { display: flex; flex-direction: column; gap: 16px; padding: 16px 14px; position: sticky; top: 14px; height: calc(100vh - 28px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--ln2) transparent; }
+.side > * { flex-shrink: 0; }   /* 矮屏整体滚动：logo、导航、系统状态都不被压缩或裁切 */
 .logo { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
 .logo-mark { width: 30px; height: 30px; border-radius: 7px; background: linear-gradient(135deg, var(--amber), #c9781a); display: flex; align-items: center; justify-content: center; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
