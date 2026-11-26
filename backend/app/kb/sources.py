@@ -36,7 +36,8 @@ from datetime import date
 from pathlib import Path
 
 from ..services import guard
-from . import parse
+from . import labels, parse
+from .meta import MetaError
 from .files import Entry, EntryError, format_entry, parse_entry
 from .items import ItemMeta, VersionContent
 
@@ -185,13 +186,18 @@ def read_manifest(data: bytes) -> tuple[list[Doc], list[str]]:
         if mode is None:
             skipped.append(f"{where}：切分方式“{row['mode']}”认不出，跳过")
             continue
+        try:   # #498：行业取值不对时整份跳过说明，免得每条都被退回、核验只报 complete
+            industries = labels.check_industries(
+                [x for x in re.split(r"[,，、;；]", row["industries"]) if x.strip()] or [labels.GENERAL_INDUSTRY])
+        except MetaError as ex:
+            skipped.append(f"{where}：{ex}，跳过")
+            continue
         version = row["version"] or (re.search(r"(\d{4})\s*$", row["code"]) or re.search(r"(\d{4})", row["published"])
                                      or re.search(r"(\d{4})", row["effective"]) or [None, "未注明"])[1]
         docs.append(Doc(file=row["file"], title=row["title"], code=row["code"], publisher=row["publisher"],
                         published=row["published"], effective=_parse_date(row["effective"]), status=status,
                         version=version, url=row["url"], mode=mode, domain=row["domain"] or "CMP",
-                        industries=[x.strip() for x in re.split(r"[,，、;；]", row["industries"]) if x.strip()]
-                        or ["通用"], replaced_by=row["replaced_by"], sha256=row["sha256"].lower()))
+                        industries=industries, replaced_by=row["replaced_by"], sha256=row["sha256"].lower()))
     return docs, skipped
 
 
