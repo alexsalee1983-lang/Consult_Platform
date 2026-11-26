@@ -202,6 +202,7 @@ export const api = {
   surveyResults: (code, pack, body) =>
     request(`/api/projects/${encodeURIComponent(code)}/survey/packs/${encodeURIComponent(pack)}/results`, { method: "POST", body: JSON.stringify(body) }),
   surveyFacts: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/facts`),
+  surveyAgenda: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/agenda`),   // 四期 E3③ 现场议程
   confirmSurveyFact: (code, id, confirmed_role) =>
     request(`/api/projects/${encodeURIComponent(code)}/survey/facts/${id}/confirm`, { method: "POST", body: JSON.stringify({ confirmed_role }) }),
   withdrawCard: (code, card) =>

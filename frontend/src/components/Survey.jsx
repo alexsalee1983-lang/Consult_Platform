@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
 import { clampInterval, registerShell, REMIND_CHOICES, REMIND_DEFAULT_MIN, reminderState } from "../survey/offline.js";
+import { clashes, itemsByQid, PHASES, phases, REASONS, sourceLabel } from "../survey/agenda.js";
 import { canPersist, checkResponses, clearDraft, listDrafts, loadDraft, progress, resultsBody, saveDraft } from "../survey/draft.js";
 
 const STATUS = { pending: ["待确认", "c-a"], confirmed: ["已确认", "c-g"], superseded: ["已被取代", ""] };
@@ -8,6 +9,8 @@ const store = () => globalThis.localStorage;
 const blank = () => ({ respondent_role: "", answers: {} });
 
 // 四期 E2②a：项目驾驶舱“调研助手”。生成调研包 → 按包填答（可多份答卷）→ 回传 → 事实确认单。
+// 四期 E3③：现场议程按受访角色分三段（快速确认 → 议程 → 补问），填答按这个顺序走；选项与答案池已有答案不一致时实时提示。
+// 证据不足由平台自动分流（补资料请求 / 进议程 / 转人工确认卡），这里只展示。
 // 普通档草稿存本机浏览器，断网可继续填，回传成功即清；严格档本机留存待负责人决定（#429），草稿只在内存、刷新即丢。
 export default function Survey({ code, tier }) {
   const persist = canPersist(tier);
@@ -21,6 +24,8 @@ export default function Survey({ code, tier }) {
   const [ok, setOk] = useState("");
   const [busy, setBusy] = useState(false);
   const [roles, setRoles] = useState({});         // 事实 id → 确认人角色
+  const [agenda, setAgenda] = useState(null);
+  const [phase, setPhase] = useState("quick_confirm");
   // 严格档定时导出摘要卡提醒：计时与间隔只在内存，不写 storage（E2②b）
   const [interval, setIntervalMin] = useState(REMIND_DEFAULT_MIN);
   const [since, setSince] = useState(() => Date.now());
@@ -41,6 +46,7 @@ export default function Survey({ code, tier }) {
   const load = useCallback(() => {
     api.surveyPacks(code).then(setPacks).catch(() => setPacks([]));
     api.surveyFacts(code).then(setFacts).catch(() => setFacts([]));
+    api.surveyAgenda(code).then(setAgenda).catch(() => setAgenda(null));
     if (persist) setDrafts(listDrafts(store(), code));
   }, [code, persist]);
   useEffect(load, [load]);
@@ -97,7 +103,8 @@ export default function Survey({ code, tier }) {
       const r = await api.surveyResults(code, open.pack.code, resultsBody(open.pack, open.responses));
       if (persist) clearDraft(store(), code, open.pack.pack_hash);
       setOpen(null);
-      setOk(`已回传：待确认事实 ${r.facts} 条，开放题 ${r.open} 条，不清楚 ${r.unclear} 处，跨角色矛盾 ${r.conflicts} 处`);
+      setOk(`已回传：待确认事实 ${r.facts} 条，开放题 ${r.open} 条，不清楚 ${r.unclear} 处，跨角色矛盾 ${r.conflicts} 处；`
+        + `自动确认 ${r.auto_confirmed} 题，补资料请求 ${r.requests ?? 0} 题，转人工确认卡 ${r.to_manual ?? 0} 题`);
       load();
     });
   };
@@ -108,6 +115,9 @@ export default function Survey({ code, tier }) {
   });
 
   const cur = open?.responses[idx];
+  const groups = open && cur ? phases(open.pack, agenda, cur.respondent_role) : null;
+  const items = cur ? itemsByQid(agenda, cur.respondent_role) : {};
+  const shown = groups ? groups[phase] : [];
   const setAnswer = (qid, patch) => {
     const responses = open.responses.map((r, i) => (i === idx ? { ...r, answers: { ...r.answers, [qid]: { value: "", text: "", ...r.answers[qid], ...patch } } } : r));
     edit({ ...open, responses });
@@ -185,11 +195,33 @@ export default function Survey({ code, tier }) {
               <button className="btn sm" onClick={exported}>已导出，重新计时</button>
             </div>
           )}
-          {open.pack.questions.map((q) => {
+          <div className="row" style={{ flexWrap: "wrap" }} aria-label="现场三段">
+            {PHASES.map(([key, name], i) => (
+              <button key={key} className={phase === key ? "btnp sm" : "btn sm"} onClick={() => setPhase(key)}>
+                {i < 3 ? `${i + 1}. ` : ""}{name}（{groups[key].length}）
+              </button>
+            ))}
+          </div>
+          {!cur.respondent_role.trim() && <div className="sub">先填受访角色，平台按角色给出该角色的快速确认、议程和补问。</div>}
+          {shown.length === 0 && <div className="sub">这一段没有题。</div>}
+          {shown.map((q) => {
             const a = cur.answers[q.qid] || {};
+            const item = items[q.qid];
+            const prior = (item?.answers || []).find((x) => x.value);
+            const clash = q.kind === "closed" ? clashes(item, a.value) : [];
             return (
               <div key={q.qid} style={{ display: "grid", gap: 4 }}>
-                <div className="sub"><span className="mono">{q.qid}</span> {q.text}</div>
+                <div className="sub">
+                  <span className="mono">{q.qid}</span> {q.text}
+                  {item?.reason && <span className="chip">{REASONS[item.reason] || item.reason}</span>}
+                </div>
+                {phase === "quick_confirm" && prior && (
+                  <div className="row" style={{ flexWrap: "wrap" }}>
+                    <span className="sub">已有答案：{prior.label}（{prior.role} · {sourceLabel(prior.source)}）</span>
+                    <button className="btn sm" onClick={() => setAnswer(q.qid, { value: prior.value })}>对方确认</button>
+                  </div>
+                )}
+                {clash.length > 0 && <span className="chip c-r">与 {clash.join("、")} 的答案不一致，请现场定案</span>}
                 {q.kind === "closed" ? (
                   <div className="row" style={{ flexWrap: "wrap" }}>
                     {q.options.map((o) => (
@@ -211,6 +243,28 @@ export default function Survey({ code, tier }) {
             <button className="btnp" disabled={busy} onClick={submit}>回传 {open.responses.length} 份答卷</button>
             <button className="btn" disabled={busy} onClick={() => setOpen(null)}>收起{persist ? "（草稿保留在本机）" : "（严格档草稿将丢失）"}</button>
           </div>
+        </div>
+      )}
+
+      {agenda && agenda.counts.questions > 0 && (
+        <div style={{ display: "grid", gap: 6 }} aria-label="现场议程">
+          <span className="cap">现场议程（按受访角色，平台自动生成）</span>
+          {agenda.roles.length === 0 && <span className="sub">调研包里的题都已确认，没有需要现场谈的。</span>}
+          {agenda.roles.map((r) => (
+            <div key={r.role} className="row" style={{ flexWrap: "wrap" }}>
+              <span className="sub">{r.role}</span>
+              {r.interviewed && <span className="chip c-g">已访谈</span>}
+              <span className="sub">快速确认 {r.quick_confirm.length} · 议程 {r.agenda.length} · 补问 {r.followup.length}</span>
+            </div>
+          ))}
+          {agenda.requests.length > 0 && (
+            <span className="sub">补资料请求 {agenda.requests.length} 题：
+              {[...new Set(agenda.requests.flatMap((i) => i.materials))].join("、")}</span>
+          )}
+          {agenda.manual.length > 0 && (
+            <span className="sub">转人工 {agenda.manual.length} 题（已发确认卡，在“待我确认”处理）：
+              {agenda.manual.map((i) => `${i.qid} ${i.card_kind}`).join("；")}</span>
+          )}
         </div>
       )}
 

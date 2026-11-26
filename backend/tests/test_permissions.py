@@ -126,6 +126,8 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/survey/spot-checks", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/survey/facts/999999/spot-check", {"passed": True}), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B/survey/pool", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/survey/agenda", None), (200, 404, 403, 403, 403)),   # 四期 E3③
+    (("GET", "/api/projects/GRID-B/survey/agenda", None), (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/survey/facts/999999/spot-check", {"passed": False}),
      (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/survey/packs", None), (404, 404, 403, 403, 403)),

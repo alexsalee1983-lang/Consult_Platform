@@ -9,6 +9,7 @@ POST /api/projects/{code}/survey/facts/{id}/confirm        确认一条事实（
 GET  /api/projects/{code}/survey/pool                      答案池：按题号汇聚，带来源渠道、可信度、题状态（四期 E3①）
 GET  /api/projects/{code}/survey/spot-checks               自动确认的抽检队列
 POST /api/projects/{code}/survey/facts/{id}/spot-check     抽检结论（通过 / 不通过退回人工）
+GET  /api/projects/{code}/survey/agenda                    现场议程：按受访角色分快速确认 / 议程 / 补问，补资料请求，转人工（四期 E3③）
 题库只经命令行 survey-import 导入。规则见 app/project/survey.py。
 """
 from datetime import datetime
@@ -22,6 +23,7 @@ from ..core.db import get_db
 from ..core.permissions import project_for_member, require_business
 from ..models import User
 from ..models.survey import SurveyAnswer
+from ..project import agenda as agenda_svc
 from ..project import survey as svc
 
 router = APIRouter(prefix="/api/projects", tags=["survey"], dependencies=[Depends(require_business)])
@@ -69,6 +71,8 @@ class ResultsOut(BaseModel):
     open: int
     conflicts: int
     auto_confirmed: int
+    requests: int = 0       # 证据不足、列进补资料请求的题数（E3③ 自动分流）
+    to_manual: int = 0      # 转人工（发确认卡）的题数
 
 
 class FactOut(BaseModel):
@@ -196,3 +200,9 @@ def spot_check(code: str, answer_id: int, body: SpotIn, db: Session = Depends(ge
         return _fact(db, svc.spot_verdict(db, user, p, a, body.passed))
     except svc.SurveyError as e:
         _raise(e)
+
+
+@router.get("/{code}/survey/agenda")
+def survey_agenda(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    p = project_for_member(db, code, user)
+    return agenda_svc.build(db, p)
