@@ -211,7 +211,7 @@ def test_agent_review_lands_candidate(monkeypatch):
     findings = {"checks": {k: {"pass": True, "reason": "与原文一致"} for k in agent_review.CHECKS}, "issues": [],
                 "conclusion": "通过"}
     monkeypatch.setattr(agent_review, "rule_failures", lambda db, v: ([], []))
-    monkeypatch.setattr(agent_review, "_agent", lambda db, v, cites: ("ok", "", dict(findings), "t1", "mock"))
+    monkeypatch.setattr(agent_review, "_agent", lambda db, v, cites, *_: ("ok", "", dict(findings), "t1", "mock"))
     author = _people()[0]
     head = {"key": f"t-{uuid.uuid4().hex[:8]}", "title": "示范审核法第二条解读", "layer": "L4", "domain": "CMP",
             "product": "GEN", "doc_type": "REF", "stage": "通用", "capabilities": "[管理]", "source_type": "public",
