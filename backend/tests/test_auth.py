@@ -93,6 +93,7 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/survey/selfeval/S-01/import"),
     ("POST", "/api/projects/BANK-A/survey/selfeval/S-01/import-xlsx"),
     ("DELETE", "/api/projects/BANK-A/survey/selfeval/S-01/import"),
+    ("GET", "/api/projects/BANK-A/survey/agenda"),
     ("GET", "/api/projects/BANK-A/deliverables/D4"),
     ("GET", "/api/projects/BANK-A/knowledge-updates"),
     ("GET", "/api/projects/BANK-A/assessment"),
@@ -100,6 +101,8 @@ PROTECTED = [
     ("PUT", "/api/projects/BANK-A/deliverables/D4/outline"),
     ("GET", "/api/projects/BANK-A/deliverables/D1/form"),      # 四期 A14
     ("POST", "/api/projects/BANK-A/deliverables/D1/form"),
+    ("POST", "/api/projects/BANK-A/deliverables/D1/form/import"),   # 四期 A28②
+    ("GET", "/api/projects/BANK-A/deliverables/D1/form/import"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
     ("GET", "/api/revision-features/summary"),   # 四期 F4②
     ("GET", "/api/extraction/questions"),   # 四期 F4③

@@ -16,6 +16,7 @@ GET  /api/projects/{code}/survey/selfeval/{s}/template.xlsx  Excel 模板（兜�
 POST /api/projects/{code}/survey/selfeval/{s}/import         导入浏览器本机解密后的答卷 → 答案池（客户自评）
 POST /api/projects/{code}/survey/selfeval/{s}/import-xlsx    导入 Excel 答卷（文件不保存）
 DELETE /api/projects/{code}/survey/selfeval/{s}/import       撤销本次导入
+GET  /api/projects/{code}/survey/agenda                    现场议程：按受访角色分快速确认 / 议程 / 补问，补资料请求，转人工（四期 E3③）
 题库只经命令行 survey-import 导入。规则见 app/project/survey.py。
 """
 from datetime import date, datetime
@@ -32,6 +33,7 @@ from ..models import User
 from ..models.survey import SurveyAnswer
 from ..models.survey import SelfEvalPack
 from ..project import selfeval as se
+from ..project import agenda as agenda_svc
 from ..project import survey as svc
 
 router = APIRouter(prefix="/api/projects", tags=["survey"], dependencies=[Depends(require_business)])
@@ -79,6 +81,8 @@ class ResultsOut(BaseModel):
     open: int
     conflicts: int
     auto_confirmed: int
+    requests: int = 0       # 证据不足、列进补资料请求的题数（E3③ 自动分流）
+    to_manual: int = 0      # 转人工（发确认卡）的题数
 
 
 class FactOut(BaseModel):
@@ -345,3 +349,7 @@ def selfeval_undo(code: str, s: str, db: Session = Depends(get_db), user: User =
         return se.undo_import(db, user, p, se.get(db, p, s))
     except svc.SurveyError as e:
         _raise(e)
+@router.get("/{code}/survey/agenda")
+def survey_agenda(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    p = project_for_member(db, code, user)
+    return agenda_svc.build(db, p)

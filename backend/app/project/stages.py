@@ -17,14 +17,20 @@
 人工处理 = 人做的处理类操作（MANUAL_LABELS，签署、退回、提交、写入、确认卡等，不含查看与导出）；
 待办 = 未处理确认卡数、待签署交付件、当前阶段未签交付件。只出计数、编号和配置里的交付件名称，不含客户原文。
 
+启动计划回写（四期 A28③）：D1 启动包成稿后，从“工作分解与里程碑”表格（阶段｜时间｜产出）取当前阶段起的第一行
+写回项目“下一个里程碑”，从“项目周期”取总周数（“共 N 周”或起止日期）；阶段自动推进时按新阶段重取。
+来源就是 D1 正文，顾问在编辑器里改了表格，下次推进即生效；不加表。审计 project.plan_writeback 只记行数、周数和阶段。
+启动会 PPT 不另做：D1 直接按 A9 导出 PPT（?format=pptx），每章一页起。
+
 Ponytail：stages.py 停在“最后才写最小代码”——阶段规则仓库里没有；排版、导出、审计全部复用已有模块，未加依赖。
 """
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -117,8 +123,70 @@ def scan(db: Session, project: Project | None = None) -> list[str]:
         db.commit()
         audit.record(db, actor="platform", action="project.phase_auto", result="allowed", project_code=p.code,
                      from_phase=PHASES[before], to_phase=PHASES[to], trigger=TRIGGER)
+        plan_writeback(db, p, "platform")
         moved.append(p.code)
     return moved
+
+
+# ---- 启动计划回写（A28③）----
+
+MILESTONE_HEAD = ["阶段", "时间", "产出"]
+
+
+def _cells(line: str) -> list[str]:
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+
+
+def milestone_rows(body: str) -> list[tuple[str, str, str]]:
+    """正文里“阶段 | 时间 | 产出”表格的数据行；没有这张表返回空。"""
+    lines = [x for x in body.splitlines() if x.strip().startswith("|")]
+    head = next((i for i, x in enumerate(lines) if _cells(x)[:3] == MILESTONE_HEAD), None)
+    if head is None:
+        return []
+    rows = [(_cells(x) + ["", ""])[:3] for x in lines[head + 2:]]
+    return [(a, b, c) for a, b, c in rows if a]
+
+
+def pick_milestone(rows: list[tuple[str, str, str]], phase: int) -> str:
+    """当前阶段起的第一行（落地辅导算汇报段）；都已过去返回空。"""
+    for stage, when, out in rows:
+        i = phase_index(stage)
+        if i is not None and i >= phase:
+            return f"{stage}（{when}）：{out}" if when else f"{stage}：{out}"
+    return ""
+
+
+def weeks_of(period: str) -> int | None:
+    m = re.search(r"共\s*(\d+)\s*周", period)
+    if m:
+        n = int(m.group(1))
+    else:
+        d = re.findall(r"\d{4}-\d{2}-\d{2}", period)
+        try:
+            n = round((date.fromisoformat(d[1]) - date.fromisoformat(d[0])).days / 7) if len(d) >= 2 else 0
+        except ValueError:
+            n = 0
+    return n if 1 <= n <= 104 else None
+
+
+def plan_writeback(db: Session, p: Project, actor: str) -> bool:
+    """按 D1 正文刷新项目“下一个里程碑”和总周数；有变化才写库并记审计。"""
+    d = next((x for x in p.deliverables if x.code == "D1"), None)
+    if d is None:
+        return False
+    bodies = [v.body for s in d.sections if (v := dsvc.get_version(s)) is not None]
+    rows = next((r for b in bodies if (r := milestone_rows(b))), [])
+    m = re.search(r"项目周期\*\*：(.+)", "\n".join(bodies))
+    weeks = weeks_of(m.group(1)) if m else None
+    nxt = pick_milestone(rows, p.phase)[:128] if rows else p.next_milestone
+    total = weeks or p.total_weeks
+    if nxt == p.next_milestone and total == p.total_weeks:
+        return False
+    p.next_milestone, p.total_weeks = nxt, total
+    db.commit()
+    audit.record(db, actor=actor, action="project.plan_writeback", result="allowed", project_code=p.code,
+                 rows=len(rows), total_weeks=total, phase=PHASES[p.phase])
+    return True
 
 
 def overview(db: Session, p: Project) -> dict:

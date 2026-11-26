@@ -29,7 +29,7 @@ function useNewEditor() {
 import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
 import { knowledgeLine } from "../kbUsage.js";
 
-// 交付件审阅（设计稿 04）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
+// 交付件页（设计稿 04“交付件审阅”）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
 // 右栏与本交付件有关的确认卡、签署流程。规则都在后端，界面只按接口返回显示和操作。
 
 const SOURCE_ROWS = [["evidence", "客户证据", "var(--ok)"], ["knowledge", "知识库", "var(--cyan)"], ["inferred", "模型推断", "var(--vio)"]];

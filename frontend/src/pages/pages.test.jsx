@@ -20,6 +20,7 @@ const { default: Overview } = await import("./Overview.jsx");
 const { OutputPage, ProjectLayout } = await import("./ProjectPages.jsx");
 const { default: Drawer } = await import("../components/Drawer.jsx");
 const { todos } = await import("../components/Panorama.jsx");
+const { default: Members } = await import("../components/Members.jsx");
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 vi.stubGlobal("localStorage", globalThis.jsdom.window.localStorage);   // Node 25+ 自带的 localStorage 会盖住 jsdom 的
@@ -97,6 +98,35 @@ test("全景：行动条、默认只看例外、已自动完成折叠成一行",
   expect(fold).toBeTruthy();
   await act(async () => fold.click());
   expect([...c.querySelectorAll("button[aria-pressed=true]")].map((b) => b.textContent)).toEqual(["全部"]);
+});
+
+test("全景：按设计稿 07 行动条五张卡、“下一步”加宽高亮，其余概况进标题下标签，全景图紧跟其后", async () => {
+  stubOverview();
+  const c = await render(<Overview code="BANK-A" />);
+  expect(c.querySelectorAll(".kpis").length).toBe(0);
+  const act = c.querySelector('section[aria-label="行动条"]');
+  expect(act.classList.contains("act")).toBe(true);
+  expect(act.querySelectorAll(".act-card").length).toBe(5);
+  expect(act.firstElementChild.classList.contains("act-next")).toBe(true);
+  expect(c.querySelector('[aria-label="项目概况"]').textContent).toContain("已签署");
+  expect(act.nextElementSibling.textContent).toContain("只看例外");
+});
+
+test("全景动效钩子：节点按状态带类名（卡住、AI 在做会呼吸），交付件卡带签署进度条", async () => {
+  stubOverview();
+  const c = await render(<Overview code="BANK-A" />);
+  expect(c.querySelectorAll("g.pn-blk").length).toBeGreaterThan(0);
+  const deliv = [...c.querySelectorAll(".act-card")].find((e) => e.textContent.includes("交付件"));
+  expect(deliv.querySelector(".bar > i")).toBeTruthy();
+});
+
+test("全景：项目只有项目经理一人时，“下一步”提示先添加成员并链到设置页", async () => {
+  stubOverview();
+  stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
+  const c = await render(<Overview code="BANK-A" />);
+  const next = c.querySelector(".act-next");
+  expect(next.textContent).toContain("先添加项目成员");
+  expect(next.querySelector('a[href="/project/BANK-A/settings"]')).toBeTruthy();
 });
 
 test("全景抽屉：待你处理按影响排，点确认卡就地打开，Esc 关闭", async () => {
@@ -227,4 +257,59 @@ test("D3 批量签：只能勾选门禁 0 问题的，签后逐份回报", async
   await act(async () => { btn.click(); });
   expect(signed).toEqual([[{ project: "BANK-A", deliverable: "D3" }]]);
   expect(c.textContent).toContain("BANK-A 已签");
+});
+
+test("按表单成稿：每个输入框下有填写示例；已预填章节收起，表格逐格编辑", async () => {
+  const { default: DeliverableForm } = await import("../components/DeliverableForm.jsx");
+  const form = { code: "D1", title: "启动包", writable: true, sections: [
+    { title: "项目概况", fixed: "", fields: [
+      { key: "goal", label: "项目目标", type: "textarea", required: true, max: 2000, default: "", example: "帮助 BANK-A 建立安全运营体系" }] },
+    { title: "风险与变更管理", fixed: "", fields: [
+      { key: "risks", label: "主要风险与应对", type: "table", columns: ["风险", "应对"], required: false, max: 4000,
+        default: "访谈难排期｜提前锁定", example: "资料滞后｜每周跟踪" }] },
+  ] };
+  const el = await render(<DeliverableForm code="BANK-A" dcode="D1" form={form} onDone={() => {}} onCancel={() => {}} />);
+  const ex = [...el.querySelectorAll(".form-ex")].map((x) => x.textContent);
+  expect(ex).toEqual(["示例：帮助 BANK-A 建立安全运营体系", "示例：资料滞后｜每周跟踪"]);
+  expect(el.querySelector("details summary").textContent).toContain("已预填");
+  expect(el.querySelector('table[aria-label="主要风险与应对"] input').value).toBe("访谈难排期");
+});
+
+test("按表单成稿：从合同导入后回填表单（含表格），等顾问核对再成稿", async () => {
+  const { default: DeliverableForm } = await import("../components/DeliverableForm.jsx");
+  const sent = [];
+  stub.importContract = async (code, dcode, file) => { sent.push([code, dcode, file.name]); return { job_id: 1, status: "queued" }; };
+  stub.contractImport = async () => ({ status: "done", error: "", values: { goal: "建立 BANK-A 安全运营体系", risks: "资料滞后｜每周跟踪", nope: "x" } });
+  const form = { code: "D1", title: "启动包", writable: true, sections: [
+    { title: "项目概况", fixed: "", fields: [{ key: "goal", label: "项目目标", type: "textarea", required: true, max: 2000, default: "" }] },
+    { title: "风险与变更管理", fixed: "", fields: [
+      { key: "risks", label: "主要风险与应对", type: "table", columns: ["风险", "应对"], required: false, max: 4000, default: "" }] },
+  ] };
+  const el = await render(<DeliverableForm code="BANK-A" dcode="D1" form={form} onDone={() => {}} onCancel={() => {}} />);
+  const input = el.querySelector('input[aria-label="合同文件"]');
+  const file = new File(["合同"], "合同.docx");
+  Object.defineProperty(input, "files", { value: [file] });
+  await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(sent).toEqual([["BANK-A", "D1", "合同.docx"]]);
+  expect(el.querySelector("textarea").value).toBe("建立 BANK-A 安全运营体系");
+  expect(el.querySelector('table[aria-label="主要风险与应对"] input').value).toBe("资料滞后");
+  expect(el.textContent).toContain("已从合同回填 2 项");
+});
+
+test("项目成员：项目经理不用输入就能看到全部可加入的同事，勾选后一次添加", async () => {
+  const added = [];
+  stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
+  stub.lookupUsers = async (q) => [{ username: "u1", display_name: "经理甲" }, { username: "u2", display_name: "顾问乙" },
+    { username: "u3", display_name: "顾问丙" }].filter((u) => !q || u.display_name.includes(q));
+  stub.putMember = async (code, username, role) => { added.push([username, role]); return [{ username: "u1", display_name: "经理甲", project_role: "manager" }]; };
+  const c = await render(<Members code="BANK-A" />);
+  await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+  const pick = c.querySelector('[aria-label="可添加的同事"]');
+  expect([...pick.querySelectorAll("label")].map((l) => l.textContent)).toEqual(["顾问乙u2", "顾问丙u3"]);
+  const boxes = pick.querySelectorAll("input[type=checkbox]");
+  await act(async () => { boxes[0].click(); boxes[1].click(); });
+  const btn = [...c.querySelectorAll("button")].find((b) => b.textContent.startsWith("添加选中的 2 人"));
+  await act(async () => btn.click());
+  expect(added).toEqual([["u2", "member"], ["u3", "member"]]);
 });

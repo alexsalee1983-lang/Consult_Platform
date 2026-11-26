@@ -13,6 +13,9 @@
   （现场证据 > 客户资料 > 现场口述 > 客户自评）。自动确认只在：非关键控制项、同题无矛盾、有高可信来源（客户资料或现场证据）；
   取可信度最高的一条为 auto，其余一致的转“被取代”。只有客户自评或现场口述的、矛盾的、关键控制项的留给人。
   已自动确认的题来了不一致答案 → 退回待确认并标矛盾。自动确认按 spot_rate() 比例进抽检队列，抽检不通过退回人工。
+- 题的议程信息（四期 E3③，不加列）：受访角色 respondent_roles、控制域 domain、获取渠道 channel（C21）、可预填资料来源
+  prefill 存在 variants 的保留键 _meta 里（question_meta 读），不进调研包；现场议程与证据不足分流见 app/project/agenda.py，
+  每次回传导入后自动分流。
 审计只记计数、包号、哈希和答案编号，不记答案原文。
 """
 import hashlib
@@ -48,6 +51,8 @@ CHANNELS = {"prefill": ("document",), "self_assess": ("self",), "onsite": ("oral
             "discussion": ("oral",)}
 CREDIBILITY = {"evidence": 4, "document": 3, "oral": 2, "self": 1}
 HIGH_SOURCES = {"evidence", "document"}
+META = "_meta"                    # variants 里的保留键：题的议程信息（E3③），行业名不会是它
+BANK_CHANNELS = ("prefill", "self", "onsite", "discussion")   # C21 题库 channel 取值
 
 
 class SurveyError(ValueError):
@@ -102,8 +107,17 @@ def _validate(q: dict) -> dict:
         if name is None or not str(v.get("stem", "")).strip():
             raise SurveyError(422, f"{qid} 行业变体的行业代码不认识或缺题面")
         variants[name] = str(v["stem"]).strip()
-    if guard.check("\n".join([text, *variants.values(), *(o["label"] for o in options)])).blocked:
-        raise SurveyError(422, f"{qid} 题面或选项含机密级内容")
+    roles = [str(r).strip()[:32] for r in q.get("respondent_roles") or [] if str(r).strip()]
+    channel = str(q.get("channel", "") or "").strip()
+    if channel and channel not in BANK_CHANNELS:
+        raise SurveyError(422, f"{qid} 获取渠道只能是 " + " / ".join(BANK_CHANNELS))
+    prefill = [str(x.get("source", "")).strip() for x in q.get("prefill") or [] if isinstance(x, dict)]
+    if guard.check("\n".join([text, *variants.values(), *(o["label"] for o in options), *roles])).blocked:
+        raise SurveyError(422, f"{qid} 题面、选项或受访角色含机密级内容")
+    meta = {"roles": roles, "domain": str(q.get("domain", "") or "").strip(), "channel": channel,
+            "prefill": [x for x in prefill if x]}
+    if any(meta.values()):
+        variants[META] = meta
     return {"qid": qid, "control": ",".join(controls)[:64], "kind": kind, "text": text, "options": options,
             "products": [product], "industries": [], "variants": variants,
             "enabled": not q.get("problem", False), "key_control": bool(q.get("key_control", False))}
@@ -137,6 +151,12 @@ def load_bank_file(path: Path) -> list[dict]:
     return questions
 
 
+def question_meta(q: SurveyQuestion) -> dict:
+    """题的议程信息（受访角色、控制域、获取渠道、可预填资料来源）；老题库导入的为空。"""
+    meta = (q.variants or {}).get(META)
+    return meta if isinstance(meta, dict) else {}
+
+
 def select_questions(db: Session, project: Project) -> list[SurveyQuestion]:
     """按项目画像选题：产品对上（服务产品名 → 产品代码），行业由题目的行业变体换题面。"""
     product = product_code(project.service)
@@ -153,7 +173,7 @@ def pack_hash(payload: dict) -> str:
 
 
 def question_json(q: SurveyQuestion, industry: str = "") -> dict:
-    text = (q.variants or {}).get(industry, q.text)
+    text = (q.variants or {}).get(industry, q.text) if industry != META else q.text
     out: dict = {"qid": q.qid, "control": q.control, "kind": q.kind, "text": text}
     if q.kind == "closed":
         out["options"] = [*q.options, UNCLEAR_OPTION]
@@ -322,7 +342,10 @@ def import_results(db: Session, user: User, project: Project, pack_code: str, gi
            "open": sum(a.kind == "open" for a in rows), "conflicts": conflicts, "auto_confirmed": auto}
     audit.record(db, actor=user.username, action="survey.results", result="ok", project_code=project.code,
                  pack=pack.code, pack_hash=pack.pack_hash, responses=len(responses), channel=channel, **out)
-    return out
+    from . import agenda          # 议程依赖本模块，延迟导入
+
+    plan = agenda.route(db, user, project)
+    return {**out, "requests": plan["counts"]["requests"], "to_manual": plan["counts"]["manual"]}
 
 
 # ---------- 事实确认单 ----------

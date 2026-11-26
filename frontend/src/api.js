@@ -202,6 +202,7 @@ export const api = {
   surveyResults: (code, pack, body) =>
     request(`/api/projects/${encodeURIComponent(code)}/survey/packs/${encodeURIComponent(pack)}/results`, { method: "POST", body: JSON.stringify(body) }),
   surveyFacts: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/facts`),
+  surveyAgenda: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/agenda`),   // 四期 E3③ 现场议程
   confirmSurveyFact: (code, id, confirmed_role) =>
     request(`/api/projects/${encodeURIComponent(code)}/survey/facts/${id}/confirm`, { method: "POST", body: JSON.stringify({ confirmed_role }) }),
   // 四期 E3②：客户自评包（生成返回口令只这一次；答卷在浏览器本机解密后导入，口令不上传）
@@ -340,6 +341,12 @@ export const api = {
   deliverableForm: (code, dcode) => request(`${dpath(code, dcode)}/form`),
   postDeliverableForm: (code, dcode, values) =>
     request(`${dpath(code, dcode)}/form`, { method: "POST", body: JSON.stringify({ values }) }),
+  importContract: (code, dcode, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request(`${dpath(code, dcode)}/form/import`, { method: "POST", body: fd });
+  },
+  contractImport: (code, dcode) => request(`${dpath(code, dcode)}/form/import`),
   putOutline: (code, dcode, titles) =>
     request(`${dpath(code, dcode)}/outline`, { method: "PUT", body: JSON.stringify({ titles }) }),
   section: (code, dcode, seq, version) =>

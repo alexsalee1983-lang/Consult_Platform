@@ -131,7 +131,7 @@ def test_results_to_facts_and_conflicts():
     r = c.post(url, json={"pack_hash": pack["pack_hash"], "responses": [
         _answers("安全运营负责人", "C", "X", text="交接时漏报未闭环工单"), _answers("值班组长", "A", "B")]})
     assert r.status_code == 201, r.text
-    assert r.json() == {"facts": 3, "unclear": 1, "open": 1, "conflicts": 1, "auto_confirmed": 0}
+    assert r.json().items() >= {"facts": 3, "unclear": 1, "open": 1, "conflicts": 1, "auto_confirmed": 0}.items()
     with SessionLocal() as db:
         assert db.scalar(select(SurveyQuestion.unclear_count).where(SurveyQuestion.qid == Q2)) \
             == before + 1

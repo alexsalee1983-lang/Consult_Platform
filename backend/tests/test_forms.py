@@ -57,7 +57,7 @@ def test_get_form_and_submit_d1(proj):
     assert "out_of_scope" in keys and "escalation" in keys and "next_steps" in keys
     fields = {f["key"]: f for s in r.json()["sections"] for f in s["fields"]}
     assert fields["frameworks"]["default"] == "SOC 能力框架\n等保 2.0\n行业要求"        # 按产品配置预填
-    assert fields["deliverables"]["default"].splitlines()[0] == "启动包"
+    assert fields["deliverables"]["default"].splitlines()[0].startswith("D1 启动包｜")   # A28：表格行
     assert fields["goal"]["default"] == ""
     data = next(s for s in r.json()["sections"] if s["title"] == "客户数据保护安排")
     assert "不收集" in data["fixed"] and "标准档" in data["fixed"] and "严格档" not in data["fixed"]
@@ -169,3 +169,94 @@ def test_bad_definition_rejected():
                                                   "template": "{a}"}]}, "D1")
     with pytest.raises(ValueError):
         forms._parse({"code": "D2", "sections": []}, "D1")
+    with pytest.raises(ValueError):          # A28：表格要写 columns
+        forms._parse({"code": "D1", "sections": [{"title": "甲", "fields": [{"key": "a", "type": "table"}],
+                                                  "template": "{a}"}]}, "D1")
+
+
+D1_HUMAN = {"goal": "建立 SOC 运营体系。", "in_scope": "现状评估\n运营体系设计", "out_of_scope": "等保测评"}
+
+
+def test_d1_a28_simplified_prefill_and_tables(proj):
+    """A28①：必填只留 5 项；周期、里程碑、角色、交付件按项目预填，其余按公司标准写法预填；表格字段成稿为表格。"""
+    code, c = proj
+    form = c.get(f"{_base(code, 'D1')}/form").json()
+    fields = {f["key"]: f for s in form["sections"] for f in s["fields"]}
+    assert {k for k, f in fields.items() if f["required"]} == {"goal", "period", "in_scope", "out_of_scope", "roles"}
+    assert fields["period"]["default"].startswith("共 12 周")
+    assert fields["milestones"]["type"] == "table" and fields["milestones"]["columns"] == ["阶段", "时间", "产出"]
+    assert fields["milestones"]["default"].splitlines()[0] == "启动｜第 1 周｜启动包"
+    assert fields["milestones"]["default"].splitlines()[-1] == "验收｜第 12 周｜高层汇报"
+    assert fields["deliverables"]["default"].splitlines()[3] == "D4 现状评估报告｜第 5–7 周｜客户项目负责人｜书面确认"
+    roles = fields["roles"]["default"].splitlines()
+    assert roles[0].startswith("我方｜") and "（项目成员）" in roles[0] and roles[-1].startswith("客户方｜")
+    for key in ("survey_methods", "acceptance", "communication", "escalation", "client_materials", "risks",
+                "change_control", "agenda", "next_steps"):
+        assert fields[key]["default"].strip(), key                    # 公司标准写法预填
+    values = {k: f["default"] for k, f in fields.items()} | D1_HUMAN  # 顾问只填 3 项，其余用预填值
+    r = c.post(f"{_base(code, 'D1')}/form", json={"values": values})
+    assert r.status_code == 201, r.text
+    s4 = c.get(f"{_base(code, 'D1')}/sections/4").json()["body"]
+    assert s4.startswith("| 阶段 | 时间 | 产出 |\n| --- | --- | --- |\n| 启动 | 第 1 周 | 启动包 |")
+    s8 = c.get(f"{_base(code, 'D1')}/sections/8").json()["body"]
+    assert "| 风险 | 应对 |" in s8
+
+
+def test_every_field_has_example(proj):
+    """负责人 2026-11-26：每个输入框都要有填写示例给顾问参考（只用虚拟客户）。"""
+    for code in ("D1", "D2"):
+        form = forms.load_form(code)
+        assert form is not None
+        for f in form.fields():
+            assert f.example.strip(), f"{code}.{f.key} 缺填写示例"
+    code, c = proj
+    fields = {f["key"]: f for s in c.get(f"{_base(code, 'D1')}/form").json()["sections"] for f in s["fields"]}
+    assert "BANK-A" in fields["goal"]["example"]
+
+
+def test_table_cells_normalized():
+    f = forms.Field("t", "表", "table", columns=("甲", "乙"))
+    form = forms.Form("D1", "x", (forms.Section("章", (f,), "{t}"),))
+    [(_, body)] = forms.render(form, {"t": "a｜b｜c\n\n只有一格\n含|竖线｜x"})
+    assert body.splitlines() == ["| 甲 | 乙 |", "| --- | --- |", "| a | b｜c |", "| 只有一格 |  |", "| 含\\|竖线 | x |"]
+    with pytest.raises(forms.FormError):
+        forms.render(form, {"t": "\n".join("x" for _ in range(51))})
+
+
+
+def test_d1_kickoff_pptx_and_milestone_writeback(proj):
+    """A28③：D1 成稿即可导出启动会 PPT（复用 A9），里程碑表回写项目“下一个里程碑”和总周数。"""
+    import io
+
+    from pptx import Presentation
+
+    code, c = proj
+    values = D1_VALUES | {"period": "共 10 周（起止日期以合同约定为准）",
+                          "milestones": "启动｜第 1 周｜启动包、启动会\n调研｜第 2–4 周｜调研包"}
+    r = c.post(f"{_base(code, 'D1')}/form", json={"values": values})
+    assert r.status_code == 201, r.text
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        assert p.next_milestone == "启动（第 1 周）：启动包、启动会" and p.total_weeks == 10
+        logs = list(db.scalars(select(AuditLog).where(AuditLog.project_code == code,
+                                                      AuditLog.action == "project.plan_writeback")))
+    assert len(logs) == 1 and "启动包" not in str(logs[0].detail)          # 审计不记正文
+    r = c.get(f"{_base(code, 'D1')}/export?format=pptx")
+    assert r.status_code == 200
+    titles = [s.shapes.title.text for s in Presentation(io.BytesIO(r.content)).slides if s.shapes.title]
+    for t in ("项目概况", "范围确认", "工作分解与里程碑", "组织与沟通", "启动会议程与下一步"):
+        assert any(t in x for x in titles), t
+
+
+def test_milestone_follows_phase():
+    from app.project import stages
+
+    body = "| 阶段 | 时间 | 产出 |\n| --- | --- | --- |\n| 启动 | 第 1 周 | 启动包 |\n| 调研 | 第 2–4 周 | 调研包 |\n" \
+           "| 落地辅导 | 第 8 周 | 辅导记录 |"
+    rows = stages.milestone_rows(body)
+    assert rows == [("启动", "第 1 周", "启动包"), ("调研", "第 2–4 周", "调研包"), ("落地辅导", "第 8 周", "辅导记录")]
+    assert stages.pick_milestone(rows, 0) == "启动（第 1 周）：启动包"
+    assert stages.pick_milestone(rows, 2) == "落地辅导（第 8 周）：辅导记录"     # 分析段没有行，取下一段
+    assert stages.pick_milestone(rows, 5) == ""
+    assert stages.weeks_of("2027-01-05 至 2027-03-31") == 12 and stages.weeks_of("共 8 周") == 8
+    assert stages.weeks_of("合同约定") is None

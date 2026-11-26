@@ -132,7 +132,7 @@ export default function Panorama({ code, data, focus, onOpen }) {
               style={{ fill: "none", stroke: "var(--ln2)", opacity: dim(a) || dim(b) ? 0.2 : 0.8 }} />;
           })}
           {boxes.filter(visible).map((b) => (
-            <g key={b.id} data-node={b.id} ref={b === lit ? focusRef : undefined} className={b === lit ? "flash" : undefined}
+            <g key={b.id} data-node={b.id} ref={b === lit ? focusRef : undefined} className={`pn pn-${b.status}${b === lit ? " flash" : ""}`}
               onClick={() => open(b)} style={{ cursor: b.folded ? "default" : "pointer", opacity: dim(b) ? 0.2 : 1 }}>
               <title>{`${b.title}${b.subtitle ? ` · ${b.subtitle}` : ""} · ${LABEL[b.status]}`}</title>
               <rect x={b.x} y={b.y} width={b.w} height={NODE_H} rx={5} style={{ fill: "var(--s3)", stroke: COLOR[b.status] }} />

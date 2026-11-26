@@ -66,6 +66,17 @@ def test_manifest_and_modes():
     assert (std.mode, std.status, std.version, std.replaced_by) == ("catalog", "superseded", "2029", "GB/T 99999-2031")
 
 
+
+def test_manifest_bad_industry_skips_with_reason():
+    """#498：清单适用行业写了平台不认的值（电信、医疗卫生），整份在读清单时跳过并说明，不再逐条退回。"""
+    m = ("文件名,名称,文号/标准号,原网址,适用行业\n"
+         "a.txt,甲办法,令第1号,https://www.gov.cn/a,电信\n"
+         "b.txt,乙办法,令第2号,https://www.gov.cn/b,银行；保险\n")
+    docs, skipped = sources.read_manifest(m.encode("utf-8"))
+    assert [d.file for d in docs] == ["b.txt"]
+    assert docs[0].industries == ["银行", "保险"]
+    assert len(skipped) == 1 and "适用行业取值不对：电信" in skipped[0] and "a.txt" in skipped[0]
+
 def test_catalog_has_no_body_text():
     docs, _ = sources.read_manifest(MANIFEST.encode())
     entries, rejected, note = sources.split_doc(docs[1], STANDARD.encode())

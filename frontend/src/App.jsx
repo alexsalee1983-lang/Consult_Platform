@@ -67,7 +67,7 @@ function DeliverablePage() {
   return <Deliverable code={code} dcode={dcode} />;
 }
 
-// 侧栏“交付件审阅”入口：先打开待签署的，其次起草中的，否则 D1
+// 侧栏“交付件”入口（原名“交付件审阅”，负责人 2026-11-26 同意改名：页面已含起草、评审、签署、客户确认四模式）：先打开待签署的，其次起草中的，否则 D1
 function DeliverableHome() {
   const { code } = useParams();
   const [target, setTarget] = useState(null);
