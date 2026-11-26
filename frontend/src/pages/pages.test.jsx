@@ -100,6 +100,35 @@ test("全景：行动条、默认只看例外、已自动完成折叠成一行",
   expect([...c.querySelectorAll("button[aria-pressed=true]")].map((b) => b.textContent)).toEqual(["全部"]);
 });
 
+test("全景：按设计稿 07 行动条五张卡、“下一步”加宽高亮，其余概况进标题下标签，全景图紧跟其后", async () => {
+  stubOverview();
+  const c = await render(<Overview code="BANK-A" />);
+  expect(c.querySelectorAll(".kpis").length).toBe(0);
+  const act = c.querySelector('section[aria-label="行动条"]');
+  expect(act.classList.contains("act")).toBe(true);
+  expect(act.querySelectorAll(".act-card").length).toBe(5);
+  expect(act.firstElementChild.classList.contains("act-next")).toBe(true);
+  expect(c.querySelector('[aria-label="项目概况"]').textContent).toContain("已签署");
+  expect(act.nextElementSibling.textContent).toContain("只看例外");
+});
+
+test("全景动效钩子：节点按状态带类名（卡住、AI 在做会呼吸），交付件卡带签署进度条", async () => {
+  stubOverview();
+  const c = await render(<Overview code="BANK-A" />);
+  expect(c.querySelectorAll("g.pn-blk").length).toBeGreaterThan(0);
+  const deliv = [...c.querySelectorAll(".act-card")].find((e) => e.textContent.includes("交付件"));
+  expect(deliv.querySelector(".bar > i")).toBeTruthy();
+});
+
+test("全景：项目只有项目经理一人时，“下一步”提示先添加成员并链到设置页", async () => {
+  stubOverview();
+  stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
+  const c = await render(<Overview code="BANK-A" />);
+  const next = c.querySelector(".act-next");
+  expect(next.textContent).toContain("先添加项目成员");
+  expect(next.querySelector('a[href="/project/BANK-A/settings"]')).toBeTruthy();
+});
+
 test("全景抽屉：待你处理按影响排，点确认卡就地打开，Esc 关闭", async () => {
   stubOverview();
   const c = await render(<Overview code="BANK-A" />);
