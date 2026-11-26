@@ -18,9 +18,18 @@ D1_VALUES = {
     "in_scope": "- 现状评估\n运营体系设计\n\n",
     "out_of_scope": "等保测评\n系统集成实施",
     "milestones": "启动｜1 月｜启动包\n调研｜2 月｜调研包",
+    "frameworks": "SOC 能力框架\n等保 2.0",
+    "survey_methods": "访谈\n文档审阅",
+    "deliverables": "现状评估报告｜2 月底｜客户安全部负责人｜书面确认",
     "roles": "项目经理：统筹",
+    "escalation": "项目经理\n双方项目负责人",
+    "client_materials": "安全运营制度\n值班记录模板",
+    "risks": "访谈排期紧｜提前锁定时间",
+    "change_control": "书面提出，双方项目负责人确认后执行。",
     "agenda": "介绍范围\n确认计划",
 }
+D1_TITLES = ["项目概况", "范围确认", "工作方法与方法论", "工作分解与里程碑", "交付件清单与验收", "组织与沟通",
+             "客户配合事项", "风险与变更管理", "客户数据保护安排", "启动会议程与下一步"]
 
 
 @pytest.fixture()
@@ -45,13 +54,19 @@ def test_get_form_and_submit_d1(proj):
     r = c.get(f"{_base(code, 'D1')}/form")
     assert r.status_code == 200 and r.json()["writable"] is True
     keys = [f["key"] for s in r.json()["sections"] for f in s["fields"]]
-    assert "out_of_scope" in keys
+    assert "out_of_scope" in keys and "escalation" in keys and "next_steps" in keys
+    fields = {f["key"]: f for s in r.json()["sections"] for f in s["fields"]}
+    assert fields["frameworks"]["default"] == "SOC 能力框架\n等保 2.0\n行业要求"        # 按产品配置预填
+    assert fields["deliverables"]["default"].splitlines()[0] == "启动包"
+    assert fields["goal"]["default"] == ""
+    data = next(s for s in r.json()["sections"] if s["title"] == "客户数据保护安排")
+    assert "不收集" in data["fixed"] and "标准档" in data["fixed"] and "严格档" not in data["fixed"]
     assert c.get(f"{_base(code, 'D4')}/form").status_code == 404
 
     r = c.post(f"{_base(code, 'D1')}/form", json={"values": D1_VALUES})
     assert r.status_code == 201, r.text
     d = r.json()
-    assert [s["title"] for s in d["sections"]] == ["项目概况", "范围确认", "工作分解与里程碑", "组织与沟通", "启动会议程"]
+    assert [s["title"] for s in d["sections"]] == D1_TITLES
     assert all(s["current_version"] == 1 for s in d["sections"])
     body = c.get(f"{_base(code, 'D1')}/sections/2").json()["body"]
     assert "- 现状评估\n- 运营体系设计" in body and "- 等保测评" in body
@@ -60,6 +75,12 @@ def test_get_form_and_submit_d1(proj):
     s1 = c.get(f"{_base(code, 'D1')}/sections/1").json()
     assert "2027-01-05 至 2027-03-31" in s1["body"] and "{" not in s1["body"]
     assert s1["versions"][0]["note"] == forms.NOTE
+    s6 = c.get(f"{_base(code, 'D1')}/sections/6").json()["body"]
+    assert "**问题升级路径**\n\n- 项目经理\n- 双方项目负责人" in s6
+    s9 = c.get(f"{_base(code, 'D1')}/sections/9").json()["body"]       # 顾问没填另行约定，固定段仍写入
+    assert s9.startswith("无论哪一档") and "保留 6 个月" in s9 and "严格档" not in s9
+    s10 = c.get(f"{_base(code, 'D1')}/sections/10").json()["body"]
+    assert "会后行动" not in s10                                       # 没填的会后行动整段去掉
 
     assert c.get(f"{_base(code, 'D1')}/form").json()["writable"] is False
     r = c.post(f"{_base(code, 'D1')}/form", json={"values": D1_VALUES})
@@ -67,7 +88,7 @@ def test_get_form_and_submit_d1(proj):
     with SessionLocal() as db:
         logs = list(db.scalars(select(AuditLog).where(AuditLog.project_code == code,
                                                       AuditLog.action == "deliverable.write")))
-    assert len(logs) == 5 and all("SOC 运营体系" not in str(x.detail) for x in logs)
+    assert len(logs) == 10 and all("SOC 运营体系" not in str(x.detail) for x in logs)
 
 
 def test_d2_agent_section_only_in_outline(proj):
@@ -110,6 +131,8 @@ def test_strict_needs_placeholders():
         r = c.post(f"{_base(strict, 'D1')}/form", json={"values": {**D1_VALUES, "goal": "江北农商银行 SOC 建设"}})
         assert r.status_code == 422 and r.json()["detail"]["kinds"] == ["机构名称"]
         assert c.post(f"{_base(strict, 'D1')}/form", json={"values": D1_VALUES}).status_code == 201
+        s9 = c.get(f"{_base(strict, 'D1')}/sections/9").json()["body"]   # 严格档固定段按档位写入
+        assert "严格档" in s9 and "摘要卡" in s9 and "标准档" not in s9
 
 
 def test_signed_refused(proj):
@@ -120,7 +143,25 @@ def test_signed_refused(proj):
     assert c.post(f"{_base(code, 'D1')}/form", json={"values": D1_VALUES}).status_code == 409
 
 
+def test_d1_ten_chapters_fixed_paragraphs():
+    f = forms.load_form("D1")
+    assert [s.title for s in f.sections] == D1_TITLES
+    data = f.sections[8]
+    assert set(data.fixed_by_tier) == {"standard", "strict"}
+    for word in ("口令", "密钥", "漏洞细节", "拓扑", "IP 地址规划", "个人信息样本"):
+        assert word in data.fixed                                     # 机密级五类与合同条款一致
+    assert "摘要卡" in data.fixed_by_tier["strict"] and "6 个月" in data.fixed_by_tier["standard"]
+    for s in f.sections:                                              # 资质边界：不出现结论性用语
+        for text in (s.fixed, *s.fixed_by_tier.values()):
+            assert "测评结论" not in text.replace("不出具等级保护测评结论", "")
+
+
 def test_bad_definition_rejected():
+    with pytest.raises(ValueError):
+        forms._parse({"code": "D1", "sections": [{"title": "甲", "fields": [{"key": "a", "prefill": "x"}],
+                                                  "template": "{a}"}]}, "D1")
+    with pytest.raises(ValueError):
+        forms._parse({"code": "D1", "sections": [{"title": "甲", "fixed_by_tier": {"gold": "x"}}]}, "D1")
     with pytest.raises(ValueError):
         forms._parse({"code": "D1", "sections": [{"title": "甲", "fields": [{"key": "a"}], "template": "{b}"}]}, "D1")
     with pytest.raises(ValueError):

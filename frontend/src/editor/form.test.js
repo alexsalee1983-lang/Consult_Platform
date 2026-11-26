@@ -43,3 +43,12 @@ test("只有空白算未填；超长与列表超 50 项报错", () => {
   const many = Array.from({ length: 51 }, (_, i) => `项${i}`).join("\n");
   assert.match(checkForm(FORM, { ...base, assumptions: many }).assumptions, /50/);
 });
+
+test("产品配置预填：default 作初值，没有 default 的为空串（#468）", () => {
+  const form = { sections: [{ title: "工作方法与方法论", fixed: "", drafted_by_agent: false, fields: [
+    { key: "frameworks", label: "依据框架与标准", type: "list", required: true, hint: "", max: 4000, default: "等保 2.0" },
+    { key: "approach", label: "方法说明", type: "textarea", required: false, hint: "", max: 2000 },
+  ] }] };
+  assert.deepEqual(emptyValues(form), { frameworks: "等保 2.0", approach: "" });
+  assert.deepEqual(checkForm(form, emptyValues(form)), {});
+});
