@@ -1,6 +1,6 @@
 """三期 B17②“我的任务”接口（规则见 app/project/my_tasks.py）。业务角色可用。
 
-GET  /api/my-tasks          七类待办合一，按影响 × 不确定度排好，超出每日额度的折叠
+GET  /api/my-tasks          各类待办合一（原工作台已并入），按影响 × 不确定度排好，超出每日额度的折叠
 POST /api/my-tasks/return   退回一项（记退回事件、排队由 Agent 重写）；不在本人待办里的 404
 """
 from fastapi import APIRouter, Depends, HTTPException
@@ -52,6 +52,7 @@ class MyTasksOut(BaseModel):
     weights: dict[str, float]
     kinds: dict[str, KindOut]
     tasks: list[TaskOut]
+    member_projects: int
 
 
 class ReturnIn(BaseModel):
@@ -74,7 +75,8 @@ def my_tasks(db: Session = Depends(get_db), user: User = Depends(current_user)) 
                      returnable=t.kind in mt.RETURNABLE and not t.blocked,
                      fields=[FieldOut(**f) for f in t.fields]) for t in s["tasks"]]
     return MyTasksOut(quota=s["quota"], folded=s["folded"], weights=s["weights"],
-                      kinds={k: KindOut(**v) for k, v in s["kinds"].items()}, tasks=tasks)
+                      kinds={k: KindOut(**v) for k, v in s["kinds"].items()}, tasks=tasks,
+                      member_projects=s["member_projects"])
 
 
 @router.post("/return", response_model=ReturnOut, status_code=202)
