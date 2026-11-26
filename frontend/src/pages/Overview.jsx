@@ -11,17 +11,19 @@ import RunPanel from "../components/RunPanel.jsx";
 // 证据、调研、评估、交付件、成员与保留期已挪到 输入 / 分析 / 输出 / 设置 页。
 
 // 行动条一张卡（设计稿 07 .act）：标签 + 大数字 + 一行说明；负责人 2026-11-26：原八个方块太占地方、字体不统一。
-function Card({ cap, value, sub, color, onClick }) {
+function Card({ cap, value, sub, color, onClick, children }) {
   const body = (
     <>
       <span className="cap">{cap}</span>
       <b className="act-v" style={{ color: color || "var(--tx)" }}>{value}</b>
       {sub && <span className="sub act-s" title={sub}>{sub}</span>}
+      {children}
     </>
   );
+  const style = { "--accent": color || "var(--ln2)" };   // 卡片顶边强调色随数值状态变
   return onClick
-    ? <button type="button" className="pnl act-card act-btn" onClick={onClick}>{body}</button>
-    : <div className="pnl act-card">{body}</div>;
+    ? <button type="button" className="pnl act-card act-btn" style={style} onClick={onClick}>{body}</button>
+    : <div className="pnl act-card" style={style}>{body}</div>;
 }
 
 export default function Overview({ code, focus }) {
@@ -71,7 +73,7 @@ export default function Overview({ code, focus }) {
       </div>
       <section className="act" aria-label="行动条">
         <div className="pnl act-card act-next">
-          <span className="cap">下一步 · 现在在 <span style={{ color: "var(--amber)" }}>{p.phase_name}</span></span>
+          <span className="cap"><i className="live" aria-hidden="true" />下一步 · 现在在 <span style={{ color: "var(--amber)" }}>{p.phase_name}</span></span>
           <span className="act-next-t">{todo[0] ? todo[0].title : "当前没有卡住的事项，按计划推进"}</span>
           <span className="sub">下一个里程碑：{p.next_milestone}</span>
         </div>
@@ -79,7 +81,9 @@ export default function Overview({ code, focus }) {
           sub={todo[0] ? `最先：${todo[0].title}` : "没有待你处理的事项"} onClick={() => setDrawer("todo")} />
         <Card cap="卡点" value={blocked} color={blocked ? "var(--crim)" : "var(--ok)"} sub="全景里标红的节点" />
         <Card cap="本周自动处理" value={pano ? autoDone(pano) : "—"} color="var(--ok)" sub="按交付链已完成步骤计" />
-        <Card cap="交付件" value={`${signed} / ${p.deliverables.length}`} sub="已签署 / 全部" />
+        <Card cap="交付件" value={`${signed} / ${p.deliverables.length}`} sub="已签署 / 全部" color="var(--cyan)">
+          <div className="bar" style={{ marginTop: 4 }}><i style={{ width: `${p.deliverables.length ? (100 * signed) / p.deliverables.length : 0}%`, background: "var(--cyan)" }} /></div>
+        </Card>
       </section>
       <Panorama code={p.code} data={pano} focus={focus} onOpen={setDrawer} />
       <section className="pnl pad" aria-label="阶段">

@@ -247,3 +247,22 @@ nav.tabs[aria-label="项目导航"] { position: sticky; top: 0; z-index: 5; back
 .flash rect { animation: flash 0.6s ease-in-out 4; stroke-width: 2; }
 @keyframes flash { 50% { stroke: var(--amber); fill: var(--amber-d); } }
 .full { padding: 14px; display: flex; flex-direction: column; gap: 14px; min-height: 100%; }
+
+/* 驾驶舱动效（负责人 2026-11-26：要有动感、更美观）：卡片依次浮现、悬停上浮、顶边强调色、状态点呼吸；系统要求减少动效时全部关掉 */
+.act-card { position: relative; overflow: hidden; border-top: 2px solid var(--accent, var(--ln2)); animation: rise .45s cubic-bezier(.2,.7,.2,1) both; transition: transform .18s, box-shadow .18s, border-color .18s, background .18s; }
+.act > :nth-child(2) { animation-delay: .06s; } .act > :nth-child(3) { animation-delay: .12s; }
+.act > :nth-child(4) { animation-delay: .18s; } .act > :nth-child(5) { animation-delay: .24s; }
+.act-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -12px var(--accent, var(--ln2)); }
+.act-next { border-top-color: var(--amber); background: linear-gradient(135deg, var(--amber-d), var(--s1) 75%); }
+.act-next::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, var(--amber-d) 50%, transparent 70%); background-size: 250% 100%; animation: sheen 6s ease-in-out infinite; }
+.live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); margin-right: 7px; vertical-align: 1px; animation: breathe 1.8s ease-in-out infinite; }
+.bar > i { transition: width .8s cubic-bezier(.2,.7,.2,1); }
+section[aria-label="项目全景"] { animation: rise .5s .2s cubic-bezier(.2,.7,.2,1) both; }
+.pn rect { transition: fill .15s, stroke-width .15s; }
+.pn:hover rect { fill: var(--s2); stroke-width: 2; }
+.pn-cur rect { stroke-width: 1.5; }
+.pn-blk circle, .pn-ai circle { animation: breathe 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes breathe { 50% { opacity: .35; transform: scale(1.35); } }
+@keyframes sheen { 0%, 60% { background-position: 150% 0; } 100% { background-position: -50% 0; } }
+@media (prefers-reduced-motion: reduce) { .act-card, .act-next::after, .live, .pn circle, section[aria-label="项目全景"] { animation: none !important; } .act-card:hover { transform: none; } }

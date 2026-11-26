@@ -78,7 +78,7 @@ export default function Sidebar() {
       { to: "/projects", icon: "proj", label: "我的项目" },
       ...(code ? [
         { to: `/project/${code}`, icon: "dash", label: "项目驾驶舱", end: true },
-        { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件审阅" },
+        { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件" },
         { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
       ] : []),
       ...(lead ? [{ group: "项目负责人" }, { to: "/portfolio", icon: "map", label: "项目总览" },

@@ -111,6 +111,14 @@ test("全景：按设计稿 07 行动条五张卡、“下一步”加宽高亮�
   expect(act.nextElementSibling.textContent).toContain("只看例外");
 });
 
+test("全景动效钩子：节点按状态带类名（卡住、AI 在做会呼吸），交付件卡带签署进度条", async () => {
+  stubOverview();
+  const c = await render(<Overview code="BANK-A" />);
+  expect(c.querySelectorAll("g.pn-blk").length).toBeGreaterThan(0);
+  const deliv = [...c.querySelectorAll(".act-card")].find((e) => e.textContent.includes("交付件"));
+  expect(deliv.querySelector(".bar > i")).toBeTruthy();
+});
+
 test("全景抽屉：待你处理按影响排，点确认卡就地打开，Esc 关闭", async () => {
   stubOverview();
   const c = await render(<Overview code="BANK-A" />);
