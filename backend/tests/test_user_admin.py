@@ -228,6 +228,9 @@ def test_lookup_returns_only_active_business_users():
         assert [u["username"] for u in got] == ["look_cons"]
         assert set(got[0]) == {"username", "display_name"}
         assert c.get("/api/users/lookup", params={"q": "%"}).json() == []   # % 不当通配符
-        assert c.get("/api/users/lookup").status_code == 422
+        # 不带查询词：列出全部可加入项目的同事供勾选（负责人 2026-11-26），仍只含启用中的业务角色
+        names = [u["username"] for u in c.get("/api/users/lookup").json()]
+        assert "look_cons" in names and not {"look_admin", "look_aud", "look_none", "look_off"} & set(names)
+        assert names == sorted(names)
     finally:
         c.__exit__(None, None, None)
