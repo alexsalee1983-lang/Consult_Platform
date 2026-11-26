@@ -103,10 +103,28 @@ def totp_code(secret: str, step_offset: int = 0) -> str:
     return pyotp.TOTP(secret).at(time.time() + 30 * step_offset)
 
 
+_USED_STEP: dict[str, int] = {}  # 密钥 → 已登录成功用过的最大时间步（服务端防重放拒绝 ≤ 它的步，#505）
+
+
+def _fresh_step(secret: str) -> int:
+    """取一个服务端还没用过的时间步：当前步已用就取下一步（服务端接受 ±1 步），下一步也用了就等到下一个 30 秒。"""
+    while True:
+        cur = int(time.time() // 30)
+        step = max(cur, _USED_STEP.get(secret, -1) + 1)
+        if step <= cur + 1:
+            return step
+        time.sleep(30 - time.time() % 30 + 0.05)
+
+
 def login(client, username: str = TEST_USER, password: str = TEST_PASSWORD, secret: str = TEST_TOTP_SECRET,
-          step_offset: int = 0):
-    return client.post("/api/auth/login", json={"username": username, "password": password,
-                                                "totp": totp_code(secret, step_offset)})
+          step_offset: int | None = None):
+    """step_offset 不传时自动避开同一密钥已用过的时间步；显式传入则照用（测重放的用例需要）。"""
+    step = _fresh_step(secret) if step_offset is None else int(time.time() // 30) + step_offset
+    r = client.post("/api/auth/login", json={"username": username, "password": password,
+                                             "totp": pyotp.TOTP(secret).at(step * 30)})
+    if r.status_code == 200:
+        _USED_STEP[secret] = max(step, _USED_STEP.get(secret, -1))
+    return r
 
 
 @pytest.fixture(scope="session", autouse=True)
