@@ -18,6 +18,7 @@ PROTECTED = [
     ("GET", "/api/projects"),
     ("GET", "/api/portfolio"),
     ("GET", "/api/indicators"),
+    ("GET", "/api/projects/BANK-A/automation"),
     ("GET", "/api/quality-incidents"),
     ("POST", "/api/quality-incidents"),
     ("GET", "/api/quality-incidents/1"),
