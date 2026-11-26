@@ -143,6 +143,29 @@ chain:
   output: ''
   query: SOC 能力 差距分析 等保 基线
   instruction: 任务：交付链第 4 步。以下面的 D3 事实清单为输入，对照评估基线（SOC 能力框架、等保 2.0、行业要求，依据只能来自知识库检索结果，没有的标【依据待核实】）做差距分析：按能力域（{domains}）输出差距分析表（能力域、能力项、现状、要求与依据、差距、证据充分性、影响和可能性各按高 / 中 / 低）、按能力域的成熟度初判表（现状、目标各 1～5 分，带依据）、业务影响 TOP 5、依据库缺口。证据不足的项列出来并发“证据不足”确认卡。用“差距分析、符合性初判”的说法，不出具测评或认证结论。
+- key: draft
+  number: 4
+  name: 现状评估报告初稿
+  agent: report-writer
+  inputs:
+  - run:gap
+  - D3
+  output: D4
+  query: SOC 现状评估报告 差距 建议
+  instruction: 任务：交付链第 {number} 步。差距分析之后、发现表经顾问确认后起草，此时还没有方案设计。根据下面的差距分析和 D3 事实清单，起草 D4 现状评估报告初稿：评估范围与方法、现状概述、主要差距与业务影响、依据说明、后续建议方向。结论必须来自差距分析，并标注证据编号和依据；这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、差距分析表原样照搬、确认卡、“测试”“内部”等字样），差距分析的结论改写成报告语言。单列一章“成熟度初判”，照差距分析的成熟度初判表写一张表（表头：能力域 | 现状（1～5） | 目标（1～5） | 依据），顾问审核时直接改分数，签署后驾驶舱以这张表为准；称“成熟度初判”，不写成等级结论。
+  # 三期 C10 槽位规格 v0（公开方法版，规划会话起草，逐条待 zj1 在试用机勾选，专家清单 E16）：
+  # D4 四个关键章节 ch1 评估范围与方法、ch2 主要差距与业务影响、ch3 依据说明、ch4 成熟度初判与后续建议方向。
+  # v0 全部 required: false，专家勾选前不发“知识不足”卡；chapter 与知识条目的 slot 字段同一写法。
+  slots:
+  - {id: d4-ch1-method, chapter: SOC.D4.ch1, type: MTD, query: SOC 现状评估 范围界定 评估方法 证据规则, need: 2, required: false, expert_review: pending}
+  - {id: d4-ch1-tpl, chapter: SOC.D4.ch1, type: TPL, query: SOC 现状评估报告 结构 模板, need: 1, required: false, expert_review: pending}
+  - {id: d4-ch2-method, chapter: SOC.D4.ch2, type: MTD, query: 差距 业务影响 可能性 排序 根因 写法, need: 2, required: false, expert_review: pending}
+  - {id: d4-ch2-pit, chapter: SOC.D4.ch2, type: PIT, query: SOC 差距分析 常见坑 基线 资产清单, need: 1, required: false, expert_review: pending}
+  - {id: d4-ch3-src, chapter: SOC.D4.ch3, type: SRC, query: 网络安全法 等级保护 安全监测 事件报告 条款, need: 3, required: false, expert_review: pending}
+  - {id: d4-ch3-ref, chapter: SOC.D4.ch3, type: REF, query: 等保 2.0 安全监测 集中管控 行业监管 依据解读, need: 2, required: false, expert_review: pending}
+  - {id: d4-ch3-method, chapter: SOC.D4.ch3, type: MTD, query: 依据引用 条款号 核对 依据待核实 写法, need: 1, required: false, expert_review: pending}
+  - {id: d4-ch4-method, chapter: SOC.D4.ch4, type: MTD, query: SOC 成熟度初判 评分锚定 抽样 目标分, need: 2, required: false, expert_review: pending}
+  - {id: d4-ch4-pit, chapter: SOC.D4.ch4, type: PIT, query: 成熟度 打分虚高 平均值陷阱, need: 1, required: false, expert_review: pending}
 - key: design
   number: 5
   name: 目标运营模型设计
@@ -174,29 +197,6 @@ chain:
   - {id: d6-ch4-tpl, chapter: SOC.D6.ch4, type: TPL, query: 交接班记录 事件报告 复盘 记录表单 模板, need: 2, required: false, expert_review: pending}
   - {id: d6-ch5-metric, chapter: SOC.D6.ch5, type: MTD, query: SOC 考核 人员绩效指标 SLA, need: 2, required: false, expert_review: pending}
   - {id: d6-ch6-pit, chapter: SOC.D6.ch6, type: PIT, query: 制度落地 无演练 升级无授权 静默知识, need: 2, required: false, expert_review: pending}
-- key: draft
-  number: 7
-  name: 现状评估报告初稿
-  agent: report-writer
-  inputs:
-  - run:gap
-  - D3
-  output: D4
-  query: SOC 现状评估报告 差距 建议
-  instruction: 任务：交付链第 7 步。根据下面的差距分析和 D3 事实清单，起草 D4 现状评估报告初稿：评估范围与方法、现状概述、主要差距与业务影响、依据说明、后续建议方向。结论必须来自差距分析，并标注证据编号和依据；这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、差距分析表原样照搬、确认卡、“测试”“内部”等字样），差距分析的结论改写成报告语言。单列一章“成熟度初判”，照差距分析的成熟度初判表写一张表（表头：能力域 | 现状（1～5） | 目标（1～5） | 依据），顾问审核时直接改分数，签署后驾驶舱以这张表为准；称“成熟度初判”，不写成等级结论。
-  # 三期 C10 槽位规格 v0（公开方法版，规划会话起草，逐条待 zj1 在试用机勾选，专家清单 E16）：
-  # D4 四个关键章节 ch1 评估范围与方法、ch2 主要差距与业务影响、ch3 依据说明、ch4 成熟度初判与后续建议方向。
-  # v0 全部 required: false，专家勾选前不发“知识不足”卡；chapter 与知识条目的 slot 字段同一写法。
-  slots:
-  - {id: d4-ch1-method, chapter: SOC.D4.ch1, type: MTD, query: SOC 现状评估 范围界定 评估方法 证据规则, need: 2, required: false, expert_review: pending}
-  - {id: d4-ch1-tpl, chapter: SOC.D4.ch1, type: TPL, query: SOC 现状评估报告 结构 模板, need: 1, required: false, expert_review: pending}
-  - {id: d4-ch2-method, chapter: SOC.D4.ch2, type: MTD, query: 差距 业务影响 可能性 排序 根因 写法, need: 2, required: false, expert_review: pending}
-  - {id: d4-ch2-pit, chapter: SOC.D4.ch2, type: PIT, query: SOC 差距分析 常见坑 基线 资产清单, need: 1, required: false, expert_review: pending}
-  - {id: d4-ch3-src, chapter: SOC.D4.ch3, type: SRC, query: 网络安全法 等级保护 安全监测 事件报告 条款, need: 3, required: false, expert_review: pending}
-  - {id: d4-ch3-ref, chapter: SOC.D4.ch3, type: REF, query: 等保 2.0 安全监测 集中管控 行业监管 依据解读, need: 2, required: false, expert_review: pending}
-  - {id: d4-ch3-method, chapter: SOC.D4.ch3, type: MTD, query: 依据引用 条款号 核对 依据待核实 写法, need: 1, required: false, expert_review: pending}
-  - {id: d4-ch4-method, chapter: SOC.D4.ch4, type: MTD, query: SOC 成熟度初判 评分锚定 抽样 目标分, need: 2, required: false, expert_review: pending}
-  - {id: d4-ch4-pit, chapter: SOC.D4.ch4, type: PIT, query: 成熟度 打分虚高 平均值陷阱, need: 1, required: false, expert_review: pending}
 - key: design_doc
   number: 7
   name: 设计方案成稿

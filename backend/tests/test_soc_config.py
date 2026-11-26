@@ -12,7 +12,7 @@ from app.project import runs
 
 OLD_STEPS = [("facts", 3, "research-interview", "D3", "整理事实清单"),
              ("gap", 4, "compliance-basis", "", "差距分析"),
-             ("draft", 7, "report-writer", "D4", "现状评估报告初稿")]
+             ("draft", 4, "report-writer", "D4", "现状评估报告初稿")]   # 四期 D4 前移（负责人 2026-11-25）：原第 7 步
 OLD_QUERIES = {"facts": "SOC 运营现状 事实 调研", "gap": "SOC 能力 差距分析 等保 基线", "draft": "SOC 现状评估报告 差距 建议"}
 OLD_INSTRUCTIONS = {
     "facts": "任务：交付链第 3 步。根据下面的本项目证据，整理 D3 事实清单：按 SOC 能力域（组织与人员、流程、"
@@ -37,6 +37,9 @@ CHANGES = [
      "差距分析的结论改写成报告语言。单列一章“成熟度初判”，照差距分析的成熟度初判表写一张表（表头：能力域 | "
      "现状（1～5） | 目标（1～5） | 依据），顾问审核时直接改分数，签署后驾驶舱以这张表为准；称“成熟度初判”，"
      "不写成等级结论。"),
+    # 四期 D4（负责人 2026-11-25 同意）：D4 起草前移到差距分析之后，发现表经顾问确认后起草
+    ("draft", "任务：交付链第 7 步。根据下面",
+     "任务：交付链第 4 步。差距分析之后、发现表经顾问确认后起草，此时还没有方案设计。根据下面"),
     # 四期 #461（负责人 11-25 同意“四格演练+就绪度总表”主线）：D3 配了大纲，快照自动在任务说明末尾加章节提示
     ("facts", "只写证据里有的事实，不推测现状。",
      "只写证据里有的事实，不推测现状。\nD3 必须包含这些章节（按这个顺序，章节标题保留这些字样，可在章下细分）："
@@ -56,11 +59,11 @@ def test_soc_chain_unchanged() -> None:
     """一期的 3→4→7 三步原样保留；A5 补的步骤（第 5、6 步和第 7 步 D5、D7、D8）另行验收，这里只核对位置。"""
     chain = [s for s in runs.chain_of(config.compose_codes("SOC")) if s.key in OLD_QUERIES]
     assert [s.key for s in runs.chain_of(config.compose_codes("SOC"))] == [
-        "facts", "gap", "design", "policy", "draft", "design_doc", "roadmap", "briefing"]
+        "facts", "gap", "draft", "design", "policy", "design_doc", "roadmap", "briefing"]
     assert [(s.key, s.number, s.agent, s.deliverable, s.name) for s in chain] == OLD_STEPS
     assert {s.key: s.instruction for s in chain} == _expected()
     assert {s.key: s.query for s in chain} == OLD_QUERIES
-    assert {s.key: f"第 {s.number} 步 {s.name}" for s in chain} == {"facts": "第 3 步 整理事实清单", "gap": "第 4 步 差距分析", "draft": "第 7 步 现状评估报告初稿"}
+    assert {s.key: f"第 {s.number} 步 {s.name}" for s in chain} == {"facts": "第 3 步 整理事实清单", "gap": "第 4 步 差距分析", "draft": "第 4 步 现状评估报告初稿"}
     assert [s.inputs for s in chain] == [("evidence",), ("D3",), ("run:gap", "D3")]
 
 

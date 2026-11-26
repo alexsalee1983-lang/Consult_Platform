@@ -23,7 +23,8 @@ from ..models import Agent, Confirmation, Project, User
 from ..services import guard
 from . import deliverables, judgment
 
-KINDS = ("方案取舍", "来源冲突", "证据不足", "范围确认", "入库确认", "知识不足")   # 知识不足：三期 A12，平台按槽位发
+KINDS = ("方案取舍", "来源冲突", "证据不足", "范围确认", "入库确认", "知识不足",   # 知识不足：三期 A12，平台按槽位发
+         "发现表确认")                                                     # 四期 D4：差距分析后平台发（runs）
 MAX_OPTIONS = 6
 MAX_OPTION_CHARS = 500
 MAX_TEXT = 4000
