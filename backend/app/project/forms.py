@@ -49,6 +49,7 @@ class Field:
     prefill: str = ""
     columns: tuple[str, ...] = ()
     default: str = ""
+    example: str = ""     # 填写示例（只用虚拟客户），显示在输入框下方供顾问参考
 
 
 @dataclass(frozen=True)
@@ -93,7 +94,7 @@ def _parse(data: dict, code: str) -> Form:
                 raise ValueError(f"forms/{code}.yaml 字段 {key!r}：table 要写 columns，其他类型不写")
             seen.add(key)
             fields.append(Field(key, str(f.get("label") or key), ftype, bool(f.get("required")), str(f.get("hint") or ""),
-                                prefill, columns, str(f.get("default") or "").strip()))
+                                prefill, columns, str(f.get("default") or "").strip(), str(f.get("example") or "").strip()))
         template = str(s.get("template") or "")
         unknown = set(_REF.findall(template)) - {f.key for f in fields}
         if unknown or (fields and not template):
@@ -168,7 +169,7 @@ def schema(form: Form, tier: str = "standard", product: object | None = None, pr
     return {"code": form.code, "title": form.title,
             "sections": [{"title": s.title, "fixed": s.fixed_for(tier), "drafted_by_agent": not s.fields and not s.fixed_for(tier),
                           "fields": [{"key": f.key, "label": f.label, "type": f.type, "required": f.required,
-                                      "hint": f.hint, "max": MAX_FIELD[f.type], "columns": list(f.columns),
+                                      "hint": f.hint, "max": MAX_FIELD[f.type], "columns": list(f.columns), "example": f.example,
                                       "default": pre.get(f.prefill) or f.default}
                                      for f in s.fields]}
                          for s in form.sections]}

@@ -4,6 +4,11 @@ import { useMemo, useState } from "react";
 import { api } from "../api.js";
 import { checkForm, emptyValues, joinRows, listCount, MAX_LIST_ITEMS, splitRows } from "../editor/form.js";
 
+// 负责人 2026-11-26：每个输入框下方常驻填写示例（虚拟客户），预填后输入框不空也看得到
+function Example({ text }) {
+  return text ? <div className="sub form-ex">示例：{text}</div> : null;
+}
+
 // A28①：表格字段按行按格编辑，存回“每行一条、格间全角竖线”的文本（与后端一致）
 function TableField({ f, value, onChange }) {
   const n = f.columns.length;
@@ -82,6 +87,7 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel })
                     <span>{f.label}{f.required ? " *" : ""}</span>
                     <TableField f={f} value={v} onChange={put} />
                     <span className="sub">{f.hint}{err ? <span className="err"> · {err}</span> : null}</span>
+                    <Example text={f.example} />
                   </div>
                 );
               }
@@ -91,9 +97,10 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel })
                 <label key={f.key} className="field" style={{ display: "block", marginTop: 8 }}>
                   <span>{f.label}{f.required ? " *" : ""}</span>
                   {f.type === "text"
-                    ? <input value={v} onChange={set} placeholder={f.hint || ""} aria-invalid={!!err} />
-                    : <textarea rows={f.type === "list" ? 4 : 3} value={v} onChange={set} placeholder={f.hint || (f.type === "list" ? "每行一项" : "")} aria-invalid={!!err} />}
-                  <span className="sub">{count}{err ? <span className="err"> · {err}</span> : null}</span>
+                    ? <input value={v} onChange={set} placeholder={f.example || f.hint || ""} aria-invalid={!!err} />
+                    : <textarea rows={f.type === "list" ? 4 : 3} value={v} onChange={set} placeholder={f.example || f.hint || (f.type === "list" ? "每行一项" : "")} aria-invalid={!!err} />}
+                  <span className="sub">{f.hint ? `${f.hint} · ` : ""}{count}{err ? <span className="err"> · {err}</span> : null}</span>
+                  <Example text={f.example} />
                 </label>
               );
             })}

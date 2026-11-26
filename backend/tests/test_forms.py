@@ -202,6 +202,18 @@ def test_d1_a28_simplified_prefill_and_tables(proj):
     assert "| 风险 | 应对 |" in s8
 
 
+def test_every_field_has_example(proj):
+    """负责人 2026-11-26：每个输入框都要有填写示例给顾问参考（只用虚拟客户）。"""
+    for code in ("D1", "D2"):
+        form = forms.load_form(code)
+        assert form is not None
+        for f in form.fields():
+            assert f.example.strip(), f"{code}.{f.key} 缺填写示例"
+    code, c = proj
+    fields = {f["key"]: f for s in c.get(f"{_base(code, 'D1')}/form").json()["sections"] for f in s["fields"]}
+    assert "BANK-A" in fields["goal"]["example"]
+
+
 def test_table_cells_normalized():
     f = forms.Field("t", "表", "table", columns=("甲", "乙"))
     form = forms.Form("D1", "x", (forms.Section("章", (f,), "{t}"),))
