@@ -24,6 +24,7 @@ esac
 # 本 PR 改动的文件；取不到基线时按“全部改动”处理（保守，不放松阻断）
 changed_files=""
 all_changed=0
+compose_added=""
 if [ "$mode" = tiered ]; then
   if [ -n "$BASE_SHA" ] && { git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch -q --depth=1 origin "$BASE_SHA"; } \
      && changed_files=$(git diff --name-only "$BASE_SHA" HEAD); then
