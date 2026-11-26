@@ -214,3 +214,28 @@ def test_import_auto_manifest_needs_as_and_hands_csv_to_publish(tmp_path, monkey
     monkeypatch.setattr(cli, "kb_source_publish", fake_publish)
     assert cli.main(["kb-acquire-import", str(b), "--auto-manifest", "--as", "kbadmin"]) == 0
     assert "测试来源" in seen["csv"] and seen["dir"] == str(b)
+
+
+def test_weekly_job_patrols_active_sources_into_dispatch():
+    """正式来源每周自动登记定时巡检缺口，白名单内直接进下发包；同一周重复跑不重复计，采集关闭后下周再开。"""
+    with SessionLocal() as db:
+        _active_source(db, GP)
+        db.add(KbSource(code="SR-G9998", name="试用来源", url="https://gp.example.gov.cn/trial/", host="gp.example.gov.cn",
+                        license="公开发布", authority_kind="法律", authority_level=1, status="trial", created_by="t"))
+        db.commit()
+    gap_pool._job({"today": TODAY.isoformat()}, None)
+    gap_pool._job({"today": TODAY.isoformat()}, None)          # 同一周再跑一次
+    with SessionLocal() as db:
+        g = db.scalar(select(KbGap).where(KbGap.gap_key == GP))
+        assert g is not None and g.plan == "direct" and g.kinds == {"schedule": 1}
+        assert db.scalar(select(KbGap).where(KbGap.gap_key.like("%/trial/%"))) is None   # 只巡检正式来源
+        assert [t["url"] for t in gap_pool.dispatch_package(db)["tasks"]] == [GP]
+        gap_pool.close(db, GP, "collected")
+    gap_pool._job({"today": TODAY.isoformat()}, None)          # 本周已采集，不再打开
+    with SessionLocal() as db:
+        assert db.scalar(select(KbGap.status).where(KbGap.gap_key == GP)) == "closed"
+    gap_pool._job({"today": (TODAY + timedelta(days=7)).isoformat()}, None)   # 下周再巡检
+    with SessionLocal() as db:
+        g = db.scalar(select(KbGap).where(KbGap.gap_key == GP))
+        assert g.status == "open" and g.plan == "direct" and g.reopened == 1
+
