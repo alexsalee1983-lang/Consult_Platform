@@ -119,6 +119,15 @@ test("全景动效钩子：节点按状态带类名（卡住、AI 在做会呼�
   expect(deliv.querySelector(".bar > i")).toBeTruthy();
 });
 
+test("全景：项目只有项目经理一人时，“下一步”提示先添加成员并链到设置页", async () => {
+  stubOverview();
+  stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
+  const c = await render(<Overview code="BANK-A" />);
+  const next = c.querySelector(".act-next");
+  expect(next.textContent).toContain("先添加项目成员");
+  expect(next.querySelector('a[href="/project/BANK-A/settings"]')).toBeTruthy();
+});
+
 test("全景抽屉：待你处理按影响排，点确认卡就地打开，Esc 关闭", async () => {
   stubOverview();
   const c = await render(<Overview code="BANK-A" />);

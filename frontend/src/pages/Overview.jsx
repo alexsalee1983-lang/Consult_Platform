@@ -34,6 +34,7 @@ export default function Overview({ code, focus }) {
 
   const [evs, setEvs] = useState(null);
   const [pano, setPano] = useState(null);
+  const [members, setMembers] = useState(null);
   const [drawer, setDrawer] = useState(null);         // "todo" | "drawer:run" | "drawer:card:{id}"
   const navigate = useNavigate();
   const load = useCallback(() => {
@@ -41,6 +42,7 @@ export default function Overview({ code, focus }) {
     api.project(code).then(setP).catch(setError);
     api.evidences(code).then(setEvs).catch(() => setEvs([]));
     api.panorama(code).then(setPano).catch(() => setPano(null));
+    api.members(code).then(setMembers).catch(() => setMembers(null));
   }, [code]);
   useEffect(load, [load]);
   const close = useCallback(() => setDrawer(null), []);
@@ -54,6 +56,7 @@ export default function Overview({ code, focus }) {
   const drafting = p.deliverables.filter((d) => d.status === "drafting").map((d) => d.code);
   const count = (k) => (evs || []).filter((e) => e.kind === k).length;
   const todo = pano ? todos(pano) : [];
+  const alone = members?.length === 1;
   const blocked = pano ? pano.nodes.filter((n) => n.status === "blk").length : 0;
   const card = drawer?.startsWith("drawer:card:") ? p.confirmations.find((c) => `drawer:card:${c.id}` === drawer) : null;
   const doTodo = (t) => (t.target.startsWith("drawer:") ? setDrawer(t.target) : navigate(t.target));
@@ -74,7 +77,9 @@ export default function Overview({ code, focus }) {
       <section className="act" aria-label="行动条">
         <div className="pnl act-card act-next">
           <span className="cap"><i className="live" aria-hidden="true" />下一步 · 现在在 <span style={{ color: "var(--amber)" }}>{p.phase_name}</span></span>
-          <span className="act-next-t">{todo[0] ? todo[0].title : "当前没有卡住的事项，按计划推进"}</span>
+          {alone   // 新项目只有项目经理一人时先提示加成员（负责人 2026-11-26）
+            ? <Link className="act-next-t" to={`${base}/settings`} style={{ color: "var(--tx)" }}>先添加项目成员 → 去设置页勾选同事</Link>
+            : <span className="act-next-t">{todo[0] ? todo[0].title : "当前没有卡住的事项，按计划推进"}</span>}
           <span className="sub">下一个里程碑：{p.next_milestone}</span>
         </div>
         <Card cap="待你处理" value={todo.length} color={todo.length ? "var(--amber)" : "var(--ok)"}
