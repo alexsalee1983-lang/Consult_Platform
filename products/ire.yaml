@@ -207,3 +207,27 @@ strict:
   - 恢复与业务连续性
   - 通报与报告
   - 治理与改进
+# 四期 C21（草稿，待产品专家复核）：资料需求清单、受访角色画像、客户自评问卷，全景客户行与答案池（A25/E3）读取。
+# 受访角色、预填来源与题库同一词表（docs/题库格式.md）；资料只要统计与配置摘要，不收机密级内容。
+inputs:
+  materials:
+  - {id: M-01, name: 事件处置记录与时间线（去标识）, provider: 安全负责人, blocks: {step: facts, deliverables: [D3, D4]}, prefill: incident_record, required: true}
+  - {id: M-02, name: 受影响系统与业务清单（类别与数量）, provider: IT运维, blocks: {step: facts, deliverables: [D3, D4]}, prefill: asset_list, required: true}
+  - {id: M-03, name: 事件期间告警与日志统计摘要, provider: 安全分析, blocks: {step: gap, deliverables: [D4]}, prefill: siem_stats, required: true}
+  - {id: M-04, name: 应急预案与处置剧本目录, provider: 安全负责人, blocks: {step: policy, deliverables: [D6]}, prefill: runbooks, required: true}
+  - {id: M-05, name: 对外通报与监管报送记录（去标识）, provider: 合规风控, blocks: {step: gap, deliverables: [D4]}, prefill: incident_record, required: false}
+  - {id: M-06, name: 安全管理制度与职责文件, provider: 安全负责人, blocks: {step: design, deliverables: [D5]}, prefill: policy_docs, required: false}
+  - {id: M-07, name: 恢复与业务连续性演练记录摘要, provider: 业务负责人, blocks: {step: gap, deliverables: [D4, D5]}, prefill: prior_report, required: false}
+  personas:
+  - {id: P-01, role: 安全负责人, focus: [事件经过与影响, 响应与处置, 治理与改进], depth: [quick, full, deep], minutes: 60}
+  - {id: P-02, role: 安全分析, focus: [检测与监测, 响应与处置], depth: [full, deep], minutes: 60}
+  - {id: P-03, role: IT运维, focus: [防护, 恢复与业务连续性], depth: [full, deep], minutes: 45}
+  - {id: P-04, role: 业务负责人, focus: [事件经过与影响, 恢复与业务连续性], depth: [quick, full, deep], minutes: 30}
+  - {id: P-05, role: 合规风控, focus: [通报与报告], depth: [full, deep], minutes: 30}
+  - {id: P-06, role: 管理层, focus: [治理与改进], depth: [quick, full, deep], minutes: 30}
+  questionnaire:
+    channels: [self]
+    kinds: [closed]
+    domains: [防护, 检测与监测, 响应与处置, 恢复与业务连续性, 治理与改进]
+    max_questions: 25
+    due_days: 3

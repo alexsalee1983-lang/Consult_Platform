@@ -215,3 +215,26 @@ strict:
   - 物理控制
   - 技术控制
   - 绩效评价与改进
+# 四期 C21（草稿，待产品专家复核）：资料需求清单、受访角色画像、客户自评问卷，全景客户行与答案池（A25/E3）读取。
+# 受访角色、预填来源与题库同一词表（docs/题库格式.md）；资料只要统计与配置摘要，不收机密级内容。
+inputs:
+  materials:
+  - {id: M-01, name: 拟定体系范围、组织架构与职责文件, provider: 安全负责人, blocks: {step: facts, deliverables: [D3, D4]}, prefill: org_chart, required: true}
+  - {id: M-02, name: 现行信息安全制度与记录清单, provider: 安全负责人, blocks: {step: gap, deliverables: [D4, D6]}, prefill: policy_docs, required: true}
+  - {id: M-03, name: 信息资产清单（类别与数量）, provider: IT运维, blocks: {step: risk, deliverables: [D5]}, prefill: asset_list, required: true}
+  - {id: M-04, name: 现有风险登记册或风险评估结果摘要, provider: 合规风控, blocks: {step: risk, deliverables: [D5]}, prefill: risk_register, required: false}
+  - {id: M-05, name: 人员入职、调岗、离职与培训记录统计, provider: 人力行政, blocks: {step: gap, deliverables: [D4]}, prefill: policy_docs, required: false}
+  - {id: M-06, name: 机房与办公区物理访问管理记录摘要, provider: 人力行政, blocks: {step: gap, deliverables: [D4]}, prefill: policy_docs, required: false}
+  - {id: M-07, name: 以往内审、管理评审或外部检查的问题清单, provider: 合规风控, blocks: {step: gap, deliverables: [D4]}, prefill: prior_report, required: false}
+  personas:
+  - {id: P-01, role: 管理层, focus: [体系范围与领导作用, 绩效评价与改进], depth: [quick, full, deep], minutes: 30}
+  - {id: P-02, role: 安全负责人, focus: [体系范围与领导作用, 风险评估与处置, 组织控制, 绩效评价与改进], depth: [quick, full, deep], minutes: 60}
+  - {id: P-03, role: 合规风控, focus: [风险评估与处置, 组织控制], depth: [full, deep], minutes: 45}
+  - {id: P-04, role: 人力行政, focus: [人员控制, 物理控制], depth: [full, deep], minutes: 45}
+  - {id: P-05, role: IT运维, focus: [技术控制, 物理控制], depth: [full, deep], minutes: 60}
+  questionnaire:
+    channels: [self]
+    kinds: [closed]
+    domains: [组织控制, 人员控制, 物理控制, 技术控制, 绩效评价与改进]
+    max_questions: 35
+    due_days: 5

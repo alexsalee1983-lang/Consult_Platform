@@ -282,3 +282,26 @@ interview:
 # D2：d2-ch1-method MTD 访谈设计 现场观察(2)；d2-ch2-list MTD 资料需求清单(1)；
 #     d2-ch3-role MTD 干系人地图 受访角色(1)；d2-ch4-tpl TPL 访谈提纲 管理层 分析师 行业问题清单(2)；
 #     d2-ch4-pit PIT 访谈偏差(1)
+# 四期 C21（草稿，待产品专家复核）：资料需求清单、受访角色画像、客户自评问卷，全景客户行与答案池（A25/E3）读取。
+# 受访角色、预填来源与题库同一词表（docs/题库格式.md）；资料只要统计与配置摘要，不收机密级内容。
+inputs:
+  materials:
+  - {id: M-01, name: 组织架构与安全岗位职责文件, provider: 安全负责人, blocks: {step: facts, deliverables: [D3, D4]}, prefill: org_chart, required: true}
+  - {id: M-02, name: 安全运营相关制度与流程清单, provider: 安全负责人, blocks: {step: facts, deliverables: [D3, D6]}, prefill: policy_docs, required: true}
+  - {id: M-03, name: 监控对象与日志源清单（类别与数量）, provider: IT运维, blocks: {step: facts, deliverables: [D3, D5]}, prefill: asset_list, required: true}
+  - {id: M-04, name: 近 3 个月告警量与处置统计, provider: 运营值班, blocks: {step: gap, deliverables: [D4]}, prefill: siem_stats, required: true}
+  - {id: M-05, name: 近 3 个月安全工单导出（去标识，只留类别与时长）, provider: 安全分析, blocks: {step: gap, deliverables: [D4]}, prefill: ticket_export, required: false}
+  - {id: M-06, name: 现有处置手册与值班手册目录, provider: 运营值班, blocks: {step: policy, deliverables: [D6]}, prefill: runbooks, required: false}
+  - {id: M-07, name: 以往安全评估或检查报告的问题清单, provider: 安全负责人, blocks: {step: gap, deliverables: [D4]}, prefill: prior_report, required: false}
+  personas:
+  - {id: P-01, role: 安全负责人, focus: [组织与人员, 流程, 度量与改进], depth: [quick, full, deep], minutes: 60}
+  - {id: P-02, role: 运营值班, focus: [流程, 技术平台与数据源], depth: [full, deep], minutes: 45}
+  - {id: P-03, role: 安全分析, focus: [流程, 技术平台与数据源, 度量与改进], depth: [full, deep], minutes: 60}
+  - {id: P-04, role: IT运维, focus: [技术平台与数据源], depth: [full, deep], minutes: 45}
+  - {id: P-05, role: 管理层, focus: [组织与人员, 度量与改进], depth: [quick, full, deep], minutes: 30}
+  questionnaire:
+    channels: [self]
+    kinds: [closed]
+    domains: [组织与人员, 流程, 技术平台与数据源, 度量与改进]
+    max_questions: 30
+    due_days: 5
