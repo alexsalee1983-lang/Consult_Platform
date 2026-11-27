@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # 四期 B25：试用机 / 部署机上的采集闭环定时同步（平台侧）。平台从不访问采集机，只经私有资料仓 Consult_Knowledge 交换。
 #   1) 拉资料仓；2) kb-acquire-dispatch 出本周下发包，有任务就写 dispatch/<日期>-<主机>.json 提交推送（采集机每小时取）；
-#   3) 资料仓 sources/returns/ 下新出现的回传批次（含 manifest.json）逐个 kb-acquire-import --auto-manifest 入库。
+#   3) 资料仓 sources/returns/ 下新出现的回传批次（含 manifest.json）逐个 kb-acquire-import --auto-manifest 入库；
+#   4) 资料仓 question_bank/*.yaml 有变化就 survey-import 导入调研题库（按题号增改，内容不变不重跑）。
 # 配置（环境变量或 scripts/kb_acquire_sync.env）：
 #   COMPOSE_DIR   平台 compose 目录（默认本仓库根）
 #   KB_REPO       资料仓在宿主机的路径（须就是 .env 里 KB_DOWNLOADS_DIR，或其上级 / 下级按 KB_CONTAINER_ROOT 对应）
 #   KB_CONTAINER_ROOT  KB_REPO 在后端容器里的路径（默认 /srv/knowledge/downloads）
 #   KB_IMPORT_AS  入库发起人（知识管理员账号，必填）
-#   KB_SYNC_STATE 已导入批次记录（默认 $HOME/.kb_acquire_sync.done）
+#   KB_SYNC_STATE 已导入批次记录（默认 $HOME/.kb_acquire_sync.done；题库指纹记在同名 .qbank 文件）
 #   KB_SYNC_HOST  下发包文件名里的主机标识（默认 hostname -s）
 # 建议 cron：17 * * * * bash <仓库>/scripts/kb_acquire_sync.sh >> $HOME/kb_acquire_sync.log 2>&1
 set -euo pipefail
@@ -57,4 +58,16 @@ for m in "$KB_REPO"/sources/returns/*/manifest.json; do
     echo "回传批次 $id 导入失败，下轮重试"
   fi
 done
+# 调研题库：题库文件指纹变了才导入；导入失败不记指纹，下轮重试
+QB=("$KB_REPO"/question_bank/*.yaml)
+if [ "${#QB[@]}" -gt 0 ]; then
+  SUM="$(cat "${QB[@]}" | sha256sum | cut -d' ' -f1)"
+  if [ "$SUM" != "$(cat "$STATE.qbank" 2>/dev/null || true)" ]; then
+    if cli survey-import "${QB[@]/#$KB_REPO/$KB_CONTAINER_ROOT}"; then
+      echo "$SUM" > "$STATE.qbank"
+    else
+      echo "调研题库导入失败，下轮重试"
+    fi
+  fi
+fi
 echo "$(date -Is) 同步结束"

@@ -97,6 +97,17 @@ def test_selection_by_profile():
     assert r.json()[[q["qid"] for q in r.json()].index(Q1)]["text"].startswith("银行版")
 
 
+def test_no_question_says_why():
+    """选不到题时说清原因：服务产品对不上题库，并列出题库已覆盖的产品（试用机 11-27 只看到笼统提示）。"""
+    code = f"SV-{secrets.token_hex(3).upper()}"
+    with SessionLocal() as db:
+        db.add(Project(code=code, service="火星合规咨询", industry="银行", tier="standard"))
+        db.commit()
+    r = _client(code).post(f"/api/projects/{code}/survey/packs")
+    assert r.status_code == 422
+    assert "火星合规咨询" in r.text and "SOC" in r.text and "IRE" in r.text
+
+
 def test_pack_hash_and_strict_fields():
     std, strict = _project("standard"), _project("strict")
     p1 = _client(std).post(f"/api/projects/{std}/survey/packs").json()

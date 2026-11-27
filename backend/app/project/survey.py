@@ -188,10 +188,19 @@ def _payload(project: Project, code: str, questions: list[SurveyQuestion]) -> di
     return payload
 
 
+def _no_question_reason(db: Session, project: Project) -> str:
+    """选不到题时说清是题库没导入，还是本项目服务产品不在题库覆盖范围内。"""
+    have = sorted({p for q in db.scalars(select(SurveyQuestion).where(SurveyQuestion.enabled.is_(True)))
+                   for p in q.products})
+    if not have:
+        return "调研题库为空：请先导入题库（survey-import；试用机由 scripts/kb_acquire_sync.sh 定时导入）"
+    return f"题库里没有本项目服务产品（{project.service}）的题目，现有题库覆盖：{'、'.join(have)}"
+
+
 def build_pack(db: Session, user: User, project: Project) -> dict:
     questions = select_questions(db, project)
     if not questions:
-        raise SurveyError(422, "题库里没有适用本项目画像的题目")
+        raise SurveyError(422, _no_question_reason(db, project))
     cards._lock(db, project)
     n = db.scalar(select(func.count()).select_from(SurveyPack).where(SurveyPack.project_id == project.id)) or 0
     code = f"P-{n + 1:02d}"
