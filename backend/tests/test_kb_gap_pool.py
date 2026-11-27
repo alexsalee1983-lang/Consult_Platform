@@ -244,6 +244,7 @@ def test_weekly_job_patrols_active_sources_into_dispatch():
 def test_first_collect_only_never_seen_sources():
     """立即全量（负责人 11-27）：只给从没登记过缺口的正式来源记首采信号，已采过、已关闭的不重开；cap 放大一次排进 direct。"""
     with SessionLocal() as db:
+        gap_pool.first_collect(db, TODAY, cap=2000)      # 先消化其他测试留下的正式来源，下面只数本测试的
         for i in range(3):
             _active_source(db, f"https://gp.example.gov.cn/new{i}/")
         _active_source(db, "https://gp.example.gov.cn/old/")
