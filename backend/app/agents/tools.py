@@ -163,7 +163,12 @@ def _project_kb_prefs(ctx: ToolContext) -> dict:
         snap = configs.snapshot(ctx.db, ctx.project)
     except config.CatalogError:
         return {}
-    industry = (ctx.project.industry or "").strip()
+    return snapshot_kb_prefs(snap, ctx.project.industry or "")
+
+
+def snapshot_kb_prefs(snap: dict, industry: str) -> dict:
+    """快照 + 立项行业 → 检索默认值（项目检索与 A24 装配评测共用，四期 B39）。"""
+    industry = industry.strip()
     ib = snap.get("industry_basis") or {}
     keys = dict.fromkeys([industry, *industry.split("/")]) if industry else {}   # 立项下拉的“银行/金融”任一部分对上
     pack = snap.get("industry") if isinstance(snap.get("industry"), dict) else {}

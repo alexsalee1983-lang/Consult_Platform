@@ -7,6 +7,7 @@
 
     product: SOC                  # 服务产品代号，按产品配置取交付链和检索默认值
     modules: []                   # 可选：模块代号，合并进配置（kb_tags、basis 跟着变）
+    industry: 银行                # 可选（四期 B39 四格）：同立项填的行业，并入行业包，依据加权与项目检索一致
     chapters:
       - id: SOC-D5-01
         step: design_doc          # 交付链步骤 key；基线用这一步配置里的固定查询
@@ -76,6 +77,7 @@ class AssemblyReport:
     product: str
     strategy: str
     chapters: list[ChapterResult] = field(default_factory=list)
+    industry: str = ""
 
     def _ratio(self, num: int, den: int) -> float:
         return round(num / den, 4) if den else 0.0
@@ -97,7 +99,7 @@ class AssemblyReport:
         return self._ratio(sum(len(c.hit) for c in self.chapters), sum(len(c.ready) for c in self.chapters))
 
     def to_json(self) -> dict[str, Any]:
-        return {"product": self.product, "strategy": self.strategy, "expected": self.expected,
+        return {"product": self.product, "industry": self.industry, "strategy": self.strategy, "expected": self.expected,
                 "readiness": self.readiness, "hit_rate": self.hit_rate, "ready_hit_rate": self.ready_hit_rate,
                 "chapters": [{**asdict(c), "missing": c.missing} for c in self.chapters]}
 
@@ -157,7 +159,7 @@ def _snapshot(evalset: dict[str, Any]) -> dict[str, Any]:
     from ..products import config
 
     try:
-        return config.compose_codes(evalset["product"], evalset["modules"])
+        return config.compose_codes(evalset["product"], evalset["modules"], evalset.get("industry", ""))
     except config.CatalogError as e:
         raise AssemblyEvalError(f"产品配置读不出来：{e}") from e
 
@@ -166,9 +168,12 @@ Retriever = Callable[[str], list[str]]
 SlotRetriever = Callable[[dict], list[str]]
 
 
-def _retriever(db: Session, user: User, snap: dict[str, Any], keys: dict[str, str | None]) -> Retriever:
-    product = str(snap.get("product") or "")
-    tags, basis = list(snap.get("kb_tags") or []), list(snap.get("basis") or [])
+def _retriever(db: Session, user: User, snap: dict[str, Any], keys: dict[str, str | None],
+               industry: str = "") -> Retriever:
+    from ..agents.tools import snapshot_kb_prefs
+
+    prefs = snapshot_kb_prefs(snap, industry)
+    product, tags, basis = prefs["product"], prefs["tags"], prefs["basis"]
 
     def retrieve(query: str) -> list[str]:
         hits = search.search(db, user, query, product=product, limit=KB_LIMIT, boost_tags=tags)["items"]
@@ -206,9 +211,9 @@ def run(db: Session, user: User, evalset: dict[str, Any], strategy: str = "basel
     wanted = {str(k) for c in evalset["chapters"] for k in c["expect"]}
     ready_keys = set(db.scalars(select(KbItem.import_key).where(
         KbItem.import_key.in_(wanted), KbItem.retired.is_(False), KbItem.current_version_id.is_not(None))))
-    retrieve = _retriever(db, user, snap, keys)
+    retrieve = _retriever(db, user, snap, keys, evalset.get("industry", ""))
     slot_retrieve, specs = _slot_retriever(db, user, snap, keys), step_slots(evalset, snap)
-    report = AssemblyReport(evalset["product"], strategy)
+    report = AssemblyReport(evalset["product"], strategy, industry=evalset.get("industry", ""))
     cache: dict[str, list[str]] = {}
     slot_cache: dict[str, list[str]] = {}
     for ch in evalset["chapters"]:
@@ -237,6 +242,8 @@ def compare(report: AssemblyReport, baseline: dict[str, Any], min_gain: float = 
         raise AssemblyEvalError("基线文件里没有 hit_rate") from e
     if baseline.get("product") != report.product:
         raise AssemblyEvalError(f"基线是 {baseline.get('product')} 的，本次是 {report.product}")
+    if baseline.get("industry", "") != report.industry:
+        raise AssemblyEvalError(f"基线行业是 {baseline.get('industry') or '未填'}，本次是 {report.industry or '未填'}")
     diff = round(report.hit_rate - base, 4)
     ok = diff >= min_gain
     return ok, (f"命中率 {report.hit_rate:.1%}，基线 {base:.1%}，{'+' if diff >= 0 else ''}{diff:.1%}"
@@ -258,7 +265,8 @@ def gate(db: Session, user: User, evalset: dict[str, Any]) -> tuple[bool, str, A
 
 
 def format_report(r: AssemblyReport) -> str:
-    lines = [f"章节级装配评测（{r.product}，策略 {r.strategy}）：{len(r.chapters)} 章、应命中知识 {r.expected} 条",
+    grid = f"{r.product}·{r.industry}" if r.industry else r.product
+    lines = [f"章节级装配评测（{grid}，策略 {r.strategy}）：{len(r.chapters)} 章、应命中知识 {r.expected} 条",
              f"- 命中率 {r.hit_rate:.1%}；就绪度 {r.readiness:.1%}；就绪命中率 {r.ready_hit_rate:.1%}", "",
              "| 章节 | 步骤 | 应命中 | 就绪 | 命中 | 缺槽 | 漏装 |", "|---|---|---|---|---|---|---|"]
     for c in r.chapters:
