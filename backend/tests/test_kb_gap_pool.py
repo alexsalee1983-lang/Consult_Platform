@@ -253,7 +253,9 @@ def test_first_collect_only_never_seen_sources():
         gap_pool.record(db, [Signal("https://gp.example.gov.cn/old/", "schedule", "EV-OLD")])
         gap_pool.close(db, "https://gp.example.gov.cn/old/", "collected")
         out = gap_pool.first_collect(db, TODAY, cap=2)
-        assert out["new"] == 3 and out["direct"] == 2 and out["deferred"] == 1
+        assert out["new"] == 3 and out["direct"] >= 2
+        plans = sorted(db.scalars(select(KbGap.plan).where(KbGap.gap_key.like("https://gp.example.gov.cn/new%"))).all())
+        assert plans.count("direct") == 2 and len(plans) == 3     # 只数本测试的：cap=2 排进两条，一条顺延
         old = db.scalar(select(KbGap).where(KbGap.gap_key == "https://gp.example.gov.cn/old/"))
         assert old.status == "closed"
         assert gap_pool.first_collect(db, TODAY, cap=2000)["new"] == 0      # 再跑不重复登记
