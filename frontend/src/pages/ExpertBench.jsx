@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { api } from "../api.js";
 import { TopBar } from "../components/common.jsx";
 import { applyPreview, buildAnswer, CHOICE_LABELS, previewTexts, problems } from "../bench/answers.js";
+import { ComparePanel, GroupView, ProfilePanel, ReviseBox } from "../bench/ExpertUx.jsx";
 
 // 专家工作台（四期 B23①②；试用反馈 11-25 起侧栏不再单列，从“我的任务”的知识内容审核项一键进入，?v= 定位到对应卡）：审核问答化 + 按类型填空卡 + 大白话 + 冲突处理卡 + 去标识预览。只给知识专家；回答换成审核决定，规则以后端为准
 function Question({ q, a, onChange }) {
@@ -92,6 +93,8 @@ function BenchCard({ card, plain, onDone }) {
   const [fill, setFill] = useState({});
   const [showFill, setShowFill] = useState(false);
   const [showBody, setShowBody] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+  const [showRevise, setShowRevise] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [started] = useState(() => Date.now());
@@ -138,7 +141,13 @@ function BenchCard({ card, plain, onDone }) {
       </div>
       <div className="sub">{plain.source_detail}：{card.source_detail || "没写"} · {card.confidence_plain}</div>
       {card.basis && <div className="sub">Agent 的看法：{card.basis}</div>}
-      <button className="btn sm" style={{ marginTop: 6 }} onClick={() => setShowBody((v) => !v)}>{showBody ? "收起正文" : "看正文"}</button>
+      <div className="row" style={{ gap: 6, marginTop: 6 }}>
+        <button className="btn sm" onClick={() => setShowBody((v) => !v)}>{showBody ? "收起正文" : "看正文"}</button>
+        <button className="btn sm" onClick={() => setShowCompare((v) => !v)}>{showCompare ? "收起对照" : "对照原文与 Agent 意见"}</button>
+        <button className="btn sm" onClick={() => setShowRevise((v) => !v)}>{showRevise ? "不改了" : "直接改正文并认可"}</button>
+      </div>
+      {showCompare && <ComparePanel versionId={card.version_id} />}
+      {showRevise && <ReviseBox card={card} onDone={onDone} />}
       {showBody && <pre className="pnl pad" style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{card.body}</pre>}
       {card.conflict && <ConflictCard conflict={card.conflict} />}
       <ul className="lst" style={{ marginTop: 6 }}>
@@ -164,6 +173,8 @@ export default function ExpertBench() {
   const [error, setError] = useState(null);
   const [done, setDone] = useState([]);
   const [showFolded, setShowFolded] = useState(false);
+  const [view, setView] = useState("cards");
+  const [showProfile, setShowProfile] = useState(false);
   const [params] = useSearchParams();
   const focus = Number(params.get("v")) || 0;
   const load = useCallback(() => { api.benchCards().then(setD).catch((e) => setError(e.message)); }, []);
@@ -178,18 +189,23 @@ export default function ExpertBench() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <TopBar cap="一题一答，Agent 已经起好草稿，你只做判断" title="专家工作台" />
-      <div className="row"><Link className="btn sm" to="/my-tasks">回我的任务</Link>
+      <div className="row" style={{ gap: 6 }}><Link className="btn sm" to="/my-tasks">回我的任务</Link>
+        <button className={view === "cards" ? "btnp sm" : "btn sm"} aria-pressed={view === "cards"} onClick={() => setView("cards")}>逐条看</button>
+        <button className={view === "groups" ? "btnp sm" : "btn sm"} aria-pressed={view === "groups"} onClick={() => setView("groups")}>按组成批认可</button>
+        <button className="btn sm" onClick={() => setShowProfile((v) => !v)}>{showProfile ? "收起我的专长" : "我的专长"}</button>
         {focus > 0 && !picked.length && <span className="sub">这条已处理或已不在你的待审里。</span>}</div>
+      {showProfile && <ProfilePanel />}
+      {view === "groups" && <GroupView onChanged={load} />}
       <div className="sub">今天先看这 {today.length} 条（每日 {d.quota} 条）。不确定的就选“不确定”，这条会留着不定。</div>
-      {done.length > 0 && <div className="sub">刚交的：{done.map((x) => `#${x.id} ${x.outcome}`).join("，")}</div>}
-      {today.length ? list(today) : <section className="pnl pad sub">今天没有要你看的。</section>}
-      {later.length > 0 && (
+      {view === "cards" && done.length > 0 && <div className="sub">刚交的：{done.map((x) => `#${x.id} ${x.outcome}`).join("，")}</div>}
+      {view === "cards" && (today.length ? list(today) : <section className="pnl pad sub">今天没有要你看的。</section>)}
+      {view === "cards" && later.length > 0 && (
         <section className="pnl pad" aria-label="超出额度">
           <div className="sb"><h2 className="h2">明天再看 <span className="sub mono">{later.length}</span></h2>
             <button className="btn sm" onClick={() => setShowFolded((v) => !v)}>{showFolded ? "收起" : "展开"}</button></div>
         </section>
       )}
-      {showFolded && list(later)}
+      {view === "cards" && showFolded && list(later)}
     </div>
   );
 }
