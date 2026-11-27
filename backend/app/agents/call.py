@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 from ..core import audit
 from ..core.db import SessionLocal
 from ..models import Agent, Project
-from ..services import gateway, llm_lane, usage
+from ..services import gateway, usage
 from . import registry
 
 RETRY_NOTE = "（平台说明：上一次输出不符合要求的格式，无法解析。请严格按上面要求的格式重新输出全部内容，不要附加其他说明。）"
@@ -109,10 +109,6 @@ def call(db: Session, code: str, message: str, *, actor: str, doc: registry.Agen
     exclude = frozenset(exclude_families)
 
     def once(msg: str) -> gateway.Completion:
-        if llm_lane.current() == llm_lane.BACKGROUND and llm_lane.background_over(db):   # A31⑪ 后台日上限
-            usage.record(db, username=actor, project_code=pcode, level=lv, model=gateway.model_for(lv),
-                         status="blocked", stream=False, attempts=0, agent_code=code)
-            raise gateway.GatewayError("知识后台今日模型用量已达上限，明天再处理", 0)
         try:
             c = gateway.complete(msg, tier=tier, project_code=pcode, level=lv, system=sys_prompt, role=role,
                                  exclude_families=exclude)

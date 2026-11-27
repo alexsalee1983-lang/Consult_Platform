@@ -27,7 +27,7 @@ import httpx
 
 from ..core import metrics
 from ..core.config import get_settings
-from . import llm_lane, model_catalog
+from . import model_catalog
 from .guard import GuardResult, check
 from .pseudonym import Pseudonymizer
 
@@ -319,9 +319,7 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
     entry: model_catalog.ModelEntry | None = None
     fallbacks = 0
     payload = p.payload
-    lane = llm_lane.current()
-    llm_lane.wait_turn(lane)                 # A31⑪：交付链、知识后台给更高优先级的调用让行
-    with llm_lane.track(lane), _client() as client:
+    with _client() as client:
         for rounds in range(get_settings().llm_max_continuations + 1):
             if rounds == 0:      # 首轮按模型目录选型，失败换备选（G2）；续写沿用选中的模型
                 resp, n, entry, fallbacks = _send_planned(client, p, plan, stream=False)
@@ -398,7 +396,7 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
             parts.append(out)
             yield out
 
-    with llm_lane.track(llm_lane.CHAT), _client() as client:     # A31⑪：流式只用于对话，最高优先级
+    with _client() as client:
         while True:
             if first:                            # 只在开始输出前换备选模型；之后各轮沿用同一个模型
                 resp, attempts, entry, fallbacks = _send_planned(client, p, plan, stream=True)

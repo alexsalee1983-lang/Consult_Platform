@@ -47,7 +47,7 @@ from ..core.config import get_settings
 from ..core.db import SessionLocal, utcnow
 from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMember, User
 from ..products import config
-from ..services import config_registry, gateway, guard, jobs, runtime_config, usage
+from ..services import config_registry, gateway, guard, injection, jobs, runtime_config, usage
 from . import cards as cards_svc
 from . import assessment, configs, findings
 from . import deliverables
@@ -396,7 +396,7 @@ def _evidence_input(db: Session, user: User, project: Project, step: Step,
     cap = INPUT_CHARS // len(batches)
     points = []
     for batch in batches:
-        res = call.call(db, step.agent, f"{CONDENSE_MARK}\n\n{CONDENSE_RULES}\n\n" + "\n\n".join(batch),
+        res = call.call(db, step.agent, f"{CONDENSE_MARK}\n\n{CONDENSE_RULES}\n\n" + injection.as_data("本项目证据", "\n\n".join(batch)),
                         actor=user.username, doc=doc, project=project, level=doc.level)
         points.append(res.completion.text.strip()[:cap])
     left = stats["total"] - stats["included"]
@@ -540,6 +540,9 @@ def _fail(db: Session, run: AgentRun, project: Project, reason: str) -> None:
     audit.record(db, actor="worker", action="run.failed", result="error", project_code=project.code,
                  run_id=run.id, step=_step_key(db, project, run), error=reason[:200])
     db.commit()
+    from . import loops
+
+    loops.on_run_failed(db, run, project, reason)        # 四期 A31③：重试用尽仍失败，同因合一张系统卡
 
 
 def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Step) -> None:
@@ -559,7 +562,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
             if not material:
                 _ask_for_evidence(db, user, project, run, step, record)
                 return
-            inputs, query = f"# 本项目证据\n\n{material}", step.query
+            inputs, query = f"# 本项目证据\n\n{injection.as_data('本项目证据', material)}", step.query
         else:
             inputs, query = _step_inputs(db, project, run, step)
         kb_block, refs = knowledge.retrieve(db, user, step.agent, project, query)
@@ -581,6 +584,9 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     except gateway.GatewayError as e:
         raise StepRetry(f"模型暂不可用（{e}）") from e
 
+    kb_block = injection.as_data("检索到的知识库内容", kb_block)    # 四期 A31①：资料与检索内容当数据，不当指令
+    target = deliverables.get_deliverable(db, project, step.deliverable) if step.deliverable else None
+    base = {s.seq: s.current_version for s in target.sections} if target else {}   # A31④：起草前的版本号
     confirmed = _resolved_cards(db, run)
     strict = STRICT_RULES if project.tier == "strict" else ""
     message = "\n\n".join(x for x in (step.instruction, OUTPUT_RULES, strict, confirmed, inputs) if x)
@@ -608,7 +614,7 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     record.refs = {**record.refs, "kb_refs": len(refs)}
     try:
         if step.deliverable:
-            record.refs.update(_write_deliverable(db, user, project, step, sections))
+            record.refs.update(_write_deliverable(db, user, project, step, sections, base))
         else:
             record.output = "\n\n".join(f"## {t}\n{b}" for t, b in sections)
             if step.agent == assessment.GAP_AGENT:            # 三期 F1：差距分析表同步成发现
@@ -708,18 +714,25 @@ def _ask_to_confirm_findings(db: Session, user: User, project: Project, run: Age
 
 
 def _write_deliverable(db: Session, user: User, project: Project, step: Step,
-                       sections: list[tuple[str, str]]) -> dict:
+                       sections: list[tuple[str, str]], base: dict[int, int] | None = None) -> dict:
     """先写大纲再写各章（经 doc.generate）。已有正文的多余章节保留在大纲末尾（不能删有正文的章）；
-    与当前版本相同的章不重复写。"""
+    与当前版本相同的章不重复写。四期 A31④：起草期间顾问手改过的章（base 之后有人工版本）不覆盖，发修订冲突卡。"""
+    from . import loops
+
     d = deliverables.require_deliverable(db, project, step.deliverable)
     titles = [t for t, _ in sections]
     kept = [s.title for s in d.sections if s.seq > len(titles) and s.current_version]
     tools.invoke(db, user, step.agent, "doc.generate",
                  {"action": "outline", "deliverable": step.deliverable, "sections": titles + kept}, project.code)
     db.refresh(d)
-    versions = {}
+    versions, conflicts = {}, []
     for seq, (_, body) in enumerate(sections, 1):
-        current = deliverables.get_version(deliverables.require_section(d, seq))
+        s = deliverables.require_section(d, seq)
+        if base and seq in base and loops.human_edits_since(s, base[seq]):
+            loops.conflict_card(db, project, d, s, base[seq], body, user.username, f"交付链第 {step.number} 步")
+            conflicts.append(seq)
+            continue
+        current = deliverables.get_version(s)
         if current is not None and current.body.strip() == body.strip():
             versions[seq] = current.version
             continue
@@ -727,7 +740,7 @@ def _write_deliverable(db: Session, user: User, project: Project, step: Step,
                          {"action": "write", "deliverable": step.deliverable, "section": seq, "body": body,
                           "note": f"交付链第 {step.number} 步 {step.name}"}, project.code)
         versions[seq] = r["version"]
-    return {"deliverable": step.deliverable, "versions": versions}
+    return {"deliverable": step.deliverable, "versions": versions, **({"conflicts": conflicts} if conflicts else {})}
 
 
 def _send_cards(db: Session, user: User, project: Project, run: AgentRun, step: Step,

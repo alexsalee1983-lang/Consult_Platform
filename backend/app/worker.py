@@ -228,13 +228,6 @@ def _weekly() -> None:
                 jobs.enqueue(db, gap_pool.JOB_KIND, created_by="platform", max_attempts=2)
     except Exception as e:  # noqa: BLE001
         log.warning("缺口池每周计划出错：%s", type(e).__name__)
-    try:                                   # 四期 A31⑩：无内容指标的漂移监测，只进审计
-        from .project import loops
-
-        with SessionLocal() as db:
-            loops.record_drift(db)
-    except Exception as e:  # noqa: BLE001
-        log.warning("质量漂移监测出错：%s", type(e).__name__)
 
 
 def _sync_runtime_config() -> None:

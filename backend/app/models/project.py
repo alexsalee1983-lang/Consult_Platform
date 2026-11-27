@@ -30,9 +30,6 @@ class Project(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 组织类型（迁移 0038，取值见 app/project/configs.ORG_TYPES，可空）：经验按组织类型分层用
     org_type: Mapped[str] = mapped_column(String(16), server_default="")
-    # 四期 A31⑦（主链 0060）：项目终止。终止后停止自动推进、关闭待办，保留期从终止日起算（app/project/loops.py）
-    terminated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    terminated_by: Mapped[str] = mapped_column(String(64), server_default="")
 
     deliverables: Mapped[list["Deliverable"]] = relationship(
         back_populates="project", order_by="Deliverable.code", cascade="all, delete-orphan"

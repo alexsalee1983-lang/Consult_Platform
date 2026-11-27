@@ -36,7 +36,7 @@ from ..project import export as export_svc
 from ..project import export_pptx
 from ..project import form_import
 from ..project import forms as forms_svc
-from ..project import kb_impact
+from ..project import kb_impact, loops
 from ..products import config as product_config
 from ..services import quality_incidents
 
@@ -291,6 +291,13 @@ def section_diff(code: str, dcode: str, seq: int, a: int = Query(ge=1), b: int =
         return {"seq": seq, "a": a, "b": b, "diff": svc.diff(svc.require_section(d, seq), a, b)}
     except svc.DeliverableError as e:
         _raise(e)
+
+
+@router.get("/{code}/deliverables/{dcode}/errata")
+def errata(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """四期 A31②：已签署件引用的条目下线后的勘误页（按当前知识状态生成，原签署版本不动）。"""
+    p, d = _load(db, code, dcode, user)
+    return loops.errata_page(db, p, d)
 
 
 @router.get("/{code}/deliverables/{dcode}/export")

@@ -30,7 +30,7 @@ from ..core.permissions import (
     roles_of,
 )
 from ..models import Confirmation, Project, ProjectMember, User
-from ..project import configs
+from ..project import configs, loops
 from ..project import confirmations as conf_svc
 from ..project import retention
 from ..project import runs as run_svc
@@ -177,6 +177,7 @@ def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db), user: User
         raise HTTPException(e.status, e.detail) from e
     run_svc.on_card_resolved(db, c)   # 交付链在等这张卡时，卡都处理完就继续
     revise_svc.on_card_resolved(db, user, c)   # 四期 A26：客户意见都处理完、有采纳的，自动生成修订稿
+    loops.on_card_resolved(db, user, c)        # 四期 A31：系统卡选重新运行、修订冲突选手工合并
     return _conf_out(c)
 
 
@@ -255,4 +256,5 @@ def delete_member(code: str, username: str, db: Session = Depends(get_db), user:
     db.commit()
     audit.record(db, actor=user.username, action="project.member_remove", result="allowed", project_code=p.code,
                  target=username)
+    loops.transfer_member_tasks(db, user, p, username)   # 四期 A31⑥：待办卡、自评包、进行中的交付链转给项目经理
     return _members(db, p)

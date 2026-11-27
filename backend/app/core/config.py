@@ -41,10 +41,6 @@ class Settings(BaseSettings):
     llm_retry_backoff_seconds: float = 1.0        # 指数退避基数：1s、2s、4s……
     llm_max_continuations: int = 3                # 输出被截断（finish_reason=length）时最多续写几次，仍不完整按失败处理
     llm_health_ttl_seconds: int = 30              # 模型可用性检查结果缓存时间
-    # 网关优先级（四期 A31⑪，app/services/llm_lane.py）：对话 > 交付链 > 知识后台
-    llm_lane_wait_seconds: float = 20             # 低优先级调用最多让行多少秒，等不到照常发出
-    llm_daily_tokens: int = 0                     # 每日模型用量（token）估算，0 = 不限；知识后台最多用其中 LLM_BACKGROUND_SHARE
-    llm_background_share: float = 0.8
     # 自动假名化：把项目卡中登记的客户名、人名、系统名替换成占位符再发给模型，回复里再换回来。
     # 模型为公司私有化部署，默认关闭；以后接入云端模型时，标准档必须开启（决策记录 2026-11-07）。
     llm_pseudonymize: bool = False
