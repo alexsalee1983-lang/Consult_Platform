@@ -23,7 +23,7 @@ from .kb_samples import SOC_MD
 
 
 def _project(manager: str) -> str:
-    code = f"FB-{secrets.token_hex(2).upper()}"
+    code = f"FB-{secrets.token_hex(3).upper()}"
     assert cli_main(["create-project", "--code", code, "--tier", "standard", "--manager", manager]) == 0
     return code
 

@@ -478,7 +478,7 @@ def test_add_member_via_cli_bootstraps_project_without_manager():
 def test_create_project_via_cli():
     """一期没有网页立项：命令行建项目和 D1～D8，必须定档、指定首位项目经理；只有成员能看到。"""
     import secrets
-    code = f"QA-{secrets.token_hex(2).upper()}"
+    code = f"QA-{secrets.token_hex(3).upper()}"
     mgr = create_user((CONSULTANT,))
     other = create_user((CONSULTANT,))
     assert cli_main(["create-project", "--code", code, "--tier", "standard", "--manager", mgr[0],
