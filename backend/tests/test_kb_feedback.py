@@ -73,7 +73,7 @@ def _review(seq=1, version=1):
 
 
 def test_review_three_keys_and_flag_goes_to_recheck(people):
-    x, y = _publish(people, f"反馈测试-F1-{secrets.token_hex(2)}"), _publish(people, f"反馈测试-F2-{secrets.token_hex(2)}")
+    x, y = _publish(people, f"反馈测试-F1-{secrets.token_hex(4)}"), _publish(people, f"反馈测试-F2-{secrets.token_hex(4)}")
     code, member = _project()
     _write(code, member, 1, f"现状与建议 [{x}] [{y}]。", agent="report-writer")
     c = logged_in_client(app, member)
@@ -115,7 +115,7 @@ def test_review_three_keys_and_flag_goes_to_recheck(people):
 
 
 def test_rejects_uncited_bad_rating_guard_hit_and_strict_note(people):
-    x = _publish(people, f"反馈测试-F3-{secrets.token_hex(2)}")
+    x = _publish(people, f"反馈测试-F3-{secrets.token_hex(4)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}]。", agent="report-writer")
     s_code, s_member = _project(tier="strict")
@@ -162,7 +162,7 @@ def _message(code, member, refs):
 
 
 def test_chat_feedback_only_for_conversation_owner(people):
-    x = _publish(people, f"反馈测试-F4-{secrets.token_hex(2)}")
+    x = _publish(people, f"反馈测试-F4-{secrets.token_hex(4)}")
     code, member = _project()
     other = create_user(("consultant",), {code: "member"})
     mid = _message(code, member, [x])
@@ -184,7 +184,7 @@ def test_chat_feedback_only_for_conversation_owner(people):
 
 
 def test_old_flags_do_not_retrigger_after_recheck_handled(people):
-    x = _publish(people, f"反馈测试-F5-{secrets.token_hex(2)}")
+    x = _publish(people, f"反馈测试-F5-{secrets.token_hex(4)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}]。", agent="report-writer")
     c = logged_in_client(app, member)
@@ -205,7 +205,7 @@ def test_old_flags_do_not_retrigger_after_recheck_handled(people):
 
 
 def test_usage_stats_citations_and_adoption(people):
-    x, y = _publish(people, f"反馈测试-F6-{secrets.token_hex(2)}"), _publish(people, f"反馈测试-F7-{secrets.token_hex(2)}")
+    x, y = _publish(people, f"反馈测试-F6-{secrets.token_hex(4)}"), _publish(people, f"反馈测试-F7-{secrets.token_hex(4)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}] [{y}]。", agent="report-writer")
     _write(code, member, 1, f"现状（顾问改写） [{y}]。")           # 顾问删掉 x 的引用
@@ -237,7 +237,7 @@ def test_usage_stats_citations_and_adoption(people):
 
 
 def test_delete_for_project(people):
-    x = _publish(people, f"反馈测试-F8-{secrets.token_hex(2)}")
+    x = _publish(people, f"反馈测试-F8-{secrets.token_hex(4)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}]。", agent="report-writer")
     c = logged_in_client(app, member)
