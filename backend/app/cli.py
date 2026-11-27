@@ -949,6 +949,17 @@ def survey_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_acquire_now(args: argparse.Namespace) -> int:
+    """立即全量采集（四期，负责人 11-27）：新正式来源登记首采缺口并放大 cap 排计划；下发包仍由 kb-acquire-dispatch 出。"""
+    from datetime import date
+
+    from .kb import gap_pool
+    with SessionLocal() as db:
+        out = gap_pool.first_collect(db, date.today(), cap=args.cap)
+    print("立即全量：" + "，".join(f"{k}={v}" for k, v in out.items()))
+    return 0
+
+
 def kb_acquire_dispatch(args: argparse.Namespace) -> int:
     """采集下发包导出（三期 B25③）：本周“直接采集”的缺口，只含网址与采集规则，交采集机。"""
     import json
@@ -1400,6 +1411,9 @@ def main(argv: list[str] | None = None) -> int:
     si = sub.add_parser("survey-import", help="导入调研题库文件（四期 E2①，E1 题库格式 YAML，可多个）")
     si.add_argument("files", nargs="+")
     si.set_defaults(func=survey_import)
+    kan = sub.add_parser("kb-acquire-now", help="立即全量采集：新正式来源登记首采缺口，按放大的上限排一次计划（已采过的不重开）")
+    kan.add_argument("--cap", type=int, default=2000, help="本次计划上限（默认 2000，每周例行为 20）")
+    kan.set_defaults(func=kb_acquire_now)
     kad = sub.add_parser("kb-acquire-dispatch", help="导出采集下发包：本周直接采集的缺口网址与规则（白名单外拒绝）")
     kad.add_argument("--out", required=True, help="下发包 JSON 文件")
     kad.set_defaults(func=kb_acquire_dispatch)

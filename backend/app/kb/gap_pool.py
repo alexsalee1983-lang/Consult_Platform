@@ -2,6 +2,7 @@
 
 合并、打分、排计划的规则在 app/kb/acquisition.py（B25①，纯逻辑）；本模块只负责落表：
 - record：信号按 gap_key 并入未关闭的缺口，同一事件编号只算一次；已关闭的缺口又来新信号就重新打开。
+- first_collect：立即全量（kb-acquire-now），只给从没登记过缺口的正式来源记首采信号，再放大 cap 排一次计划。
 - patrol：每周任务先给每个正式来源登记一条定时巡检信号（事件编号按 ISO 周，同周不重复，采集关闭后下周重开）。
 - run_week：每周后台任务（worker 每周排一次 kb.gap_week），白名单取 B16 正式来源的网址前缀，
   结果写回每个缺口的 plan / score / planned_at；审计只记各路数量。
@@ -300,6 +301,18 @@ def patrol(db: Session, today: date) -> int:
     if srcs:
         record(db, [acq.Signal(s.url, "schedule", ref, authority=s.authority_level or 3) for s in srcs])
     return len(srcs)
+
+
+def first_collect(db: Session, today: date, *, cap: int = 2000, actor: str = "cli") -> dict[str, int]:
+    """立即全量（负责人 2026-11-27）：从没登记过缺口的正式来源记一条首采信号，再按放大的 cap 排一次计划。
+    已采过、已关闭的缺口不重开；之前因每周上限顺延的未关闭缺口一并排进来。"""
+    seen = set(db.scalars(select(KbGap.gap_key)))
+    srcs = [s for s in db.scalars(select(KbSource).where(KbSource.status == "active").order_by(KbSource.id))
+            if s.url not in seen]
+    if srcs:
+        ref = f"first-{today:%Y%m%d}"
+        record(db, [acq.Signal(s.url, "schedule", ref, authority=s.authority_level or 3) for s in srcs])
+    return {"new": len(srcs), **run_week(db, today, cap=cap, actor=actor)}
 
 
 @jobs.handler(JOB_KIND)

@@ -239,3 +239,25 @@ def test_weekly_job_patrols_active_sources_into_dispatch():
         g = db.scalar(select(KbGap).where(KbGap.gap_key == GP))
         assert g.status == "open" and g.plan == "direct" and g.reopened == 1
 
+
+
+def test_first_collect_only_never_seen_sources():
+    """立即全量（负责人 11-27）：只给从没登记过缺口的正式来源记首采信号，已采过、已关闭的不重开；cap 放大一次排进 direct。"""
+    with SessionLocal() as db:
+        gap_pool.first_collect(db, TODAY, cap=2000)      # 先消化其他测试留下的正式来源，下面只数本测试的
+        for k in db.scalars(select(KbGap.gap_key).where(KbGap.status == "open")).all():
+            gap_pool.close(db, k, "collected")            # 关掉它们，免得和本测试的缺口抢 cap
+        for i in range(3):
+            _active_source(db, f"https://gp.example.gov.cn/new{i}/")
+        _active_source(db, "https://gp.example.gov.cn/old/")
+        gap_pool.record(db, [Signal("https://gp.example.gov.cn/old/", "schedule", "EV-OLD")])
+        gap_pool.close(db, "https://gp.example.gov.cn/old/", "collected")
+        out = gap_pool.first_collect(db, TODAY, cap=2)
+        assert out["new"] == 3 and out["direct"] >= 2
+        plans = sorted(db.scalars(select(KbGap.plan).where(KbGap.gap_key.like("https://gp.example.gov.cn/new%"))).all())
+        assert plans.count("direct") == 2 and len(plans) == 3     # 只数本测试的：cap=2 排进两条，一条顺延
+        old = db.scalar(select(KbGap).where(KbGap.gap_key == "https://gp.example.gov.cn/old/"))
+        assert old.status == "closed"
+        assert gap_pool.first_collect(db, TODAY, cap=2000)["new"] == 0      # 再跑不重复登记
+    from app import cli
+    assert cli.main(["kb-acquire-now", "--cap", "5"]) == 0
