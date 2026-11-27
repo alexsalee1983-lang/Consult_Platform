@@ -46,7 +46,7 @@ def test_workbench_aggregates_roles_and_marks_self_conflicts():
         assert ("confirmation", code) in kinds and ("confirmation", other_code) not in kinds   # 非成员项目的卡不出现
         assert ("signoff", code) in kinds and sum(t["kind"] == "signoff" for t in todos) == 1
         dele = next(t for t in todos if t["kind"] == "deletion" and t["project_code"] == other_code)
-        assert "另一位项目负责人" in dele["blocked"]                                            # 发起人不能自己确认
+        assert "另一位咨询业务负责人" in dele["blocked"]                                            # 发起人不能自己确认
         deid = next(t for t in todos if t["kind"] == "deid" and t["title"] == f"上传 #{upload_id}")
         assert "另一位知识管理员" in deid["blocked"]                                           # 上传者不能确认去标识
         assert "x.docx" not in r.text                                                           # 不给上传文件名

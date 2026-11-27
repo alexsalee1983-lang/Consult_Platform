@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useParams, useSearchParams } from "react-router";
 import { api } from "./api.js";
 import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireLead, RequireSysAdmin } from "./auth.jsx";
+import { AgentBar, AgentViewProvider } from "./components/AgentActivity.jsx";
 import { Loading } from "./components/common.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Audit from "./pages/Audit.jsx";
@@ -33,10 +34,12 @@ import Users from "./pages/Users.jsx";
 function Shell() {
   return (
     <RequireAuth>
-      <div className="layout">
-        <Sidebar />
-        <main className="content"><Outlet /></main>
-      </div>
+      <AgentViewProvider>
+        <div className="layout">
+          <Sidebar />
+          <main className="content"><AgentBar /><Outlet /></main>
+        </div>
+      </AgentViewProvider>
     </RequireAuth>
   );
 }

@@ -1,15 +1,16 @@
 """权限：系统角色、三权分立规则、项目成员检查。
 
 规则（改动这里必须同步更新 tests/test_permissions.py 的权限矩阵）：
-1. 业务角色：顾问、项目负责人、知识专家、知识管理员。只有持业务角色的用户能访问业务接口。
+1. 业务角色：顾问、咨询业务负责人、知识专家、知识管理员。只有持业务角色的用户能访问业务接口。
 2. 系统管理员：只管账号和角色，看不到任何业务数据（项目、对话、待确认、审计）。
 3. 安全审计员：只读审计日志。由单独任命，只能在服务器命令行授予或撤销（python -m app.cli），
    任何接口都不能授予、撤销，也不能修改审计员账号。
 4. 系统管理员、安全审计员与其他任何角色互斥：一个账号只能是其中之一，且不能兼任业务角色。
 5. 系统管理员不能修改自己的角色、不能停用自己。
-6. 项目可见性只看 project_members：不是成员一律返回 404（不暴露项目是否存在）。唯一例外：项目负责人的项目总览
-   （GET /api/portfolio，负责人 11-15 定方案 A）只看元数据，不含资料、交付件内容、确认卡和对话，不能进驾驶舱。
-7. 项目内身份（项目经理 / 项目成员）放在 project_members，不是系统角色。
+6. 项目可见性只看 project_members：不是成员一律返回 404（不暴露项目是否存在）。唯一例外：咨询业务负责人的项目总览
+   （GET /api/portfolio，负责人 11-15 定方案 A）只看元数据，不含资料、交付件内容、确认卡和对话，不能进驾驶舱；
+   四期 A29 的跨项目运行状态（GET /api/agent-activity/projects）同理，只看步骤和失败类型。
+7. 项目内身份（项目经理 / 项目成员）放在 project_members，不是系统角色。交付链发起、取消只给项目经理（四期 A29）。
 """
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ SYS_ADMIN = "sys_admin"
 SECURITY_AUDITOR = "security_auditor"
 
 ROLE_NAMES = {
-    CONSULTANT: "顾问", PROJECT_LEAD: "项目负责人", KNOWLEDGE_EXPERT: "知识专家",
+    CONSULTANT: "顾问", PROJECT_LEAD: "咨询业务负责人", KNOWLEDGE_EXPERT: "知识专家",
     KNOWLEDGE_ADMIN: "知识管理员", SYS_ADMIN: "系统管理员", SECURITY_AUDITOR: "安全审计员",
 }
 BUSINESS_ROLES = frozenset({CONSULTANT, PROJECT_LEAD, KNOWLEDGE_EXPERT, KNOWLEDGE_ADMIN})

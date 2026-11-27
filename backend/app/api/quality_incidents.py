@@ -1,9 +1,9 @@
 """AI 质量事件台账接口（四期 F3）。规则在 app/services/quality_incidents.py。
 
 - POST /api/quality-incidents：登记（业务角色；挂项目须是成员，否则 404）；
-- GET  /api/quality-incidents：台账（只给项目负责人），可按 status=open/closed、level 过滤；
-- GET  /api/quality-incidents/{id}：详情与处置记录（项目负责人、所属项目经理、登记人；其他人 404）；
-- POST /api/quality-incidents/{id}/events：追加一步处置（项目负责人、所属项目经理）。
+- GET  /api/quality-incidents：台账（只给咨询业务负责人），可按 status=open/closed、level 过滤；
+- GET  /api/quality-incidents/{id}：详情与处置记录（咨询业务负责人、所属项目经理、登记人；其他人 404）；
+- POST /api/quality-incidents/{id}/events：追加一步处置（咨询业务负责人、所属项目经理）。
 描述与说明只记长度和摘要哈希，接口不回显原文。
 """
 from __future__ import annotations

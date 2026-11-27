@@ -5,7 +5,7 @@
 以及抽检、公司做法确认、来源确认、客户自评（四期 E3②：自评包到期前一天、当天提醒发包人，逾期 2 天升级项目经理，
 阶段由 worker 的 selfeval.scan_reminders 推进）。
 - 只列本人有权处理的（项目类只看本人是成员的项目；待签署只给项目经理；知识类按知识角色；
-  去标识给知识管理员；资料删除给项目负责人，不必是成员，只给项目代号）；
+  去标识给知识管理员；资料删除给咨询业务负责人，不必是成员，只给项目代号）；
   本人按规则不能处理的（作者不能审自己的版本、上传者不能确认去标识、发起人不能确认删除）照样列出、
   写明要谁处理，排在最后，不占额度。
 - 知识审核按角色拆成内容审核（知识专家，一键进专家工作台对应卡）和合规审核（知识管理员）；
@@ -18,6 +18,12 @@
 - 退回：记 task_returns 一条、jobs.enqueue(REWRITE_JOB)；已退回、未重写完的对象不再列出。
   本单只做排队入口，不改 Agent md，处理器只把状态推进到 waiting_agent，等 Agent 接上后重写并置 done。
 退回意见先过 guard，只存库；审计只记类别、编号和长度。
+
+四期 A29（《平台规划刷新设计》3.2，统一收件箱）：
+- 只显示自己能处理的卡：按规则须由别人处理的（blocked 非空）直接隐藏，不再灰显列出（blocked 字段保留，恒为空）。
+- 卡片统一格式：标题、情况（situation）与补充（supplement）两栏、推荐处理按钮（action，放第一个）、
+  影响说明（impact_text）、预计分钟数（minutes，按类别估）。顶部：待处理数、预计分钟数合计、本周 AI 已自动办完多少件。
+- 交付链延迟（run_delay）：AI 在写的一步超过预计用时 2 倍（app/project/panorama.py 的 run_eta），推卡给项目经理。
 """
 from __future__ import annotations
 
@@ -48,7 +54,18 @@ KINDS: dict[str, str] = {
     "practice": "公司做法确认",
     "source_confirm": "来源确认",
     "selfeval": "客户自评",
+    "run_delay": "交付链延迟",
 }
+# 统一卡片格式：推荐处理按钮文字、预计分钟数、情况栏缺省说明（按类别）
+ACTION = {"confirmation": "去确认", "deliverable_review": "去签署", "kb_content": "去审核", "kb_compliance": "去审核",
+          "recheck": "去复审", "deid": "去确认", "deletion": "去确认", "sample": "去抽检", "practice": "去认可",
+          "source_confirm": "去确认", "selfeval": "去跟进", "run_delay": "去查看"}
+MINUTES = {"confirmation": 2, "deliverable_review": 15, "kb_content": 5, "kb_compliance": 3, "recheck": 5, "deid": 3,
+           "deletion": 2, "sample": 5, "practice": 3, "source_confirm": 2, "selfeval": 2, "run_delay": 2}
+SITUATION = {"deliverable_review": "交付件已提交，等你签署", "kb_content": "知识条目待内容审核",
+             "kb_compliance": "知识条目待合规审核", "recheck": "已发布条目待复审", "deid": "上传资料去标识待确认",
+             "deletion": "项目资料删除申请待确认", "sample": "已发布条目待抽检", "practice": "公司做法待认可",
+             "source_confirm": "新来源待确认", "selfeval": "客户自评包待跟进", "confirmation": "Agent 需要你拍板"}
 UNAVAILABLE = {"practice", "source_confirm"}           # 接口未合并（#283、#297），先留空位
 KB_REVIEW_KINDS = ("kb_content", "kb_compliance")
 RETURNABLE = {*KB_REVIEW_KINDS, "kb_review", "sample", "recheck", "confirmation"}  # kb_review = 旧类名，兼容
@@ -86,6 +103,26 @@ class Task:
     fields: list[dict] = field(default_factory=list)
     score: float = 0.0
     folded: bool = False
+    situation: str = ""
+    supplement: str = ""
+    impact_text: str = ""
+
+    @property
+    def action(self) -> str:
+        return ACTION.get(self.kind, "去处理")
+
+    @property
+    def minutes(self) -> int:
+        return MINUTES.get(self.kind, 3)
+
+    def fill(self) -> None:
+        """补齐统一卡片格式里没单独给的栏：情况取类别说明，补充取预填字段，影响取影响数。"""
+        self.situation = self.situation or SITUATION.get(self.kind, KINDS.get(self.kind, self.kind))
+        if not self.supplement:
+            self.supplement = "；".join(f"{f['label']}：{f['value'] or '待补'}" for f in self.fields)
+        if not self.impact_text:
+            n = int(self.impact)
+            self.impact_text = f"涉及 {n} 项在办项目或交付件" if n else "不影响其他在办事项"
 
 
 def weights() -> Weights:
@@ -207,6 +244,8 @@ def collect(db: Session, user: User) -> list[Task]:
             tasks.append(Task(kind="confirmation", ref_id=c.id, title=c.title, project_code=code,
                               link=f"/project/{code}", impact=1 + bool(c.deliverable_code),
                               uncertainty=1.0 if unsure else 0.0, created_ts=_ts(c.created_at),
+                              situation=f"{c.kind}：{c.reason}"[:80] if c.reason else c.kind,
+                              impact_text=c.impact[:80],
                               fields=[_field("recommendation", "推荐选项", c.recommendation),
                                       _field("deliverable_code", "关联交付件", c.deliverable_code)]))
     if codes:
@@ -227,6 +266,7 @@ def collect(db: Session, user: User) -> list[Task]:
             code = codes[d.project_id]
             tasks.append(Task(kind="deliverable_review", ref_id=d.id, title=f"{d.code} {d.title}", project_code=code,
                               link=f"/project/{code}/deliverables/{d.code}", impact=2.0))
+        tasks += _delays(db, managed, codes)
 
     if roles & rv.KNOWLEDGE_ROLES:
         usage = _live_usage(db)
@@ -260,9 +300,40 @@ def collect(db: Session, user: User) -> list[Task]:
                             .options(selectinload(ProjectDeletion.project))):
             tasks.append(Task(kind="deletion", ref_id=d.id, title=f"删除申请 #{d.id}", project_code=d.project.code,
                               link="/deletions", impact=1.0, created_ts=_ts(d.requested_at),
-                              blocked="你是发起人，需另一位项目负责人确认" if d.requested_by == me else ""))
+                              blocked="你是发起人，需另一位咨询业务负责人确认" if d.requested_by == me else ""))
     gone = _returned(db)
-    return [t for t in tasks if (_norm(t.kind), t.ref_id) not in gone]
+    out = [t for t in tasks if (_norm(t.kind), t.ref_id) not in gone and not t.blocked]   # A29：别人的卡隐藏
+    for t in out:
+        t.fill()
+    return out
+
+
+def _delays(db: Session, managed: set[int], codes: dict[int, str]) -> list[Task]:
+    """交付链延迟卡（A29）：本人当项目经理的项目里，AI 在写的一步超过预计用时 2 倍。只给步骤名和时间，不给内容。"""
+    from . import configs, panorama
+
+    out: list[Task] = []
+    for pid in managed:
+        run = panorama.latest_run(db, pid)
+        if run is None or run.status not in panorama.WORKING_RUN:
+            continue
+        p = db.get(Project, pid)
+        try:
+            chain = configs.snapshot(db, p)["chain"]
+        except Exception:      # 配置有问题时全景自会报，不在这里报
+            continue
+        if run.step_index >= len(chain):
+            continue
+        step = chain[run.step_index]
+        eta, late = panorama.run_eta(db, run, step["key"])
+        if not late:
+            continue
+        code = codes[pid]
+        out.append(Task(kind="run_delay", ref_id=run.id, title=f"交付链第 {step['number']} 步 {step['name']} 延迟",
+                        link=f"/project/{code}", project_code=code, impact=1.0, created_ts=_ts(run.updated_at),
+                        situation="AI 处理已超过预计用时 2 倍", supplement=f"预计完成：{eta:%m-%d %H:%M}（UTC）",
+                        impact_text="下游交付件会顺延；可在“查看 Agent 运行情况”里暂停或重跑"))
+    return out
 
 
 def summary(db: Session, user: User) -> dict:
@@ -270,7 +341,11 @@ def summary(db: Session, user: User) -> dict:
     ranked = rank(collect(db, user), w)
     folded = apply_quota(ranked, w.quota)
     counts = {k: sum(t.kind == k for t in ranked) for k in KINDS}
-    return {"quota": w.quota, "folded": folded, "weights": {"impact": w.impact, "uncertainty": w.uncertainty},
+    from .panorama import auto_done
+
+    live = _memberships(db, user)
+    return {"pending": len(ranked), "minutes": sum(t.minutes for t in ranked),
+            "auto_done": auto_done(db, {m.project_id for m in live}), "quota": w.quota, "folded": folded, "weights": {"impact": w.impact, "uncertainty": w.uncertainty},
             "kinds": {k: {"name": n, "available": k not in UNAVAILABLE, "count": counts[k]} for k, n in KINDS.items()},
             "tasks": ranked, "member_projects": member_projects(db, user)}
 

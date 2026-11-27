@@ -4,8 +4,9 @@ import { api, TIER } from "../api.js";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Drawer from "../components/Drawer.jsx";
-import Panorama, { autoDone, todos } from "../components/Panorama.jsx";
+import Panorama, { todos } from "../components/Panorama.jsx";
 import RunPanel from "../components/RunPanel.jsx";
+import { useAgentView } from "../components/AgentActivity.jsx";
 
 // 全景（四期 A25②）：页头 + 行动条 + 泳道全景图；确认卡、交付链、待办在右侧抽屉里办，资料、交付件等跳到对应导航页。
 // 证据、调研、评估、交付件、成员与保留期已挪到 输入 / 分析 / 输出 / 设置 页。
@@ -35,15 +36,16 @@ export default function Overview({ code, focus }) {
   const [evs, setEvs] = useState(null);
   const [pano, setPano] = useState(null);
   const [members, setMembers] = useState(null);
-  const [drawer, setDrawer] = useState(null);         // "todo" | "drawer:run" | "drawer:card:{id}"
+  const [drawer, setDrawer] = useState(null);         // "todo" | "drawer:run" | "drawer:card:{id}" | "drawer:deliv:{code}"
   const navigate = useNavigate();
+  const { on: agentView } = useAgentView();            // 右上角“查看 Agent 运行情况”（四期 A29）
   const load = useCallback(() => {
     setError(null);
     api.project(code).then(setP).catch(setError);
     api.evidences(code).then(setEvs).catch(() => setEvs([]));
-    api.panorama(code).then(setPano).catch(() => setPano(null));
+    api.panorama(code, agentView).then(setPano).catch(() => setPano(null));
     api.members(code).then(setMembers).catch(() => setMembers(null));
-  }, [code]);
+  }, [code, agentView]);
   useEffect(load, [load]);
   const close = useCallback(() => setDrawer(null), []);
 
@@ -64,7 +66,7 @@ export default function Overview({ code, focus }) {
   return (
     <>
       <TopBar cap={`${p.code} · ${p.industry} · ${tier.label} · 阶段 ${p.phase_name} · 第 ${p.week} / ${p.total_weeks} 周`} title={`项目驾驶舱 · ${p.service}`}>
-        <button type="button" className="btn" onClick={() => setDrawer("drawer:run")}>交付链</button>
+        {agentView && <button type="button" className="btn" onClick={() => setDrawer("drawer:run")}>交付链</button>}
         <Link className="btnp" to={`/chat/${encodeURIComponent(p.code)}`} style={{ display: "inline-flex", alignItems: "center", textDecoration: "none" }}>打开顾问对话</Link>
       </TopBar>
       {error && <div className="err">{error.message}</div>}
@@ -85,7 +87,7 @@ export default function Overview({ code, focus }) {
         <Card cap="待你处理" value={todo.length} color={todo.length ? "var(--amber)" : "var(--ok)"}
           sub={todo[0] ? `最先：${todo[0].title}` : "没有待你处理的事项"} onClick={() => setDrawer("todo")} />
         <Card cap="卡点" value={blocked} color={blocked ? "var(--crim)" : "var(--ok)"} sub="全景里标红的节点" />
-        <Card cap="本周自动处理" value={pano ? autoDone(pano) : "—"} color="var(--ok)" sub="按交付链已完成步骤计" />
+        <Card cap="本周自动处理" value={pano ? pano.auto_done : "—"} color="var(--ok)" sub="近 7 天 AI 自动完成的步骤" />
         <Card cap="交付件" value={`${signed} / ${p.deliverables.length}`} sub="已签署 / 全部" color="var(--cyan)">
           <div className="bar" style={{ marginTop: 4 }}><i style={{ width: `${p.deliverables.length ? (100 * signed) / p.deliverables.length : 0}%`, background: "var(--cyan)" }} /></div>
         </Card>
@@ -113,7 +115,12 @@ export default function Overview({ code, focus }) {
       )}
       {drawer === "drawer:run" && (
         <Drawer title="交付链" onClose={close} more={{ to: `${base}/output`, label: "去输出页" }}>
-          <RunPanel code={p.code} strict={strict} onChange={load} />
+          <RunPanel code={p.code} strict={strict} onChange={load} canManage={Boolean(pano?.can_manage_runs)} />
+        </Drawer>
+      )}
+      {drawer?.startsWith("drawer:deliv:") && (
+        <Drawer title="已完成交付件 · 只读" onClose={close} more={{ to: `${base}/deliverables`, label: "全部交付件" }}>
+          <SignedPanel code={p.code} dcode={drawer.slice("drawer:deliv:".length)} />
         </Drawer>
       )}
       {card && (
@@ -122,5 +129,43 @@ export default function Overview({ code, focus }) {
         </Drawer>
       )}
     </>
+  );
+}
+
+const fmtDate = (t) => (t ? new Date(t).toLocaleDateString("zh-CN") : "—");
+
+// 已完成交付件的只读面板（四期 A29，《平台规划刷新设计》4.1）：签署版、签署人与日期、交客户与回执、引用依据是否仍有效。
+// 已签署的不能直接改；要改走“发起勘误”（勘误流程待后续工作项接入）。
+function SignedPanel({ code, dcode }) {
+  const [d, setD] = useState(null);
+  const [so, setSo] = useState(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    api.deliverable(code, dcode).then(setD).catch((e) => setErr(e.message));
+    api.signoff(code, dcode).then(setSo).catch(() => setSo({ history: [] }));
+  }, [code, dcode]);
+  if (!d) return <div className="sub">{err || "加载中…"}</div>;
+  const sign = [...(so?.history || [])].reverse().find((h) => h.action === "sign");
+  const updates = d.totals?.knowledge_updates || 0;
+  const page = `/project/${encodeURIComponent(code)}/deliverables/${encodeURIComponent(dcode)}`;
+  const download = () => api.exportWord(code, dcode).catch((e) => setErr(e.message));
+  return (
+    <section aria-label="已完成交付件" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="h2">{d.code} · {d.title}</div>
+      <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", margin: 0 }}>
+        <dt>签署版</dt><dd className="mono">{sign ? `r${sign.revision}` : d.revision ? `r${d.revision}` : "—"}</dd>
+        <dt>签署人与日期</dt><dd>{sign ? `${sign.actor} · ${fmtDate(sign.created_at)}` : "—"}</dd>
+        <dt>交客户与回执</dt><dd className="sub">交付登记暂未接入，以项目经理线下记录为准</dd>
+        <dt>引用依据</dt><dd style={{ color: updates ? "var(--amber)" : "var(--ok)" }}>{updates ? `${updates} 条依据已有更新，建议发起勘误` : "仍有效"}</dd>
+      </dl>
+      {err && <div className="err" role="alert">{err}</div>}
+      <div className="sub">已签署的不能直接改；要改请发起勘误。</div>
+      <div className="row">
+        <Link className="btn sm" to={page}>查看</Link>
+        <button type="button" className="btn sm" onClick={download}>下载</button>
+        <Link className="btn sm" to={page} title="签署流程一栏里有每一版的记录">版本历史</Link>
+        <button type="button" className="btn sm" disabled title="勘误流程待后续工作项接入">发起勘误</button>
+      </div>
+    </section>
   );
 }
