@@ -116,7 +116,7 @@ class KbVersion(KbBase):
     ref_replaced_by: Mapped[str] = mapped_column(String(200), default="")   # 已被替代时：替代文件名和版本
     ref_replaces: Mapped[str] = mapped_column(String(200), default="")      # 本文件替代的旧文件（名称或文号，三期 B26）
     ref_amends: Mapped[str] = mapped_column(String(200), default="")        # 本文件部分修订的文件（三期 B26）
-    deid_status: Mapped[str] = mapped_column(String(16), default="pending")    # pending / passed / not_needed
+    deid_status: Mapped[str] = mapped_column(String(16), default="pending")    # pending / passed / not_needed / virtual（AI 基线草稿，非生产）
     deid_report_id: Mapped[int | None] = mapped_column(ForeignKey("kb_deid_reports.id"), nullable=True)
     upload_id: Mapped[int | None] = mapped_column(ForeignKey("kb_uploads.id"), nullable=True)
     effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)

@@ -14,6 +14,8 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..core import audit
+from ..core.config import get_settings
 from ..models import KbItem, KbVersion, User
 from . import labels, meta, multilang
 from . import review as rv
@@ -39,14 +41,16 @@ def same(v: KbVersion, e: Entry) -> bool:
         c.ref_status, c.ref_code, c.ref_replaced_by, c.ref_replaces, c.ref_amends, c.repeal_date)         and (c.effective_date is None or c.effective_date == v.effective_date)
 
 
-def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> ImportResult:
+def import_entry(db: Session, user: User, e: Entry, submit: bool = False, ai_baseline: bool = False) -> ImportResult:
     r = ImportResult(file="", key=e.key)
-    if e.content.source_type != "public":
+    if ai_baseline:
+        rv.check_ai_baseline(e.content)
+    elif e.content.source_type != "public":
         r.action, r.message = "error", "批量导入只收公开资料；其他来源请走投料箱并通过去标识"
         return r
     item = db.scalar(select(KbItem).where(KbItem.import_key == e.key))
     if item is None:
-        v = rv.new_item(db, user, e.meta, e.content)
+        v = rv.new_item(db, user, e.meta, e.content, ai_baseline=ai_baseline)
         v.item.import_key = e.key
         db.commit()
         r.action = "created"
@@ -79,15 +83,20 @@ def import_entry(db: Session, user: User, e: Entry, submit: bool = False) -> Imp
                      ("，产品已更新", products_changed), ("，行业已更新", industries_changed))
             r.action, r.message = "unchanged", "与现行版本相同" + "".join(n for n, hit in notes if hit)
             return r
-        v = rv.new_version(db, user, item, e.content)
+        v = rv.new_version(db, user, item, e.content, ai_baseline=ai_baseline)
         r.action = "revised"
+    if ai_baseline:
+        audit.record(db, actor=user.username, action="kb.ai_baseline_import", result="allowed", doc_id=v.item.doc_id,
+                     version=v.version)
     if submit:
         rv.submit(db, user, v)
     r.doc_id, r.version_id = v.item.doc_id, v.id
     return r
 
 
-def import_dir(db: Session, user: User, path: Path, submit: bool = False) -> list[ImportResult]:
+def import_dir(db: Session, user: User, path: Path, submit: bool = False, ai_baseline: bool = False) -> list[ImportResult]:
+    if ai_baseline and get_settings().is_prod:             # 生产整批拒收，一条也不建
+        raise rv.ReviewError(403, "生产环境不收 AI 基线草稿")
     # 跳过 README、以 _ 或 . 开头的文件和目录（如 Agent 起草退回的 _rejected/）、未合并的 *.new.md
     files = sorted(p for p in path.rglob("*.md")
                    if p.name != "README.md" and not p.name.endswith(".new.md")
@@ -100,7 +109,7 @@ def import_dir(db: Session, user: User, path: Path, submit: bool = False) -> lis
             if e.key in seen:
                 raise EntryError(f"key 与 {seen[e.key]} 重复")
             seen[e.key] = f.name
-            r = import_entry(db, user, e, submit)
+            r = import_entry(db, user, e, submit, ai_baseline)
         except (EntryError, rv.ReviewError) as ex:
             db.rollback()
             r = ImportResult(file="", action="error", message=str(ex))
