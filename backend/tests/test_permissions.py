@@ -247,6 +247,8 @@ MATRIX = [
     (("POST", "/api/kb/sources/confirm-queue/decide", {"gap_ids": [999999], "decision": "reject"}),
      (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/sources/manual-queue", None),     (403, 403, 403, 403, 403)),   # 需人工下载（四期 B25），同上
+    (("GET", "/api/kb/sources/alarms", None),           (403, 403, 403, 403, 403)),   # 入库报警卡（四期 B41），同上
+    (("POST", "/api/kb/sources/alarms/999999/resolve", None), (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/readiness", None),                (403, 403, 403, 403, 403)),   # F2②：知识专家、知识管理员、项目负责人

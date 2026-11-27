@@ -48,6 +48,7 @@ KINDS: dict[str, str] = {
     "practice": "公司做法确认",
     "source_confirm": "来源确认",
     "selfeval": "客户自评",
+    "kb_alarm": "入库报警",                             # 四期 B41⑥：采集回传入库数为 0 或正文率低（app/kb/gap_loop.py）
 }
 UNAVAILABLE = {"practice", "source_confirm"}           # 接口未合并（#283、#297），先留空位
 KB_REVIEW_KINDS = ("kb_content", "kb_compliance")
@@ -255,6 +256,11 @@ def collect(db: Session, user: User) -> list[Task]:
             tasks.append(Task(kind="deid", ref_id=u.id, title=f"上传 #{u.id}", link="/kb/intake", impact=1.0,
                               created_ts=_ts(u.created_at),
                               blocked="你是上传者，需另一位知识管理员确认" if u.uploaded_by == me else ""))
+        from ..models import KbAlarm
+
+        for a in db.scalars(select(KbAlarm).where(KbAlarm.status == "open")):
+            tasks.append(Task(kind="kb_alarm", ref_id=a.id, title=f"入库报警 #{a.id}（{a.count} 批）",
+                              link="/kb/sources", impact=1.0, created_ts=_ts(a.created_at)))
     if PROJECT_LEAD in roles:
         for d in db.scalars(select(ProjectDeletion).where(ProjectDeletion.status == "pending")
                             .options(selectinload(ProjectDeletion.project))):

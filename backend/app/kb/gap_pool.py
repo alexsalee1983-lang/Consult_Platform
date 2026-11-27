@@ -237,9 +237,10 @@ def import_return(db: Session, batch: Path, *, actor: str = "cli") -> tuple[acq.
     rows = manifest["files"]
     from . import gap_loop                      # 四期 B41：栏目页两级取正文（避免循环导入）
 
-    listing = gap_loop.listing_files(batch, rows, whitelist(db))
+    wl = whitelist(db)
+    listing, report.body = gap_loop.classify(batch, rows, wl)
     closed = 0
-    for url in sorted({str(r["url"]) for r in rows if str(r.get("file", "")) not in listing}):
+    for url in sorted({str(r["url"]) for r in rows}):          # 栏目页本身也算采到了（正文链接转下一轮）
         for g in _open_by_url(db, url):
             close(db, g.gap_key, "collected", actor=actor)
             closed += 1
@@ -256,7 +257,7 @@ def import_return(db: Session, batch: Path, *, actor: str = "cli") -> tuple[acq.
                 mark_manual(db, row.gap_key, reason, actor=actor)
                 report.manual += 1
     report.listing = sorted(listing)
-    report.next_round = gap_loop.expand_listings(db, batch, rows, listing, whitelist(db), actor=actor)
+    report.next_round = gap_loop.expand_listings(db, batch, rows, listing, wl, actor=actor)
     extra = {k: v for k, v in (("manual", report.manual), ("unavailable", report.unavailable),
                                ("listing", len(report.listing)), ("next_round", report.next_round)) if v}
     audit.record(db, actor=actor, action="kb.gap.return", result="allowed", files=report.count, closed=closed, **extra)
@@ -340,7 +341,12 @@ def publish_manifest(db: Session, batch: Path, skip: frozenset[str] | set[str] =
             unmatched.append(str(r.get("file", "")))
             continue
         s = max(hits, key=lambda x: len(x.url))
-        w.writerow({"文件名": r["file"], "名称": s.name, "发布机关": s.publisher, "原网址": url,
+        title = ""
+        if str(r["file"]).lower().endswith((".html", ".htm", ".shtml")):    # 网页正文用页面标题（B41，免得同源各页同名）
+            from . import gap_loop
+
+            title = gap_loop.page_title((batch / str(r["file"])).read_bytes())
+        w.writerow({"文件名": r["file"], "名称": title or s.name, "发布机关": s.publisher, "原网址": url,
                     "现行状态": "现行", "获取方式": "已下载", "sha256": str(r.get("sha256", "")).lower()})
     return out.getvalue(), unmatched
 
