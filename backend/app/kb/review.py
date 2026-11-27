@@ -13,6 +13,8 @@
 - 任一审核人退回，版本即“已退回”（终态）；要修改就基于它建新版本再提交，审核记录始终对应被审的那一版。
 - 来源：投料来的草稿必须是去标识已通过的投料；不经投料直接写的草稿只允许“公开资料”（deid_status=not_needed），
   正文同样先过机密级检测。
+- AI 基线草稿（负责人 2026-11-27）：虚拟客户的黄金样例、公司做法基线稿，非生产环境经 kb-import --ai-baseline 导入，
+  来源只能是专家萃取，deid_status=virtual（虚拟数据免去标识），按第三级由一位非作者知识专家拍板；生产环境导入、提交都拒绝。
 - 发布：正文按章节切片写入 kb_chunks（PostgreSQL 自动建中文全文索引）；条目的现行版本切到新版本，旧版本“已替代”。
 - 下线：条目标记下线，现行版本“已下线”，检索不再返回；历史版本全部保留。
 所有操作写审计（只记编号、状态、角色，不记正文）。
@@ -42,7 +44,19 @@ LEVEL3_SOURCES = ("project", "expert", "internal")
 
 def level3(v: KbVersion) -> bool:
     """第三级：非公开来源、去标识已由知识管理员确认（合规审核并入去标识确认）。"""
-    return v.source_type in LEVEL3_SOURCES and v.deid_status == "passed"
+    return v.source_type in LEVEL3_SOURCES and (v.deid_status == "passed" or virtual_ok(v))
+
+
+def virtual_ok(v: KbVersion) -> bool:
+    """AI 基线草稿：虚拟数据免去标识，只在非生产环境认。"""
+    return v.deid_status == "virtual" and not get_settings().is_prod
+
+
+def check_ai_baseline(c: VersionContent) -> None:
+    if get_settings().is_prod:
+        raise ReviewError(403, "生产环境不收 AI 基线草稿")
+    if c.source_type != "expert":
+        raise ReviewError(422, "AI 基线草稿只收专家萃取来源（source_type: expert）")
 
 
 def required_roles(v: KbVersion) -> tuple[str, ...]:
@@ -86,7 +100,10 @@ def body_from_upload(db: Session, upload_id: int) -> tuple[str, KbDeidReport]:
     return "\n\n".join(parts), report
 
 
-def _source_fields(db: Session, c: VersionContent, upload_id: int | None) -> dict:
+def _source_fields(db: Session, c: VersionContent, upload_id: int | None, ai_baseline: bool = False) -> dict:
+    if ai_baseline:
+        check_ai_baseline(c)
+        return {"deid_status": "virtual"}
     if upload_id is not None:
         body, report = body_from_upload(db, upload_id)
         if not c.body.strip():
@@ -104,9 +121,10 @@ def _apply(v: KbVersion, fields: dict) -> None:
 
 # ---- 草稿 ----
 
-def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id: int | None = None) -> KbVersion:
+def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id: int | None = None,
+             ai_baseline: bool = False) -> KbVersion:
     require_knowledge(db, user)
-    fields = _source_fields(db, c, upload_id)
+    fields = _source_fields(db, c, upload_id, ai_baseline)
     _check_text(c.title, c.body)
     try:
         m.check()
@@ -121,7 +139,8 @@ def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id:
     return v
 
 
-def new_version(db: Session, user: User, item: KbItem, c: VersionContent, upload_id: int | None = None) -> KbVersion:
+def new_version(db: Session, user: User, item: KbItem, c: VersionContent, upload_id: int | None = None,
+                ai_baseline: bool = False) -> KbVersion:
     require_knowledge(db, user)
     open_draft = db.scalar(select(KbVersion.id).where(KbVersion.item_id == item.id,
                                                       KbVersion.status.in_(("draft", "in_review"))))
@@ -136,7 +155,7 @@ def new_version(db: Session, user: User, item: KbItem, c: VersionContent, upload
         if cur.deid_status == "not_needed" and c.source_type != "public":
             raise ReviewError(422, "现行版本来自公开资料，修订时来源仍须为公开资料")
     else:
-        fields = _source_fields(db, c, upload_id)
+        fields = _source_fields(db, c, upload_id, ai_baseline)
     _check_text(c.title, c.body)
     try:
         v = create_draft(db, item, c, created_by=user.username)
@@ -181,8 +200,8 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
     require_knowledge(db, user)
     if v.status != "draft":
         raise ReviewError(409, "只有草稿能提交")
-    if v.deid_status not in ("passed", "not_needed"):
-        raise ReviewError(409, "去标识还没有通过，不能提交")
+    if v.deid_status not in ("passed", "not_needed") and not virtual_ok(v):
+        raise ReviewError(409, "去标识还没有通过，不能提交" if v.deid_status != "virtual" else "生产环境不收 AI 基线草稿")
     if not v.body.strip():
         raise ReviewError(422, "正文不能为空")
     _check_multilang(db, v, user.username, "kb.submit")

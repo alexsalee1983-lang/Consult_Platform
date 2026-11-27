@@ -771,14 +771,19 @@ def kb_import(args: argparse.Namespace) -> int:
         user = _knowledge_user(db, args.as_user)
         if user is None:
             return 1
-        results = importer.import_dir(db, user, path, submit=args.submit)
+        try:
+            results = importer.import_dir(db, user, path, submit=args.submit, ai_baseline=args.ai_baseline)
+        except importer.rv.ReviewError as e:
+            print(str(e), file=sys.stderr)
+            return 1
     label = {"created": "新建", "revised": "修订", "unchanged": "无变化", "skipped": "跳过", "error": "失败"}
     for r in results:
         where = f" {r.doc_id}" if r.doc_id else ""
         print(f"  {label.get(r.action, r.action)}  {r.file}{where}" + (f"  —— {r.message}" if r.message else ""))
     counts = {k: sum(1 for r in results if r.action == k) for k in label}
     batches.record_cli("import", args.as_user, {**counts, "total": len(results), "submit": bool(args.submit)}, args.dir)
-    print("合计：" + "，".join(f"{label[k]} {n}" for k, n in counts.items() if n) +
+    print(("AI 基线草稿（虚拟数据免去标识，一位非作者知识专家拍板）" if args.ai_baseline else "") +
+          "合计：" + "，".join(f"{label[k]} {n}" for k, n in counts.items() if n) +
           ("；已提交审核，仍需双人审核后发布" if args.submit else "；均为草稿，在审批队列提交审核"))
     return 2 if counts["error"] else 0
 
@@ -1356,6 +1361,8 @@ def main(argv: list[str] | None = None) -> int:
     ki.add_argument("dir", help="条目文件所在目录（*.md，带元数据头）")
     ki.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份导入")
     ki.add_argument("--submit", action="store_true", help="导入后一并提交审核")
+    ki.add_argument("--ai-baseline", action="store_true",
+                    help="AI 基线草稿：只收专家萃取来源的虚拟样例（黄金样例、公司做法），免去标识，生产环境拒绝")
     ki.set_defaults(func=kb_import)
     ke = sub.add_parser("kb-export", help="导出已发布的公开知识及审核记录、哈希，交生产环境导入")
     ke.add_argument("out", help="导出目录（必须为空或不存在）")
