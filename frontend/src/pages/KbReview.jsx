@@ -368,7 +368,7 @@ export default function KbReview() {
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{v.title}</h2>
                 <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                   <span className="chip c-c">来源：{{ public: "公开资料", expert: "专家萃取", project: "项目沉淀", internal: "内部制度改造" }[v.source_type] || v.source_type}</span>
-                  <span className="chip c-n">去标识：{{ passed: "已通过", not_needed: "无需", pending: "未完成" }[v.deid_status] || v.deid_status}</span>
+                  <span className="chip c-n">去标识：{{ passed: "已通过", not_needed: "无需", virtual: "虚拟基线免去标识", pending: "未完成" }[v.deid_status] || v.deid_status}</span>
                   {v.applicability && <span className="chip c-n">适用：{v.applicability}</span>}
                   {v.ref_document && <span className="chip c-v">依据：{v.ref_document} {v.ref_version}</span>}
                   {v.review_date && <span className="chip c-n">复审 {v.review_date}</span>}
