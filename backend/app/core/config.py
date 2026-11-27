@@ -118,6 +118,11 @@ class Settings(BaseSettings):
     kb_readiness_targets: str = ""
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
+    # 四期 B41 缺口闭环：一批回传导入后正文率（正文页 ÷ 非栏目页文件）低于此值或入库数为 0 推入库报警卡给知识管理员
+    kb_body_rate_min: float = 0.5
+    # 来源推荐 Agent 命中率（推荐的网址最终采到 ÷ 已有结果的推荐）低于此值、且样本不少于下一项时自动停用（近 90 天）
+    kb_recommend_min_hit: float = 0.3
+    kb_recommend_min_samples: int = 10
 
     # 重排服务（/rerank，交叉编码模型，决策记录 2026-11-11），同样只经网关调用。留空表示不启用：检索只用 RRF 排序，
     # 依据查询退回上面的余弦相似度门槛。docker compose 默认指向 rerank 服务（tools/rerank）。
