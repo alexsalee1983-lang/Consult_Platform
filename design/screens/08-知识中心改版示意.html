@@ -1,4 +1,5 @@
-<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>知识中心改版示意 v1</title><style>
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>知识中心改版示意 v3</title>
+<style>
 :root{--obs:#0a0d12;--s1:#10151c;--s2:#161d27;--s3:#1d2633;--ln:#232d3b;--ln2:#2e3a4b;--tx:#e6ebf2;--tx2:#a3aebe;--tx3:#6b7789;--amber:#f5a524;--cyan:#22d3ee;--ok:#3dd68c;--vio:#b49cff;--crim:#f0454f}
 *{box-sizing:border-box}
 body{margin:0;background:var(--obs);color:var(--tx);font:13px/1.55 "Microsoft YaHei",sans-serif;display:flex;min-width:1440px}
@@ -54,192 +55,166 @@ tr.hov:hover td{background:var(--s2);cursor:pointer}
 .filt{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.filt a{border:1px solid var(--ln2);border-radius:14px;padding:2px 11px;color:var(--tx2);font-size:12.5px}.filt a.on{border-color:var(--cyan);color:var(--cyan)}
 .lp ol{margin:0;padding-left:18px;line-height:1.8}.lp .p{color:var(--ok)}
 </style></head><body>
-<div class="side"><div class="logo">安全咨询平台</div>
-<a class="it" onclick="toast('我的任务：知识专家的卡片同时出现在这里（示意）')">我的任务 <span class="tag" id="sideTodo">7</span></a>
-<a class="it" onclick="toast('我的项目（示意）')">我的项目</a>
-<a class="it" onclick="toast('顾问对话：回答里的引用角标点开即进条目详情（示意）')">顾问对话</a>
+<style>
+.mx2 td{text-align:center;padding:6px}.mx2 td:first-child{text-align:left}
+.cl{display:inline-block;min-width:108px;border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer;border:1px solid transparent}
+.cl.tg{border-color:var(--cyan)}.cl.np{background:var(--s2);color:var(--tx3);cursor:default}
+.g-ok{background:rgba(61,214,140,.14);color:var(--ok)}.g-am{background:rgba(245,165,36,.14);color:var(--amber)}.g-cr{background:rgba(240,69,79,.14);color:var(--crim)}
+.auto{color:var(--tx3);font-size:12px}
+.ib.k-gold{border-left-color:var(--ok)}.ib.k-leak{border-left-color:var(--crim);border-color:var(--crim)}
+</style>
+<div class="side">
+<div class="logo">安全咨询平台</div>
+<div class="grp r-c-g">项目里（驾驶舱）</div>
+<a class="it r-c" data-v="retro">结项复盘</a>
 <div class="grp">知识中心</div>
-<a class="it" data-v="search" data-r="c">知识检索</a>
-<a class="it" data-v="drop" data-r="c">投料箱</a>
-<a class="it" data-v="inbox" data-r="e">待我处理 <span class="tag" id="sideInbox">7</span></a>
-<a class="it" data-v="ops" data-r="m">知识运转</a>
+<a class="it r-e r-a" data-v="inbox">待我处理 <span class="tag" id="sideInbox">4</span></a>
+<a class="it r-c r-e r-a" data-v="health">知识健康</a>
+<a class="it r-c r-e r-a" data-v="drop">投料箱</a>
+<a class="it r-a" data-v="plan">规划与规则</a>
+<div class="grp r-a-g">系统（负责人，排查用）</div>
+<a class="it r-a" data-v="sys">运行与审计</a>
 <div class="grp">说明</div>
-<a class="it" data-v="map">改版全景</a>
-<div class="grp">管理</div><a class="it" onclick="toast('指标看板（示意）')">指标看板</a></div>
-
+<a class="it" data-v="why">v3 改了什么</a>
+<a class="it" data-v="map">人工触点对照</a>
+</div>
 <div class="main">
-<div class="top"><div class="crumb" id="crumb">知识中心 / 知识检索</div>
-<div class="role"><span class="muted" style="padding:4px 8px">以谁的身份看：</span><a data-role="c" class="on">顾问</a><a data-role="e">知识专家</a><a data-role="m">知识管理员</a></div></div>
-<div class="note">四期知识中心改版可点击示意（2026-11-27 草案）：9 个页面收成 3 个角色入口 + 1 个条目枢纽。数据均为虚拟（BANK-A、GRID-B、MFG-C）；按钮只弹提示，不连后端。</div>
+<div class="top"><div class="crumb" id="crumb"></div>
+<div class="role" id="role"><a data-r="c">顾问</a><a data-r="e">知识专家</a><a data-r="a">负责人</a></div></div>
+<div class="note" id="roleNote"></div>
 
-<!-- ① 顾问：检索 -->
-<div class="view" id="v-search">
-<h1>知识检索</h1><div class="sub">结果直接点进条目详情；零命中的查询自动进缺口池，不用你另外提需求</div>
-<div class="search"><input id="q" value="双因素 身份鉴别 三级" onkeydown="if(event.key==='Enter')doSearch()"><a class="btn" onclick="doSearch()">检索</a><a class="btn2" onclick="document.getElementById('q').value='泰国 PDPA 跨境传输 银行';doSearch()">试一个零命中</a></div>
-<div class="filt"><a class="on">全部</a><a>法规标准</a><a>控制项解读</a><a>公司经验</a><a>模板</a><span class="muted" style="margin-left:auto">适用行业：<span class="chip">金融</span> 地区：<span class="chip">中国大陆</span></span></div>
-<div id="results"></div>
-</div>
-
-<!-- ① 顾问：投料箱 -->
-<div class="view" id="v-drop">
-<h1>投料箱</h1><div class="sub">交经验、交资料；去标识、建条目、审核由流水线自动跑，你只会在需要确认去标识时收到一张卡</div>
-<div class="g2"><div class="card"><h3>交一条经验</h3><div class="t2" style="margin-bottom:8px">一句话说清楚：在什么情形下、怎么做有效。客户名、IP、人名会被自动替换成占位符。</div>
-<div style="background:var(--s2);border:1px solid var(--ln2);border-radius:8px;padding:10px;min-height:90px;color:var(--tx2)">城商行做等保差距分析时，远程运维堡垒机常只做了口令认证，建议在整改建议里把“堡垒机接入 OTP”单列为高优先级，客户接受度高、改造成本低。</div>
-<div style="margin-top:8px;display:flex;gap:8px"><a class="btn" onclick="toast('已提交：机器去标识（命中 0 项）→ 起草条目 → 规则 + Agent 审核；审核例外才进专家收件箱')">提交</a><a class="btn2">上传资料</a></div></div>
-<div class="card"><h3>我交的</h3><table><tr><th>内容</th><th>当前在哪</th><th>结果</th></tr>
-<tr><td>堡垒机 OTP 整改经验</td><td>Agent 审核</td><td><span class="chip c-cy">自动跑中</span></td></tr>
-<tr><td>GRID-B 调研中发现的 OT 区分区做法</td><td>去标识确认</td><td><span class="chip c-am">等专家 1 张卡</span></td></tr>
-<tr><td>数据分类分级访谈提纲 v2</td><td>已发布</td><td><span class="chip c-ok">被引用 6 次</span></td></tr></table></div></div>
-</div>
-
-<!-- ② 专家：待我处理 -->
 <div class="view" id="v-inbox">
-<h1>待我处理</h1><div class="sub">审批队列与专家工作台合一。机器能定的已经定了，这里只剩必须由你判断或担责的事；按影响排序（在办项目数 × 服务产品 × 截止时间）</div>
-<div class="g4" style="margin-bottom:12px">
-<div class="kpi"><b id="kLeft">7</b><span>待处理卡片</span></div>
-<div class="kpi"><b class="ok">212</b><span>本周机器自动处理（未打扰你）</span></div>
-<div class="kpi"><b>3</b><span>可批量决定</span></div>
-<div class="kpi"><span>今日时间预算</span><div style="display:flex;align-items:center;gap:8px;margin-top:6px"><div class="bar" style="flex:1"><i id="budget" style="width:20%"></i></div><span id="budgetT">4 / 20 分钟</span></div></div></div>
-<div class="filt" id="ibf"><a class="on" data-k="all">全部</a><a data-k="exc">审核例外</a><a data-k="conflict">冲突裁决</a><a data-k="reg">法规变更影响</a><a data-k="gap">缺口确认</a><a data-k="due">复审到期</a><a data-k="deid">去标识确认</a>
-<span style="margin-left:auto;display:flex;gap:6px"><a class="btn2 sm" onclick="batch()">批量同意机器建议（3）</a></span></div>
+<h1>待我处理</h1><div class="sub">只有必须由你判断或担责的事。处理完就没有了；没有的时候这一页是空的。</div>
+<div class="filt"><span class="muted" id="budgetT" style="padding-top:2px"></span><a class="btn2 sm" style="margin-left:auto" onclick="batch()">同类批量同意</a></div>
 <div id="inbox"></div>
+<div class="auto" id="empty" style="display:none;padding:30px 0;text-align:center">今天没有需要你处理的事。</div>
 </div>
 
-<!-- ③ 管理员：知识运转 -->
-<div class="view" id="v-ops">
-<h1>知识运转</h1><div class="sub">看流水线在不在转、卡在哪、错没错；采集、法规变更、冲突、实践问题队列从命令行搬上界面</div>
-<div class="tabs" id="opsTabs"><a class="on" data-t="pipe">流水线</a><a data-t="src">来源登记</a><a data-t="health">健康</a></div>
-<div id="t-pipe">
-<div class="flow" id="flow"></div>
-<div class="gl"><div>
-<div class="card"><h3 id="stTitle">卡住项 · 全部阶段</h3><table id="stuck"></table></div>
-<div class="card"><h3>采集批次</h3><table><tr><th>批次</th><th>清单</th><th>取到</th><th>回传核对</th><th>入库</th><th></th></tr>
-<tr><td>20261127-full</td><td>75</td><td>66</td><td><span class="chip c-ok">哈希一致</span></td><td><span class="chip c-am">待导入</span></td><td><a class="btn2 sm" onclick="toast('9 项未取到已自动转两级下载重试（示意）')">看 9 项未取到</a></td></tr>
-<tr><td>first2-20261127</td><td>48</td><td>—</td><td>—</td><td><span class="chip c-cy">采集中</span></td><td></td></tr>
-<tr><td>20261120-reg</td><td>31</td><td>31</td><td><span class="chip c-ok">哈希一致</span></td><td><span class="chip c-ok">已发布 27</span></td><td></td></tr></table></div>
-</div><div>
-<div class="card"><h3>本周</h3><table>
-<tr><td>新建条目</td><td style="text-align:right">138</td></tr>
-<tr><td>自动发布</td><td style="text-align:right" class="ok">104（75%）</td></tr>
-<tr><td>转人工</td><td style="text-align:right" class="am">19</td></tr>
-<tr><td>驳回 / 回炉</td><td style="text-align:right">15</td></tr>
-<tr><td>专家平均处理</td><td style="text-align:right">2.4 分钟 / 卡</td></tr></table></div>
-<div class="card"><h3>失败原因 TOP</h3><table>
-<tr><td>引用条款号对不上原文</td><td style="text-align:right">7</td></tr>
-<tr><td>与已发布条目冲突</td><td style="text-align:right">4</td></tr>
-<tr><td>来源站点拒绝访问</td><td style="text-align:right">9</td></tr>
-<tr><td>适用范围缺行业</td><td style="text-align:right">3</td></tr></table></div>
-</div></div></div>
-<div id="t-src" style="display:none"><div class="card"><table>
-<tr><th>来源</th><th>类型</th><th>版本</th><th>最近采集</th><th>派生条目</th><th>变更</th></tr>
-<tr class="hov" onclick="toast('来源详情：派生的 64 条条目、历次采集与差异（示意）')"><td>GB/T 22239-2019 网络安全等级保护基本要求</td><td>国家标准</td><td>2019</td><td>11-20 · 一致</td><td>64</td><td><span class="chip">无</span></td></tr>
-<tr class="hov"><td>GB/T 35273-2020 个人信息安全规范</td><td>国家标准</td><td>2020</td><td>11-20 · 一致</td><td>41</td><td><span class="chip">无</span></td></tr>
-<tr class="hov" onclick="goInbox('reg')"><td>某监管机构 · 银行业数据安全管理办法</td><td>部门规章</td><td>2026 修订</td><td>11-26 · <span class="am">有差异</span></td><td>23</td><td><span class="chip c-vi">影响分析 → 专家 1 卡</span></td></tr>
-<tr class="hov"><td>Thailand PDPA B.E. 2562</td><td>境外法规</td><td>2019</td><td>11-27 · 一致</td><td>12</td><td><span class="chip">无</span></td></tr>
-<tr class="hov"><td>NIST SP 800-53 Rev.5</td><td>境外标准</td><td>Rev.5</td><td>11-27 · <span class="cr">未取到</span></td><td>38</td><td><span class="chip c-am">两级下载重试</span></td></tr></table></div></div>
-<div id="t-health" style="display:none">
-<div class="g4" style="margin-bottom:12px"><div class="kpi"><b>1,284</b><span>已发布条目</span></div><div class="kpi"><b class="am">31</b><span>30 天内复审到期</span></div><div class="kpi"><b class="cr">5</b><span>红格（缺口）</span></div><div class="kpi"><b>86%</b><span>交付件引用命中率</span></div></div>
-<div class="g2"><div class="card"><h3>覆盖矩阵（行业 × 服务产品）<span class="muted" style="font-weight:400;font-size:12px">　点红格看缺口</span></h3>
-<table class="mx"><tr><th></th><th>等保差距分析</th><th>数据安全评估</th><th>个人信息保护</th><th>密码应用初判</th><th>OT 安全</th></tr>
-<tr><td>金融</td><td><span class="cell L3">L3</span></td><td><span class="cell L3">L3</span></td><td><span class="cell L2">L2</span></td><td><span class="cell L2">L2</span></td><td><span class="cell L0" onclick="goInbox('gap')">L0</span></td></tr>
-<tr><td>能源电力</td><td><span class="cell L3">L3</span></td><td><span class="cell L2">L2</span></td><td><span class="cell L1">L1</span></td><td><span class="cell L1">L1</span></td><td><span class="cell L2">L2</span></td></tr>
-<tr><td>制造</td><td><span class="cell L2">L2</span></td><td><span class="cell L1">L1</span></td><td><span class="cell L1">L1</span></td><td><span class="cell L0" onclick="goInbox('gap')">L0</span></td><td><span class="cell L1">L1</span></td></tr>
-<tr><td>东南亚（境外）</td><td>—</td><td><span class="cell L1">L1</span></td><td><span class="cell L0" onclick="goInbox('gap')">L0</span></td><td>—</td><td>—</td></tr></table></div>
-<div class="card"><h3>自动发布抽检 · 信任度</h3><table><tr><th>条目类型</th><th>自动发布</th><th>抽检比例</th><th>抽检错误率</th><th>机器调整</th></tr>
-<tr><td>法规原文切片</td><td>98%</td><td>5%</td><td class="ok">0.4%</td><td><span class="chip c-ok">已放宽</span></td></tr>
-<tr><td>控制项解读</td><td>71%</td><td>15%</td><td>2.1%</td><td><span class="chip">保持</span></td></tr>
-<tr><td>映射关系</td><td>64%</td><td>20%</td><td class="am">4.8%</td><td><span class="chip c-am">已收紧</span></td></tr>
-<tr><td>公司经验</td><td>0%</td><td>—</td><td>—</td><td><span class="chip c-vi">必须人签发</span></td></tr></table>
-<div class="muted" style="margin-top:6px">错误率连续 2 周 &gt; 3% 自动收紧，连续 4 周 &lt; 1% 自动放宽；阈值改动属规则变更，需负责人确认。</div></div></div></div>
+<div class="view" id="v-health">
+<h1>知识健康</h1><div class="sub">知识够不够用、新不新。缺口识别、获取、起草、审核、到期复审都在后台自动进行，这里只看结果。</div>
+<div class="filt" id="regf"><span class="muted" style="padding-top:2px">地区：</span><a class="on" data-g="cn">中国大陆</a><a data-g="sea">东南亚</a><a data-g="af">非洲 7 国</a><a data-g="hk">港澳</a></div>
+<div class="g4" style="margin-bottom:12px">
+<div class="kpi"><b>1,284</b><span>可用条目</span></div>
+<div class="kpi"><b class="ok">96%</b><span>在有效期内（保鲜）</span></div>
+<div class="kpi"><b class="am">74%</b><span>SOC × 银行 关键章节就绪度（目标 ≥ 70%）</span></div>
+<div class="kpi"><b>86%</b><span>交付件引用命中率</span></div></div>
+<div class="gl"><div class="card"><h3>覆盖矩阵 <span class="muted" id="regT" style="font-size:12px">· 中国大陆</span></h3><table class="mx2" id="mx"></table>
+<div class="muted" style="margin-top:6px">格内：就绪度 · 趋势；青框 = 当前目标格；灰色 = 未规划（不算缺口）。新建产品或地区后，对应格子自动出现并自动补齐。</div></div>
+<div class="card"><h3 id="cellT">点左侧格子</h3><div id="cellBody" class="t2">看这一格哪些内容还不够，以及是否需要人。</div></div></div>
 </div>
 
-<!-- 枢纽：条目详情 -->
-<div class="view" id="v-item">
-<div class="crumb" style="margin-bottom:6px"><a onclick="back()">← 返回</a>　/kb/item/K-0412</div>
-<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h1>三级系统远程管理须采用两种以上组合鉴别技术</h1><span class="chip c-ok">已发布 v3</span><span class="chip">控制项解读</span><span class="chip">金融 · 能源电力 · 制造</span><span class="chip c-am">复审到期 2027-02-10</span></div>
-<div class="sub" style="margin-top:6px">用于差距分析与整改建议；不构成测评结论</div>
-<div class="gl"><div>
-<div class="card body"><h3>正文与适用范围</h3>
-<p>适用于等级保护第三级及以上系统的管理员远程登录（含运维堡垒机、云管平台控制台）。要求同时使用两种或两种以上组合鉴别技术，其中至少一种应基于密码技术<sup>[1]</sup>。</p>
-<p>差距分析时常见情形：仅口令 + 图形验证码（不满足）；口令 + 短信验证码（满足组合，但需评估短信通道风险）；口令 + 硬件令牌或 OTP（满足）<sup>[2]</sup>。</p>
-<p class="t2">整改建议优先级：远程运维入口先于本地控制台；与密码应用改造合并实施可降低成本。</p></div>
-<div class="card"><h3>依据链</h3><div class="chain"><span>GB/T 22239-2019</span>→<span>8.1.4.1 身份鉴别 d)</span>→<span>原文切片 K-0088</span>→<span>本条目 K-0412</span>→<span>映射：NIST CSF PR.AA-03</span></div></div>
-<div class="card"><h3>被哪些交付件 / 项目引用 <span class="muted" style="font-weight:400;font-size:12px">按项目权限过滤：你只看得到自己参与的项目</span></h3>
-<table><tr><th>项目</th><th>交付件</th><th>引用处</th></tr>
-<tr><td>BANK-A 等保差距分析</td><td>D4 差距分析报告</td><td>4.2 身份鉴别 · 发现 F-07</td></tr>
-<tr><td>GRID-B 数据安全评估</td><td>D5 整改建议</td><td>建议 R-12</td></tr>
-<tr><td class="muted" colspan="3">另有 3 个项目引用（你不是成员，不显示名称）</td></tr></table></div>
-</div><div>
-<div class="card"><h3>这条有问题？</h3><div class="t2" style="margin-bottom:8px">点一下即可，系统会生成专家卡片，你不用管后续流程。</div>
-<div style="display:flex;gap:6px"><a class="btn2" onclick="fb('有误')">有误</a><a class="btn2" onclick="fb('过时')">过时</a><a class="btn2" onclick="fb('缺了')">缺了内容</a></div></div>
-<div class="card"><h3>机器审核结论</h3><table>
-<tr><td>引用核对</td><td class="ok">条款号与原文一致</td></tr><tr><td>冲突规则</td><td class="ok">无冲突</td></tr><tr><td>Agent 审核</td><td class="ok">通过 · 置信 0.93</td></tr><tr><td>抽检</td><td>11-20 抽中 · 专家判合格</td></tr></table></div>
-<div class="card"><h3>版本与审核记录</h3><div class="tl">
-<div class="k">v3 · 11-20 · 自动发布（法规变更复审，差异为措辞）</div><div>v2 · 09-03 · 专家 A 签发（补短信通道风险）</div><div>v1 · 06-11 · 初版导入</div></div></div>
-<div class="card"><h3>反馈记录</h3><div class="t2">10-15 顾问反馈“缺云管平台场景” → 专家采纳 → 已并入 v2</div></div>
-</div></div></div>
+<div class="view" id="v-drop">
+<h1>投料箱</h1><div class="sub">平时想到的经验、手上的公开资料，交到这里就行，后面不用管。项目里的经验在结项复盘时交。</div>
+<div class="g2"><div class="card"><h3>交一条经验</h3><div class="t2" style="margin-bottom:8px">一句话：什么情形下、怎么做有效。提交前自动去掉客户名、IP、人名，给你看一眼再交。</div>
+<div style="background:var(--s2);border:1px solid var(--ln2);border-radius:8px;padding:10px;min-height:80px;color:var(--tx2)">城商行做差距分析时，远程运维堡垒机常只做了口令认证，整改建议里把“堡垒机接入动态口令”单列为高优先级，客户接受度高、改造成本低。</div>
+<div style="margin-top:8px;color:var(--tx2)"><label><input type="checkbox"> 这是公司做法</label>　<label><input type="checkbox"> 推荐为黄金样例（需写一句为什么好）</label><div class="muted">都不勾：类型由机器判断。</div></div>
+<div style="margin-top:8px;display:flex;gap:8px"><a class="btn" onclick="toast('已去标识（命中 0 项），已提交')">预览并提交</a><a class="btn2" onclick="toast('批量上传：拖入文件夹或压缩包；子文件夹名为“黄金样例”“公司做法”的按提名处理')">批量上传（文件夹 / 压缩包）</a></div></div>
+<div class="card"><h3>我交的 · 我报的</h3><table><tr><th>内容</th><th>状态</th></tr>
+<tr><td>堡垒机动态口令整改经验</td><td><span class="auto">处理中</span></td></tr>
+<tr><td>电力监控系统安全防护评估要点</td><td><span class="chip c-ok">已入库 · 被引用 3 次</span></td></tr>
+<tr><td>某次演练的日志样本</td><td><span class="chip c-cr">未收：含业务数据样本</span></td></tr>
+<tr><td>批次 · SOC 方法资料 236 份</td><td>入库 198 · <span class="am">退回 12（看原因）</span> · <span class="auto">处理中 26</span></td></tr>
+<tr><td>我报“有误”：日志留存 6 个月</td><td><span class="chip c-ok">已修正，回执 11-26</span></td></tr></table>
+<div class="muted" style="margin-top:6px">中间过程不展示；只告诉你结果，被退回时说明原因。</div></div></div>
+</div>
 
-<!-- 说明：全景 -->
+<div class="view" id="v-plan">
+<h1>规划与规则</h1><div class="sub">负责人只定“要什么”和“边界”。定了之后，缺口识别、获取、保鲜都自动跑。</div>
+<div class="g2">
+<div class="card"><h3>服务产品与地区（规划）</h3><table>
+<tr><th>产品 / 地区</th><th>状态</th></tr>
+<tr><td>SOC 安全运营咨询 · 银行 / 电力</td><td><span class="chip c-ok">在用</span></td></tr>
+<tr><td>IRE 应急响应 · 银行 / 电力</td><td><span class="chip c-ok">在用</span></td></tr>
+<tr><td>数据安全治理 · 泰国</td><td><span class="chip c-am">新建 11-27 · 自动补齐中 38%</span></td></tr></table>
+<div style="margin-top:8px"><a class="btn" onclick="toast('新建后：自动识别缺口 → 自动获取 → 在知识健康里看进度')">新建产品 / 地区</a></div></div>
+<div class="card"><h3>只有这几件要你定</h3><div class="t2">① 新建或停用产品、行业、地区<br>② 新增公开资料来源（白名单）<br>③ 自动发布门槛的调整（机器只提建议）<br><span class="muted">其余全部自动；需要你时出现在“待我处理”。</span></div></div></div>
+</div>
+
+<div class="view" id="v-retro">
+<h1>结项复盘 · BANK-A（驾驶舱内）</h1><div class="sub">交付期间系统静默记下的候选，结项时勾一遍就行。确认去标识后成批交给知识中心。</div>
+<div class="card"><table><tr><th>候选</th><th>类型</th><th>系统依据</th><th>交不交</th></tr>
+<tr><td>堡垒机接入动态口令单列高优先级</td><td>公司做法</td><td>本项目 3 次改稿都往这个方向改</td><td><label><input type="checkbox" checked> 交</label></td></tr>
+<tr><td>D4 第 3 章 差距分析</td><td>黄金样例候选</td><td>审阅一次通过、客户无重大意见</td><td><label><input type="checkbox" checked> 交</label> <input placeholder="一句话：为什么好" style="background:var(--s2);border:1px solid var(--ln2);color:var(--tx);border-radius:5px;padding:2px 6px"></td></tr>
+<tr><td>日志源接入数量 42 类</td><td>经验数值</td><td>补“经验数值”缺口（IRE × 电力 需人）</td><td><label><input type="checkbox" checked> 交</label></td></tr></table>
+<div class="muted" style="margin:8px 0">去标识预览：客户名 → 某城商行；人名 3 处 → 占位符；规模 → 区间；地区 → 大区。</div>
+<a class="btn" onclick="toast('已确认去标识并交出 3 条；结果回到投料箱“我交的”')">确认去标识并交出</a></div></div>
+
+<div class="view" id="v-sys">
+<h1>运行与审计</h1><div class="sub">只用于排查和对账，平时不用看。需要你时会出现在“待我处理”。</div>
+<div class="card t2">现有页面归到这里：审计（按 Agent 筛选）· 指标看板 · 入库批次 · 来源登记 · 对比评测 · 质量事件 · 模型与运行配置。</div></div>
+
 <div class="view" id="v-map">
-<h1>改版全景</h1><div class="sub">原则：自动化优先——机器跑全流程，人只处理例外与必须担责的事</div>
-<div class="g3" style="margin-bottom:12px">
-<div class="card"><h3>① 顾问 · 用知识</h3><div class="t2">知识检索、投料箱保留；对话与交付件里的引用角标、检索结果统一跳条目详情；新增一键反馈（有误 · 过时 · 缺了）</div></div>
-<div class="card"><h3 class="am">② 知识专家 · 只处理例外</h3><div class="t2">审批队列 + 专家工作台合成「待我处理」：问答卡片、影响排序、批量决定、明天再看、每日时间预算；入口同时挂「我的任务」和飞书提醒，专家全程不碰命令行</div></div>
-<div class="card"><h3 class="cy">③ 知识管理员 · 看运转</h3><div class="t2">流水线（新增）、来源登记（补派生条目与采集结果）、健康（地图 + 使用统计 + 就绪度三合一，新增自动发布抽检与信任度）</div></div></div>
-<div class="card"><h3 class="vi">◆ 条目详情页 /kb/item/:id · 所有页面都跳到这里</h3><div class="t2">正文与适用范围 · 依据链 · 版本与审核记录 · 被引用（按项目权限过滤） · 反馈记录 · 复审到期 · 关联映射 · 机器审核结论与抽检</div></div>
-<div class="g4 lp">
-<div class="card"><h3 class="cy">闭环 A · 补缺口</h3><ol><li>健康页红格 / 零命中 / 反馈</li><li class="p">专家确认值得补</li><li>自动出采集包 → 流水线</li><li>发布后红格自动变绿</li></ol></div>
-<div class="card"><h3 class="cy">闭环 B · 法规变更</h3><ol><li>来源变更，自动比对差异</li><li>影响分析：条目、映射、在办项目</li><li>Agent 预复核</li><li class="p">有疑问的进专家收件箱</li><li>修订发布，通知相关项目经理</li></ol></div>
-<div class="card"><h3 class="cy">闭环 C · 使用反馈</h3><ol><li>引用处 / 条目详情一键反馈</li><li class="p">专家卡片裁决</li><li>修订发布</li><li>引用数、反馈数回健康页</li></ol></div>
-<div class="card"><h3 class="cy">闭环 D · 信任度自调</h3><ol><li>自动发布按类型抽样</li><li class="p">专家抽检</li><li>错误率高 → 收紧自动发布</li><li>持续合格 → 放宽、降抽检比例</li></ol></div></div>
-<div class="g3"><div class="card"><h3>P0 纯前端重组</h3><div class="t2">复用现有 API：侧栏收成 3 个入口；审批队列并入工作台；三看板合一</div></div>
-<div class="card"><h3>P1 补枢纽与可见性</h3><div class="t2">条目详情页；流水线页；采集、法规变更、冲突、实践问题队列补只读 API</div></div>
-<div class="card"><h3>P2 自动化加深</h3><div class="t2">抽检与信任度；收件箱影响排序；每日时间预算</div></div></div>
-<div class="muted">不变：数据保护红线与资质边界；知识侧 Agent 不读项目区，「被哪些项目引用」仅对项目成员可见；外部采集只在独立采集机。绿色 = 人工环节。</div>
-</div>
+<h1>人工触点对照（逻辑图 ↔ 界面）</h1><div class="sub">逻辑图里每一处要人的地方，都必须在界面上有落点；没有落点的就是断环。</div>
+<div class="card"><table>
+<tr><th>谁</th><th>要做的事</th><th>来自哪个闭环</th><th>界面落点</th></tr>
+<tr><td>负责人</td><td>新建 / 停用产品、行业、地区</td><td>触发 · 规划变更</td><td>规划与规则</td></tr>
+<tr><td>负责人</td><td>新增来源；来源失效且无替代</td><td>白名单外来源 · 来源失效</td><td>待我处理</td></tr>
+<tr><td>负责人</td><td>门槛调整建议</td><td>闭环 2 质量</td><td>待我处理（建议卡）→ 规划与规则生效</td></tr>
+<tr><td>负责人</td><td>卡住项、超时升级</td><td>闭环 6、7</td><td>待我处理</td></tr>
+<tr><td>负责人</td><td>泄漏事件确认</td><td>闭环 9</td><td>待我处理（最高优先）</td></tr>
+<tr><td>负责人</td><td>Agent 换模型 / 改提示词上线；漂移回退知悉</td><td>闭环 11</td><td>待我处理（附回归评测对比）</td></tr>
+<tr><td>负责人</td><td>客户删除确认</td><td>闭环 8</td><td>现有删除流程页；知识侧追溯自动跟随</td></tr>
+<tr><td>专家</td><td>公司做法认可、黄金样例认可</td><td>闭环 4</td><td>待我处理（同类可批量）</td></tr>
+<tr><td>专家</td><td>冲突裁决（含依据变更引起的做法冲突、审核两次不一致）</td><td>主线 6 · 闭环 10</td><td>待我处理</td></tr>
+<tr><td>专家</td><td>公司经验到期复认（自动续期待你定）</td><td>闭环 3</td><td>待我处理</td></tr>
+<tr><td>专家</td><td>每周 5 张抽检卡</td><td>闭环 2</td><td>待我处理</td></tr>
+<tr><td>项目经理</td><td>复盘勾选、确认去标识、提名黄金样例</td><td>闭环 4</td><td>驾驶舱 · 结项复盘</td></tr>
+<tr><td>顾问</td><td>投料（零星 / 批量，两个勾选）</td><td>触发 · 人交来的</td><td>投料箱</td></tr>
+<tr><td>顾问</td><td>报“有误”，收回执；看批次结果</td><td>闭环 2、5</td><td>引用角标“有误”；投料箱“我交的 · 我报的”</td></tr>
+<tr><td>顾问</td><td>看到“引用已变”提示</td><td>闭环 3</td><td>交付件写稿页（未签署稿）</td></tr>
+<tr><td>所有人</td><td>看覆盖与保鲜；查条目来历</td><td>—</td><td>知识健康；条目详情</td></tr>
+</table><div class="muted" style="margin-top:6px">提醒只在平台内（侧栏角标、首页待办），不接外部通知服务。</div></div></div>
+
+<div class="view" id="v-why">
+<h1>v3 改了什么</h1>
+<div class="card t2">
+<b>原则</b>：页面只放人要做的事；Agent 和程序在后台做的事不显示。<br><br>
+<b>灰显还是隐藏</b>：定为<b>隐藏</b>。只在一处用灰字：自己交的东西显示“处理中”，让人知道交上去了，但不展示走到哪一步；健康格子里“自动补齐中”也是灰字，表示不用管。<br><br>
+<b>删掉的页面</b>：总览全景、知识运转（流水线、卡住项、来源巡检、抽检信任度）。这些是机器的工作台，人不需要看；卡住超过时限的自动变成“待我处理”的一张卡。<br><br>
+<b>外部经验</b>：长期自动获取、自动保鲜（到期复审、法规变更），结果只体现在知识健康的“在有效期内”和各格就绪度上。<br><br>
+<b>新建产品 / 到期</b>：负责人新建产品或地区 → 自动识别缺口 → 自动获取 → 健康看板出现新格并显示补齐进度。<br><br>
+<b>人只在 4 处</b>：专家 · 待我处理；顾问 · 投料箱与结项复盘（在驾驶舱）；负责人 · 规划与规则；所有人 · 知识健康只读。<br><br>
+<b>待我处理按人分</b>：专家 6 类（公司做法认可、黄金样例认可、冲突裁决、公司经验到期复认、抽检卡；同类可批量，有每日时间预算）；负责人 5 类（泄漏事件置顶、新增 / 失效来源、Agent 变更上线、卡住与超时升级、门槛建议）。“审核例外”并入冲突裁决；“去标识确认”挪到结项复盘；“新领域缺口”取消。完整对照见“人工触点对照”。</div></div>
 </div>
 <div class="toast" id="toast"></div>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-let cur='search',prev='search';
-const names={search:'知识检索',drop:'投料箱',inbox:'待我处理',ops:'知识运转',item:'条目详情',map:'改版全景'};
-const roleHome={c:'search',e:'inbox',m:'ops'},viewRole={search:'c',drop:'c',inbox:'e',ops:'m'};
-function show(v){if(v!=='item'&&cur!=='item')prev=cur;else if(v==='item')prev=cur;cur=v;$$('.view').forEach(e=>e.classList.toggle('on',e.id==='v-'+v));$$('.side .it[data-v]').forEach(e=>e.classList.toggle('on',e.dataset.v===v));$('#crumb').textContent='知识中心 / '+names[v];if(viewRole[v])$$('.role a').forEach(x=>x.classList.toggle('on',x.dataset.role===viewRole[v]));scrollTo(0,0)}
-function back(){show(prev==='item'?'search':prev)}
-function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',3200)}
-$$('.side .it[data-v]').forEach(e=>e.onclick=()=>show(e.dataset.v));
-$$('.role a').forEach(e=>e.onclick=()=>{$$('.role a').forEach(x=>x.classList.toggle('on',x===e));show(roleHome[e.dataset.role])});
-const R=[
-{t:'三级系统远程管理须采用两种以上组合鉴别技术',d:'等保三级 · 身份鉴别 d)：远程管理时组合鉴别，其中一种基于密码技术；附常见差距情形与整改优先级',c:['控制项解读','v3','引用 14 次','复审 2027-02'],hub:1},
-{t:'GB/T 22239-2019 8.1.4.1 身份鉴别（原文切片）',d:'应采用口令、密码技术、生物技术等两种或两种以上组合的鉴别技术对用户进行身份鉴别……',c:['法规标准','原文','引用 31 次']},
-{t:'城商行堡垒机 OTP 改造：整改建议写法',d:'公司经验：把“堡垒机接入 OTP”单列为高优先级，客户接受度高、改造成本低',c:['公司经验','专家签发','引用 6 次']},
-{t:'密码应用初判：身份鉴别的密码技术选型参考',d:'动态口令、数字证书、国密 SM2 签名等方式的适用场景与改造成本对比',c:['控制项解读','v2','复审 2026-12-20 将到期']}];
-function doSearch(){const q=$('#q').value;const box=$('#results');if(/PDPA|泰国/.test(q)){box.innerHTML=`<div class="card" style="border-color:var(--amber)"><h3 class="am">没有找到可用条目</h3><div class="t2">已自动记入缺口池：「东南亚 × 个人信息保护 × 金融」，健康页对应红格 +1。专家确认值得补后，系统自动出采集包。</div><div style="margin-top:8px;display:flex;gap:8px"><a class="btn2 sm" onclick="goInbox('gap')">看这张缺口卡（专家视角）</a><a class="btn2 sm" onclick="toast('已关注：条目发布后通知你')">发布后通知我</a></div></div>`;return}
-box.innerHTML=`<div class="muted" style="margin-bottom:6px">找到 ${R.length} 条 · 按与当前项目（BANK-A）相关度排序</div>`+R.map((r,i)=>`<div class="res" onclick="${r.hub?"show('item')":"toast('打开条目详情（示意只做了第一条）')"}"><div class="tt">${r.t}</div><div class="ds">${r.d}</div>${r.c.map(x=>`<span class="chip ${/到期/.test(x)?'c-am':''}">${x}</span>`).join(' ')}</div>`).join('')}
-const I=[
-{k:'reg',kn:'法规变更影响',t:'银行业数据安全管理办法（2026 修订）第 18 条措辞变化',why:'差异涉及“重要数据出境评估”的触发条件，机器无法判断是否改变结论口径',did:'已比对差异 3 处、定位受影响条目 4 条、映射 2 条；在办项目 BANK-A 引用其中 2 条；Agent 预复核建议修订 1 条、其余不变',imp:'在办 2 项目 · 截止 12-05',b:0},
-{k:'conflict',kn:'冲突裁决',t:'K-0391 与 K-0517 对日志留存期限说法不一致',why:'两条均有依据（一条依网络安全法 6 个月，一条依行业规范 1 年），需判断金融行业取哪条',did:'已列出两条依据原文与适用范围；Agent 建议：金融行业取 1 年，并在 K-0391 补行业例外',imp:'在办 1 项目',b:1},
-{k:'exc',kn:'审核例外',t:'新条目「OT 区工程师站 USB 管控做法」Agent 审核置信 0.61',why:'置信低于自动发布阈值 0.8，引用的厂商手册不在来源登记里',did:'引用核对通过 2/3；冲突规则无冲突；已建议补登来源或删去该引用',imp:'缺口格 能源 × OT',b:0},
-{k:'gap',kn:'缺口确认',t:'东南亚 × 个人信息保护 × 金融：近 30 天零命中 6 次',why:'是否值得补、补到什么程度，需要专家判断业务价值',did:'已匹配候选来源 4 个（PDPA 及其下位规则），均在采集白名单内；预计新增 15～20 条',imp:'商机 2 个',b:1},
-{k:'deid',kn:'去标识确认',t:'投料：GRID-B 调研中发现的 OT 区分区做法',why:'机器替换了 7 处，有 1 处疑似站点名称不能确定',did:'已替换人名 2、IP 段 4、单位名 1；疑似项已标黄，确认后进入建条目',imp:'—',b:0},
-{k:'due',kn:'复审到期',t:'密码应用初判：身份鉴别的密码技术选型参考（12-20 到期）',why:'公司经验类条目到期须人复核',did:'Agent 预复核：来源无变化、近 90 天无负面反馈，建议原样续期 12 个月',imp:'引用 9 次',b:1},
-{k:'exc',kn:'审核例外',t:'映射 GB/T 22239 8.1.10.6 → ISO 27001 A.8.15 自动发布被抽检判错',why:'抽检错误需确认后修订，并计入「映射关系」信任度',did:'已下线该映射；同批 12 条映射已自动加抽',imp:'信任度：映射关系',b:0}];
-let filt='all',done=new Set(),budget=4;
-function renderInbox(){$('#inbox').innerHTML=I.map((c,i)=>(filt==='all'||filt===c.k)?`<div class="ib k-${c.k} ${done.has(i)?'done':''}" id="ib${i}"><div class="hd"><span class="chip">${c.kn}</span><b>${c.t}</b><span class="muted" style="margin-left:auto">${c.imp}</span></div>
-<div class="why"><div><i>为什么要你</i>${c.why}</div><div><i>机器已经做了</i>${c.did}</div></div>
-<div class="act">${done.has(i)?'<span class="ok">已处理</span>':`<a class="btn sm" onclick="act(${i},'同意机器建议')">同意机器建议</a><a class="btn2 sm" onclick="act(${i},'改后同意')">改后同意</a><a class="btn2 sm" onclick="act(${i},'驳回')">驳回</a><a class="btn2 sm" onclick="later(${i})">明天再看</a>${c.b?'<span class="chip c-cy">可批量</span>':''}<a class="btn2 sm" style="margin-left:auto" onclick="show('item')">看条目详情</a>`}</div></div>`:'').join('')}
-function upd(){const n=I.length-done.size;$('#kLeft').textContent=n;$('#sideInbox').textContent=n;$('#sideTodo').textContent=n;$('#budget').style.width=Math.min(100,budget*5)+'%';$('#budgetT').textContent=budget+' / 20 分钟'}
-function act(i,a){done.add(i);budget+=2;renderInbox();upd();toast(a+'：已记录签发人与理由，修订自动发布（示意）')}
-function later(i){toast('已推到明天，不计入今日预算');const c=I.splice(i,1)[0];I.push(c);renderInbox()}
-function batch(){I.forEach((c,i)=>{if(c.b)done.add(i)});budget+=3;renderInbox();upd();toast('已批量同意 3 张：每张单独留审计记录')}
-function goInbox(k){filt=k;$$('#ibf a[data-k]').forEach(x=>x.classList.toggle('on',x.dataset.k===k));renderInbox();show('inbox')}
-$$('#ibf a[data-k]').forEach(e=>e.onclick=()=>{filt=e.dataset.k;$$('#ibf a[data-k]').forEach(x=>x.classList.toggle('on',x===e));renderInbox()});
-const S=[['缺口池','红格·零命中·反馈',23,''],['缺口确认','专家一张卡',2,'h'],['来源登记','自动匹配候选',5,''],['采集','独立采集机',48,''],['回传核对','批次哈希',66,''],['初筛·起草','经网关',41,''],['规则+Agent 审核','冲突·引用核对',17,''],['例外人工','进收件箱',5,'h'],['发布+抽检','按比例',104,''],['到期/变更复审','Agent 预复核',31,'']];
-const ST=[[6,'Agent 审核','OT 区工程师站 USB 管控做法','置信 0.61 < 0.8','已转专家'],[6,'Agent 审核','K-0391 / K-0517 日志留存期限','冲突规则命中','已转专家'],[3,'采集','NIST SP 800-53 Rev.5','站点拒绝访问','两级下载重试'],[3,'采集','vbpl.vn 越南法规库','超时','两级下载重试'],[5,'初筛·起草','PDPA 下位规则 2023','超过 3 天未处理','<a class="btn2 sm" onclick="toast(\'已重新入队（示意）\')">重新入队</a>']];
-function renderFlow(sel){$('#flow').innerHTML=S.map((s,i)=>(i?'<span class="ar">→</span>':'')+`<div class="st ${s[3]}" onclick="renderFlow(${i})" style="${sel===i?'border-color:var(--cyan)':''}"><div>${s[0]}</div><b>${s[2]}</b><div class="d">${s[1]}</div>${ST.some(x=>x[0]===i)?`<div class="w">卡住 ${ST.filter(x=>x[0]===i).length}</div>`:''}</div>`).join('');
-const rows=ST.filter(x=>sel==null||x[0]===sel);$('#stTitle').textContent='卡住项 · '+(sel==null?'全部阶段':S[sel][0]);$('#stuck').innerHTML='<tr><th>阶段</th><th>对象</th><th>原因</th><th>处理</th></tr>'+(rows.length?rows.map(r=>`<tr><td>${r[1]}</td><td>${r[2]}</td><td class="am">${r[3]}</td><td>${r[4]}</td></tr>`).join(''):'<tr><td colspan="4" class="muted">该阶段没有卡住项</td></tr>')}
-$$('#opsTabs a').forEach(e=>e.onclick=()=>{$$('#opsTabs a').forEach(x=>x.classList.toggle('on',x===e));['pipe','src','health'].forEach(t=>$('#t-'+t).style.display=t===e.dataset.t?'':'none')});
-function fb(t){toast('已反馈「'+t+'」：生成专家卡片，结果会通知你')}
-doSearch();renderInbox();renderFlow(null);upd();show('search');
-const h=location.hash.replace('#v=','');if(h==='inbox')goInbox('all');else if(names[h])show(h);
+function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2600)}
+const NAMES={retro:'结项复盘',sys:'运行与审计',map:'人工触点对照',inbox:'待我处理',health:'知识健康',drop:'投料箱',plan:'规划与规则',why:'v3 改了什么'};
+function show(v){$$('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));$$('.side .it').forEach(x=>x.classList.toggle('on',x.dataset.v===v));$('#crumb').textContent='知识中心 / '+NAMES[v]}
+$$('.side .it').forEach(a=>a.onclick=()=>show(a.dataset.v));
+let role='e';
+function batch(){let n=0;IB.forEach(x=>{if(!x.done&&x.r===role&&(x.k==='spot'||x.k==='due')){x.done=1;n++}});toast(n?'已批量同意 '+n+' 张同类卡':'没有可批量的卡');renderInbox()}
+const RN={c:'顾问：看知识健康（只读）、用投料箱。项目经验在驾驶舱的结项复盘里交。',e:'知识专家：主要待在“待我处理”。',a:'负责人：定规划、来源和门槛；待我处理里只看归你的卡。'};
+const IB=[
+{k:'prac',r:'e',t:'公司做法认可 · 城商行堡垒机整改建议',a:'来自 BANK-A 结项复盘，已去标识，与现有 2 条做法不冲突',q:'这算不算公司推荐做法？',b:['认可','改后认可','不认可']},
+{k:'conflict',r:'e',t:'冲突裁决 · 日志留存期限',a:'两份依据写法不同：一份 6 个月，一份 180 天且限定范围',q:'以哪个为准，或两条都留并注明适用范围？',b:['选 A','选 B','都留并注明']},
+{k:'due',r:'e',t:'公司经验到期复认 · 电力行业演练脚本模板',a:'满 12 个月；近半年被引用 9 次，无负面反馈',q:'是否继续有效？',b:['继续有效','下线']},
+{k:'gold',r:'e',t:'黄金样例认可 · SOC × 银行 D4 第 3 章',a:'BANK-A 项目经理提名：一次通过、客户无重大意见；同章已有 1 份',q:'是否作为范本？更好的话替换旧的',b:['认可并保留旧的','认可并替换','不认可']},
+{k:'spot',r:'e',t:'抽检 · 控制项解读：双因素认证（本周第 2/5 张）',a:'已自动发布 14 天，被引用 4 次',q:'内容对不对？',b:['对','有误']},
+{k:'leak',r:'a',t:'泄漏事件 · 1 条已发布条目疑似残留单位名',a:'已自动下线；同批 37 条复查中；检测规则已补并过回归',q:'知悉并关闭事件？',b:['知悉']},
+{k:'agent',r:'a',t:'Agent 变更上线 · 知识审核换新模型',a:'回归评测 91 → 93 分，抽检题无退步',q:'是否切换？',b:['切换','暂不']},
+{k:'stuck',r:'a',t:'卡住 · 印尼来源 3 次下载失败（合并 4 项）',a:'已标“暂无可用来源”，健康格已注明；未找到替代来源',q:'提供替代来源，或接受暂缺？',b:['接受暂缺','我来给来源']},
+{k:'src',r:'a',t:'新增来源确认 · 泰国个人数据保护委员会官网',a:'新建“数据安全治理 · 泰国”后自动识别的缺口需要它；公开法规站点',q:'是否加入公开资料白名单？',b:['加入','不加入']}];
+function renderInbox(){const list=IB.filter(x=>!x.done&&x.r===role).sort((a,b)=>(b.k==='leak')-(a.k==='leak'));
+$('#inbox').innerHTML=list.map(x=>`<div class="ib ${x.k==='conflict'?'k-conflict':x.k==='due'?'k-due':x.k==='src'||x.k==='agent'?'k-reg':x.k==='gold'?'k-gold':x.k==='leak'?'k-leak':''}"><div class="hd"><b>${x.t}</b></div><div class="why"><div><i>已知情况</i>${x.a}</div><div><i>要你定</i>${x.q}</div></div><div class="act">${x.b.map((b,i)=>`<a class="${i?'btn2':'btn'} sm" onclick="done(${IB.indexOf(x)},'${b}')">${b}</a>`).join('')}</div></div>`).join('');
+$('#budgetT').textContent=role==='e'?'今日预计 '+list.length*2+' 分钟（预算 25 分钟）':'';$('#empty').style.display=list.length?'none':'block';$('#sideInbox').textContent=list.length||'';}
+function done(i,b){IB[i].done=1;toast('已记录：'+b);renderInbox()}
+const P=['SOC','IRE','DSG','RISK','GRC'],PN={SOC:'安全运营',IRE:'应急响应',DSG:'数据安全治理',RISK:'风险评估',GRC:'合规差距分析'},IND=['银行','电力','通用'];
+const N=[null];
+const MX={cn:[[[74,'↑',1],[68,'↑',1],[81,'→']],[[71,'↑',1],[63,'↑',1,1],[77,'→']],[[55,'↑'],N,[62,'↑']],[N,N,[70,'→']],[[66,'→'],[58,'↑'],[83,'→']]],
+sea:[[N,N,N],[N,N,N],[N,N,[38,'↑']],[N,N,N],[N,N,[52,'↑']]],
+af:[[N,N,N],[N,N,N],[N,N,N],[N,N,N],[N,N,[44,'↑']]],
+hk:[[N,N,N],[N,N,N],[N,N,[49,'↑']],[N,N,N],[N,N,[61,'→']]]};
+let reg='cn';
+function cls(v){return v>=70?'g-ok':v>=55?'g-am':'g-cr'}
+function renderMx(){const m=MX[reg];$('#mx').innerHTML='<tr><th>产品</th>'+IND.map(x=>`<th>${x}</th>`).join('')+'</tr>'+P.map((p,i)=>`<tr><td><b>${p}</b> <span class="muted">${PN[p]}</span></td>`+m[i].map((c,j)=>c[0]==null?'<td><span class="cl np">未规划</span></td>':`<td><span class="cl ${cls(c[0])} ${c[2]?'tg':''}" onclick="cell(${i},${j})">${c[0]}% ${c[1]}${c[3]?' · 需人':''}</span></td>`).join('')+'</tr>').join('')}
+function cell(i,j){const c=MX[reg][i][j];$('#cellT').textContent=P[i]+' × '+IND[j]+' · 就绪度 '+c[0]+'%';
+const ok=c[0]>=70,rows=[['依据','够'],['方法与模板','够'],['常见坑',ok?'够':'自动补齐中'],['经验数值',c[3]?'缺：只能靠结项复盘':(ok?'够':'自动补齐中')]];
+$('#cellBody').innerHTML='<table><tr><th>内容</th><th>情况</th></tr>'+rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1].startsWith('缺')?'<span class="am">'+r[1]+'</span>':r[1].startsWith('自动')?'<span class="auto">'+r[1]+'</span>':r[1]}</td></tr>`).join('')+'</table><div class="muted" style="margin-top:6px">'+(c[3]?'这一格需要人：项目经理在结项复盘时补经验数值。':'这一格不需要人。')+'</div>'}
+$$('#regf a').forEach(a=>a.onclick=()=>{reg=a.dataset.g;$$('#regf a').forEach(x=>x.classList.toggle('on',x===a));$('#regT').textContent='· '+a.textContent;renderMx();$('#cellT').textContent='点左侧格子';$('#cellBody').textContent='看这一格哪些内容还不够，以及是否需要人。'});
+function setRole(r){role=r;$$('#role a').forEach(a=>a.classList.toggle('on',a.dataset.r===r));$('#roleNote').textContent=RN[r];
+$$('.side .it').forEach(a=>{if(a.dataset.v==='why'||a.dataset.v==='map')return;a.style.display=a.classList.contains('r-'+r)?'':'none'});$$('.r-a-g').forEach(g=>g.style.display=r==='a'?'':'none');$$('.r-c-g').forEach(g=>g.style.display=r==='c'?'':'none');renderInbox();show(r==='c'?'drop':'inbox')}
+$$('#role a').forEach(a=>a.onclick=()=>setRole(a.dataset.r));
+renderMx();setRole('e');
 </script></body></html>
