@@ -183,6 +183,20 @@ def _daily() -> None:
     except Exception as e:  # noqa: BLE001
         log.warning("每日运维任务出错：%s", type(e).__name__)
     _reg_lifecycle()
+    _grade_scan()
+
+
+def _grade_scan() -> None:
+    """四期 B43：条目分级（候选 → 可用 → 推荐）按使用信号升降，只读库内计数、不调模型。"""
+    from .kb import grade
+
+    try:
+        with SessionLocal() as db:
+            r = grade.scan(db)
+        if any(r.counts().values()):
+            log.info("条目分级：%s", r.counts())
+    except Exception as e:  # noqa: BLE001
+        log.warning("条目分级任务出错：%s", type(e).__name__)
 
 
 def _reg_lifecycle() -> None:
