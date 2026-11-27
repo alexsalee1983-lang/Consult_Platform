@@ -28,6 +28,9 @@ class DeliverableSection(Base):
     created_by: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # 四期 A31⑫（主链 0060）：上游变更后标“需更新”的原因类别与时间；本章写入新版本后清空（app/project/loops.py）
+    stale_reason: Mapped[str] = mapped_column(String(64), server_default="")
+    stale_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     versions: Mapped[list["SectionVersion"]] = relationship(
         back_populates="section", order_by="SectionVersion.version", cascade="all, delete-orphan")
