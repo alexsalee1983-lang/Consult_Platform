@@ -21,9 +21,9 @@ from .extraction import ExtractionQuestion
 from .rbac import ProjectMember, Role, UserRole
 from .run import AgentRun, AgentRunStep
 from .runtime_config import RuntimeConfigItem, RuntimeConfigVersion
-from .survey import SurveyAnswer, SurveyPack, SurveyQuestion
+from .survey import SelfEvalPack, SurveyAnswer, SurveyPack, SurveyQuestion
 from .tasks import TaskReturn
 from .usage import LlmUsage
 from .user import User
 
-__all__ = ["Agent", "AgentMdPin", "AgentMdVersion", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "ExtractionQuestion", "Finding", "Job", "JudgmentEvent", "KbChunk", "KbControl", "KbControlCheckpoint", "KbControlMapping", "KbDeidReport", "KbFramework", "KbGap", "KbItem", "KbItemAlias", "KbItemLabel", "KbMapping", "KbPracticeDecision", "KbReview", "KbSource", "KbSourceEvent", "KbUpload", "KbVersion", "KnowledgeFeedback", "LlmUsage", "Message", "Project", "ProjectConfig", "ProjectConsent", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityIncident", "QualityIncidentEvent", "QualityReview", "ReviewIssue", "ReviewWaiver", "RevisionFeature", "Role", "RuntimeConfigItem", "RuntimeConfigVersion", "SectionVersion", "SignOff", "SummaryCard", "SurveyAnswer", "SurveyPack", "SurveyQuestion", "TaskReturn", "Tool", "User", "UserRole"]
+__all__ = ["Agent", "AgentMdPin", "AgentMdVersion", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "ExtractionQuestion", "Finding", "Job", "JudgmentEvent", "KbChunk", "KbControl", "KbControlCheckpoint", "KbControlMapping", "KbDeidReport", "KbFramework", "KbGap", "KbItem", "KbItemAlias", "KbItemLabel", "KbMapping", "KbPracticeDecision", "KbReview", "KbSource", "KbSourceEvent", "KbUpload", "KbVersion", "KnowledgeFeedback", "LlmUsage", "Message", "Project", "ProjectConfig", "ProjectConsent", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityIncident", "QualityIncidentEvent", "QualityReview", "ReviewIssue", "ReviewWaiver", "RevisionFeature", "Role", "RuntimeConfigItem", "RuntimeConfigVersion", "SectionVersion", "SelfEvalPack", "SignOff", "SummaryCard", "SurveyAnswer", "SurveyPack", "SurveyQuestion", "TaskReturn", "Tool", "User", "UserRole"]

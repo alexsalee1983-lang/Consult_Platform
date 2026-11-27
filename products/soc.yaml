@@ -12,15 +12,35 @@ deliverables:
   stage: 启动
   client_facing: true
   review_profile: light   # 过程材料：只查红线和专项（A13）
+  # 四期 #461：章节同 products/forms/D1.yaml（D1 由表单成稿，不在交付链里，槽位暂无步骤可挂，草稿见文件末尾注释）
+  outline:
+  - 项目概况
+  - 范围确认
+  - 工作分解与里程碑
+  - 组织与沟通
+  - 启动会议程
 - code: D2
   title: 调研包
   stage: 调研
   client_facing: true
   review_profile: light   # 过程材料：只查红线和专项（A13）
+  # 四期 #461：章节同 products/forms/D2.yaml（D2 由表单成稿，槽位草稿见文件末尾注释）
+  outline:
+  - 调研范围与安排
+  - 资料清单
+  - 访谈对象与日程
+  - 访谈提纲
 - code: D3
   title: 事实清单
   stage: 调研
   client_facing: false
+  # 四期 #461：章节取 facts 步骤任务说明
+  outline:
+  - 组织与人员
+  - 流程
+  - 技术平台与数据源
+  - 度量与改进
+  - 待补证据与矛盾点
 - code: D4
   title: 现状评估报告
   stage: 分析
@@ -39,14 +59,35 @@ deliverables:
   title: 制度文件包
   stage: 设计
   client_facing: true
+  # 四期 #461：章节取 policy 步骤任务说明
+  outline:
+  - SOC 运营管理办法
+  - 流程规范
+  - 岗位职责
+  - 记录表单
+  - 考核要求
+  - 落地风险提示
 - code: D7
   title: 实施路线图
   stage: 设计
   client_facing: true
+  # 四期 #461：章节取 roadmap 步骤任务说明
+  outline:
+  - 路线图总览与分期原则
+  - 分阶段目标、任务与里程碑
+  - 资源需求与前置条件
+  - 风险与待确认事项
 - code: D8
   title: 高层汇报
   stage: 验收
   client_facing: true
+  # 四期 #461：章节取 briefing 步骤任务说明（每章一页汇报要点）
+  outline:
+  - 现状结论
+  - 主要风险与业务影响
+  - 目标运营模型概要
+  - 路线图与资源需求
+  - 需要管理层决策的事项
 baseline:
   domains:
   - 组织与人员
@@ -84,6 +125,15 @@ chain:
   output: D3
   query: SOC 运营现状 事实 调研
   instruction: 任务：交付链第 3 步。根据下面的本项目证据，整理 D3 事实清单：按 SOC 能力域（组织与人员、流程、技术平台与数据源、度量与改进等）分章列出已确认的事实，每条带证据编号；另起一章列“待补证据与矛盾点”。只写证据里有的事实，不推测现状。
+  # 四期 #461 槽位规格 v0（公开方法版，开发线 2 起草，逐条待专家勾选）；章号同本交付件 outline，全部 required: false。
+  slots:
+  - {id: d3-ch1-org, chapter: SOC.D3.ch1, type: MTD, query: SOC 组织与人员 现状调研 岗位 编制 值班 工作量, need: 2, required: false, expert_review: pending}
+  - {id: d3-ch1-tpl, chapter: SOC.D3.ch1, type: TPL, query: SOC 事实清单 模板 证据编号 能力域, need: 1, required: false, expert_review: pending}
+  - {id: d3-ch2-proc, chapter: SOC.D3.ch2, type: MTD, query: SOC 流程现状 流程访谈 流程成熟度 工单, need: 2, required: false, expert_review: pending}
+  - {id: d3-ch3-tech, chapter: SOC.D3.ch3, type: MTD, query: 日志源 数据源评估 采集健康度 资产发现 现状, need: 2, required: false, expert_review: pending}
+  - {id: d3-ch4-metric, chapter: SOC.D3.ch4, type: MTD, query: SOC 度量现状 指标采集 基线, need: 2, required: false, expert_review: pending}
+  - {id: d3-ch5-evid, chapter: SOC.D3.ch5, type: MTD, query: 证据规则 证据充分性 矛盾 待补证据, need: 2, required: false, expert_review: pending}
+  - {id: d3-ch5-pit, chapter: SOC.D3.ch5, type: PIT, query: 访谈偏差 只听管理层 口头陈述 无资产清单, need: 2, required: false, expert_review: pending}
 - key: gap
   number: 4
   name: 差距分析
@@ -93,6 +143,29 @@ chain:
   output: ''
   query: SOC 能力 差距分析 等保 基线
   instruction: 任务：交付链第 4 步。以下面的 D3 事实清单为输入，对照评估基线（SOC 能力框架、等保 2.0、行业要求，依据只能来自知识库检索结果，没有的标【依据待核实】）做差距分析：按能力域（{domains}）输出差距分析表（能力域、能力项、现状、要求与依据、差距、证据充分性、影响和可能性各按高 / 中 / 低）、按能力域的成熟度初判表（现状、目标各 1～5 分，带依据）、业务影响 TOP 5、依据库缺口。证据不足的项列出来并发“证据不足”确认卡。用“差距分析、符合性初判”的说法，不出具测评或认证结论。
+- key: draft
+  number: 4
+  name: 现状评估报告初稿
+  agent: report-writer
+  inputs:
+  - run:gap
+  - D3
+  output: D4
+  query: SOC 现状评估报告 差距 建议
+  instruction: 任务：交付链第 {number} 步。差距分析之后、发现表经顾问确认后起草，此时还没有方案设计。根据下面的差距分析和 D3 事实清单，起草 D4 现状评估报告初稿：评估范围与方法、现状概述、主要差距与业务影响、依据说明、后续建议方向。结论必须来自差距分析，并标注证据编号和依据；这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、差距分析表原样照搬、确认卡、“测试”“内部”等字样），差距分析的结论改写成报告语言。单列一章“成熟度初判”，照差距分析的成熟度初判表写一张表（表头：能力域 | 现状（1～5） | 目标（1～5） | 依据），顾问审核时直接改分数，签署后驾驶舱以这张表为准；称“成熟度初判”，不写成等级结论。
+  # 三期 C10 槽位规格 v0（公开方法版，规划会话起草，逐条待 zj1 在试用机勾选，专家清单 E16）：
+  # D4 四个关键章节 ch1 评估范围与方法、ch2 主要差距与业务影响、ch3 依据说明、ch4 成熟度初判与后续建议方向。
+  # v0 全部 required: false，专家勾选前不发“知识不足”卡；chapter 与知识条目的 slot 字段同一写法。
+  slots:
+  - {id: d4-ch1-method, chapter: SOC.D4.ch1, type: MTD, query: SOC 现状评估 范围界定 评估方法 证据规则, need: 2, required: false, expert_review: pending}
+  - {id: d4-ch1-tpl, chapter: SOC.D4.ch1, type: TPL, query: SOC 现状评估报告 结构 模板, need: 1, required: false, expert_review: pending}
+  - {id: d4-ch2-method, chapter: SOC.D4.ch2, type: MTD, query: 差距 业务影响 可能性 排序 根因 写法, need: 2, required: false, expert_review: pending}
+  - {id: d4-ch2-pit, chapter: SOC.D4.ch2, type: PIT, query: SOC 差距分析 常见坑 基线 资产清单, need: 1, required: false, expert_review: pending}
+  - {id: d4-ch3-src, chapter: SOC.D4.ch3, type: SRC, query: 网络安全法 等级保护 安全监测 事件报告 条款, need: 3, required: false, expert_review: pending}
+  - {id: d4-ch3-ref, chapter: SOC.D4.ch3, type: REF, query: 等保 2.0 安全监测 集中管控 行业监管 依据解读, need: 2, required: false, expert_review: pending}
+  - {id: d4-ch3-method, chapter: SOC.D4.ch3, type: MTD, query: 依据引用 条款号 核对 依据待核实 写法, need: 1, required: false, expert_review: pending}
+  - {id: d4-ch4-method, chapter: SOC.D4.ch4, type: MTD, query: SOC 成熟度初判 评分锚定 抽样 目标分, need: 2, required: false, expert_review: pending}
+  - {id: d4-ch4-pit, chapter: SOC.D4.ch4, type: PIT, query: 成熟度 打分虚高 平均值陷阱, need: 1, required: false, expert_review: pending}
 - key: design
   number: 5
   name: 目标运营模型设计
@@ -113,29 +186,17 @@ chain:
   output: D6
   query: SOC 运营 管理制度 流程规范 岗位职责
   instruction: 任务：交付链第 6 步。根据下面的目标运营模型，起草 D6 制度文件包：SOC 运营管理办法，配套的流程规范、岗位职责、记录表单、考核要求，最后一章写落地风险提示。条款要可执行（谁、何时、做什么、留什么记录）；部门名称只用目标运营模型和事实清单里出现过的，客户实际部门或已有制度不清楚时发“范围确认”确认卡，不编造部门；引用依据只用知识库检索结果。
-- key: draft
-  number: 7
-  name: 现状评估报告初稿
-  agent: report-writer
-  inputs:
-  - run:gap
-  - D3
-  output: D4
-  query: SOC 现状评估报告 差距 建议
-  instruction: 任务：交付链第 7 步。根据下面的差距分析和 D3 事实清单，起草 D4 现状评估报告初稿：评估范围与方法、现状概述、主要差距与业务影响、依据说明、后续建议方向。结论必须来自差距分析，并标注证据编号和依据；这是初稿，供顾问审核署名，不写最终结论口吻。D4 是交给客户的报告：不写内部工作内容（差距编号 G-xx、差距分析表原样照搬、确认卡、“测试”“内部”等字样），差距分析的结论改写成报告语言。单列一章“成熟度初判”，照差距分析的成熟度初判表写一张表（表头：能力域 | 现状（1～5） | 目标（1～5） | 依据），顾问审核时直接改分数，签署后驾驶舱以这张表为准；称“成熟度初判”，不写成等级结论。
-  # 三期 C10 槽位规格 v0（公开方法版，规划会话起草，逐条待 zj1 在试用机勾选，专家清单 E16）：
-  # D4 四个关键章节 ch1 评估范围与方法、ch2 主要差距与业务影响、ch3 依据说明、ch4 成熟度初判与后续建议方向。
-  # v0 全部 required: false，专家勾选前不发“知识不足”卡；chapter 与知识条目的 slot 字段同一写法。
+  # 四期 #461 槽位规格 v0（公开方法版，开发线 2 起草，逐条待专家勾选）；章号同本交付件 outline，全部 required: false。
   slots:
-  - {id: d4-ch1-method, chapter: SOC.D4.ch1, type: MTD, query: SOC 现状评估 范围界定 评估方法 证据规则, need: 2, required: false, expert_review: pending}
-  - {id: d4-ch1-tpl, chapter: SOC.D4.ch1, type: TPL, query: SOC 现状评估报告 结构 模板, need: 1, required: false, expert_review: pending}
-  - {id: d4-ch2-method, chapter: SOC.D4.ch2, type: MTD, query: 差距 业务影响 可能性 排序 根因 写法, need: 2, required: false, expert_review: pending}
-  - {id: d4-ch2-pit, chapter: SOC.D4.ch2, type: PIT, query: SOC 差距分析 常见坑 基线 资产清单, need: 1, required: false, expert_review: pending}
-  - {id: d4-ch3-src, chapter: SOC.D4.ch3, type: SRC, query: 网络安全法 等级保护 安全监测 事件报告 条款, need: 3, required: false, expert_review: pending}
-  - {id: d4-ch3-ref, chapter: SOC.D4.ch3, type: REF, query: 等保 2.0 安全监测 集中管控 行业监管 依据解读, need: 2, required: false, expert_review: pending}
-  - {id: d4-ch3-method, chapter: SOC.D4.ch3, type: MTD, query: 依据引用 条款号 核对 依据待核实 写法, need: 1, required: false, expert_review: pending}
-  - {id: d4-ch4-method, chapter: SOC.D4.ch4, type: MTD, query: SOC 成熟度初判 评分锚定 抽样 目标分, need: 2, required: false, expert_review: pending}
-  - {id: d4-ch4-pit, chapter: SOC.D4.ch4, type: PIT, query: 成熟度 打分虚高 平均值陷阱, need: 1, required: false, expert_review: pending}
+  - {id: d6-ch1-pol, chapter: SOC.D6.ch1, type: POL, query: SOC 运营管理办法 制度母版 总则 职责 授权, need: 1, required: false, expert_review: pending}
+  - {id: d6-ch1-charter, chapter: SOC.D6.ch1, type: MTD, query: SOC 章程 使命 服务范围 授权, need: 1, required: false, expert_review: pending}
+  - {id: d6-ch1-src, chapter: SOC.D6.ch1, type: SRC, query: 网络安全法 等级保护 安全管理制度 安全运维管理 条款, need: 2, required: false, expert_review: pending}
+  - {id: d6-ch2-proc, chapter: SOC.D6.ch2, type: MTD, query: 事件响应 生命周期 升级标准 流程文档 通报, need: 2, required: false, expert_review: pending}
+  - {id: d6-ch2-tpl, chapter: SOC.D6.ch2, type: TPL, query: 处置剧本 模板 流程规范, need: 1, required: false, expert_review: pending}
+  - {id: d6-ch3-role, chapter: SOC.D6.ch3, type: MTD, query: SOC 岗位职责 岗位设计 RACI 分析师, need: 2, required: false, expert_review: pending}
+  - {id: d6-ch4-tpl, chapter: SOC.D6.ch4, type: TPL, query: 交接班记录 事件报告 复盘 记录表单 模板, need: 2, required: false, expert_review: pending}
+  - {id: d6-ch5-metric, chapter: SOC.D6.ch5, type: MTD, query: SOC 考核 人员绩效指标 SLA, need: 2, required: false, expert_review: pending}
+  - {id: d6-ch6-pit, chapter: SOC.D6.ch6, type: PIT, query: 制度落地 无演练 升级无授权 静默知识, need: 2, required: false, expert_review: pending}
 - key: design_doc
   number: 7
   name: 设计方案成稿
@@ -169,6 +230,16 @@ chain:
   output: D7
   query: SOC 建设 实施路线图 分阶段
   instruction: 任务：交付链第 7 步。根据下面目标运营模型里的路线图草案和差距分析，起草 D7 实施路线图：分近期、中期、远期写阶段目标、主要任务、责任方、前置条件和里程碑，优先安排业务影响大的差距；资源和时间按客户约束写，不清楚的写成待确认事项。D7 是交给客户的文件：不写内部工作内容（差距编号 G-xx、确认卡、“测试”“内部”等字样）。
+  # 四期 #461 槽位规格 v0（公开方法版，开发线 2 起草，逐条待专家勾选）；章号同本交付件 outline，全部 required: false。
+  slots:
+  - {id: d7-ch1-method, chapter: SOC.D7.ch1, type: MTD, query: 路线图 分阶段 近期 中期 远期 投资优先级, need: 2, required: false, expert_review: pending}
+  - {id: d7-ch1-tpl, chapter: SOC.D7.ch1, type: TPL, query: 实施路线图 模板, need: 1, required: false, expert_review: pending}
+  - {id: d7-ch2-dep, chapter: SOC.D7.ch2, type: MTD, query: 路线图 依赖 前置条件 里程碑 速赢, need: 2, required: false, expert_review: pending}
+  - {id: d7-ch2-trial, chapter: SOC.D7.ch2, type: MTD, query: 试运行 计划 退出标准 过渡 组织切换, need: 2, required: false, expert_review: pending}
+  - {id: d7-ch3-budget, chapter: SOC.D7.ch3, type: MTD, query: 预算估算 编制估算 资源需求, need: 2, required: false, expert_review: pending}
+  - {id: d7-ch3-bmk, chapter: SOC.D7.ch3, type: BMK, query: SOC 建设周期 投入 人力 经验数值, need: 1, required: false, expert_review: pending}
+  - {id: d7-ch4-pit, chapter: SOC.D7.ch4, type: PIT, query: 路线图 愿望清单 范围蔓延, need: 2, required: false, expert_review: pending}
+  - {id: d7-ch4-risk, chapter: SOC.D7.ch4, type: MTD, query: 假设 风险 待确认事项, need: 1, required: false, expert_review: pending}
 - key: briefing
   number: 7
   name: 高层汇报起草
@@ -180,6 +251,15 @@ chain:
   output: D8
   query: SOC 高层汇报 管理层 决策
   instruction: 任务：交付链第 7 步。根据下面的 D4 现状评估报告、D5 设计方案和 D7 实施路线图，起草 D8 高层汇报：面向客户管理层，每章是一页汇报的要点（现状结论、主要风险与业务影响、目标运营模型概要、路线图与资源需求、需要管理层决策的事项），结论先行、语言简洁。只用这三份文件里已有的结论并标注来源，不新增结论；用“差距分析、整改建议”的说法，不出具测评或认证结论。
+  # 四期 #461 槽位规格 v0（公开方法版，开发线 2 起草，逐条待专家勾选）；章号同本交付件 outline，全部 required: false。
+  slots:
+  - {id: d8-ch1-method, chapter: SOC.D8.ch1, type: MTD, query: 高层汇报 管理层 结论先行 管理报告, need: 2, required: false, expert_review: pending}
+  - {id: d8-ch1-gld, chapter: SOC.D8.ch1, type: GLD, query: SOC 高层汇报 黄金样例, need: 1, required: false, expert_review: pending}
+  - {id: d8-ch2-impact, chapter: SOC.D8.ch2, type: MTD, query: 业务影响 排序 风险 管理层语言, need: 1, required: false, expert_review: pending}
+  - {id: d8-ch3-model, chapter: SOC.D8.ch3, type: MTD, query: SOC 组织模式 概览 目标运营模型, need: 1, required: false, expert_review: pending}
+  - {id: d8-ch4-budget, chapter: SOC.D8.ch4, type: MTD, query: 投资优先级 预算估算 资源需求 速赢, need: 2, required: false, expert_review: pending}
+  - {id: d8-ch5-obj, chapter: SOC.D8.ch5, type: OBJ, query: 管理层 异议 看不到价值 不需要 SOC 等保已做, need: 2, required: false, expert_review: pending}
+  - {id: d8-ch5-tpl, chapter: SOC.D8.ch5, type: TPL, query: 高层汇报 模板 决策事项, need: 1, required: false, expert_review: pending}
 gates:
 - id: soc-sections
   kind: required_sections
@@ -195,6 +275,13 @@ strict:
 interview:
   weekly_limit_per_expert: 3
   max_questions: 5
+# 四期 #461：D1、D2 槽位规格 v0 草稿（D1、D2 由表单 products/forms/D1、D2.yaml 成稿，不在交付链里，
+# 平台目前只在交付链步骤下读 slots；表单成稿接检索或交付件级 slots 由开发线 1 定后再落配置）：
+# D1：d1-ch1-tpl TPL 启动会材料 项目章程 模板(1)；d1-ch2-scope MTD SOC 范围界定 评估边界(1)；
+#     d1-ch2-pit PIT 范围蔓延(1)；d1-ch3-plan MTD 工作分解 里程碑 干系人(2)；d1-ch5-kickoff MTD 启动会 议程(1)
+# D2：d2-ch1-method MTD 访谈设计 现场观察(2)；d2-ch2-list MTD 资料需求清单(1)；
+#     d2-ch3-role MTD 干系人地图 受访角色(1)；d2-ch4-tpl TPL 访谈提纲 管理层 分析师 行业问题清单(2)；
+#     d2-ch4-pit PIT 访谈偏差(1)
 # 四期 C21（草稿，待产品专家复核）：资料需求清单、受访角色画像、客户自评问卷，全景客户行与答案池（A25/E3）读取。
 # 受访角色、预填来源与题库同一词表（docs/题库格式.md）；资料只要统计与配置摘要，不收机密级内容。
 inputs:

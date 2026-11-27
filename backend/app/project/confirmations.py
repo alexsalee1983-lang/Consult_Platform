@@ -23,7 +23,8 @@ from ..models import Agent, Confirmation, Project, User
 from ..services import guard
 from . import deliverables, judgment
 
-KINDS = ("方案取舍", "来源冲突", "证据不足", "范围确认", "入库确认", "知识不足")   # 知识不足：三期 A12，平台按槽位发
+KINDS = ("方案取舍", "来源冲突", "证据不足", "范围确认", "入库确认", "知识不足",   # 知识不足：三期 A12，平台按槽位发
+         "发现表确认")                                                     # 四期 D4：差距分析后平台发（runs）
 MAX_OPTIONS = 6
 MAX_OPTION_CHARS = 500
 MAX_TEXT = 4000
@@ -121,6 +122,44 @@ def create(db: Session, user: User, project: Project, agent: Agent, args: dict) 
     db.commit()
     db.refresh(c)
     return c, True
+
+
+# ---- 客户意见（四期 A26 客户意见回路 v1）----
+FEEDBACK_KIND = "客户意见"           # 不在 KINDS 里：Agent 不能发这类卡，只由顾问录入
+FEEDBACK_AGENT = "客户意见回路"
+FEEDBACK_ADOPT = "A"
+FEEDBACK_OPTIONS = [{"key": "A", "text": "采纳，进入修订稿"}, {"key": "B", "text": "不采纳，保留原文"}]
+MAX_FEEDBACK_ITEMS = 20
+
+
+def create_feedback(db: Session, user: User, project: Project, d, items: list[tuple[int | None, str]]) -> list[Confirmation]:
+    """顾问录入客户意见，每条一张确认卡（关联交付件和章）；正文先过机密级检测，任何一条命中整批不保存。"""
+    action = "confirmation.create"
+    if not items or len(items) > MAX_FEEDBACK_ITEMS:
+        raise ConfirmationError(422, f"客户意见每次 1～{MAX_FEEDBACK_ITEMS} 条")
+    clean: list[tuple[int | None, str]] = []
+    for seq, text in items:
+        text = (text or "").strip()
+        if not text or len(text) > MAX_TEXT:
+            raise ConfirmationError(422, f"每条客户意见不能为空，且不超过 {MAX_TEXT} 字")
+        if seq is not None and deliverables.get_section(d, seq) is None:
+            raise ConfirmationError(422, f"{d.code} 没有第 {seq} 章")
+        clean.append((seq, text))
+    _guard(db, user, project, action, "\n".join(t for _, t in clean), kind=FEEDBACK_KIND)
+    cards = []
+    for seq, text in clean:
+        c = Confirmation(project_id=project.id, kind=FEEDBACK_KIND,
+                         title=f"客户意见 · {d.code}" + (f" 第 {seq} 章" if seq is not None else " 全文"),
+                         agent=FEEDBACK_AGENT, agent_code="", options=FEEDBACK_OPTIONS, recommendation=FEEDBACK_ADOPT,
+                         reason=text, impact="采纳的意见在全部客户意见处理完后自动生成修订稿，评审修订后重签；已签版本留存只读",
+                         deliverable_code=d.code, section_seq=seq, created_by=user.username)
+        db.add(c)
+        db.flush()
+        audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
+                     confirmation_id=c.id, kind=FEEDBACK_KIND, deliverable=d.code, length=len(text))
+        cards.append(c)
+    db.commit()
+    return cards
 
 
 def resolve(db: Session, user: User, c: Confirmation, choice: str = "", resolution: str = "") -> Confirmation:

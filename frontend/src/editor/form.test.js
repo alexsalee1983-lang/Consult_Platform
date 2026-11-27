@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkForm, emptyValues, formFields, listCount } from "./form.js";
+import { checkForm, emptyValues, formFields, joinRows, listCount, splitRows } from "./form.js";
 
 const FORM = {
   code: "D1", title: "启动包", writable: true,
@@ -42,4 +42,23 @@ test("只有空白算未填；超长与列表超 50 项报错", () => {
   assert.match(checkForm(FORM, { ...base, period: "字".repeat(201) }).period, /200/);
   const many = Array.from({ length: 51 }, (_, i) => `项${i}`).join("\n");
   assert.match(checkForm(FORM, { ...base, assumptions: many }).assumptions, /50/);
+});
+
+test("产品配置预填：default 作初值，没有 default 的为空串（issue 468）", () => {
+  const form = { sections: [{ title: "工作方法与方法论", fixed: "", drafted_by_agent: false, fields: [
+    { key: "frameworks", label: "依据框架与标准", type: "list", required: true, hint: "", max: 4000, default: "等保 2.0" },
+    { key: "approach", label: "方法说明", type: "textarea", required: false, hint: "", max: 2000 },
+  ] }] };
+  assert.deepEqual(emptyValues(form), { frameworks: "等保 2.0", approach: "" });
+  assert.deepEqual(checkForm(form, emptyValues(form)), {});
+});
+
+test("A28 表格字段：每行一条、格间用全角竖线，按列数补齐；空行去掉", () => {
+  assert.deepEqual(splitRows("a｜b\n\nc", 3), [["a", "b", ""], ["c", "", ""]]);
+  assert.deepEqual(splitRows("", 2), []);
+  assert.equal(joinRows([["a", "b", ""], ["", "", ""], ["c", "d", "e"]]), "a｜b｜\nc｜d｜e");
+  const form = { sections: [{ fields: [{ key: "t", label: "表", type: "table", columns: ["甲", "乙"], required: true, max: 4000 }] }] };
+  assert.deepEqual(checkForm(form, { t: "" }), { t: "必填" });
+  assert.deepEqual(checkForm(form, { t: "｜\n" }), { t: "必填" });
+  assert.deepEqual(checkForm(form, { t: "x｜y" }), {});
 });

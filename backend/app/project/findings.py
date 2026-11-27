@@ -4,6 +4,7 @@
   按控制项编号（没有就按要求要点）对上已有发现；只覆盖仍是 draft 且来自 Agent 的发现，顾问确认过的不动；
   这次输出里没有了的 Agent 初判删掉；新发现接着已有最大 F 编号往下编，F 编号一经分配不变。
 - 状态只能按 draft → confirmed → signed → remediating → verified 往前走一步（advance）。
+  交付链差距分析后平台发“发现表确认”卡，选 A 时草稿发现一并确认（confirm_drafts，四期 D4）。
   draft → confirmed 时，若 JUDGMENT_CAPTURE 打开，记一条训练三元组（特征、Agent 初判、顾问结论），不记文字。
 - 只有 draft、confirmed 可改（update）；取值固定的字段校验取值，文字字段先过机密级检测。
 """
@@ -169,6 +170,14 @@ def advance(db: Session, project: Project, f: Finding, to: str) -> Finding:
     f.status = to
     db.flush()
     return f
+
+
+def confirm_drafts(db: Session, project: Project) -> int:
+    """发现表确认卡选 A（四期 D4，runs.on_card_resolved 调用、调用方提交）：本项目草稿发现逐条转为已确认，照常记三元组。"""
+    drafts = [f for f in list_for_project(db, project) if f.status == "draft"]
+    for f in drafts:
+        advance(db, project, f, "confirmed")
+    return len(drafts)
 
 
 def delete_for_project(db: Session, project_id: int) -> int:

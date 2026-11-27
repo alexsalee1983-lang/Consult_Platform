@@ -212,7 +212,7 @@ def require_expert(db: Session, user: User) -> None:
 def cards(db: Session, user: User) -> dict:
     require_expert(db, user)
     w = mt.weights()
-    tasks = [t for t in mt.collect(db, user) if t.kind == "kb_review" and not t.blocked]
+    tasks = [t for t in mt.collect(db, user) if t.kind == "kb_content" and not t.blocked]
     ranked = mt.rank(tasks, w)
     folded = mt.apply_quota(ranked, w.quota)
     out = []

@@ -50,7 +50,7 @@ export default function Projects() {
   const load = () => Promise.all([api.projects(), api.confirmations()])
     .then(([p, c]) => { setProjects(p); setConfs(c); })
     .catch(setError);
-  useEffect(() => { load(); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []);
 
   if (!projects) return <Loading error={error} />;
 

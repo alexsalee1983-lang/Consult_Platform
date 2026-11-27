@@ -7,6 +7,8 @@ import AssistPanel from "../components/AssistPanel.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
 import DeliverableForm from "../components/DeliverableForm.jsx";
+import { BatchSign, ClientFeedback, ModeBar, RevisePanel } from "../components/DeliverableModes.jsx";
+import { modeOf, separationNote } from "../delivModes.js";
 import { noteAfterInsert, spliceText } from "../editor/assist.js";
 import { applyReplace } from "../editor/selectEdit.js";
 
@@ -27,12 +29,12 @@ function useNewEditor() {
 import { FeedbackKeys, useKbFeedback } from "../components/KbFeedback.jsx";
 import { knowledgeLine } from "../kbUsage.js";
 
-// 交付件审阅（设计稿 04）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
+// 交付件页（设计稿 04“交付件审阅”）：左栏目录与来源构成、质量门禁；中间章节正文（来源上标、版本、修改）；
 // 右栏与本交付件有关的确认卡、签署流程。规则都在后端，界面只按接口返回显示和操作。
 
 const SOURCE_ROWS = [["evidence", "客户证据", "var(--ok)"], ["knowledge", "知识库", "var(--cyan)"], ["inferred", "模型推断", "var(--vio)"]];
 const EVIDENCE_KIND = { D: "客户资料", I: "访谈纪要", O: "现场观察" };
-const ACTION_NAMES ={ submit: "提交签署", sign: "签署", return: "退回修改" };
+const ACTION_NAMES = { submit: "提交签署", sign: "签署", return: "退回修改", reopen: "客户意见重开修订" };
 
 function fmt(t) {
   return t ? new Date(t).toLocaleString("zh-CN", { hour12: false }).replace(/:\d{2}$/, "") : "";
@@ -435,7 +437,7 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
     setBusy(true);
     setError("");
     try {
-      await api.signoffAction(code, dcode, action, text);
+      await (action === "merged" ? api.signMerged(code, dcode) : api.signoffAction(code, dcode, action, text));
       setComment("");
       setReturning(false);
       await onChanged();
@@ -459,7 +461,12 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
       {!so.gate && so.status !== "signed" && so.reasons.length > 0 && (
         <ul className="sub gate-reasons">{so.reasons.map((x) => <li key={x}>{x}</li>)}</ul>
       )}
+      {separationNote(so) && <div className="sub">{separationNote(so)}</div>}
+      {so.sign_block && so.status === "review" && isManager && <div className="note-amber" role="status">{so.sign_block}</div>}
       {error && <div className="err" role="alert">{error}</div>}
+      {so.merged && so.status === "drafting" && isManager && (
+        <button className="btnp" disabled={busy || !so.merged_ready} title={so.merged_ready ? "" : "门禁还有问题，先逐条核对"} onClick={() => act("merged")}>核对并签署（一步完成）</button>
+      )}
       {so.status === "signed" ? <div className="sub" style={{ color: "var(--ok)" }}>已签署，正文只读。</div>
         : so.status === "review" ? (
           isManager ? (returning ? (
@@ -472,7 +479,7 @@ function SignFlow({ code, dcode, d, so, isManager, onChanged }) {
             </div>
           ) : (
             <div className="row">
-              <button className="btnp" style={{ flex: 1 }} disabled={busy || !so.gate} onClick={() => act("sign")}>签署</button>
+              <button className="btnp" style={{ flex: 1 }} disabled={busy || !so.gate || !!so.sign_block} onClick={() => act("sign")}>签署</button>
               <button className="btn" disabled={busy} onClick={() => setReturning(true)}>退回修改</button>
             </div>
           )) : <div className="sub">已提交，等待项目经理签署。</div>
@@ -501,6 +508,7 @@ export default function Deliverable({ code, dcode }) {
   const [p, setP] = useState(null);
   const [d, setD] = useState(null);
   const [so, setSo] = useState(null);
+  const [rv, setRv] = useState(null);           // A26 一键修订状态
   const [cards, setCards] = useState([]);
   const [members, setMembers] = useState([]);
   const [seq, setSeq] = useState(1);
@@ -522,13 +530,14 @@ export default function Deliverable({ code, dcode }) {
       setSo(ss);
       setCards(cc.filter((c) => c.deliverable_code === dcode));
       setError(null);
+      api.reviseState(code, dcode).then(setRv).catch(() => setRv(null));
     } catch (e) {
       setError(e);
     }
   }, [code, dcode]);
 
   useEffect(() => {
-    setD(null); setSo(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false);
+    setD(null); setSo(null); setRv(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false);
     loadForm();
     api.project(code).then(setP).catch(setError);
     api.members(code).then(setMembers).catch(() => setMembers([]));
@@ -536,7 +545,7 @@ export default function Deliverable({ code, dcode }) {
   }, [code, dcode, load, loadForm]);
 
   // 评审在后台跑：排队或进行中时每 3 秒刷新一次
-  const active = so?.latest_review && ["queued", "running"].includes(so.latest_review.status);
+  const active = (so?.latest_review && ["queued", "running"].includes(so.latest_review.status)) || ["queued", "running"].includes(rv?.status);
   useEffect(() => {
     if (!active) return undefined;
     const t = setInterval(load, 3000);
@@ -564,6 +573,7 @@ export default function Deliverable({ code, dcode }) {
   const isManager = members.some((m) => m.username === user?.username && m.project_role === "manager");
   const st = DELIV_STATUS[d.status] || DELIV_STATUS.not_started;
   const cur = d.sections.find((s) => s.seq === seq) ? seq : d.sections[0]?.seq;
+  const mode = modeOf(d, so, rv);
 
   return (
     <>
@@ -577,6 +587,7 @@ export default function Deliverable({ code, dcode }) {
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportWord)}>{exporting ? "导出中…" : "导出 Word"}</button>
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportPpt)}>导出 PPT</button>
       </TopBar>
+      <ModeBar mode={mode} />
       {notice && <div className={notice.startsWith("导出失败") ? "err" : "sub"} role="status">{notice}</div>}
       {error && <div className="err">{error.message}</div>}
       {d.totals.knowledge_updates > 0 && (
@@ -613,7 +624,10 @@ export default function Deliverable({ code, dcode }) {
               {cards.length === 0 && <li className="sub">本交付件没有待确认事项。<Link to={`/project/${encodeURIComponent(code)}`}>回驾驶舱</Link></li>}
             </ul>
           </section>
+          {mode === 1 && <RevisePanel code={code} dcode={dcode} rv={rv} editable={editable} onChanged={load} />}
           <SignFlow code={code} dcode={dcode} d={d} so={so} isManager={isManager} onChanged={load} />
+          {mode === 3 && !so.merged && <ClientFeedback code={code} dcode={dcode} sections={d.sections} onChanged={load} />}
+          {so.merged && isManager && <BatchSign onChanged={load} />}
         </div>
       </div>
     </>

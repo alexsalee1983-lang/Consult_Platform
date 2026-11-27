@@ -4,7 +4,8 @@
 - 心跳：每轮写 Redis 键 worker:heartbeat:<编号>（30 秒过期，/api/health 据此显示 worker 是否在线），
   并更新本地文件 /tmp/worker.alive 的时间（容器健康检查用，不依赖 Redis）。
 - 收到 SIGTERM / SIGINT 时做完当前任务再退出。
-- 每 SCAN_SECONDS 秒扫描一次到期项目，自动发起删除申请（app/project/deletion.py）。
+- 每 SCAN_SECONDS 秒扫描一次到期项目，自动发起删除申请（app/project/deletion.py）；
+  推进客户自评包的到期提醒与逾期升级（app/project/selfeval.py，四期 E3②）。
 - 每 DAILY_SECONDS 秒（启动时先做一次）排每日自检、停用长期未登录的账号（app/services/ops.py，二期 C5）、
   排候选影子期晋级任务 kb.candidate_promote（app/kb/candidate.py，三期 B24①）；
   按日期切换依据现行状态（app/kb/reg_lifecycle.py，三期 B26）。
@@ -25,7 +26,7 @@ from .core import audit, metrics
 from .core.config import get_settings
 from .core.db import SessionLocal
 from .kb import agent_review, batches, candidate, deid_flow, gap_manual, gap_pool, intake, reconfirm_agent, search  # noqa: F401  注册 kb.parse、kb.deid、kb.embed、kb.agent_review、kb.candidate_promote、kb.batch_* 等任务处理器
-from .project import autoflow, deletion, evidence, my_tasks, quality, runs  # noqa: F401  注册 project.parse、project.delete 等
+from .project import autoflow, deletion, evidence, form_import, my_tasks, quality, revise, runs, selfeval, stages  # noqa: F401  注册 project.parse、project.delete 等
 from .services import jobs, ops, runtime_config
 
 POLL_SECONDS = 5
@@ -101,6 +102,17 @@ def _scan_due() -> None:
         log.warning("到期删除扫描出错：%s", type(e).__name__)
 
 
+def _scan_selfeval() -> None:
+    """平台规则（E3②）：客户自评包到期前一天、当天提醒，逾期 2 天升级项目经理（可重复执行，每级只提醒一次）。"""
+    try:
+        with SessionLocal() as db:
+            made = selfeval.scan_reminders(db)
+        if made:
+            log.info("客户自评包提醒与升级 %d 个", len(made))
+    except Exception as e:  # noqa: BLE001
+        log.warning("客户自评包提醒扫描出错：%s", type(e).__name__)
+
+
 def _scan_reconfirm() -> None:
     """平台规则（人工环节复查 K7）：复审到期的公开知识条目排知识审核 Agent 复查（可重复执行，本周期查过的不再排）。"""
     try:
@@ -118,8 +130,9 @@ def _auto_flow() -> None:
         with SessionLocal() as db:
             started = autoflow.scan_runs(db)
             reviewed = autoflow.scan_reviews(db)
-        if started or reviewed:
-            log.info("自动发起交付链 %d 个、质量评审 %d 个", len(started), len(reviewed))
+            moved = stages.scan(db)                     # 四期 A27：本阶段交付件全部签署即进入下一阶段
+        if started or reviewed or moved:
+            log.info("自动发起交付链 %d 个、质量评审 %d 个、阶段推进 %d 个", len(started), len(reviewed), len(moved))
     except Exception as e:  # noqa: BLE001
         log.warning("交付流程自动推进出错：%s", type(e).__name__)
 
@@ -216,6 +229,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
+    jobs.validate_handlers()   # 签名不一致直接拒绝启动（四期 G7）
     wid = worker_id()
     r = _redis()
     log.info("worker %s 启动，任务种类：%s", wid, ", ".join(jobs.registered()))
@@ -227,6 +241,7 @@ def main() -> None:
             last_scan = time.monotonic()
             _sync_runtime_config()
             _scan_due()
+            _scan_selfeval()
             _scan_reconfirm()
             _auto_flow()
             _verify_audit()
