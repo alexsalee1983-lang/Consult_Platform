@@ -75,7 +75,9 @@ def _counts() -> tuple[int, int]:
         return db.scalar(select(func.count(KbItem.id))), db.scalar(select(func.count(KbVersion.id)))
 
 
-def test_suggest_groups_with_sources_and_read_only(proj):
+def test_suggest_groups_with_sources_and_read_only(proj, monkeypatch):
+    # 只验分组、出处与只读，不验排名：全量跑时别的测试留下的公司做法（如 test_expert_bench）可能排在前面
+    monkeypatch.setattr("app.project.kb_suggest.PER_GROUP", 20)
     code, c, corpus = proj
     before = _counts()
     r = c.get(f"/api/projects/{code}/deliverables/D4/sections/1/kb-suggest", params={"q": TAG})
