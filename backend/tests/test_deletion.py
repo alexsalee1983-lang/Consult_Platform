@@ -28,7 +28,7 @@ def _work() -> None:
 
 
 def _project(manager: str) -> str:
-    code = f"QD-{secrets.token_hex(2).upper()}"
+    code = f"QD-{secrets.token_hex(3).upper()}"
     assert cli_main(["create-project", "--code", code, "--tier", "standard", "--manager", manager]) == 0
     return code
 

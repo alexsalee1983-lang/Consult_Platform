@@ -1,9 +1,10 @@
-"""投料解析：把 Word / PDF / Markdown / 文本解析成“章节 + 正文”，再切成检索用的片段。
+"""投料解析：把 Word / PDF / Markdown / 网页 / 文本解析成“章节 + 正文”，再切成检索用的片段。
 
 - 只在本地解析，不联网；不执行文件中的宏、不加载外部引用。
 - 入口清洗（四期 B42 投毒防护第②层）：只取可见正文——Word 的隐藏文字（w:vanish）、修订删除、批注、文档属性不取；
   Markdown 的 HTML 注释去掉；零宽、方向控制等不可见格式字符去掉。去掉的段数记在 ParsedDoc.hidden，只记个数。
 - 文件类型以内容判断（文件头），扩展名只作参考：.docx 必须是 zip、PDF 必须以 %PDF 开头、文本必须能按 UTF-8 解码。
+- 网页（.html/.htm）用标准库 html.parser 去标签取正文，丢弃脚本、样式、导航、页头页脚；h1～h6 作章节标题。
 - 扫描件（PDF 每页几乎没有文字）判为不支持：OCR 一期不做（决策记录 2026-11-08），提示提供文字版。
 - 解析结果只给调用方，不写日志；出错时只抛 ParseError 的安全说明，不带文件内容。
 """
@@ -12,6 +13,7 @@ from __future__ import annotations
 import io
 import re
 import zipfile
+from html.parser import HTMLParser
 from dataclasses import asdict, dataclass, field
 
 MAX_BYTES = 20 * 1024 * 1024          # 单个文件上限（nginx 上限 50MB，这里更严）
@@ -21,7 +23,8 @@ SCANNED_CHARS_PER_PAGE = 30            # 平均每页少于这么多字，视为
 CHUNK_CHARS = 800                      # 检索片段目标长度
 CHUNK_OVERLAP = 100
 
-EXTENSIONS = {".docx": "docx", ".pdf": "pdf", ".md": "markdown", ".markdown": "markdown", ".txt": "text"}
+EXTENSIONS = {".docx": "docx", ".pdf": "pdf", ".md": "markdown", ".markdown": "markdown", ".txt": "text",
+              ".html": "html", ".htm": "html"}
 
 
 class ParseError(ValueError):
@@ -57,11 +60,13 @@ def detect_kind(filename: str, data: bytes) -> str:
     ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
     kind = EXTENSIONS.get(ext)
     if kind is None:
-        raise ParseError("只支持 Word（.docx）、PDF、Markdown（.md）和纯文本（.txt）；旧版 .doc 请另存为 .docx")
+        raise ParseError("只支持 Word（.docx）、PDF、Markdown（.md）、网页（.html）和纯文本（.txt）；旧版 .doc 请另存为 .docx")
     if kind == "docx" and not data.startswith(b"PK\x03\x04"):
         raise ParseError("文件内容不是 .docx 格式")
     if kind == "pdf" and not data.lstrip()[:5].startswith(b"%PDF-"):
         raise ParseError("文件内容不是 PDF 格式")
+    if kind == "html" and not re.search(rb"<[a-zA-Z!]", data[:65536]):
+        raise ParseError("文件内容不是网页格式")
     return kind
 
 
@@ -71,7 +76,7 @@ def parse(filename: str, data: bytes) -> ParsedDoc:
     if len(data) > MAX_BYTES:
         raise ParseError(f"文件超过 {MAX_BYTES // 1024 // 1024}MB")
     kind = detect_kind(filename, data)
-    doc = {"docx": _docx, "pdf": _pdf, "markdown": _markdown, "text": _text}[kind](data)
+    doc = {"docx": _docx, "pdf": _pdf, "markdown": _markdown, "html": _html, "text": _text}[kind](data)
     _clean(doc)
     doc.sections = [s for s in doc.sections if s.text.strip()]
     if not doc.sections:
@@ -149,6 +154,77 @@ def _markdown(data: bytes) -> ParsedDoc:
     return ParsedDoc("markdown", _by_headings(
         ((len(m.group(1)), m.group(2)) if (m := _MD_HEADING.match(line)) else (0, line))
         for line in _decode_text(data).replace("\r\n", "\n").split("\n")))
+
+
+_HTML_SKIP = {"script", "style", "noscript", "template", "head", "nav", "header", "footer", "aside",
+              "form", "select", "button", "iframe", "svg", "object"}
+_HTML_BLOCK = {"p", "div", "br", "li", "ul", "ol", "tr", "table", "section", "article", "main", "dd", "dt",
+               "dl", "blockquote", "pre", "hr", "caption", "figure", "figcaption"}
+_HTML_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_-]+)""", re.I)
+
+
+class _HtmlText(HTMLParser):
+    """收集 (标题级别, 文字) 行；跳过 _HTML_SKIP 里的元素整体，td/th 用“ | ”分隔。"""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.lines: list[tuple[int, str]] = []
+        self.skip = 0
+        self.level = 0
+        self.buf: list[str] = []
+
+    def _end_line(self) -> None:
+        # 只合并 ASCII 空白，保留法条里常见的全角空格
+        text = re.sub(r"[ \t\r\n\f\v\xa0]+", " ", "".join(self.buf)).strip(" |")
+        if text:
+            self.lines.append((self.level, text))
+        self.buf.clear()
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag in _HTML_SKIP:
+            self.skip += 1
+        elif self.skip:
+            return
+        elif re.fullmatch(r"h[1-6]", tag):
+            self._end_line()
+            self.level = int(tag[1])
+        elif tag in _HTML_BLOCK:
+            self._end_line()
+        elif tag in ("td", "th") and self.buf:
+            self.buf.append(" | ")
+
+    def handle_startendtag(self, tag: str, attrs) -> None:
+        if not self.skip and tag in _HTML_BLOCK:
+            self._end_line()
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _HTML_SKIP:
+            self.skip = max(0, self.skip - 1)
+        elif self.skip:
+            return
+        elif re.fullmatch(r"h[1-6]", tag):
+            self._end_line()
+            self.level = 0
+        elif tag in _HTML_BLOCK:
+            self._end_line()
+
+    def handle_data(self, data: str) -> None:
+        if not self.skip:
+            self.buf.append(data)
+
+
+def _html(data: bytes) -> ParsedDoc:
+    text = None
+    if m := _HTML_CHARSET.search(data[:4096]):
+        try:
+            text = data.decode(m.group(1).decode("ascii"))
+        except (LookupError, UnicodeDecodeError):
+            text = None
+    p = _HtmlText()
+    p.feed(text if text is not None else _decode_text(data))
+    p.close()
+    p._end_line()
+    return ParsedDoc("html", _by_headings(p.lines))
 
 
 def _by_headings(lines) -> list[Section]:

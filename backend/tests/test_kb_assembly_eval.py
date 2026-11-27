@@ -215,3 +215,25 @@ def test_cli_gate(published, tmp_path, capsys, monkeypatch):
     q.write_text(yaml.safe_dump({k: v for k, v in _evalset().items() if k != "slots"}, allow_unicode=True),
                  encoding="utf-8")
     assert cli_main(["kb-assembly-eval", str(q), "--as", name, "--gate"]) == 3
+
+
+def test_industry_evalset_uses_industry_pack_like_project(published, monkeypatch):
+    """四期 B39：评测集写 industry 时按立项同样的规则并入行业包，基线检索的依据加权行业依据在前。"""
+    from app.agents import tools
+    from app.products import config
+
+    data = {**_evalset(), "industry": "银行"}
+    snap = ae._snapshot(data)
+    assert snap["industry"]["code"] == "BANK"
+    want = tools.snapshot_kb_prefs(config.compose_codes("SOC", [], "银行"), "银行")["basis"]
+    assert want[: len(snap["industry"]["basis"])] == snap["industry"]["basis"]
+    seen: list[list[str]] = []
+    real = ae.search.basis
+    monkeypatch.setattr(ae.search, "basis", lambda *a, **kw: (seen.append(list(kw["boost_refs"])), real(*a, **kw))[1])
+    with SessionLocal() as db:
+        rep = ae.run(db, db.merge(published), data)
+    assert seen and all(refs == want for refs in seen)
+    assert rep.to_json()["industry"] == "银行"
+    assert "银行" in ae.format_report(rep).splitlines()[0]
+    with pytest.raises(ae.AssemblyEvalError, match="行业"):
+        ae.compare(rep, {**rep.to_json(), "industry": "电力"})

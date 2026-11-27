@@ -70,14 +70,14 @@ def _agent_write(code: str, name: str, body: str = AGENT_BODY) -> None:
 def test_org_type_on_create() -> None:
     lead = logged_in_client(app, create_user((PROJECT_LEAD,)))
     try:
-        code = f"QA-{secrets.token_hex(2).upper()}"
+        code = f"QA-{secrets.token_hex(3).upper()}"
         base = {"tier": "standard", "product": "SOC", "industry": "电力"}
         bad = lead.post("/api/projects", json={**base, "code": code, "org_type": "神秘机构"})
         assert bad.status_code == 422
         r = lead.post("/api/projects", json={**base, "code": code, "org_type": "local_soe"})
         assert r.status_code == 201, r.text
         assert r.json()["org_type"] == "local_soe" and r.json()["org_type_name"] == "地方国企"
-        other = f"QA-{secrets.token_hex(2).upper()}"
+        other = f"QA-{secrets.token_hex(3).upper()}"
         assert lead.post("/api/projects", json={**base, "code": other}).json()["org_type"] == ""   # 可不填
     finally:
         lead.__exit__(None, None, None)

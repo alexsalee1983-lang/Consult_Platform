@@ -64,6 +64,30 @@ def test_bad_files_rejected(name, data, msg):
         parse.parse(name, data)
 
 
+def test_html_body_text_without_tags_scripts_and_nav():
+    html = """<!doctype html><html><head><meta charset="gbk"><title>t</title>
+<style>.x{color:red}</style><script>var a = "<p>不要</p>";</script></head>
+<body><nav>首页 | 栏目</nav><h1>某某管理办法</h1><h2>第一章 总则</h2>
+<p>第一条　为了规范&nbsp;管理，<b>制定</b>本办法。</p><p>第二条　适用范围。</p>
+<table><tr><td>项</td><td>说明</td></tr></table><footer>版权所有</footer></body></html>"""
+    doc = parse.parse("a.html", html.encode("gbk"))
+    assert doc.kind == "html"
+    assert doc.sections[0].heading == "某某管理办法 / 第一章 总则"
+    text = doc.full_text()
+    assert "第一条　为了规范 管理，制定本办法。" in text and "第二条　适用范围。" in text
+    assert "项 | 说明" in text
+    for gone in ("不要", "color", "首页", "版权所有", "<"):
+        assert gone not in text
+    assert parse.parse("b.HTM", "<p>正文</p>".encode()).kind == "html"
+    odd = parse.parse("c.html", '<meta charset="x-bogus"><p>甲<br/>乙</p>'.encode())   # 未知编码回退 UTF-8
+    assert odd.full_text() == "甲\n乙"
+
+
+def test_html_without_markup_rejected():
+    with pytest.raises(parse.ParseError, match="不是网页"):
+        parse.parse("a.html", "纯文字".encode())
+
+
 def test_oversize_rejected():
     with pytest.raises(parse.ParseError, match="超过"):
         parse.parse("big.txt", b"x" * (parse.MAX_BYTES + 1))

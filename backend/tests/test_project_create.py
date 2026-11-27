@@ -21,7 +21,7 @@ from .test_product_config import AGENTS, MODULE, PRODUCT, _write
 
 
 def _code() -> str:
-    return f"QA-{secrets.token_hex(2).upper()}"
+    return f"QA-{secrets.token_hex(3).upper()}"
 
 
 @pytest.fixture

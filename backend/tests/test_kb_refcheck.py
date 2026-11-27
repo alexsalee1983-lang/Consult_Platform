@@ -22,7 +22,7 @@ SENTINEL = "夜班无人值守示范句"
 
 @pytest.fixture(scope="module")
 def signed():
-    live, other = _publish(f"校验测试-现行{secrets.token_hex(2)}"), _publish("校验测试-另一条")
+    live, other = _publish(f"校验测试-现行{secrets.token_hex(4)}"), _publish("校验测试-另一条")
     gone = _publish("校验测试-下线", retire=True)
     code = f"BANK-A-{secrets.token_hex(3).upper()}"
     with SessionLocal() as db:

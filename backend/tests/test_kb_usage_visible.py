@@ -34,7 +34,7 @@ def _publish_basis(people, title):  # noqa: F811
 
 
 def test_section_lists_used_knowledge_with_version_and_authority(people):  # noqa: F811
-    x = _publish_basis(people, f"A17-U1-{secrets.token_hex(2)}")
+    x = _publish_basis(people, f"A17-U1-{secrets.token_hex(4)}")
     code, member = _project()
     _write(code, member, 1, f"现状与建议 [{x}]。", agent="report-writer")
     c = logged_in_client(app, member)
@@ -53,7 +53,7 @@ def test_section_lists_used_knowledge_with_version_and_authority(people):  # noq
 
 
 def test_flag_goes_to_gap_pool_and_knowledge_health(people):  # noqa: F811
-    x = _publish_basis(people, f"A17-U2-{secrets.token_hex(2)}")
+    x = _publish_basis(people, f"A17-U2-{secrets.token_hex(4)}")
     code, member = _project()
     _write(code, member, 1, f"现状 [{x}]。", agent="report-writer")
     c = logged_in_client(app, member)
@@ -86,7 +86,7 @@ def test_flag_goes_to_gap_pool_and_knowledge_health(people):  # noqa: F811
 
 
 def test_readiness_slot_marks_feedback_recheck(people):  # noqa: F811
-    x = _publish_basis(people, f"A17-U3-{secrets.token_hex(2)}")
+    x = _publish_basis(people, f"A17-U3-{secrets.token_hex(4)}")
     key = f"a17-{secrets.token_hex(3)}"
     with SessionLocal() as db:
         item = db.scalar(select(KbItem).where(KbItem.doc_id == x))
