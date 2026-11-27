@@ -39,7 +39,7 @@ def _new_project(org_type: str = "") -> str:
 @pytest.fixture()
 def proj():
     code = _new_project("central_soe")
-    account = create_user((CONSULTANT,), {code: "member"})
+    account = create_user((CONSULTANT,), {code: "manager"})  # 四期 A29：发起交付链只给项目经理
     c = logged_in_client(app, account)
     yield code, c, account[0]
     c.__exit__(None, None, None)

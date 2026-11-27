@@ -54,23 +54,24 @@ test("我的项目：列出虚拟项目，链接到项目驾驶舱", async () =>
   expect(c.textContent).toContain("没有待确认事项");
 });
 
-// 全景数据：确认卡 card:7 卡住 D3 → 第 4 步 → D4（影响 3）；card:8 只连 D4（影响 1）；D1 待签署（影响 0）
+// 全景数据（A29：没有 AI·平台 泳道，连线交付件 → 交付件）：确认卡 card:7 卡住 D3 → D4 → 签署 D4（影响 3）；
+// card:8 只连 D4 → 签署 D4（影响 2）；D1 待签署（影响 0）；D0 已签署，点开是只读面板；D4 AI 在写
 const PANO = {
   project: "BANK-A", product: "soc", product_name: "SOC 建设", current: "c1", my_lanes: ["consultant"],
   columns: [{ id: "c0", name: "启动", status: "done" }, { id: "c1", name: "调研", status: "cur" }, { id: "c2", name: "分析", status: "next" }],
-  lanes: [{ id: "client", name: "客户" }, { id: "consultant", name: "顾问" }, { id: "manager", name: "项目经理" }, { id: "ai", name: "AI·平台" }],
+  auto_done: 2, can_manage_runs: false,
+  lanes: [{ id: "client", name: "客户" }, { id: "consultant", name: "顾问" }, { id: "manager", name: "项目经理" }],
   nodes: [
-    { id: "step:s1", col: "c0", lane: "ai", type: "step", status: "ok", title: "第 1 步 启动", subtitle: "", target: "drawer:run" },
-    { id: "step:s2", col: "c1", lane: "ai", type: "step", status: "ok", title: "第 2 步 调研", subtitle: "", target: "drawer:run" },
+    { id: "deliv:D0", col: "c0", lane: "consultant", type: "deliverable", status: "ok", title: "D0 项目启动", subtitle: "已签署", target: "drawer:deliv:D0" },
     { id: "deliv:D1", col: "c1", lane: "consultant", type: "deliverable", status: "cur", title: "D1 现状差距分析", subtitle: "待签署", target: "/project/BANK-A/deliverables/D1" },
     { id: "sign:D1", col: "c1", lane: "manager", type: "signoff", status: "cur", title: "签署 D1", subtitle: "", target: "/project/BANK-A/deliverables/D1" },
-    { id: "card:8", col: "c1", lane: "consultant", type: "card", status: "blk", title: "证据缺口 · 机房", subtitle: "", target: "drawer:card:8" },
-    { id: "card:7", col: "c1", lane: "consultant", type: "card", status: "blk", title: "组织与人员矛盾", subtitle: "", target: "drawer:card:7" },
+    { id: "card:8", col: "c1", lane: "consultant", type: "card", status: "blk", title: "证据缺口 · 机房", subtitle: "补资料 · 影响 1 项", target: "drawer:card:8" },
+    { id: "card:7", col: "c1", lane: "consultant", type: "card", status: "blk", title: "组织与人员矛盾", subtitle: "确认卡 · 影响 2 项", target: "drawer:card:7" },
     { id: "deliv:D3", col: "c2", lane: "consultant", type: "deliverable", status: "todo", title: "D3 事实清单", subtitle: "", target: "/project/BANK-A/deliverables/D3" },
-    { id: "step:s4", col: "c2", lane: "ai", type: "step", status: "todo", title: "第 4 步 差距", subtitle: "", target: "drawer:run" },
-    { id: "deliv:D4", col: "c2", lane: "consultant", type: "deliverable", status: "todo", title: "D4 差距分析", subtitle: "", target: "/project/BANK-A/deliverables/D4" },
+    { id: "deliv:D4", col: "c2", lane: "consultant", type: "deliverable", status: "ai", title: "D4 差距分析", subtitle: "处理中", eta: "2026-11-27T08:30:00+00:00", late: false, target: "/project/BANK-A/deliverables/D4" },
+    { id: "sign:D4", col: "c2", lane: "manager", type: "signoff", status: "todo", title: "签署 D4", subtitle: "", target: "/project/BANK-A/deliverables/D4" },
   ],
-  edges: [{ from: "card:7", to: "deliv:D3" }, { from: "deliv:D3", to: "step:s4" }, { from: "step:s4", to: "deliv:D4" },
+  edges: [{ from: "card:7", to: "deliv:D3" }, { from: "deliv:D3", to: "deliv:D4" }, { from: "deliv:D4", to: "sign:D4" },
     { from: "card:8", to: "deliv:D4" }, { from: "deliv:D1", to: "sign:D1" }],
 };
 
@@ -83,21 +84,42 @@ function stubOverview() {
 }
 
 test("待办按影响排序：卡住下游越多越靠前，同影响确认卡在签署前", () => {
-  expect(todos(PANO).map((t) => [t.id, t.impact])).toEqual([["card:7", 3], ["card:8", 1], ["sign:D1", 0]]);
+  expect(todos(PANO).map((t) => [t.id, t.impact])).toEqual([["card:7", 3], ["card:8", 2], ["sign:D1", 0]]);
 });
 
-test("全景：行动条、默认只看例外、已自动完成折叠成一行", async () => {
+test("A29 全景：视图只有“要我做的 / 全部”，默认要我做的；没有回放、没有“自动完成”折叠行、没有 AI 泳道", async () => {
   stubOverview();
   const c = await render(<Overview code="BANK-A" />);
   expect(c.querySelector("h1").textContent).toBe("项目驾驶舱 · 安全运营中心建设");
   expect(c.textContent).toContain("当前为外部测试模型");
   expect(c.textContent).toContain("最先：组织与人员矛盾");
-  const pressed = [...c.querySelectorAll("button[aria-pressed=true]")].map((b) => b.textContent);
-  expect(pressed).toEqual(["只看例外"]);
-  const fold = [...c.querySelectorAll("button")].find((b) => b.textContent.includes("本周自动完成 2 项"));
+  const views = [...c.querySelectorAll("button[aria-pressed]")].map((b) => b.textContent);
+  expect(views).toEqual(["要我做的", "全部"]);
+  expect([...c.querySelectorAll("button[aria-pressed=true]")].map((b) => b.textContent)).toEqual(["要我做的"]);
+  expect(c.textContent).not.toContain("回放");
+  expect(c.textContent).not.toContain("本周自动完成");
+  expect(c.textContent).not.toContain("AI·平台");
+  expect(c.textContent).not.toContain("交付链");                     // 默认隐藏 Agent：没有“交付链”按钮
+  expect(c.querySelector('g[data-node="deliv:D4"]').textContent).toContain("处理中");   // AI 在写：灰字处理中
+});
+
+test("A29 全景：已完成阶段折叠，点一下原位展开；已签署交付件点开是只读面板", async () => {
+  stubOverview();
+  stub.deliverable = async () => ({ code: "D0", title: "项目启动", status: "signed", revision: 2, sections: [], totals: { knowledge_updates: 0 } });
+  stub.signoff = async () => ({ history: [{ id: 1, action: "sign", revision: 2, actor: "经理甲", created_at: "2026-11-20T02:00:00Z" }] });
+  const c = await render(<Overview code="BANK-A" />);
+  expect(c.querySelector('g[data-node="deliv:D0"]')).toBeNull();
+  const fold = c.querySelector('g[data-fold="c0:consultant"]');
   expect(fold).toBeTruthy();
-  await act(async () => fold.click());
-  expect([...c.querySelectorAll("button[aria-pressed=true]")].map((b) => b.textContent)).toEqual(["全部"]);
+  await act(async () => fold.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  const d0 = c.querySelector('g[data-node="deliv:D0"]');
+  expect(d0).toBeTruthy();
+  await act(async () => d0.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  const panel = document.querySelector('[aria-label="已完成交付件"]');
+  expect(panel.textContent).toContain("经理甲");
+  expect(panel.textContent).toContain("已签署的不能直接改");
+  const labels = [...panel.querySelectorAll("a, button")].map((b) => b.textContent);
+  for (const t of ["查看", "下载", "版本历史", "发起勘误"]) expect(labels).toContain(t);
 });
 
 test("全景：按设计稿 07 行动条五张卡、“下一步”加宽高亮，其余概况进标题下标签，全景图紧跟其后", async () => {
@@ -109,7 +131,7 @@ test("全景：按设计稿 07 行动条五张卡、“下一步”加宽高亮�
   expect(act.querySelectorAll(".act-card").length).toBe(5);
   expect(act.firstElementChild.classList.contains("act-next")).toBe(true);
   expect(c.querySelector('[aria-label="项目概况"]').textContent).toContain("已签署");
-  expect(act.nextElementSibling.textContent).toContain("只看例外");
+  expect(act.nextElementSibling.textContent).toContain("要我做的");
 });
 
 test("全景动效钩子：节点按状态带类名（卡住、AI 在做会呼吸），交付件卡带签署进度条", async () => {

@@ -18,13 +18,9 @@ export function toggleFilter(current, key) {
   return current === key ? "" : key;
 }
 
-// 分成今天、超出额度、须由别人处理三段；filter 为空看全部
+// 分成今天、超出额度两段；filter 为空看全部。四期 A29：别人的卡隐藏，不灰显（后端已不返回，这里再兜一层）
 export function splitTasks(tasks, filter) {
-  const rows = (tasks || []).filter((t) => !filter || t.kind === filter);
-  return {
-    today: rows.filter((t) => !t.blocked && !t.folded),
-    later: rows.filter((t) => !t.blocked && t.folded),
-    blocked: rows.filter((t) => t.blocked),
-  };
+  const rows = (tasks || []).filter((t) => !t.blocked && (!filter || t.kind === filter));
+  return { today: rows.filter((t) => !t.folded), later: rows.filter((t) => t.folded) };
 }
 

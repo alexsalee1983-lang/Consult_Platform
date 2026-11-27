@@ -67,10 +67,9 @@ def test_my_tasks_covers_all_former_workbench_kinds_with_one_count():
     assert by[("kb_content", vid)]["link"] == f"/kb/bench?v={vid}"        # 内容审核一键进专家工作台对应卡
     assert by[("kb_compliance", vid)]["link"] == f"/kb/review?version={vid}"
     assert by[("recheck", recheck_id)]["link"] == "/kb/review?tab=recheck"  # 保留 #465 的页签链接
-    deid = by[("deid", upload_id)]
-    assert "另一位知识管理员" in deid["blocked"] and deid["link"] == "/kb/intake"
-    gone = by[("deletion", dele_id)]
-    assert "另一位项目负责人" in gone["blocked"] and gone["project_code"] == other_code
+    # A29：按规则须由别人处理的（上传者确认去标识、发起人确认删除）直接隐藏，不灰显
+    assert ("deid", upload_id) not in by and ("deletion", dele_id) not in by
+    assert all(not t["blocked"] for t in tasks)
     assert "y.docx" not in str(body)                                    # 不给上传文件名
     for k in FILTER_KINDS:                                               # 计数口径：kinds 计数 = 本类任务数
         assert body["kinds"][k]["count"] == sum(t["kind"] == k for t in tasks)

@@ -111,7 +111,7 @@ function Detail({ id, onChange }) {
   );
 }
 
-// 项目负责人：项目资料删除确认队列（M4 ②）
+// 咨询业务负责人：项目资料删除确认队列（M4 ②）
 export default function Deletions() {
   const [filter, setFilter] = useState("open");
   const [rows, setRows] = useState(null);
@@ -123,7 +123,7 @@ export default function Deletions() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <TopBar cap="项目负责人" title="项目资料删除">
+      <TopBar cap="咨询业务负责人" title="项目资料删除">
         {FILTERS.map(([k, v]) => (
           <button key={k} className={k === filter ? "btnp sm" : "btn sm"} onClick={() => setFilter(k)}>{v}</button>))}
       </TopBar>

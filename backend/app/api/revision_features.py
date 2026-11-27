@@ -1,4 +1,4 @@
-"""四期 F4②：改稿与驳回特征汇总。只给项目负责人、知识管理员（其他角色 403）。
+"""四期 F4②：改稿与驳回特征汇总。只给咨询业务负责人、知识管理员（其他角色 403）。
 
 GET /api/revision-features/summary?project=CODE
     按章节键、来源聚合计数（规则见 app/project/revision_features.py）；不带 project 时汇总本人所在的全部项目，

@@ -3,7 +3,7 @@ import { api } from "../api.js";
 import { TopBar } from "../components/common.jsx";
 
 // 指标看板 v1（三期 F2①）：10 项精简版指标 + 自动发布率、人工分钟 / 百条，国标内容引用单列。
-// 只有数字和口径，不含项目代号和内容；只给项目负责人。
+// 只有数字和口径，不含项目代号和内容；只给咨询业务负责人。
 const STATUS = {
   ok: { label: "达标", cls: "c-g" },
   breach: { label: "越红线", cls: "c-r" },
@@ -102,7 +102,7 @@ export default function Indicators() {
   }, [days]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <TopBar cap="项目负责人" title="指标看板" />
+      <TopBar cap="咨询业务负责人" title="指标看板" />
       <div className="sub">按时间窗现算的精简版指标（只有数字和口径，不含项目和交付件内容）。红线指标越线标红；暂无数据的写明何时有数。</div>
       <div style={{ display: "flex", gap: 8 }}>
         {WINDOWS.map(([d, label]) => (

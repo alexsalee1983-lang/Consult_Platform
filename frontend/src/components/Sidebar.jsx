@@ -81,7 +81,7 @@ export default function Sidebar() {
         { to: `/project/${code}/deliverables`, icon: "doc", label: "交付件" },
         { to: `/chat/${code}`, icon: "chat", label: "顾问对话" },
       ] : []),
-      ...(lead ? [{ group: "项目负责人" }, { to: "/portfolio", icon: "map", label: "项目总览" },
+      ...(lead ? [{ group: "咨询业务负责人" }, { to: "/portfolio", icon: "map", label: "项目总览" },
         { to: "/indicators", icon: "dash", label: "指标看板" },
         { to: "/quality-incidents", icon: "review", label: "质量事件" },
         { to: "/deletions", icon: "trash", label: "资料删除" }] : []),

@@ -73,8 +73,8 @@ export default function Retention({ p, onChange }) {
           <span>验收日 {p.accepted_on} · 保留 {p.retention_months} 个月</span>
           <span>到期日 <span className="mono">{p.deletion_due_on}</span>
             {left > 0 ? ` · 还有 ${left} 天` : left === 0 ? " · 今天到期" : ` · 已过期 ${-left} 天`}</span>
-          {p.retention_state === "due_soon" && <span style={{ color: "var(--amber)" }}>30 天内到期：{prepare}到期后由项目负责人确认删除项目资料。</span>}
-          {p.retention_state === "due" && <span style={{ color: "var(--crim)" }}>已到期：待项目负责人确认删除项目资料并形成删除记录。</span>}
+          {p.retention_state === "due_soon" && <span style={{ color: "var(--amber)" }}>30 天内到期：{prepare}到期后由咨询业务负责人确认删除项目资料。</span>}
+          {p.retention_state === "due" && <span style={{ color: "var(--crim)" }}>已到期：待咨询业务负责人确认删除项目资料并形成删除记录。</span>}
         </div>
       ) : (
         <div className="sub">项目验收后登记验收日，平台按保留期（默认 6 个月）计算到期日，到期前 30 天提醒。</div>
@@ -105,7 +105,7 @@ export default function Retention({ p, onChange }) {
       )}
       {isManager && early && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div className="sub">收到客户书面要求后登记，项目负责人确认后删除，10 个工作日内完成。已签署的交付件也会删除。</div>
+          <div className="sub">收到客户书面要求后登记，咨询业务负责人确认后删除，10 个工作日内完成。已签署的交付件也会删除。</div>
           <label className="sub">书面要求文号（不写客户名称）
             <input className="inp" maxLength={64} value={ref} onChange={(e) => setRef(e.target.value)} />
           </label>
