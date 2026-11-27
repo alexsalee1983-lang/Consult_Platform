@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import inspect
 import json
 import threading
 import time
@@ -63,6 +64,20 @@ def handler(kind: str):
 
 def registered() -> list[str]:
     return sorted(_handlers)
+
+
+def validate_handlers() -> None:
+    """启动时校验：每个处理器都能按 fn(payload, ctx) 调用（四期 G7，#307），不符合直接抛错拒绝启动。"""
+    bad = []
+    for kind, fn in sorted(_handlers.items()):
+        try:
+            if inspect.iscoroutinefunction(fn):
+                raise TypeError("worker 同步调用处理器，不能是 async 函数")
+            inspect.signature(fn).bind({}, None)
+        except (TypeError, ValueError) as e:
+            bad.append(f"{kind}：{e}")
+    if bad:
+        raise RuntimeError("后台任务处理器签名与调用约定 fn(payload, ctx) 不一致：" + "；".join(bad))
 
 
 def _as_aware(dt: datetime | None) -> datetime | None:

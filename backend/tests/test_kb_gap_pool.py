@@ -169,3 +169,95 @@ def test_import_ok_closes_collected_gaps(tmp_path):
         assert g.status == "closed" and g.close_reason == "collected"
         a = db.scalar(select(AuditLog).where(AuditLog.action == "kb.gap.return").order_by(AuditLog.id.desc()))
         assert a.result == "allowed" and json.loads(a.detail)["files"] == 1 and json.loads(a.detail)["closed"] == 1
+
+
+def test_publish_manifest_built_from_registry_and_unmatched_listed(tmp_path):
+    import csv
+    import io
+
+    with SessionLocal() as db:
+        url = _planned_direct(db)
+        src = db.scalar(select(KbSource).where(KbSource.url == GP))
+        src.publisher = "虚拟发布机关"
+        db.commit()
+        b = _batch(tmp_path, url)
+        text, unmatched = gap_pool.publish_manifest(db, b)
+    rows = list(csv.DictReader(io.StringIO(text)))
+    assert unmatched == []
+    assert rows == [{"文件名": "a.html", "名称": "测试来源", "发布机关": "虚拟发布机关", "原网址": url,
+                     "现行状态": "现行", "获取方式": "已下载",
+                     "sha256": hashlib.sha256(b"<html>public</html>").hexdigest()}]
+
+
+def test_publish_manifest_skips_files_without_registered_source(tmp_path):
+    with SessionLocal() as db:
+        _planned_direct(db)
+        src = db.scalar(select(KbSource).where(KbSource.url == GP))
+        src.status = "candidate"                                    # 候选来源不算登记，不能自动入库
+        db.commit()
+        text, unmatched = gap_pool.publish_manifest(db, _batch(tmp_path, GP + "law/1.html"))
+    assert unmatched == ["a.html"] and text.count("\n") == 1          # 只有表头
+
+
+def test_import_auto_manifest_needs_as_and_hands_csv_to_publish(tmp_path, monkeypatch):
+    with SessionLocal() as db:
+        url = _planned_direct(db)
+    b = _batch(tmp_path, url)
+    assert cli.main(["kb-acquire-import", str(b), "--auto-manifest"]) == 1
+    seen: dict = {}
+
+    def fake_publish(args):
+        seen["csv"] = open(args.manifest, encoding="utf-8").read()
+        seen["dir"] = args.dir
+        return 0
+
+    monkeypatch.setattr(cli, "kb_source_publish", fake_publish)
+    assert cli.main(["kb-acquire-import", str(b), "--auto-manifest", "--as", "kbadmin"]) == 0
+    assert "测试来源" in seen["csv"] and seen["dir"] == str(b)
+
+
+def test_weekly_job_patrols_active_sources_into_dispatch():
+    """正式来源每周自动登记定时巡检缺口，白名单内直接进下发包；同一周重复跑不重复计，采集关闭后下周再开。"""
+    with SessionLocal() as db:
+        _active_source(db, GP)
+        db.add(KbSource(code="SR-G9998", name="试用来源", url="https://gp.example.gov.cn/trial/", host="gp.example.gov.cn",
+                        license="公开发布", authority_kind="法律", authority_level=1, status="trial", created_by="t"))
+        db.commit()
+    gap_pool._job({"today": TODAY.isoformat()}, None)
+    gap_pool._job({"today": TODAY.isoformat()}, None)          # 同一周再跑一次
+    with SessionLocal() as db:
+        g = db.scalar(select(KbGap).where(KbGap.gap_key == GP))
+        assert g is not None and g.plan == "direct" and g.kinds == {"schedule": 1}
+        assert db.scalar(select(KbGap).where(KbGap.gap_key.like("%/trial/%"))) is None   # 只巡检正式来源
+        assert [t["url"] for t in gap_pool.dispatch_package(db)["tasks"] if t["url"].startswith(GP)] == [GP]
+        gap_pool.close(db, GP, "collected")
+    gap_pool._job({"today": TODAY.isoformat()}, None)          # 本周已采集，不再打开
+    with SessionLocal() as db:
+        assert db.scalar(select(KbGap.status).where(KbGap.gap_key == GP)) == "closed"
+    gap_pool._job({"today": (TODAY + timedelta(days=7)).isoformat()}, None)   # 下周再巡检
+    with SessionLocal() as db:
+        g = db.scalar(select(KbGap).where(KbGap.gap_key == GP))
+        assert g.status == "open" and g.plan == "direct" and g.reopened == 1
+
+
+
+def test_first_collect_only_never_seen_sources():
+    """立即全量（负责人 11-27）：只给从没登记过缺口的正式来源记首采信号，已采过、已关闭的不重开；cap 放大一次排进 direct。"""
+    with SessionLocal() as db:
+        gap_pool.first_collect(db, TODAY, cap=2000)      # 先消化其他测试留下的正式来源，下面只数本测试的
+        for k in db.scalars(select(KbGap.gap_key).where(KbGap.status == "open")).all():
+            gap_pool.close(db, k, "collected")            # 关掉它们，免得和本测试的缺口抢 cap
+        for i in range(3):
+            _active_source(db, f"https://gp.example.gov.cn/new{i}/")
+        _active_source(db, "https://gp.example.gov.cn/old/")
+        gap_pool.record(db, [Signal("https://gp.example.gov.cn/old/", "schedule", "EV-OLD")])
+        gap_pool.close(db, "https://gp.example.gov.cn/old/", "collected")
+        out = gap_pool.first_collect(db, TODAY, cap=2)
+        assert out["new"] == 3 and out["direct"] >= 2
+        plans = sorted(db.scalars(select(KbGap.plan).where(KbGap.gap_key.like("https://gp.example.gov.cn/new%"))).all())
+        assert plans.count("direct") == 2 and len(plans) == 3     # 只数本测试的：cap=2 排进两条，一条顺延
+        old = db.scalar(select(KbGap).where(KbGap.gap_key == "https://gp.example.gov.cn/old/"))
+        assert old.status == "closed"
+        assert gap_pool.first_collect(db, TODAY, cap=2000)["new"] == 0      # 再跑不重复登记
+    from app import cli
+    assert cli.main(["kb-acquire-now", "--cap", "5"]) == 0

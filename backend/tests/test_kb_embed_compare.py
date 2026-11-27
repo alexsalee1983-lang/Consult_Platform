@@ -34,7 +34,7 @@ def _user(roles):
 
 def _publish(tmp_path) -> str:
     """发布一份样例，key 加本次独有前缀（同一批样例在别的用例里可能已下线），返回前缀。"""
-    pre = f"ec{secrets.token_hex(2)}-"
+    pre = f"ec{secrets.token_hex(4)}-"
     d = tmp_path / "kb"
     shutil.copytree(SAMPLES, d)
     for f in d.glob("*.md"):

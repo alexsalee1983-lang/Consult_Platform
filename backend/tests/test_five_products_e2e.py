@@ -20,10 +20,10 @@ import pytest
 from sqlalchemy import select
 
 from app.core.config import get_settings
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, utcnow
 from app.core.permissions import CONSULTANT, PROJECT_LEAD
 from app.main import app
-from app.models import AuditLog, Deliverable, LlmUsage, Project
+from app.models import AuditLog, Deliverable, Job, LlmUsage, Project
 from app.project import configs, deliverables, quality, runs
 from app.services import gateway, jobs
 
@@ -102,9 +102,29 @@ class _Model:
 
 
 def _work() -> None:
+    kinds = [runs.JOB_KIND, quality.JOB_KIND]
     with SessionLocal() as db:
-        while jobs.run_once(db, "e2e-worker", kinds=[runs.JOB_KIND, quality.JOB_KIND]):
-            pass
+        for _ in range(50):
+            while jobs.run_once(db, "e2e-worker", kinds=kinds):
+                pass
+            # 系统时钟回拨容忍（#418）：测试机上 created_at/run_after 比循环结束晚 30 多秒，入队后时钟被往回校，
+            # 0 延迟任务一时“未到期”。这里只把 attempts=0 的 0 延迟任务拨到现在再领；出错退避（attempts>0）照常报现场
+            late = db.scalars(select(Job).where(Job.status == jobs.QUEUED, Job.kind.in_(kinds),
+                                                Job.attempts == 0)).all()
+            if not late:
+                break
+            for j in late:
+                j.run_after = utcnow()
+            db.commit()
+        loop_end = utcnow()
+        # 循环停下后仍有 queued 任务就报现场（#418）：attempts>0 是出错退避；attempts=0 看 run_after/created_at
+        # 与 loop_end 的先后、再领一次能否领到，区分“循环结束后才入队”和“到期了却领不到”
+        stuck = db.scalars(select(Job).where(Job.status == jobs.QUEUED, Job.kind.in_(kinds))).all()
+        info = [(j.id, j.kind, j.attempts, j.last_error, str(j.run_after), str(j.created_at)) for j in stuck]
+        if stuck:
+            again = jobs.claim(db, "e2e-worker", kinds=kinds)
+            raise AssertionError({"loop_end": str(loop_end), "now": str(utcnow()), "stuck": info,
+                                  "reclaim": again.id if again else None})
 
 
 def _notes(product_dir: str | None) -> list[tuple[str, str, str]]:
@@ -159,7 +179,7 @@ def test_product_d1_to_d8(product: str, modules: list[str], client: str, materia
     lead = logged_in_client(app, create_user((PROJECT_LEAD,)))
     mgr_user = create_user((CONSULTANT,))
     mgr = logged_in_client(app, mgr_user)
-    code = f"{client}-E{secrets.token_hex(2).upper()}"
+    code = f"{client}-E{secrets.token_hex(3).upper()[:5]}"
     try:
         r = lead.post("/api/projects", json={"code": code, "tier": "standard", "product": product,
                                              "modules": modules, "manager": mgr_user[0], "industry": "其他"})
@@ -241,13 +261,17 @@ def test_product_d1_to_d8(product: str, modules: list[str], client: str, materia
         rv = _review(mgr, code, "D4")
         assert rv["blocking"] == 0 and _state(mgr, code, "D4")["gate"], rv["issues"]
 
-        # L2 交付件由项目经理看过后提交；全部 8 份由项目经理签署
+        # L2 交付件由项目经理看过后提交；全部 8 份由项目经理签署。写签分离（四期 A26）：交付链按发起人 mgr 写入，
+        # 对客户交付件由另一位项目经理签，D3 对内件豁免、mgr 自己签
+        signer = logged_in_client(app, create_user((CONSULTANT,), {code: "manager"}))
         for dcode in ("D3", "D4", "D5", "D7"):
             r = mgr.post(_url(code, dcode, "signoff/submit"), json={"comment": "已逐章核对评审标出的问题"})
             assert r.status_code == 200 and r.json()["status"] == "review", (dcode, r.text)
+        assert mgr.post(_url(code, "D4", "signoff/sign"), json={}).status_code == 403
         for dcode in declared:
-            r = mgr.post(_url(code, dcode, "signoff/sign"), json={"comment": "同意"})
+            r = (mgr if dcode == "D3" else signer).post(_url(code, dcode, "signoff/sign"), json={"comment": "同意"})
             assert r.status_code == 200 and r.json()["status"] == "signed", (dcode, r.text)
+        signer.__exit__(None, None, None)
 
         with SessionLocal() as db:
             p = db.scalar(select(Project).where(Project.code == code))

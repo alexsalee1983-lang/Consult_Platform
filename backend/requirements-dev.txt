@@ -1,3 +1,5 @@
 -r requirements.txt
 pytest==9.2.0
 ruff==0.8.4
+pytest-cov==7.1.0     # 覆盖率（CI 改动行覆盖率门的数据来源），开发/CI 依赖，不进生产镜像
+diff-cover==11.0.4    # 只看 PR 改动行的覆盖率（低于 80% 即失败），开发/CI 依赖，不进生产镜像

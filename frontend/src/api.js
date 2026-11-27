@@ -124,6 +124,7 @@ export const api = {
   createProject: (body) => request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   assessment: (code) => request(`/api/projects/${encodeURIComponent(code)}/assessment`),
+  panorama: (code) => request(`/api/projects/${encodeURIComponent(code)}/panorama`),   // 四期 A25① 全景
   confirmations: () => request("/api/confirmations"),
   // 处理确认卡：选一个选项（choice）或写意见（resolution），或两者都有
   resolve: (id, { choice = "", resolution = "" }) =>
@@ -195,6 +196,32 @@ export const api = {
   cardTemplate: (code) => request(`/api/projects/${encodeURIComponent(code)}/summary-cards/template`),
   uploadCards: (code, cards) =>
     request(`/api/projects/${encodeURIComponent(code)}/summary-cards`, { method: "POST", body: JSON.stringify({ cards }) }),
+  // 四期 E2：调研助手（调研包、回传、事实确认单）
+  surveyPacks: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/packs`),
+  createSurveyPack: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/packs`, { method: "POST" }),
+  surveyResults: (code, pack, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/packs/${encodeURIComponent(pack)}/results`, { method: "POST", body: JSON.stringify(body) }),
+  surveyFacts: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/facts`),
+  surveyAgenda: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/agenda`),   // 四期 E3③ 现场议程
+  confirmSurveyFact: (code, id, confirmed_role) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/facts/${id}/confirm`, { method: "POST", body: JSON.stringify({ confirmed_role }) }),
+  // 四期 E3②：客户自评包（生成返回口令只这一次；答卷在浏览器本机解密后导入，口令不上传）
+  selfevalPacks: (code) => request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval`),
+  createSelfeval: (code, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval`, { method: "POST", body: JSON.stringify(body) }),
+  selfevalSent: (code, s) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/sent`, { method: "POST" }),
+  selfevalTemplate: (code, s) => download(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/template.xlsx`),
+  selfevalImport: (code, s, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/import`, { method: "POST", body: JSON.stringify(body) }),
+  selfevalImportXlsx: (code, s, file, confirm = false) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("confirm", confirm ? "true" : "false");
+    return request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/import-xlsx`, { method: "POST", body: fd });
+  },
+  selfevalUndo: (code, s) =>
+    request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/import`, { method: "DELETE" }),
   withdrawCard: (code, card) =>
     request(`/api/projects/${encodeURIComponent(code)}/summary-cards/${encodeURIComponent(card)}/withdraw`, { method: "POST" }),
   // 项目资料删除（M4 ②）：项目经理发起提前删除、标记客户不同意回流；项目负责人确认
@@ -215,11 +242,12 @@ export const api = {
   agentMdVersions: (code) => request(`/api/agent-md/${encodeURIComponent(code)}/versions`),
   agentMdUnpin: (code, reason) =>
     request(`/api/agent-md/${encodeURIComponent(code)}/unpin`, { method: "POST", body: JSON.stringify({ reason }) }),
-  workbench: () => request("/api/workbench"),
   myTasks: () => request("/api/my-tasks"),
   benchCards: () => request("/api/expert-bench/cards"),
   benchAnswer: (versionId, body) =>
     request(`/api/expert-bench/cards/${versionId}/answer`, { method: "POST", body: JSON.stringify(body) }),
+  benchDeidPreview: (texts) =>
+    request("/api/expert-bench/deid-preview", { method: "POST", body: JSON.stringify({ texts }) }),
   returnTask: (kind, ref_id, reason) =>
     request("/api/my-tasks/return", { method: "POST", body: JSON.stringify({ kind, ref_id, reason }) }),
   deletion: (id) => request(`/api/deletions/${id}`),
@@ -284,10 +312,19 @@ export const api = {
   kbSubmit: (id) => request(`/api/kb/versions/${id}/submit`, { method: "POST" }),
   kbReview: (id, role, decision, comment) =>
     request(`/api/kb/versions/${id}/review`, { method: "POST", body: JSON.stringify({ role, decision, comment }) }),
-  kbQueue: () => request("/api/kb/review-queue"),
+  kbQueue: (p = {}) => request(`/api/kb/review-queue?${new URLSearchParams(p)}`),
+  kbRecheckQueue: (p = {}) => request(`/api/kb/recheck-queue?${new URLSearchParams(p)}`),
   kbSamples: () => request("/api/kb/samples"),
   kbConfirmQueue: () => request("/api/kb/sources/confirm-queue"),
   kbConfirmDecide: (gapIds, decision, source = null) => request("/api/kb/sources/confirm-queue/decide", { method: "POST", body: JSON.stringify({ gap_ids: gapIds, decision, ...(source ? { source } : {}) }) }),
+  kbManualQueue: () => request("/api/kb/sources/manual-queue"),
+  kbManualUpload: (gapId, file, title, url = "") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("title", title);
+    if (url) fd.append("url", url);
+    return request(`/api/kb/sources/manual-queue/${encodeURIComponent(gapId)}/upload`, { method: "POST", body: fd });
+  },
   kbSample: (versionId, decision, comment = "") => request(`/api/kb/versions/${versionId}/sample`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
   kbDue: (days = 30) => request(`/api/kb/review-due?days=${days}`),
   kbSearch: (params) => request(`/api/kb/search?${new URLSearchParams(Object.entries(params).filter(([, v]) => v))}`),
@@ -300,6 +337,16 @@ export const api = {
   kbSourceEvents: (code) => request(`/api/kb/sources/${encodeURIComponent(code)}/events`),
   // ---- 交付件（M3）：章节与版本、质量评审、签署、导出 ----
   deliverable: (code, dcode) => request(dpath(code, dcode)),
+  // 四期 A14②：D1、D2 按表单成稿（GET 404 表示该交付件没有表单）
+  deliverableForm: (code, dcode) => request(`${dpath(code, dcode)}/form`),
+  postDeliverableForm: (code, dcode, values) =>
+    request(`${dpath(code, dcode)}/form`, { method: "POST", body: JSON.stringify({ values }) }),
+  importContract: (code, dcode, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request(`${dpath(code, dcode)}/form/import`, { method: "POST", body: fd });
+  },
+  contractImport: (code, dcode) => request(`${dpath(code, dcode)}/form/import`),
   putOutline: (code, dcode, titles) =>
     request(`${dpath(code, dcode)}/outline`, { method: "PUT", body: JSON.stringify({ titles }) }),
   section: (code, dcode, seq, version) =>
@@ -315,6 +362,14 @@ export const api = {
   signoff: (code, dcode) => request(`${dpath(code, dcode)}/signoff`),
   signoffAction: (code, dcode, action, comment = "") =>   // submit / sign / return
     request(`${dpath(code, dcode)}/signoff/${action}`, { method: "POST", body: JSON.stringify({ comment }) }),
+  // 四期 A26：D3 核对与签署合并、一键修订、客户意见回路、D3 批量签
+  signMerged: (code, dcode) => request(`${dpath(code, dcode)}/signoff/merged`, { method: "POST" }),
+  reviseState: (code, dcode) => request(`${dpath(code, dcode)}/revise`),
+  revise: (code, dcode) => request(`${dpath(code, dcode)}/revise`, { method: "POST" }),
+  clientFeedback: (code, dcode, items) =>   // items: [{section: 章号或 null, text}]
+    request(`${dpath(code, dcode)}/client-feedback`, { method: "POST", body: JSON.stringify({ items }) }),
+  batchCandidates: () => request("/api/deliverables/batch-sign"),
+  batchSign: (items) => request("/api/deliverables/batch-sign", { method: "POST", body: JSON.stringify({ items }) }),
   exportWord: (code, dcode) => download(`${dpath(code, dcode)}/export`),
   exportPpt: (code, dcode) => download(`${dpath(code, dcode)}/export?format=pptx`),   // 二期 A9
   verifyAudit: (expectHead) =>

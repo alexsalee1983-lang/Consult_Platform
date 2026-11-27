@@ -64,7 +64,7 @@ def test_k0010_round_trip(tmp_path: Path):
 # ---- 解析与写入 ----
 
 def test_resolve_via_alias_and_canonical():
-    live = _publish(f"别名测试-现行{secrets.token_hex(2)}")
+    live = _publish(f"别名测试-现行{secrets.token_hex(4)}")
     old = _alias()
     _add(old, live)
     with SessionLocal() as db:
@@ -127,7 +127,7 @@ def test_new_doc_id_skips_alias_numbers():
 @pytest.fixture(scope="module")
 def cited():
     """BANK-A 虚拟项目一章引用两条：一条按别名（现行）、一条按别名（已下线）。"""
-    live, gone = _publish(f"别名测试-引用现行{secrets.token_hex(2)}"), _publish("别名测试-引用下线", retire=True)
+    live, gone = _publish(f"别名测试-引用现行{secrets.token_hex(4)}"), _publish("别名测试-引用下线", retire=True)
     a_live, a_gone = _alias(), _alias()
     _add(a_live, live)
     _add(a_gone, gone)
@@ -183,7 +183,7 @@ def test_quality_states_via_alias():
 
 
 def test_recheck_usage_merges_alias_with_current():
-    item = _publish(f"别名测试-复查{secrets.token_hex(2)}")
+    item = _publish(f"别名测试-复查{secrets.token_hex(4)}")
     old = _alias()
     _add(old, item)
     code = f"BANK-A-{secrets.token_hex(3).upper()}"
@@ -206,7 +206,7 @@ def test_recheck_usage_merges_alias_with_current():
 
 
 def test_api_item_by_alias_and_search():
-    live = _publish(f"别名测试-接口{secrets.token_hex(2)}")
+    live = _publish(f"别名测试-接口{secrets.token_hex(4)}")
     old = _alias()
     _add(old, live)
     expert = create_user(("knowledge_expert",))

@@ -46,6 +46,12 @@ class KbItem(KbBase):
     # 后两类必须由作者以外的知识专家人工确认才能发布。slot：C10 章节槽位键，选填
     knowledge_kind: Mapped[str] = mapped_column(String(16), default="", server_default="", index=True)
     slot: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # 多语言与海外法规（四期 B28①，知识区迁移 k0021，app/kb/multilang.py）：language 原文语种、jurisdiction 辖区；
+    # 译文条目 translation_of 挂原文条目编号，translation_notice 必须是“非官方译本”，引用与导出回溯到原文条款
+    language: Mapped[str] = mapped_column(String(16), default="zh", server_default="zh")
+    jurisdiction: Mapped[str] = mapped_column(String(16), default="CN", server_default="CN", index=True)
+    translation_of: Mapped[str] = mapped_column(String(40), default="", server_default="", index=True)
+    translation_notice: Mapped[str] = mapped_column(String(16), default="", server_default="")
     classification: Mapped[str] = mapped_column(String(16), default="internal")  # internal / restricted
     visible_roles: Mapped[list] = mapped_column(JSON, default=_default_visible_roles)
     owner: Mapped[str] = mapped_column(String(64), default="")                 # 专家负责人（用户名）
@@ -110,7 +116,7 @@ class KbVersion(KbBase):
     ref_replaced_by: Mapped[str] = mapped_column(String(200), default="")   # 已被替代时：替代文件名和版本
     ref_replaces: Mapped[str] = mapped_column(String(200), default="")      # 本文件替代的旧文件（名称或文号，三期 B26）
     ref_amends: Mapped[str] = mapped_column(String(200), default="")        # 本文件部分修订的文件（三期 B26）
-    deid_status: Mapped[str] = mapped_column(String(16), default="pending")    # pending / passed / not_needed
+    deid_status: Mapped[str] = mapped_column(String(16), default="pending")    # pending / passed / not_needed / virtual（AI 基线草稿，非生产）
     deid_report_id: Mapped[int | None] = mapped_column(ForeignKey("kb_deid_reports.id"), nullable=True)
     upload_id: Mapped[int | None] = mapped_column(ForeignKey("kb_uploads.id"), nullable=True)
     effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -394,7 +400,8 @@ class KbGap(KbBase):
     due: Mapped[date | None] = mapped_column(Date, nullable=True)
     authority: Mapped[int] = mapped_column(Integer, default=3)
     status: Mapped[str] = mapped_column(String(12), default="open", index=True)
-    plan: Mapped[str] = mapped_column(String(12), default="")                   # direct / confirm / deferred / waiting
+    plan: Mapped[str] = mapped_column(String(12), default="")  # direct / confirm / deferred / waiting / confirmed / manual / uploaded
+    manual_reason: Mapped[str] = mapped_column(String(16), default="")          # 需人工下载的原因类别（k0022）
     score: Mapped[float] = mapped_column(Float, default=0.0)
     planned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     close_reason: Mapped[str] = mapped_column(String(16), default="")

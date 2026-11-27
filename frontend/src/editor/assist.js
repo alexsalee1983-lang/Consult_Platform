@@ -26,3 +26,21 @@ export function sourcesLine(sources) {
   const bad = sources.unresolved || [];
   return `来源：${parts.join(" · ")}${bad.length ? `；核对不上：${bad.join("、")}（插入后保存会列入待核对，签署前评审阻断）` : ""}`;
 }
+
+// 四期 A16③ 三个一键工作流（#396）：不用写要求，程序先核对再交模型；补来源、口径检查走前后对比 + 接受 / 回退，摘要插入为新段落
+export const WORKFLOWS = [["cite", "一键补来源"], ["check", "一键口径检查"], ["summary", "一键管理层摘要"]];
+
+// 改写锁定的区间：有选区用选区，没有用整章；摘要不锁区间
+export function workflowTarget(mode, range, body) {
+  if (mode === "summary") return null;
+  if (range && range.text) return range;
+  return body ? { from: 0, to: body.length, text: body } : null;
+}
+
+// done.findings → 侧栏一行说明
+export function findingsLine(f) {
+  if (!f) return "";
+  const q = f.qualification || [];
+  return `程序核对：无来源论断 ${f.unsourced || 0} 句；`
+    + (q.length ? `资质边界用语：${q.join("、")}（接受前请确认已改掉）` : "未发现资质边界用语");
+}

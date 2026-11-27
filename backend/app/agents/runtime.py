@@ -48,6 +48,9 @@ def agent_info(db: Session, agent: Agent) -> AgentInfo:
     if doc is None:
         return AgentInfo(agent.code, agent.name, agent.side, granted, False, "缺少 md 或 md 的 name 不一致",
                          "standard", "", [])
+    if agent.side == tools.COLLECTOR:
+        return AgentInfo(agent.code, agent.name, agent.side, granted, False, "采集机区 Agent，不进平台对话",
+                         doc.level, doc.version, registry.tools_mismatch(doc, granted))
     if agent.side != tools.DELIVERY:
         return AgentInfo(agent.code, agent.name, agent.side, granted, False, "知识侧 Agent，知识区对话在 M2 提供",
                          doc.level, doc.version, registry.tools_mismatch(doc, granted))
@@ -60,6 +63,9 @@ def list_agents(db: Session) -> list[AgentInfo]:
 
 
 def ready_doc(db: Session, agent_code: str) -> registry.AgentDoc:
+    from . import roster
+
+    agent_code = roster.resolve(db, agent_code)    # C6-P：旧代号已停用时转到新代号
     agent = db.get(Agent, agent_code)
     if agent is None:
         raise AgentNotReady("Agent 不存在")

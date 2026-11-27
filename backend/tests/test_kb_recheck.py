@@ -73,7 +73,7 @@ def _version(doc_id):
 
 
 def test_scan_marks_often_removed_items(people):
-    bad, good = _publish(people, f"复查测试-常被删{secrets.token_hex(2)}"), _publish(people, "复查测试-常被保留")
+    bad, good = _publish(people, f"复查测试-常被删{secrets.token_hex(4)}"), _publish(people, "复查测试-常被保留")
     a, ma = _project(2)
     _rewrite(a, ma, 1, bad, good)
     _rewrite(a, ma, 2, bad, good)

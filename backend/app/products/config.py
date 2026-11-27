@@ -487,7 +487,7 @@ MAX_SLOTS, MAX_SLOT_NEED = 12, 5
 def parse_slots(p: _P, raw: Any) -> tuple[dict[str, Any], ...]:
     """步骤的知识槽位（三期 A12；C10 槽位规格写进产品配置前可不写）。每个槽位：
     id（本步内唯一）、type（条目类型，meta.DOC_TYPES 的键）、query（检索词）、need（所需条数 1～5，默认 1）、
-    required（必需槽位库里没有时发“知识不足”卡，默认否）。"""
+    required（必需槽位库里没有时发“知识不足”卡，默认否）；可选 chapter（C10 章节槽位键）、expert_review（pending / done）。"""
     if raw is None:
         return ()
     if not isinstance(raw, list) or len(raw) > MAX_SLOTS:
@@ -511,9 +511,21 @@ def parse_slots(p: _P, raw: Any) -> tuple[dict[str, Any], ...]:
             sp.add(f"need 应为 1～{MAX_SLOT_NEED} 的整数")
         if not isinstance(req, bool):
             sp.add("required 应为 true 或 false")
+        extra: dict[str, str] = {}
+        if "chapter" in r:   # C10 章节槽位键，与知识条目的 slot 同一写法（例 SOC.D5.ch2）
+            chapter = r["chapter"]
+            if not isinstance(chapter, str) or not meta.SLOT_RE.match(chapter):
+                sp.add(f"chapter {chapter!r} 应为章节槽位键（例 SOC.D5.ch2）")
+            else:
+                extra["chapter"] = chapter
+        if "expert_review" in r:   # C10 槽位规格逐条待专家勾选
+            if r["expert_review"] not in EXPERT_REVIEWS:
+                sp.add(f"expert_review {r['expert_review']!r} 应为 pending 或 done")
+            else:
+                extra["expert_review"] = str(r["expert_review"])
         seen.add(sid)
         if sid and typ and query and len(p.out) == bad:
-            out.append({"id": sid, "type": typ, "query": query, "need": need, "required": req})
+            out.append({"id": sid, "type": typ, "query": query, "need": need, "required": req, **extra})
     return tuple(out)
 
 

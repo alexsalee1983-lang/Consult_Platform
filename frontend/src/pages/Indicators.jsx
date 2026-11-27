@@ -17,6 +17,74 @@ const DETAIL = {
   human_reviews: "人工审核次数",
 };
 
+const pct = (v) => (v === null || v === undefined ? "—" : `${Math.round(v * 1000) / 10}%`);
+
+// 四期 F2③：v4.0 验收口径（萃取跳过率、四格分列），口径见 backend/app/services/indicators_v4.py
+function V4({ v4 }) {
+  const s = v4.extraction_skip;
+  const st = STATUS[s.status] || STATUS.na;
+  return (
+    <section className="pnl pad" aria-label="v4.0 验收口径">
+      <h2 className="h2">v4.0 验收口径</h2>
+      <div className="sub">
+        经验萃取跳过率 <span className="mono">{pct(s.value)}</span>（已答 {s.answered}、跳过 {s.skipped}，阈值 30%）{" "}
+        <span className={`chip ${st.cls}`}>{s.status === "breach" ? "超阈值" : st.label}</span>
+      </div>
+      <table className="tbl">
+        <thead><tr><th>四格</th><th>签署</th><th>编造条款号</th><th>发布</th><th>自动发布率</th></tr></thead>
+        <tbody>
+          {v4.grids.map((g) => (
+            <tr key={g.key}>
+              <td>{g.key}</td>
+              <td className="mono">{g.signed}</td>
+              <td className={`mono ${g.fabricated_clauses ? "c-r" : ""}`}>{g.fabricated_clauses}</td>
+              <td className="mono">{g.published}</td>
+              <td className="mono">{pct(g.auto_publish_rate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="sub">编造条款号只算签署交付件，对比评测的编造条号在上表总数里；通用条目会同时算进多格。四格关键章节就绪度见就绪度看板。</div>
+    </section>
+  );
+}
+
+// 四期 F5：自动化验收三条与自适应抽检，口径见 backend/app/services/automation_ledger.py
+const SPOT = { tight: "收紧（退回人工）", normal: "常规", relaxed: "放开" };
+function Automation({ a }) {
+  const rows = [
+    [a.soc_manual, a.soc_manual.value ?? "—", `≤ ${a.soc_manual.threshold} 次（SOC 项目 ${a.soc_manual.projects} 个，取最多）`],
+    [a.fact_auto, pct(a.fact_auto.value), `≥ ${pct(a.fact_auto.threshold)}（自动 ${a.fact_auto.auto}、人工 ${a.fact_auto.manual}）`],
+    [a.spot_error, pct(a.spot_error.value), `≤ ${pct(a.spot_error.threshold)}（抽检 ${a.spot_error.checks} 条）`],
+    [a.daily_manual, a.daily_manual.value ?? "—", `≤ ${a.daily_manual.threshold} 件`],
+  ];
+  return (
+    <section className="pnl pad" aria-label="自动化验收">
+      <h2 className="h2">自动化验收</h2>
+      <table className="tbl">
+        <thead><tr><th>指标</th><th>当前</th><th>目标</th><th>状态</th></tr></thead>
+        <tbody>
+          {rows.map(([m, v, goal]) => {
+            const st = STATUS[m.status] || STATUS.na;
+            return (
+              <tr key={m.label}>
+                <td>{m.label}</td>
+                <td className="mono">{v}</td>
+                <td className="sub">{goal}</td>
+                <td><span className={`chip ${st.cls}`}>{st.label}</span></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="sub">
+        事实抽检比例 <span className="mono">{pct(a.spot.rate)}</span>：{SPOT[a.spot.state] || a.spot.state}（连续通过 {a.spot.streak} 条）。
+        发现差错即每条都抽，连续通过 20 条恢复常规，连续 100 条无差错减半。
+      </div>
+    </section>
+  );
+}
+
 function show(m) {
   if (m.value === null || m.value === undefined) return "—";
   if (m.unit === "比例") return `${Math.round(m.value * 1000) / 10}%`;
@@ -68,6 +136,8 @@ export default function Indicators() {
           </table>
         </section>
       )}
+      {data?.v4 && <V4 v4={data.v4} />}
+      {data?.automation && <Automation a={data.automation} />}
     </div>
   );
 }

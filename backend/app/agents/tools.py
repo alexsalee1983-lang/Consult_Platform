@@ -35,7 +35,7 @@ from ..models import Agent, AgentToolGrant, Project, ProjectMember, Tool, User
 from ..schemas import PHASES
 from ..services.guard import check
 
-DELIVERY, KNOWLEDGE = "delivery", "knowledge"
+DELIVERY, KNOWLEDGE, COLLECTOR = "delivery", "knowledge", "collector"   # 所在区：项目区 / 知识区 / 采集机区（C6-P）
 
 
 class ToolError(Exception):
@@ -74,6 +74,10 @@ class ToolContext:
 
 def violates_hard_rule(agent_side: str, tool_zone: str, tool_access: str) -> str | None:
     """返回违反的硬规则说明；不违反时返回 None。授权写入和每次调用都检查。"""
+    if agent_side == COLLECTOR:
+        return "采集机区 Agent 不能使用平台工具"
+    if agent_side not in (DELIVERY, KNOWLEDGE):
+        return "Agent 所在区未登记"
     if agent_side == KNOWLEDGE and tool_zone == "project":
         return "知识侧 Agent 不能访问项目区"
     if agent_side == DELIVERY and tool_access == "write" and tool_zone in {"knowledge", "staging"}:
@@ -159,7 +163,12 @@ def _project_kb_prefs(ctx: ToolContext) -> dict:
         snap = configs.snapshot(ctx.db, ctx.project)
     except config.CatalogError:
         return {}
-    industry = (ctx.project.industry or "").strip()
+    return snapshot_kb_prefs(snap, ctx.project.industry or "")
+
+
+def snapshot_kb_prefs(snap: dict, industry: str) -> dict:
+    """快照 + 立项行业 → 检索默认值（项目检索与 A24 装配评测共用，四期 B39）。"""
+    industry = industry.strip()
     ib = snap.get("industry_basis") or {}
     keys = dict.fromkeys([industry, *industry.split("/")]) if industry else {}   # 立项下拉的“银行/金融”任一部分对上
     pack = snap.get("industry") if isinstance(snap.get("industry"), dict) else {}
@@ -272,6 +281,11 @@ def invoke(db: Session, user: User, agent_code: str, tool_code: str, args: dict[
                      reason=reason, **meta)
         raise exc(message)
 
+    from . import roster
+
+    resolved = roster.resolve(db, agent_code)    # C6-P：旧代号已停用时转到收敛后的新代号
+    if resolved != agent_code:
+        meta["alias_of"], meta["agent"], agent_code = agent_code, resolved, resolved
     agent = db.get(Agent, agent_code)
     if agent is None or not agent.enabled:
         deny(ToolNotFound, "agent_unknown_or_disabled", "Agent 不存在或未启用")
@@ -292,7 +306,7 @@ def invoke(db: Session, user: User, agent_code: str, tool_code: str, args: dict[
                             .where(Project.code == project_code, ProjectMember.user_id == user.id))
         if project is None:
             deny(ToolNotFound, "not_member", "项目不存在")
-    elif project_code and tool_code in PROJECT_PREFS and agent.side != KNOWLEDGE:
+    elif project_code and tool_code in PROJECT_PREFS and agent.side == DELIVERY:
         # 知识检索不需要项目，但交付侧在项目里调用时按项目配置快照排序（B2）；不是成员就当没有项目，不报错、不泄露
         project = db.scalar(select(Project).join(ProjectMember, ProjectMember.project_id == Project.id)
                             .where(Project.code == project_code, ProjectMember.user_id == user.id))

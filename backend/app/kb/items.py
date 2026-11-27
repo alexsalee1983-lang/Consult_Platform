@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from ..core.db import utcnow
 from ..models import KbItem, KbItemAlias, KbMapping, KbVersion
 from ..services import model_catalog
-from . import labels, mapping, meta
+from . import labels, mapping, meta, multilang
 
 
 @dataclass
@@ -35,6 +35,10 @@ class ItemMeta:
     knowledge_kind: str = ""   # 知识类型（三期 B35，k0017）：留空时 create_item 按交付物类型和来源推断
     slot: str = ""             # C10 章节槽位键（选填）
     products: list[str] = field(default_factory=list)   # 全部服务产品（B15，主产品 product 在前）；空 = 只有主产品
+    language: str = "zh"           # 四期 B28①：原文语种、辖区、译文挂的原文条目编号、“非官方译本”标记（app/kb/multilang.py）
+    jurisdiction: str = "CN"
+    translation_of: str = ""
+    translation_notice: str = ""
 
     def check(self) -> None:
         meta.check_classification(self.layer, self.domain, self.product, self.doc_type)
@@ -47,6 +51,8 @@ class ItemMeta:
         self.tags = check_search_tags(self.tags)
         self.control_ids = check_control_ids(self.control_ids)
         self.slot = self.slot.strip()
+        self.language, self.jurisdiction, self.translation_of, self.translation_notice = multilang.check_meta(
+            self.language, self.jurisdiction, self.translation_of, self.translation_notice)
 
 
 SEARCH_TAGS_MAX, SEARCH_TAG_LEN = 10, 20
@@ -152,7 +158,9 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
                       doc_type=m.doc_type, stage=m.stage, capabilities=list(m.capabilities),
                       industries=list(m.industries), classification=m.classification,
                       visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags), control_ids=list(m.control_ids),
-                      knowledge_kind=kind, slot=m.slot, created_by=created_by)
+                      knowledge_kind=kind, slot=m.slot, language=m.language, jurisdiction=m.jurisdiction,
+                      translation_of=m.translation_of, translation_notice=m.translation_notice,
+                      created_by=created_by)
         db.add(item)
         try:
             db.flush()

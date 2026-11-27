@@ -121,13 +121,9 @@ def validate(cases: list[dict]) -> list[dict]:
     return cases
 
 
-_QUOTED = re.compile(r"“[^”\n]{0,120}”|「[^」\n]{0,120}」|『[^』\n]{0,120}』|‘[^’\n]{0,120}’"
-                     r'|"[^"\n]{0,120}"')
-
-
 def _unquoted(text: str) -> str:
-    """去掉引号里的内容（引用原话），换成同长度空格，保持否定词距离不变。"""
-    return _QUOTED.sub(lambda m: " " * len(m.group()), text)
+    """去掉引号里的内容（引用原话）；规则在 quality.unquoted（四期 F6 公共判定）。"""
+    return quality.unquoted(text)
 
 
 def grade(db: Session, case: dict, text: str) -> CaseResult:
@@ -144,7 +140,7 @@ def grade(db: Session, case: dict, text: str) -> CaseResult:
         if not re.search(pat, text):
             r.reasons.append(f"缺少：{pat}")
     for pat in case.get("must_not", []):
-        if re.search(pat, text):
+        if quality.must_not_hit(pat, text):        # 否定式免责句里的资质用语不算（F6，#436）
             r.reasons.append(f"不应出现：{pat}")
     pts = case.get("points", [])
     if pts:
@@ -210,6 +206,9 @@ def run(db: Session, user: User, cases: list[dict], timeout: float = CASE_TIMEOU
             r = _case(case, "error", [f"超时（{timeout:g} 秒）"])
         except gateway.BlockedError:
             r = _case(case, "blocked", ["提问被机密级检测拦下"])
+        except call.QualificationBlocked as e:     # 输出端兜底改写不了（F6）：按资质边界红线判不通过
+            r = _case(case, "ok", [f"资质边界用语 {e.hits} 处（无法安全改写，平台已拦下）"])
+            r.qualification = e.hits
         except (gateway.GatewayError, call.AgentUnavailable) as e:
             r = _case(case, "error", [f"调用失败：{type(e).__name__}"])
         else:

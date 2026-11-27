@@ -58,6 +58,7 @@ def _ratio(n: int, d: int) -> float | None:
 class _Signed:
     deliverable_id: int
     first_pass: bool
+    project_id: int = 0
     unresolved: int = 0
     fabricated: int = 0
     gb: int = 0
@@ -79,7 +80,8 @@ def _signed(db: Session, start: datetime, end: datetime, project_ids: list[int] 
                                                           SignOff.id < sign.id).order_by(SignOff.id)).all()
         if "sign" in history:                       # 只看这次签署之前、上一次签署之后
             history = history[len(history) - history[::-1].index("sign"):]
-        r = _Signed(sign.deliverable_id, first_pass=history.count("submit") == 1 and "return" not in history)
+        r = _Signed(sign.deliverable_id, first_pass=history.count("submit") == 1 and "return" not in history,
+                    project_id=project.id)
         for seq, ver in (sign.versions or {}).items():
             body = db.scalar(select(SectionVersion.body).join(DeliverableSection).where(
                 DeliverableSection.deliverable_id == sign.deliverable_id, DeliverableSection.seq == int(seq),
@@ -96,6 +98,9 @@ def _signed(db: Session, start: datetime, end: datetime, project_ids: list[int] 
                     r.gb += 1
         out.append(r)
     return out
+
+
+signed = _signed   # 四期 F2③ 四格分列复用（indicators_v4）
 
 
 def _latest_eval(db: Session) -> dict:

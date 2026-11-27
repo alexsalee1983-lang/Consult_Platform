@@ -1,0 +1,112 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>知识中心 · 后台运转逻辑与闭环</title>
+<style>
+:root{--obs:#0a0d12;--s1:#10151c;--s2:#161d27;--s3:#1d2633;--ln:#232d3b;--ln2:#2e3a4b;--tx:#e6ebf2;--tx2:#a3aebe;--tx3:#6b7789;--amber:#f5a524;--cyan:#22d3ee;--ok:#3dd68c;--vio:#b49cff;--crim:#f0454f}
+*{box-sizing:border-box}body{margin:0;background:var(--obs);color:var(--tx);font:13px/1.5 "Microsoft YaHei",sans-serif;padding:18px 22px;width:1640px}
+h1{font-size:20px;margin:0 0 2px}.sub{color:var(--tx2);margin-bottom:12px}
+.row{display:grid;grid-template-columns:230px 26px 1fr 26px 250px;gap:0;align-items:stretch}
+.col{display:flex;flex-direction:column;gap:7px}
+.hd{color:var(--tx3);font-size:12px;margin-bottom:2px}
+.b{background:var(--s2);border:1.5px solid var(--ln2);border-radius:8px;padding:7px 10px}
+.b b{display:block;font-size:13px}.b .d{color:var(--tx3);font-size:11.5px}
+.ar{display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:18px}
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.n{font-size:11px;color:var(--cyan);font-weight:700}
+.p{border-left:3px solid var(--tx3)}.a{border-left:3px solid var(--vio)}.h{border-left:3px solid var(--amber);border-color:var(--amber)}.r{border-left:3px solid var(--crim)}
+.leg{display:flex;gap:14px;color:var(--tx2);font-size:12px;margin:4px 0 10px}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.side{display:flex;gap:6px;margin-top:7px}.side .b{flex:1}
+.loops{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.lp{background:var(--s1);border:1px solid var(--ln);border-radius:9px;padding:9px 12px}
+.lp h3{margin:0 0 4px;font-size:13.5px;color:var(--cyan)}.lp div{color:var(--tx2);font-size:12px}
+.lp .new{color:var(--amber);font-weight:700}
+.back{margin-top:8px;border:1px dashed var(--cyan);border-radius:9px;padding:7px 12px;color:var(--tx2)}
+.add{margin-top:14px;background:var(--s1);border:1px solid var(--amber);border-radius:9px;padding:10px 14px}
+.add h3{margin:0 0 6px;font-size:14px;color:var(--amber)}.add ol{margin:0;padding-left:20px;columns:2;column-gap:30px;color:var(--tx2);font-size:12.5px}.add li{margin-bottom:3px;break-inside:avoid}
+.add b{color:var(--tx)}
+.hum{margin-top:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.hum div{background:var(--s1);border:1px solid var(--ln);border-left:3px solid var(--amber);border-radius:8px;padding:7px 11px;font-size:12px;color:var(--tx2)}.hum b{color:var(--tx)}
+</style></head><body>
+<h1>知识中心 · 后台运转逻辑与闭环</h1>
+<div class="sub">页面上看不到这一层；人只在橙色节点出现（统一进“待我处理”或结项复盘）。所有步骤记审计（不记原文），运行情况在负责人的“系统”区可查。</div>
+<div class="leg"><span><i style="background:var(--tx3)"></i>程序</span><span><i style="background:var(--vio)"></i>Agent（知识编写 / 知识审核）</span><span><i style="background:var(--amber)"></i>人（只处理例外与担责）</span><span><i style="background:var(--crim)"></i>红线闸口</span></div>
+
+<div class="row">
+<div class="col"><div class="hd">① 触发：四类，全部自动发起</div>
+<div class="b p"><b>规划变更 · 立项预检</b><div class="d">负责人新建 / 停用产品、行业、地区 → 重算应有槽位；<span style="color:var(--amber)">新：</span>项目立项即查该格就绪度，不足则加急补齐</div></div>
+<div class="b p"><b>定时保鲜</b><div class="d">到期日到；采集机巡检来源发现法规新版 / 废止</div></div>
+<div class="b p"><b>使用信号</b><div class="d">对话零命中、引用反馈“有误 / 过时”、写稿缺槽、改稿与驳回（静默记录）</div></div>
+<div class="b h"><b>人交来的</b><div class="d">投料箱（零星 / 批量上传）、结项复盘批次、内部来源同步</div></div>
+</div>
+<div class="ar">→</div>
+<div><div class="hd">② 处理主线</div>
+<div class="pipe">
+<div class="b p"><span class="n">1 缺口池</span><b>算缺什么</b><div class="d">规划格 × 章节槽位 − 已有条目；按目标格优先排队</div></div>
+<div class="b p"><span class="n">2 获取</span><b>去拿资料</b><div class="d">规划内且白名单有来源 → 自动出采集包；采集机下载 → 回传哈希核对。内部资料直接进 3</div></div>
+<div class="b r"><span class="n">3 入口闸</span><b>读取 · 机密检测 · 去标识</b><div class="d">口令、IP 规划、漏洞细节、样本数据整份拦下并写退回原因；客户名、人名换占位符</div></div>
+<div class="b a"><span class="n">4 知识编写</span><b>分类 · 拆条目</b><div class="d">定产品 / 行业 / 类型，拆成条目，挂控制项，留出处</div></div>
+<div class="b p"><span class="n">5 比对</span><b>去重 · 冲突</b><div class="d">与已有条目、公开法规比对；重复合并，冲突标记</div></div>
+<div class="b a"><span class="n">6 知识审核</span><b>换模型独立审</b><div class="d">忠于原文、无残留客户信息、分类正确；两次判断不一致 → 冲突裁决</div></div>
+<div class="b p"><span class="n">7 发布判定</span><b>按知识类型分流</b><div class="d">法规切片、模板等过门槛 → 自动发布 + 抽检；公司做法、黄金案例 → 专家认可</div></div>
+<div class="b h"><span class="n">8 人</span><b>待我处理</b><div class="d">做法认可、冲突裁决、经验到期复认、新增来源（负责人）、卡住项（负责人）</div></div>
+</div>
+<div class="side">
+<div class="b r"><b>白名单外来源</b><div class="d">不自动采：生成“新增来源”卡给负责人</div></div>
+<div class="b p"><b>失败重试</b><div class="d">被挡 → 两级下载重试 → 3 次仍失败标“暂无可用来源”</div></div>
+<div class="b p"><b>限流</b><div class="d">模型日用量上限；专家卡按目标格分批、每日时间预算</div></div>
+</div></div>
+<div class="ar">→</div>
+<div class="col"><div class="hd">③ 发布与使用</div>
+<div class="b p"><b>发布 · 建索引</b><div class="d">全文 + 向量；就绪度、有效期即时重算</div></div>
+<div class="b p"><b>顾问对话</b><div class="d">问答、查依据，带出处角标</div></div>
+<div class="b a"><b>交付链写稿</b><div class="d">按章节槽位自动取条目</div></div>
+<div class="b p"><b>知识健康</b><div class="d">人看到的唯一结果面：覆盖、就绪度、保鲜率</div></div>
+<div class="b p"><b>使用埋点</b><div class="d">命中、引用、反馈、改稿 → 回到 ① 使用信号</div></div>
+</div></div>
+<div class="back">↺ 使用信号、到期、法规变更、抽检结果 → 回到 1 缺口池 / 复审。整个系统没有“人要定期去看”的环节，需要人时由系统推卡。</div>
+
+<div class="loops">
+<div class="lp"><h3>闭环 1 · 缺口</h3><div>缺口 → 获取 → 发布 → 就绪度重算 → 缺口关闭。拿不到的不无限重试：标“暂无可用来源”并在健康格写明原因，<span class="new">新：</span>每月自动再试一次。</div></div>
+<div class="lp"><h3>闭环 2 · 质量</h3><div>抽检错误率按知识类型统计 → 自动调整抽检比例；门槛本身变更只出建议给负责人。<span class="new">新：</span>顾问反馈“有误” → 该条暂停引用 → 复审 → 修正或下线 → 回执给反馈人。</div></div>
+<div class="lp"><h3>闭环 3 · 保鲜</h3><div>到期 / 法规变更 → 知识编写写变更影响 → 审核 → 公开类自动更新；公司经验找专家复认。<span class="new">新：</span>条目更新或下线时，提示正在写、尚未签署的交付件“引用已变”。</div></div>
+<div class="lp"><h3>闭环 4 · 公司经验</h3><div>交付期间静默记录 → 结项复盘出候选 → 项目经理勾选并确认去标识 → 专家认可 → 下个项目写稿取用 → 引用次数作为到期复认依据。</div></div>
+<div class="lp"><h3>闭环 5 · 投料回执</h3><div>每批给提交人结果：入库数、退回数及原因、处理中数；入库后显示被引用次数。中间过程不展示。</div></div>
+<div class="lp"><h3>闭环 6 · 卡住</h3><div>任一步骤超时或连续失败 → 自动重试 → 仍失败 → “待我处理”给负责人一张卡（附原因），<span class="new">新：</span>同类故障合并成一张。</div></div>
+<div class="lp"><h3>闭环 7 · 人不响应 <span class="new">新</span></h3><div>卡片 3 个工作日未处理 → 提醒；7 天 → 升级负责人。未认可的条目只是不发布，不阻塞其他条目和交付。</div></div>
+<div class="lp"><h3>闭环 8 · 客户删除 <span class="new">新</span></h3><div>客户行使删除时，按告知模板核对：从该项目复盘来的条目一并追溯（下线或确认已充分去标识），删除记录可查。</div></div>
+<div class="lp"><h3>闭环 9 · 泄漏应急 <span class="new">新二</span></h3><div>抽检或反馈发现已发布条目残留客户信息 → 立即下线 → 同批、同来源条目全部复查 → 检测规则补强并回归 → 记事件台账。</div></div>
+<div class="lp"><h3>闭环 10 · 依赖级联 <span class="new">新二</span></h3><div>条目之间记依赖（解读、映射、公司做法 → 依据原文）。依据一变，所有依赖它的条目自动进复审，公司做法与新法规冲突的推专家。</div></div>
+<div class="lp"><h3>闭环 11 · Agent 自身变更 <span class="new">新二</span></h3><div>换模型、改提示词、改规则 → 先跑回归评测题 → 不低于原分数才切换；运行中按周比对审核通过率与抽检错误率，漂移即告警回退。</div></div>
+<div class="lp"><h3>闭环 12 · 价值与淘汰 <span class="new">新二</span></h3><div>按条目统计引用、被驳回、被报有误。12 个月零引用 → 降权归档（不删）；常被驳回 → 进复审。库只增不减会越来越脏。</div></div>
+</div>
+
+<div class="add"><h3>这次补充的缺漏（原设计没覆盖）</h3><ol>
+<li><b>人不响应</b>：卡片超时提醒、升级，未认可不阻塞（闭环 7）。</li>
+<li><b>反馈回执</b>：顾问报“有误”后告知处理结果，否则没人愿意再报（闭环 2）。</li>
+<li><b>下线级联</b>：条目更新或下线时提示未签署的交付件，已签署的不动（闭环 3）。</li>
+<li><b>获取失败终局</b>：3 次失败标“暂无可用来源”，每月再试，避免无限重试和费用（闭环 1）。</li>
+<li><b>客户删除追溯</b>：复盘来的经验条目记来源项目，客户删除时可追溯（闭环 8，须对照告知模板与法务三问）。</li>
+<li><b>批量导入限流</b>：大批资料不把专家淹没：按目标格分批推卡、每日时间预算，同类可批量认可。</li>
+<li><b>模型用量上限</b>：后台任务设日上限，超了排队降速，不影响顾问对话和写稿。</li>
+<li><b>停用产品</b>：相关缺口自动关闭，条目保留但不再主动补齐和提醒。</li>
+<li><b>故障合并</b>：同一原因的卡住项合成一张卡，不刷屏（闭环 6）。</li>
+<li><b>内部来源同步</b>：批量上传与（以后的）共享目录同步走同一入口闸，改过的文件按新版本处理、旧条目进复审。</li>
+</ol></div>
+<div class="add"><h3>第二轮自查补充（11-27）</h3><ol>
+<li><b>抽检谁来做</b>：原图写了抽检却没人认领。定为：模型交叉抽检为主 + 专家每周 5 张随机卡（算在时间预算内）。</li>
+<li><b>泄漏应急</b>：入口闸漏检后的处置（闭环 9），属红线。</li>
+<li><b>依赖级联</b>：依据变了，解读、映射、做法跟着复审（闭环 10）。</li>
+<li><b>签署快照</b>：交付件签署时固定所引条目的版本，以后条目更新不改已签文件。</li>
+<li><b>Agent 自身变更</b>：换模型、改提示词先过回归评测，运行中监测漂移（闭环 11）。</li>
+<li><b>立项预检</b>：按真实项目需求排缺口优先级，而不是只按规划（触发区）。</li>
+<li><b>价值与淘汰</b>：零引用归档、常被驳回复审（闭环 12）。</li>
+<li><b>防再识别</b>：复盘来的条目泛化：规模用区间、地区只到大区、不写独特事件，防止多条拼起来认出客户。</li>
+<li><b>来源失效</b>：白名单网站下线或改版 → 巡检发现 → 找替代来源，找不到推负责人。</li>
+<li><b>待负责人定</b>：公司经验到期时，若期间被引用 ≥ 5 次且无负面反馈，是否允许自动续期（减少专家工作，但改了“公司经验须人认可”的口径）。</li>
+</ol></div>
+
+<div class="hum">
+<div><b>负责人</b>：新建 / 停用产品与地区；新增来源；门槛调整；卡住项与超时升级</div>
+<div><b>知识专家</b>：公司做法与黄金案例认可；冲突裁决；公司经验到期复认；每周少量抽检卡</div>
+<div><b>项目经理 / 顾问</b>：结项复盘勾选并确认去标识；投料（零星 / 批量）；觉得不对就点“有误”</div>
+<div><b>所有人</b>：知识健康只读；条目详情可看出处与来历</div>
+</div>
+</body></html>

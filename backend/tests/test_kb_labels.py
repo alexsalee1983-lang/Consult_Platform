@@ -71,7 +71,7 @@ def test_entry_product_accepts_list_and_roundtrips():
 # ---- 写入与检索 ----
 
 def test_new_item_writes_all_label_kinds(people):  # noqa: F811
-    hit = _publish(people, f"标签写入-{secrets.token_hex(2)}", "## 标签\n\n写入测试。")
+    hit = _publish(people, f"标签写入-{secrets.token_hex(4)}", "## 标签\n\n写入测试。")
     got = _labels(hit.item_id)
     assert ("product", "SOC") in got and ("industry", "通用") in got
     assert ("capability", "运营") in got and ("domain", "OPS") in got
@@ -82,7 +82,7 @@ def test_new_item_writes_all_label_kinds(people):  # noqa: F811
 
 
 def test_item_detail_lists_products_and_meta_has_industries(people):  # noqa: F811
-    hit = _publish(people, f"标签接口-{secrets.token_hex(2)}", "## 接口\n\n详情带产品。")
+    hit = _publish(people, f"标签接口-{secrets.token_hex(4)}", "## 接口\n\n详情带产品。")
     with SessionLocal() as db:
         labels.set_products(db, db.get(KbItem, hit.item_id), ["SOC", "NSG"], actor="tester")
         db.commit()
@@ -95,7 +95,7 @@ def test_item_detail_lists_products_and_meta_has_industries(people):  # noqa: F8
 
 
 def test_multi_product_item_found_under_each_product(people):  # noqa: F811
-    tag = secrets.token_hex(2)
+    tag = secrets.token_hex(4)
     q = f"多产品值守交接{tag}"
     hit = _publish(people, f"多产品-{tag}", f"## 值守\n\n{q}要点。")
     with SessionLocal() as db:

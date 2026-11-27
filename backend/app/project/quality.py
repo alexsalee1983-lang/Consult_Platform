@@ -22,7 +22,11 @@
 
 签署流程（设计稿 04：Agent 起草 → 质量评审 → 顾问审核 → 项目负责人签署）：
 - 提交签署（submit）：项目成员；门禁 = 每章都有正文 + 最近一次评审已完成、针对当前修订、阻断为 0。状态 → review。
-- 签署（sign）：项目经理；交付件在 review 且修订号与提交时一致，门禁再查一次；项目经理可以签自己提交的（负责人 2026-11-12 定，不设四眼限制）。
+- 签署（sign）：项目经理；交付件在 review 且修订号与提交时一致，门禁再查一次；项目经理可以签自己提交的（负责人 2026-11-12 定）。
+  写签分离（四期 A26，负责人 2026-11-25 阻断）：对客户的交付件，签署人不能是起草人（各章第 1 版的作者）或最后修改人
+  （各章当前版本的作者；Agent 写入记发起的顾问）→ 403；SIGN_SEPARATION_EXEMPT（默认 D3 对内件）豁免。
+  核对与签署合并（A26，MERGED_SIGN_DELIVERABLES 默认 D3）：门禁通过且评审阻断、重要、已驳回都为 0 时，
+  项目经理一步完成提交和签署（sign_merged），可跨项目批量签（batch_sign），审计逐份记 trigger。
   状态 → signed，之后交付件只读（写入 409、交付链不跑），导出不再带草稿页眉。
 - 退回（return）：项目经理，必须写理由；状态 → drafting。
 - review 状态下任何章节或大纲写入，都把状态改回 drafting（提交作废，要重新评审、重新提交）。
@@ -55,13 +59,14 @@ from sqlalchemy.orm import Session
 from ..agents import call, knowledge, runtime, tools
 from ..core import audit
 from ..kb import refs as kb_refs_svc
+from ..core.config import get_settings
 from ..core.db import SessionLocal, utcnow
 from ..core.permissions import PROJECT_MANAGER, membership
-from ..models import (AgentRun, AgentRunStep, Deliverable, KbVersion, Project, QualityReview, ReviewWaiver, SignOff,
-                      User)
+from ..models import (AgentRun, AgentRunStep, Deliverable, KbVersion, Project, ProjectMember, QualityReview,
+                      ReviewWaiver, SignOff, User)
 from ..products import config
 from ..services import gateway, guard, jobs, model_catalog
-from . import cards, configs, deliverables, review_issues
+from . import cards, configs, contradictions, deliverables, review_issues
 from . import evidence as evidence_svc
 
 AGENT = "qa-reviewer"
@@ -215,17 +220,21 @@ def list_waivers(db: Session, r: QualityReview) -> list[ReviewWaiver]:
 
 
 def waivable(issue: dict) -> bool:
-    return (issue.get("by") == "agent" and issue.get("severity") == "阻断"
+    """评审 Agent 的阻断和 A18 矛盾核对的阻断（程序比对、可能误报）可以驳回；其他平台规则不能。"""
+    return (review_issues.soft(issue) and issue.get("severity") == "阻断"
             and issue.get("status") != review_issues.WAIVED_MARK)
 
 
 def blocking_of(db: Session, r: QualityReview) -> Blocking:
     issues = r.issues or []
-    rule = sum(1 for i in issues if i.get("by") == "rule" and i.get("severity") == "阻断")
+    rule_all = sum(1 for i in issues if i.get("by") == "rule" and i.get("severity") == "阻断"
+                   and i.get("status") != review_issues.WAIVED_MARK)
     listed = {n for n, i in enumerate(issues) if waivable(i)}
-    agent = max(r.blocking - rule, 0)
+    soft_rule = sum(1 for n in listed if issues[n].get("by") == "rule")
+    agent = max(r.blocking - rule_all, 0)
     waived = sum(1 for w in list_waivers(db, r) if w.issue_index in listed)
-    return Blocking(rule=rule, agent_open=len(listed) - waived, unlisted=max(agent - len(listed), 0), waived=waived)
+    return Blocking(rule=rule_all - soft_rule, agent_open=len(listed) - waived,
+                    unlisted=max(agent - (len(listed) - soft_rule), 0), waived=waived)
 
 
 def gate(db: Session, d: Deliverable) -> Gate:
@@ -315,12 +324,70 @@ def _issue(severity: str, location: str, dimension: str, problem: str, suggestio
             "problem": problem[:500], "suggestion": suggestion[:500], "by": by}
 
 
+def qualification_matches(text: str) -> list[str]:
+    """命中的测评 / 认证结论用语原文（排除前面紧跟否定或设问的）。"""
+    return [m.group(0) for m in _QUALIF.finditer(text)
+            if not _NEGATION.search(text[max(0, m.start() - 20):m.start()])]
+
+
 def qualification_hits(text: str) -> int:
-    n = 0
-    for m in _QUALIF.finditer(text):
-        if not _NEGATION.search(text[max(0, m.start() - 20):m.start()]):
-            n += 1
-    return n
+    return len(qualification_matches(text))
+
+
+# 四期 F6：资质用语公共判定（评测、评测门、Agent 输出兜底共用，规则同上面的 _QUALIF / _NEGATION）。
+# 类别只用于审计和报告（不记原文）；只有“××结论”能程序化改写成允许用语，其余（通过测评、测评合格、等保达标）拦下。
+QUALIF_CATEGORIES = ("结论用语", "通过测评", "测评合格", "等保达标")
+_CONCLUSION = re.compile(r"(?:测评|认证|密评|合规)结论")     # 评测题 must_not 里常见的裸词（含“合规结论”）
+_QUOTED = re.compile(r"“[^”\n]{0,120}”|「[^」\n]{0,120}」|『[^』\n]{0,120}』|‘[^’\n]{0,120}’|\"[^\"\n]{0,120}\"")
+REWRITE_TO = "符合性初判"
+# 评测门自检与 lint 用的否定式免责句样例：任何禁词规则都不得命中这些句子。
+NEGATED_SAMPLES = ("本回答为依据梳理，不构成测评结论。", "本报告为差距分析，不构成等保测评结论。",
+                   "平台不出具认证结论。", "以上并非密评结论。", "本结果不代表测评结论。", "这不是合规结论。")
+
+
+def unquoted(text: str) -> str:
+    """去掉引号里的内容（引用原话），换成同长度空格，保持否定词距离不变。"""
+    return _QUOTED.sub(lambda m: " " * len(m.group()), text)
+
+
+def qualification_negated(text: str, pos: int) -> bool:
+    """text[pos:] 开头的资质用语前面紧跟否定或设问（只看本分句）。"""
+    return bool(_NEGATION.search(text[max(0, pos - 20):pos]))
+
+
+def qualification_category(phrase: str) -> str:
+    if phrase.endswith("结论"):
+        return "结论用语"
+    if phrase.startswith("通过"):
+        return "通过测评"
+    if phrase.endswith(("合格", "通过")) and phrase.startswith(("测评", "认证", "密评")):
+        return "测评合格"
+    return "等保达标"
+
+
+def must_not_hit(pattern: str, text: str) -> bool:
+    """评测题 must_not 判定：命中处若含资质用语且该用语处于否定句里（“不构成测评结论”），不算命中（#436）。"""
+    for m in re.finditer(pattern, text):
+        inner = _QUALIF.search(m.group(0)) or _CONCLUSION.search(m.group(0))
+        if inner is None or not qualification_negated(text, m.start() + inner.start()):
+            return True
+    return False
+
+
+def rewrite_qualification(text: str) -> tuple[str, int, list[str]]:
+    """Agent 输出兜底：引号外、非否定的“××结论”改写为“符合性初判”。
+    返回 (改写后文本, 改写处数, 无法安全改写的命中类别列表)。"""
+    plain = unquoted(text)
+    spans = [m for m in _QUALIF.finditer(plain) if not qualification_negated(plain, m.start())]
+    out, last, n, left = [], 0, 0, []
+    for m in spans:
+        cat = qualification_category(m.group(0))
+        if cat != "结论用语":
+            left.append(cat)
+            continue
+        out += [text[last:m.start()], REWRITE_TO]
+        last, n = m.end(), n + 1
+    return "".join(out) + text[last:], n, left
 
 
 def rule_issues(d: Deliverable, versions: dict,
@@ -550,6 +617,11 @@ def _review_job(payload: dict, ctx: jobs.JobContext) -> None:
             raise
 
 
+def execute_review(review_id: int, ctx: jobs.JobContext) -> None:
+    """在调用方的任务里立即执行一次已排队的评审（四期 A26 一键修订每轮复查用）；排队的任务之后看到已完成就跳过。"""
+    _review_job({"review_id": review_id}, ctx)
+
+
 def _finish_failed(db: Session, r: QualityReview, project: Project, d: Deliverable, reason: str) -> None:
     _lock(db, r)
     r.status, r.error, r.finished_at = "failed", reason[:200], utcnow()
@@ -578,6 +650,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
     issues, confidential = rule_issues(d, r.versions, evidence_svc.withdrawn_codes(db, project),
                                        strict=project.tier == "strict",
                                        kb_states=kb_ref_states(db, cited_kb_refs(d, r.versions)))
+    issues += contradictions.check(db, project, d, r.versions)        # A18①：与确认卡、事实确认单矛盾
     gates, profile = project_gates(db, project), review_profile(db, project, d)
     if gates is None:
         issues.append(_issue("阻断", "全文", "产品规则", "服务产品配置有问题，产品门禁规则无法核对",
@@ -652,9 +725,11 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
         return
     for k, v in meta.items():                  # 加锁会 refresh，模型信息放在加锁之后写，否则被冲掉
         setattr(r, k, v)
+    calibrated = contradictions.apply_calibration(issues, counts, contradictions.calibrated_keys(db))  # A18②
     issues = issues[:MAX_ISSUES]
     ledger = review_issues.reconcile(db, d, r, issues, counts)    # 固定编号、已驳回不重提（A13）
-    rule_counts = {s: sum(1 for i in issues if i["by"] == "rule" and i["severity"] == s) for s in SEVERITIES}
+    rule_counts = {s: sum(1 for i in issues if i["by"] == "rule" and i["severity"] == s
+                          and i.get("status") != review_issues.WAIVED_MARK) for s in SEVERITIES}
     blocking, major, minor = (rule_counts[s] + counts[s] for s in SEVERITIES)
     r.issues, r.report = issues, report
     r.blocking, r.major, r.minor = blocking, major, minor
@@ -662,7 +737,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
     audit.record(db, actor="worker", action="quality.review", result="allowed", project_code=project.code,
                  deliverable=d.code, review_id=r.id, revision=r.revision, conclusion=r.conclusion,
                  blocking=blocking, major=major, minor=minor, rule_issues=sum(rule_counts.values()),
-                 downgraded=downgraded, profile=profile, profile_capped=capped,
+                 downgraded=downgraded, profile=profile, profile_capped=capped, calibrated=calibrated,
                  **{f"incremental_{k}": v for k, v in incremental.items()},
                  **{f"issues_{k}": v for k, v in ledger.items()},
                  length=len(report), prompt_tokens=r.prompt_tokens, completion_tokens=r.completion_tokens,
@@ -723,12 +798,49 @@ def submit(db: Session, user: User, project: Project, d: Deliverable, comment: s
     return s
 
 
-def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str = "") -> SignOff:
+def _codes(raw: str) -> set[str]:
+    return {c.strip().upper() for c in (raw or "").split(",") if c.strip()}
+
+
+def writers(d: Deliverable) -> tuple[set[str], set[str]]:
+    """(起草人, 最后修改人)：各章第 1 版的作者、各章当前版本的作者；平台自动写入不算人。"""
+    drafters, last = set(), set()
+    for s in d.sections:
+        first, cur = deliverables.get_version(s, 1), deliverables.get_version(s)
+        drafters |= {first.author} if first else set()
+        last |= {cur.author} if cur else set()
+    return drafters - {"", "platform"}, last - {"", "platform"}
+
+
+def merged_kind(d: Deliverable) -> bool:
+    return d.code.upper() in _codes(get_settings().merged_sign_deliverables)
+
+
+def separation_exempt(d: Deliverable) -> bool:
+    return d.code.upper() in _codes(get_settings().sign_separation_exempt)
+
+
+def separation_conflict(d: Deliverable, username: str) -> str:
+    """写签分离：对客户交付件，签署人是起草人或最后修改人时返回中文原因；没有冲突返回空串。"""
+    if separation_exempt(d):
+        return ""
+    drafters, last = writers(d)
+    roles = [n for n, who in (("起草人", drafters), ("最后修改人", last)) if username in who]
+    if not roles:
+        return ""
+    return (f"写签分离：你是 {d.code} 的{'和'.join(roles)}，不能签署自己写的对客户交付件，"
+            "请由本项目另一位项目经理签署")
+
+
+def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str = "", trigger: str = "") -> SignOff:
     """项目经理签署。"""
     action = "deliverable.sign"
     comment = _comment(comment)
     if not _is_manager(db, project, user):
         _refuse(db, user, project, d, action, "not_manager", 403, "只有项目经理能签署")
+    why = separation_conflict(d, user.username)
+    if why:
+        _refuse(db, user, project, d, action, "write_sign_separation", 403, why)
     _lock_deliverable(db, d)
     if d.status != "review":
         _refuse(db, user, project, d, action, "not_submitted", 409,
@@ -746,10 +858,81 @@ def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str
     db.flush()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, revision=d.revision, versions=s.versions, review_id=g.review.id,
-                 submit_id=sub.id, waived=g.waived, comment_length=len(comment))
+                 submit_id=sub.id, waived=g.waived, comment_length=len(comment),
+                 **({"trigger": trigger} if trigger else {}))
     db.commit()
     db.refresh(s)
     return s
+
+
+# ---- 核对与签署合并、批量签（四期 A26）----
+
+MERGED = "d3-merged"
+BATCH = "d3-batch"
+
+
+def merged_check(db: Session, d: Deliverable) -> list[str]:
+    """能否核对与签署合并；返回不能的原因（空 = 可以）。门禁通过且评审 0 问题（阻断、重要、已驳回都为 0）。"""
+    if not merged_kind(d):
+        return [f"{d.code} 不走核对与签署合并"]
+    if d.status not in ("drafting", "review"):
+        return [f"{d.code} 已签署" if d.status == "signed" else f"{d.code} 还没有正文"]
+    g = gate(db, d)
+    reasons = list(g.reasons)
+    r = g.review
+    if r is not None and not reasons and (r.major or g.waived):
+        reasons.append(f"质量门禁还有问题（重要 {r.major}、已驳回阻断 {g.waived}），请回到逐条核对")
+    return reasons
+
+
+def sign_merged(db: Session, user: User, project: Project, d: Deliverable, trigger: str = MERGED) -> SignOff:
+    """项目经理一步完成提交与签署（D3 门禁 0 问题）。提交、签署各记一条审计，带 trigger。"""
+    action = "deliverable.sign"
+    if not _is_manager(db, project, user):
+        _refuse(db, user, project, d, action, "not_manager", 403, "只有项目经理能签署")
+    reasons = merged_check(db, d)
+    if reasons:
+        _refuse(db, user, project, d, action, "merged_gate", 409, {"gate": False, "reasons": reasons})
+    if d.status == "drafting":
+        submit(db, user, project, d, trigger=trigger)
+    return sign(db, user, project, d, trigger=trigger)
+
+
+def _managed_projects(db: Session, user: User) -> list[Project]:
+    return list(db.scalars(select(Project).join(ProjectMember, ProjectMember.project_id == Project.id)
+                           .where(ProjectMember.user_id == user.id, ProjectMember.project_role == PROJECT_MANAGER,
+                                  Project.deleted_at.is_(None)).order_by(Project.code)))
+
+
+def batch_candidates(db: Session, user: User) -> list[dict]:
+    """本人任项目经理的项目里，待签的合并签署交付件（起草中或待签署、已有正文）及能否签。"""
+    out = []
+    for p in _managed_projects(db, user):
+        for d in p.deliverables:
+            if merged_kind(d) and d.status in ("drafting", "review") and d.sections:
+                reasons = merged_check(db, d)
+                out.append({"project": p.code, "deliverable": d.code, "title": d.title, "revision": d.revision,
+                            "status": d.status, "ready": not reasons, "reasons": reasons})
+    return out
+
+
+def batch_sign(db: Session, user: User, items: list[tuple[str, str]]) -> list[dict]:
+    """逐份签：每份单独判、单独提交事务和审计；不是本人任经理的项目一律“不存在”，不泄露。"""
+    managed = {p.code: p for p in _managed_projects(db, user)}
+    out = []
+    for code, dcode in items:
+        p = managed.get(code)
+        d = deliverables.get_deliverable(db, p, dcode) if p is not None else None
+        if d is None:
+            out.append({"project": code, "deliverable": dcode, "ok": False, "reason": "不存在或你不是该项目的项目经理"})
+            continue
+        try:
+            sign_merged(db, user, p, d, trigger=BATCH)
+            out.append({"project": code, "deliverable": dcode, "ok": True, "reason": ""})
+        except QualityError as e:
+            detail = e.detail if isinstance(e.detail, str) else "；".join(e.detail.get("reasons", []))
+            out.append({"project": code, "deliverable": dcode, "ok": False, "reason": detail})
+    return out
 
 
 def send_back(db: Session, user: User, project: Project, d: Deliverable, comment: str) -> SignOff:
@@ -796,7 +979,8 @@ def waive(db: Session, user: User, project: Project, d: Deliverable, r: QualityR
     if not 0 <= index < len(issues):
         raise QualityError(404, "问题不存在")
     if not waivable(issues[index]):
-        reason_code = "rule_issue" if issues[index].get("by") == "rule" else "not_blocking"
+        reason_code = ("rule_issue" if issues[index].get("by") == "rule" and issues[index].get("severity") == "阻断"
+                       else "not_blocking")
         _refuse(db, user, project, d, action, reason_code, 422,
                 "平台规则判出的阻断不能驳回，请修改正文后重新评审" if reason_code == "rule_issue"
                 else "只有阻断问题需要驳回")
@@ -806,6 +990,8 @@ def waive(db: Session, user: User, project: Project, d: Deliverable, r: QualityR
     db.add(w)
     db.flush()
     review_issues.mark_waived(db, d, issues[index], w.id)
+    from . import revision_features          # 四期 F4②：评审驳回特征（开关关、严格档、不同意回流不写）
+    revision_features.record_waiver(db, project, d, issues[index])
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, review_id=r.id, revision=r.revision, issue=index,
                  reason_length=len(reason))

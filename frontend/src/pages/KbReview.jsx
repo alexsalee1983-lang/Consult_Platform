@@ -4,10 +4,12 @@ import { api } from "../api.js";
 import { hasRole, useAuth } from "../auth.jsx";
 import { TopBar } from "../components/common.jsx";
 import { Chip, EMPTY_META, fmtDate, MetaForm, useKbMeta, VERSION_STATUS } from "../components/kb.jsx";
+import ManualDownload from "../components/ManualDownload.jsx";
 import SourceConfirm from "../components/SourceConfirm.jsx";
 
+const PAGE = 100;
 const TABS = [
-  ["queue", "待审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"], ["confirm", "来源确认"],
+  ["queue", "待审"], ["recheck", "待复审"], ["sample", "抽检"], ["draft", "我的草稿"], ["rejected", "已退回"], ["published", "已发布"], ["confirm", "来源确认"], ["manual", "需人工下载"],
 ];
 const ROLE_LABEL = { content: "内容", compliance: "合规", platform: "平台核验", sample: "抽检", agent: "知识审核 Agent" };
 const DECISION = { approve: ["c-g", "采纳"], reject: ["c-r", "退回"], flag: ["c-a", "存疑"] };
@@ -257,7 +259,9 @@ function NewPublicItem({ onCreated, onCancel }) {
 export default function KbReview() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
-  const [tab, setTab] = useState(params.get("version") ? "draft" : "queue");
+  const urlTab = params.get("tab");
+  const [tab, setTab] = useState(TABS.some(([k]) => k === urlTab) ? urlTab : params.get("version") ? "draft" : "queue");
+  const [total, setTotal] = useState(null);
   const [list, setList] = useState([]);
   const [selected, setSelected] = useState(params.get("version") ? Number(params.get("version")) : null);
   const [v, setV] = useState(null);
@@ -265,18 +269,26 @@ export default function KbReview() {
   const [error, setError] = useState("");
   const [stats, setStats] = useState(null);
 
-  const loadList = useCallback(async () => {
+  const [more, setMore] = useState(false);
+  const loadList = useCallback(async (append = false) => {
     setError("");
-    if (tab === "confirm") return;
+    if (tab === "confirm" || tab === "manual") return;
+    const offset = append ? list.length : 0;
+    const page = { limit: PAGE, offset };
+    const merge = (rows) => { setList(append ? [...list, ...rows] : rows); return rows.length === PAGE; };
     try {
-      if (tab === "queue") setList(await api.kbQueue());
-      else if (tab === "sample") { const s = await api.kbSamples(); setStats(s); setList(s.items); }
-      else if (tab === "published") setList(await api.kbVersions({ status: "published" }));
-      else setList(await api.kbVersions({ status: tab, mine: true }));
+      setTotal(null);
+      if (tab === "queue" || tab === "recheck") {
+        const r = await (tab === "queue" ? api.kbQueue(page) : api.kbRecheckQueue(page));
+        merge(r.items); setTotal(r.total); setMore(offset + r.items.length < r.total);
+      } else if (tab === "sample") { const s = await api.kbSamples(); setStats(s); setList(s.items); setMore(false); }
+      else if (tab === "published") setMore(merge(await api.kbVersions({ status: "published", ...page })));
+      else setMore(merge(await api.kbVersions({ status: tab, mine: true, ...page })));
     } catch (e) {
       setError(e.message);
     }
-  }, [tab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, list.length]);
   const loadV = useCallback(async (id) => {
     if (!id) { setV(null); return; }
     try {
@@ -286,14 +298,15 @@ export default function KbReview() {
     }
   }, []);
 
-  useEffect(() => { loadList(); }, [loadList]);
+  useEffect(() => { loadList(); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
   useEffect(() => { loadV(selected); }, [selected, loadV]);
 
   const tabBar = (
     <div className="tabs" role="tablist">
       {TABS.map(([k, l]) => (
         <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : undefined}
-          onClick={() => setTab(k)}>{l}</button>
+          onClick={() => { setTab(k); setParams({}); }}>{l}</button>
       ))}
     </div>
   );
@@ -305,13 +318,13 @@ export default function KbReview() {
       <TopBar cap="知识 · 双人审核（知识专家审内容，知识管理员审合规）" title="审批队列">
         <button type="button" className="btnp" onClick={() => { setCreating(true); setSelected(null); }}>＋ 新建公开资料条目</button>
       </TopBar>
-      {tab === "confirm" && (
+      {(tab === "confirm" || tab === "manual") && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <section className="pnl pad" aria-label="版本列表">{tabBar}</section>
-          <SourceConfirm />
+          {tab === "confirm" ? <SourceConfirm /> : <ManualDownload />}
         </div>
       )}
-      {tab !== "confirm" && <div className="kb3">
+      {tab !== "confirm" && tab !== "manual" && <div className="kb3">
         <section className="pnl pad" aria-label="版本列表">
           {tabBar}
           {error && <div className="err">{error}</div>}
@@ -329,6 +342,7 @@ export default function KbReview() {
               {!stats.agent.enabled ? " · 自动发布已关闭" : ""}
             </div>
           )}
+          {total != null && <div className="sub">共 {total} 条，已显示 {list.length} 条</div>}
           <ul className="pick">
             {list.map((x) => (
               <li key={x.id}>
@@ -339,6 +353,7 @@ export default function KbReview() {
                 </button>
               </li>
             ))}
+            {more && <li><button type="button" className="btn" onClick={() => loadList(true)}>加载更多</button></li>}
             {list.length === 0 && <li className="sub">没有{TABS.find(([k]) => k === tab)[1]}的版本</li>}
           </ul>
         </section>
@@ -353,7 +368,7 @@ export default function KbReview() {
                 <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{v.title}</h2>
                 <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
                   <span className="chip c-c">来源：{{ public: "公开资料", expert: "专家萃取", project: "项目沉淀", internal: "内部制度改造" }[v.source_type] || v.source_type}</span>
-                  <span className="chip c-n">去标识：{{ passed: "已通过", not_needed: "无需", pending: "未完成" }[v.deid_status] || v.deid_status}</span>
+                  <span className="chip c-n">去标识：{{ passed: "已通过", not_needed: "无需", virtual: "虚拟基线免去标识", pending: "未完成" }[v.deid_status] || v.deid_status}</span>
                   {v.applicability && <span className="chip c-n">适用：{v.applicability}</span>}
                   {v.ref_document && <span className="chip c-v">依据：{v.ref_document} {v.ref_version}</span>}
                   {v.review_date && <span className="chip c-n">复审 {v.review_date}</span>}

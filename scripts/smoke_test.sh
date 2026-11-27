@@ -149,8 +149,10 @@ for i in $(seq 1 30); do   # 等 worker 解析并去标识，最多 60 秒
   status="$(curl -s -b "$JAR" "$BASE/api/kb/intake/$upload_id" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status',''))")"
   [ "$status" = "deid_pending" ] && break; sleep 2
 done
-if [ "$status" = "deid_pending" ]; then echo "  通过  知识投料：后台解析和去标识完成"; pass=$((pass+1)); else
-  echo "  失败  知识投料：后台处理状态 ${status:-无}（期望 deid_pending）"; fail=$((fail+1)); fi
+# 四期 G7：这一项就是“经接口发起后台任务（kb.parse -> kb.deid，不依赖真实模型）-> worker 执行完成”的路径；
+# 失败多半是处理器签名错、worker 少挂目录或 worker 没起（#307、#302）
+if [ "$status" = "deid_pending" ]; then echo "  通过  知识投料：后台解析和去标识完成（经接口发起的后台任务由 worker 执行）"; pass=$((pass+1)); else
+  echo "  失败  知识投料：后台任务未完成，状态 ${status:-无}（期望 deid_pending；查 docker compose logs worker、worker 挂载目录、处理器签名）"; fail=$((fail+1)); fi
 check "知识投料：去标识报告可查看"      200 "$BASE/api/kb/intake/${upload_id:-0}/deid"
 if grep -q "冒烟测试农商行" "$BODY"; then echo "  失败  知识投料：去标识报告里仍有客户名"; fail=$((fail+1)); else
   echo "  通过  知识投料：去标识报告和预览不含客户名"; pass=$((pass+1)); fi

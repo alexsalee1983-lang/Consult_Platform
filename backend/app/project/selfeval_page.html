@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!-- 客户自评问卷（四期 E3②）：离线网页，禁止任何网络请求；题单加密内嵌，口令另行告知；答卷在本机加密导出。不要加外部脚本、字体、图片。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<title>客户自评问卷（离线）</title>
+<style>
+/* 令牌与 frontend/src/theme.css 暗色版一致（测试核对），只用变量，不写硬编码颜色 */
+:root {
+  --obs: #0a0d12; --s1: #10151c; --s2: #161d27; --s3: #1d2633;
+  --ln: #232d3b; --ln2: #2e3a4b;
+  --tx: #e6ebf2; --tx2: #a3aebe; --tx3: #6b7789;
+  --amber: #f5a524; --amber-d: rgba(245,165,36,.12);
+  --crim: #f0454f; --crim-d: rgba(240,69,79,.13);
+  --cyan: #22d3ee; --cyan-d: rgba(34,211,238,.10);
+  --ok: #3dd68c; --ok-d: rgba(61,214,140,.12);
+  --vio: #b49cff; --vio-d: rgba(180,156,255,.12);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--obs); color: var(--tx); font-size: 14px; line-height: 1.6;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+header { padding: 12px 18px; border-bottom: 1px solid var(--ln); background: var(--s1); }
+h1 { margin: 0; font-size: 16px; }
+main { padding: 16px 18px; max-width: 960px; }
+.pnl { background: var(--s1); border: 1px solid var(--ln); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.sub { color: var(--tx3); font-size: 12px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+input[type=password], input[type=file], textarea { width: 100%; background: var(--s2); border: 1px solid var(--ln2); border-radius: 6px; color: var(--tx); padding: 6px 8px; font: inherit; }
+textarea { min-height: 40px; resize: vertical; margin-top: 6px; }
+label.opt { display: flex; gap: 6px; align-items: flex-start; margin: 3px 0; color: var(--tx2); cursor: pointer; }
+.btn { background: var(--s2); border: 1px solid var(--ln2); color: var(--tx); border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
+.btnp { background: var(--amber); border: 1px solid var(--amber); color: var(--obs); border-radius: 6px; padding: 6px 14px; cursor: pointer; font: inherit; font-weight: 600; }
+.err { border-left: 3px solid var(--crim); background: var(--crim-d); padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+.okm { border-left: 3px solid var(--ok); background: var(--ok-d); padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+.mono { font-family: ui-monospace, Consolas, monospace; color: var(--cyan); font-size: 12px; }
+.hide { display: none; }
+</style>
+</head>
+<body>
+<header><h1>客户自评问卷</h1><div class="sub" id="meta">离线网页：不联网、不上传任何内容</div></header>
+<main>
+  <div id="msg"></div>
+  <div class="pnl" id="unlock">
+    <p>请输入另行告知的打开口令。</p>
+    <div class="row"><input type="password" id="pw" autocomplete="off" style="max-width:320px"><button class="btnp" id="open">打开问卷</button></div>
+  </div>
+  <div id="form" class="hide">
+    <div class="pnl">
+      <div class="row"><span id="progress"></span></div>
+      <p class="sub">请按实际情况选择；拿不准选“不清楚”。备注可写补充说明，请不要填写口令、密钥、IP 地址、网络拓扑、个人信息或业务数据样本。
+        填写中可随时“导出加密答卷”保存；下次打开本网页、输入口令后“导入已导出的答卷”继续填。</p>
+      <div class="row">
+        <button class="btnp" id="export">导出加密答卷</button>
+        <label class="btn" for="resume">导入已导出的答卷继续填</label>
+        <input type="file" id="resume" accept=".cpself,.json" class="hide">
+      </div>
+    </div>
+    <div id="qs"></div>
+  </div>
+</main>
+<script>
+"use strict";
+const PACK = /*CP-SELFEVAL-PACK*/null/*END-CP-SELFEVAL-PACK*/;
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const b64 = (u8) => { let s = ""; for (const x of u8) s += String.fromCharCode(x); return btoa(s); };
+  const unb64 = (s) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
+  let pass = "", body = null;
+  const answers = {};          // 题号 → {value, note}，只在内存（不用 localStorage）
+
+  function show(text, ok) {
+    const d = document.createElement("div");
+    d.className = ok ? "okm" : "err";
+    d.textContent = text;
+    $("msg").replaceChildren(d);
+  }
+  async function deriveKey(p, salt, iterations) {
+    const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(p), "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, base,
+      { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+  async function decrypt(pkg, p) {
+    if (!pkg || pkg.format !== "cp-field-package" || pkg.version !== 1) throw new Error("文件格式不对");
+    const key = await deriveKey(p, unb64(pkg.kdf.salt), pkg.kdf.iterations);
+    let plain;
+    try {
+      plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(pkg.cipher.iv),
+        additionalData: new TextEncoder().encode("cp-field-package:1:" + pkg.kind) }, key, unb64(pkg.data));
+    } catch (e) { throw new Error("口令不对或文件已损坏"); }
+    return JSON.parse(new TextDecoder().decode(plain));
+  }
+  async function encrypt(kind, obj, p, iterations) {
+    const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(p, salt, iterations);
+    const data = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv,
+      additionalData: new TextEncoder().encode("cp-field-package:1:" + kind) }, key, new TextEncoder().encode(JSON.stringify(obj))));
+    return { format: "cp-field-package", version: 1, kind,
+      kdf: { name: "PBKDF2", hash: "SHA-256", iterations, salt: b64(salt) }, cipher: { name: "AES-GCM", iv: b64(iv) }, data: b64(data) };
+  }
+  function download(name, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+  function progress() {
+    const done = body.questions.filter((q) => (answers[q.qid] || {}).value).length;
+    $("progress").textContent = `已答 ${done} / ${body.questions.length} 题 · 截止 ${body.due_date}`;
+  }
+  function render() {
+    const box = $("qs");
+    box.replaceChildren();
+    body.questions.forEach((q, i) => {
+      const a = answers[q.qid] || (answers[q.qid] = { value: "", note: "" });
+      const p = document.createElement("div");
+      p.className = "pnl";
+      const h = document.createElement("div");
+      const m = document.createElement("span"); m.className = "mono"; m.textContent = `${i + 1}. ${q.qid} `;
+      h.append(m, document.createTextNode(q.text));
+      p.append(h);
+      for (const o of q.options) {
+        const l = document.createElement("label"); l.className = "opt";
+        const r = document.createElement("input"); r.type = "radio"; r.name = q.qid; r.value = o.key; r.checked = a.value === o.key;
+        r.addEventListener("change", () => { a.value = o.key; progress(); });
+        l.append(r, document.createTextNode(`${o.key}. ${o.label}`));
+        p.append(l);
+      }
+      const t = document.createElement("textarea"); t.maxLength = 500; t.placeholder = "备注（选填）"; t.value = a.note;
+      t.addEventListener("input", () => { a.note = t.value; });
+      p.append(t);
+      box.append(p);
+    });
+    progress();
+  }
+  $("open").addEventListener("click", async () => {
+    try {
+      if (!globalThis.crypto || !crypto.subtle) throw new Error("浏览器不支持本机解密，请用新版 Edge 或 Chrome 打开");
+      const p = $("pw").value;
+      body = await decrypt(PACK, p);
+      pass = p;
+      $("pw").value = "";
+      $("unlock").classList.add("hide");
+      $("form").classList.remove("hide");
+      $("meta").textContent = `${body.code} 第 ${body.selfeval_version} 版 · 受访角色：${body.respondent_role} · 不联网、不上传任何内容`;
+      $("msg").replaceChildren();
+      render();
+    } catch (e) { show(e.message); }
+  });
+  $("export").addEventListener("click", async () => {
+    try {
+      const list = body.questions.map((q) => ({ qid: q.qid, value: (answers[q.qid] || {}).value || "",
+        note: ((answers[q.qid] || {}).note || "").trim() }));
+      const out = { format: "cp-selfeval-answers", code: body.code, selfeval_version: body.selfeval_version,
+        pack_hash: body.pack_hash, answers: list, exported_at: new Date().toISOString() };
+      const pkg = await encrypt("selfeval-answers", out, pass, PACK.kdf.iterations);
+      download(`${body.project}-${body.code}-v${body.selfeval_version}-答卷.cpself`, JSON.stringify(pkg));
+      show("已导出加密答卷。请把导出的文件作为附件回复邮件；要继续填写，下次导入这份答卷即可。", true);
+    } catch (e) { show(e.message); }
+  });
+  $("resume").addEventListener("change", async (ev) => {
+    const f = ev.target.files[0];
+    ev.target.value = "";
+    if (!f) return;
+    try {
+      const prev = await decrypt(JSON.parse(await f.text()), pass);
+      if (prev.code !== body.code || prev.selfeval_version !== body.selfeval_version) throw new Error("这份答卷不属于本问卷（包号或版本不同）");
+      for (const a of prev.answers || []) answers[a.qid] = { value: a.value || "", note: a.note || "" };
+      render();
+      show("已导入之前的答卷，可以继续填写。", true);
+    } catch (e) { show(e.message); }
+  });
+})();
+</script>
+</body>
+</html>

@@ -190,3 +190,52 @@ def test_inserted_reply_still_blocked_at_signoff(team, model):
     assert rule >= {"范围与资质边界", "证据链 / 依据"}
     r = member.post(_url(code, "signoff/submit"), json={})
     assert r.status_code == 409 and any("阻断" in x for x in r.json()["detail"]["reasons"])
+
+
+# ---- 四期 A16③ 三个一键工作流（补来源 / 口径检查 / 管理层摘要） ----
+
+WF_BODY = ("SOC 现有 6 人，全部白班 [O-01]。夜间告警无人处置，平均响应超过 8 小时。\n"
+           "经评估，本系统已通过等保三级测评。建议建立 7×24 值守机制 [推断]。")
+
+
+def test_workflow_precheck_pure_functions():
+    from app.project import assist as a
+    assert a.unsourced_sentences(WF_BODY) == ["夜间告警无人处置，平均响应超过 8 小时。", "经评估，本系统已通过等保三级测评。"]
+    assert a.unsourced_sentences("短句。") == []           # 太短的不算论断
+    assert a.qualification_phrases(WF_BODY) == ["通过等保"]
+    assert a.qualification_phrases("本报告不构成测评结论。") == []   # 否定说明不算
+
+
+def test_workflows_need_no_prompt_and_carry_program_findings(team, model):
+    code, member, _ = team
+    for mode, marker in (("cite", "无来源标注的论断"), ("check", "资质边界用语"), ("summary", "管理层摘要")):
+        r = member.post(_url(code, "sections/1/assist"), json={"mode": mode, "context": WF_BODY})
+        assert r.status_code == 200, r.text
+        done = sse(r)[-1][1]
+        assert done["mode"] == mode
+        msg = model.last["messages"][-1]["content"]
+        assert marker in msg and "夜间告警无人处置" in msg
+        f = done["findings"]
+        assert f["unsourced"] == 2 and f["qualification"] == ["通过等保"]
+    # 补来源按无来源论断检索知识库，找不到依据的要求标“待补依据”；摘要限定篇幅且保留来源
+    assert "待补依据" in a_msg(model, "cite", member, code)
+    assert "300 字" in a_msg(model, "summary", member, code)
+    with SessionLocal() as db:
+        logs = db.scalars(select(AuditLog).where(AuditLog.action == "deliverable.assist",
+                                                 AuditLog.project_code == code)).all()
+        dumped = json.dumps([x.detail for x in logs], ensure_ascii=False)
+        assert "夜间告警" not in dumped and "通过等保三级测评" not in dumped
+        ds = [json.loads(x.detail) for x in logs]
+        assert all(d["unsourced"] == 2 and d["qualification"] == 1 for d in ds if d["mode"] != "ask")
+
+
+def a_msg(model, mode, member, code) -> str:
+    assert member.post(_url(code, "sections/1/assist"), json={"mode": mode, "context": WF_BODY}).status_code == 200
+    return model.last["messages"][-1]["content"]
+
+
+def test_ask_and_edit_still_require_prompt(team, model):
+    code, member, _ = team
+    for mode in ("ask", "edit"):
+        assert member.post(_url(code, "sections/1/assist"), json={"mode": mode}).status_code == 422
+    assert model.requests == []

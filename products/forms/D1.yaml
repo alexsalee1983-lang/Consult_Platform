@@ -1,14 +1,19 @@
 # 四期 A14：D1 启动包表单（各产品通用；顾问填表，平台按模板程序成稿，不调模型）
 # 字段类型：text 单行、textarea 多行、list 每行一项（成稿时渲染为列表）
-# 模板里用 {字段 key} 引用字段；fixed 为平台固定写入的段落（资质边界），顾问不能改
+# 模板里用 {字段 key} 引用字段；fixed 为平台固定写入的段落（资质边界、数据保护），顾问不能改
+# fixed_by_tier：按项目档位（standard 标准档 / strict 严格档）追加的固定段落，档位取立项时的设置，顾问不另选
+# prefill：表单初值取自项目的产品配置（frameworks 评估基线框架、deliverables 交付件清单），顾问可改（自动化优先）
+# A28①：table 表格字段（columns 列名，每行一条、格间用全角竖线｜）；prefill 另有 period、milestones、roles（取项目周期与成员）；
+# default 为公司标准写法初值；必填只留顾问必须亲自确认的 5 项（目标、周期、范围、不包含项、角色），其余已预填可改
+# 第 9 章措辞以 docs/客户数据告知模板与合同条款.md 为准，不得承诺平台做不到的（#468，负责人 2026-11-25 同意 10 章目录）
 code: D1
 title: 启动包
 sections:
 - title: 项目概况
   fields:
-  - {key: goal, label: 项目目标, type: textarea, required: true}
-  - {key: period, label: 项目周期, type: text, required: true, hint: 例如 2027-01-05 至 2027-03-31}
-  - {key: background, label: 背景与驱动因素, type: textarea}
+  - {key: goal, label: 项目目标, type: textarea, required: true, example: "帮助 BANK-A 建立覆盖监测、分析、响应和值班的安全运营体系，形成可落地的制度和 12 个月建设路线图。"}
+  - {key: period, label: 项目周期, type: text, required: true, prefill: period, hint: 已按立项周数预填，请改成合同起止日期，例如 2027-01-05 至 2027-03-31, example: "2027-01-05 至 2027-03-31"}
+  - {key: background, label: 背景与驱动因素, type: textarea, example: "BANK-A 现有安全设备告警分散在多个平台，夜间无人值守；监管检查提出要建立持续监测能力。"}
   template: |
     **项目目标**
 
@@ -19,9 +24,9 @@ sections:
     {background}
 - title: 范围确认
   fields:
-  - {key: in_scope, label: 本次范围（每行一项）, type: list, required: true}
-  - {key: out_of_scope, label: 不包含项（每行一项）, type: list, required: true}
-  - {key: assumptions, label: 前提与依赖（每行一项）, type: list}
+  - {key: in_scope, label: 本次范围（每行一项）, type: list, required: true, example: "安全运营现状评估\n运营组织与流程设计\n运营制度文件编写\n实施路线图"}
+  - {key: out_of_scope, label: 不包含项（每行一项）, type: list, required: true, example: "等级保护测评\n安全设备采购与部署\n渗透测试"}
+  - {key: assumptions, label: 前提与依赖（每行一项）, type: list, example: "客户在启动后 1 周内提供资料清单所列资料\n关键岗位人员可按排期参加访谈"}
   template: |
     **本次范围**
 
@@ -35,15 +40,43 @@ sections:
 
     {assumptions}
   fixed: 本项目提供差距分析、符合性初判与整改建议，不出具等级保护测评结论、商用密码应用安全性评估结论或认证结论。
+- title: 工作方法与方法论
+  fields:
+  - {key: frameworks, label: 依据框架与标准（每行一项）, type: list, prefill: frameworks, hint: 已按产品评估基线预填，可增删, example: "SOC 能力框架\n网络安全等级保护基本要求（GB/T 22239-2019）"}
+  - {key: survey_methods, label: 调研方式（每行一项）, type: list, default: "关键岗位访谈\n制度与记录文档审阅\n现场查看（只读，不接入生产网络）", example: "关键岗位访谈\n制度与记录文档审阅\n现场查看（只读）"}
+  - {key: approach, label: 方法说明, type: textarea, example: "先按能力框架逐域访谈和审阅资料形成事实清单，再对照基线做差距分析，最后按优先级设计整改与建设方案。"}
+  template: |
+    **依据框架与标准**
+
+    {frameworks}
+
+    **调研方式**
+
+    {survey_methods}
+
+    {approach}
 - title: 工作分解与里程碑
   fields:
-  - {key: milestones, label: 阶段与里程碑（每行一项：阶段｜时间｜产出）, type: list, required: true}
+  - {key: milestones, label: 阶段与里程碑, type: table, columns: [阶段, 时间, 产出], prefill: milestones, hint: 已按产品交付件和项目周数排好，可改, example: "调研｜第 2–4 周｜调研包、事实清单"}
   template: |
     {milestones}
+- title: 交付件清单与验收
+  fields:
+  - {key: deliverables, label: 交付件清单, type: table, columns: [交付件, 时间, 验收人, 验收方式], prefill: deliverables, hint: 已按产品交付件和里程碑预填，可改, example: "D4 现状评估报告｜第 5–7 周｜客户项目负责人｜书面确认"}
+  - {key: acceptance, label: 验收约定, type: textarea, default: 每份交付件提交后 5 个工作日内由客户项目负责人书面确认；有修改意见的，我方修改后再次提交确认。, example: "每份交付件提交后 5 个工作日内由客户项目负责人书面确认；有修改意见的，我方修改后再次提交。"}
+  template: |
+    **交付件清单**
+
+    {deliverables}
+
+    **验收约定**
+
+    {acceptance}
 - title: 组织与沟通
   fields:
-  - {key: roles, label: 双方角色与职责（每行一项）, type: list, required: true}
-  - {key: communication, label: 沟通机制, type: textarea}
+  - {key: roles, label: 双方角色与职责, type: table, columns: [方, 姓名或岗位, 职责], required: true, prefill: roles, hint: 我方已按项目成员预填，请补客户方姓名或岗位, example: "客户方｜信息科技部安全负责人｜确认范围与计划、协调访谈、组织验收"}
+  - {key: communication, label: 沟通机制, type: textarea, default: 每周一次项目例会，我方每周五发项目周报；日常问题经双方项目对接人即时沟通，重要事项以书面方式确认。, example: "每周二上午项目例会；我方每周五发周报；日常问题经双方对接人在工作群沟通。"}
+  - {key: escalation, label: 问题升级路径（每行一级）, type: list, default: "双方项目对接人\n双方项目负责人\n双方分管领导", example: "双方项目对接人\n双方项目负责人\n双方分管领导"}
   template: |
     **角色与职责**
 
@@ -52,11 +85,58 @@ sections:
     **沟通机制**
 
     {communication}
-- title: 启动会议程
+
+    **问题升级路径**
+
+    {escalation}
+- title: 客户配合事项
   fields:
-  - {key: agenda, label: 议程（每行一项）, type: list, required: true}
-  - {key: meeting, label: 时间与参会人, type: text}
+  - {key: client_materials, label: 请客户提供的资料（每行一项）, type: list, default: "安全管理制度与流程文件\n组织架构与岗位职责说明\n近一年的安全运营记录（值班、事件处置、演练）\n已有的评估或审计报告（结论部分）", hint: 只列制度、流程、记录类资料；不收口令、密钥、漏洞细节、完整拓扑与 IP 规划、业务数据和个人信息样本, example: "安全管理制度汇编\n安全运营值班记录（近 3 个月）\n安全事件处置记录（近 1 年）"}
+  - {key: interviewees, label: 访谈对象与时间, type: table, columns: [对象, 时间], hint: 调研阶段前确定即可, example: "安全运营主管｜第 2 周周三上午"}
+  - {key: access, label: 环境与系统访问安排, type: textarea, hint: 例如 现场办公位、只读查看的系统；顾问不接入生产网络, example: "客户提供现场办公位 2 个；顾问只读查看告警平台界面，不接入生产网络，不拷贝数据。"}
+  template: |
+    **请客户提供的资料**
+
+    {client_materials}
+
+    **访谈对象与时间**
+
+    {interviewees}
+
+    **环境与系统访问**
+
+    {access}
+- title: 风险与变更管理
+  fields:
+  - {key: risks, label: 主要风险与应对, type: table, columns: [风险, 应对], default: "访谈对象时间难以协调｜启动会上锁定访谈排期，预留备选时间\n资料提供滞后｜启动后一周内提交资料清单，每周例会跟踪\n范围理解不一致｜以本启动包范围为准，调整走变更流程", example: "年底业务繁忙，访谈难排期｜启动会上锁定访谈时间，预留备选日期"}
+  - {key: change_control, label: 变更管理（谁提、谁批、怎么记）, type: textarea, default: 范围、周期或交付件的调整由任一方书面提出，双方项目负责人确认后执行，并记入项目变更记录。, example: "范围或周期调整由任一方书面提出，双方项目负责人确认后执行，记入变更记录。"}
+  template: |
+    **主要风险与应对**
+
+    {risks}
+
+    **变更管理**
+
+    {change_control}
+- title: 客户数据保护安排
+  fields:
+  - {key: data_notes, label: 双方另行约定的事项, type: textarea, hint: 例如 部分资料仅现场使用；与已签保密协议不一致的，以更严格的约定为准, example: "运营值班记录只在客户现场查阅，不带离现场。"}
+  template: |
+    {data_notes}
+  fixed: 无论哪一档，我方均不收集贵方的账号口令和密钥、可被利用的漏洞细节、完整网络拓扑和 IP 地址规划、业务数据和个人信息样本；贵方误提供的，我方立即删除并告知贵方。贵方资料不提供给任何外部人工智能服务，不用于训练或改进任何模型。
+  fixed_by_tier:
+    standard: 本项目按标准档处理，按《AI 辅助与数据处理说明》执行：项目验收后，项目专属空间保留 6 个月用于答疑和售后支持，到期后经我方负责人人工确认删除全部项目资料并形成删除记录；贵方可以要求提前删除并获取删除记录。
+    strict: 本项目按严格档处理，按双方签署的《数据处理计划》执行：贵方资料、访谈纪要和证据原文全部留在贵方现场，不传输到我方任何服务器；离场后只使用经贵方对接人逐份审阅签字的去标识工作摘要（摘要卡），交付物初稿一律使用占位符。现场资料验收后 5 个工作日内删除并由贵方对接人确认；摘要卡和占位符版本初稿保留 6 个月，经我方负责人人工确认后删除。
+- title: 启动会议程与下一步
+  fields:
+  - {key: agenda, label: 议程（每行一项）, type: list, default: "双方介绍与项目目标\n确认范围与不包含项\n确认计划与里程碑\n确认沟通机制与配合事项\n下一步安排", example: "双方介绍与项目目标\n确认范围与不包含项\n确认计划与里程碑\n下一步安排"}
+  - {key: meeting, label: 时间与参会人, type: text, example: "2027-01-06 14:00，客户会议室；双方项目负责人、对接人、我方项目组"}
+  - {key: next_steps, label: 会后行动, type: table, columns: [事项, 负责人, 时间], default: "提交资料清单｜我方项目经理｜会后 1 个工作日\n确认访谈排期｜客户项目对接人｜会后 3 个工作日", example: "提交资料清单｜我方项目经理｜会后 1 个工作日"}
   template: |
     {meeting}
 
     {agenda}
+
+    **会后行动**
+
+    {next_steps}

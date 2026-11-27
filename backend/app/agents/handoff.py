@@ -84,16 +84,16 @@ def draft(source_name: str, brief: str) -> str:
 
 def create(db: Session, user, project, source: Agent, args: dict) -> dict:
     """工具 agent.handoff 的实现：校验来源对话和目标，新建对话，返回新对话编号和草稿。"""
-    from . import runtime
+    from . import roster, runtime
 
     try:
         cid = int(args.get("from_conversation"))
     except (TypeError, ValueError) as e:
         raise HandoffError("from_conversation 必须是对话编号") from e
     src = db.get(Conversation, cid)
-    if src is None or src.project_id != project.id or src.user_id != user.id or src.agent_code != source.code:
+    if src is None or src.project_id != project.id or src.user_id != user.id or roster.resolve(db, src.agent_code) != source.code:
         raise HandoffError("来源对话不存在", 404)
-    target = str(args.get("target", ""))
+    target = roster.resolve(db, str(args.get("target", "")))    # C6-P：旧代号已停用时转到新代号
     if target == source.code:
         raise HandoffError("不能转交给自己")
     agent = db.get(Agent, target)

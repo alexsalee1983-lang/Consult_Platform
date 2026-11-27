@@ -50,13 +50,14 @@ from ..models import (
     QualityReview,
     ReviewIssue,
     ReviewWaiver,
+    RevisionFeature,
     SectionVersion,
     SignOff,
     User,
 )
 from ..kb import feedback as kb_feedback
 from ..services import guard, jobs, storage
-from . import findings, judgment, my_tasks, retention
+from . import findings, judgment, my_tasks, retention, survey
 
 JOB_KIND = "project.delete"
 PLATFORM = "platform"
@@ -279,12 +280,14 @@ def purge(db: Session, p: Project) -> dict:
     counts["runs"] = drop(AgentRun, AgentRun.project_id == pid)
     drop(ReviewIssue, ReviewIssue.project_id == pid)
     drop(ReviewWaiver, ReviewWaiver.project_id == pid)
+    drop(RevisionFeature, RevisionFeature.project_id == pid)   # 四期 F4② 特征（不含正文）
     counts["sign_offs"] = drop(SignOff, SignOff.project_id == pid)
     counts["quality_reviews"] = drop(QualityReview, QualityReview.project_id == pid)
     counts["confirmations"] = drop(Confirmation, Confirmation.project_id == pid)
     judgment.delete_for_project(db, pid)
     kb_feedback.delete_for_project(db, pid)          # 知识使用反馈（三期 B29）
     my_tasks.delete_for_project(db, pid)
+    counts["survey_answers"] = survey.delete_for_project(db, pid)   # 四期 E2① 调研回传与调研包
     dels = select(Deliverable.id).where(Deliverable.project_id == pid)
     secs = select(DeliverableSection.id).where(DeliverableSection.deliverable_id.in_(dels))
     counts["signed_deliverables"] = db.scalar(select(func.count()).select_from(Deliverable)

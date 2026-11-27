@@ -1,0 +1,220 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><title>知识中心改版示意 v3</title>
+<style>
+:root{--obs:#0a0d12;--s1:#10151c;--s2:#161d27;--s3:#1d2633;--ln:#232d3b;--ln2:#2e3a4b;--tx:#e6ebf2;--tx2:#a3aebe;--tx3:#6b7789;--amber:#f5a524;--cyan:#22d3ee;--ok:#3dd68c;--vio:#b49cff;--crim:#f0454f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--obs);color:var(--tx);font:13px/1.55 "Microsoft YaHei",sans-serif;display:flex;min-width:1440px}
+a{color:inherit;text-decoration:none;cursor:pointer}
+.side{width:176px;background:var(--s1);border-right:1px solid var(--ln);padding:16px 12px;color:var(--tx3);min-height:100vh;flex-shrink:0;position:sticky;top:0;align-self:flex-start}
+.logo{color:var(--tx);font-weight:700;font-size:15px;margin-bottom:14px}
+.side .it{display:flex;justify-content:space-between;padding:6px 8px;border-radius:6px}.side .it:hover{color:var(--tx)}.side .on{color:var(--tx);background:var(--s3)}.side .grp{font-size:11px;margin:12px 0 4px 8px}
+.side .dim{opacity:.45}
+.tag{font-size:11px;background:rgba(240,69,79,.18);color:var(--crim);border-radius:8px;padding:0 6px}
+.main{flex:1;padding:14px 22px 80px;min-width:0}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.crumb{color:var(--tx3);font-size:12px}
+.role{margin-left:auto;display:flex;gap:2px;background:var(--s1);border:1px solid var(--ln);border-radius:8px;padding:2px}
+.role a{padding:4px 12px;border-radius:6px;color:var(--tx3)}.role a.on{background:var(--s3);color:var(--cyan);font-weight:700}
+h1{font-size:21px;margin:0 0 4px}.sub{color:var(--tx2);margin-bottom:12px}
+.chip{font-size:12px;border-radius:10px;padding:1px 9px;border:1px solid var(--ln2);color:var(--tx2);white-space:nowrap;display:inline-block}
+.c-ok{border-color:rgba(61,214,140,.5);color:var(--ok)}.c-am{border-color:rgba(245,165,36,.6);color:var(--amber)}.c-cy{border-color:var(--cyan);color:var(--cyan)}.c-cr{border-color:rgba(240,69,79,.6);color:var(--crim)}.c-vi{border-color:var(--vio);color:var(--vio)}
+.btn{background:var(--cyan);color:var(--obs);border-radius:7px;padding:5px 14px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block}
+.btn2{border:1px solid var(--ln2);border-radius:7px;padding:4px 12px;color:var(--tx2);cursor:pointer;white-space:nowrap;display:inline-block}
+.btn2:hover{border-color:var(--cyan);color:var(--cyan)}.sm{font-size:12px;padding:2px 9px}
+.card{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.card h3{margin:0 0 8px;font-size:14.5px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.gl{display:grid;grid-template-columns:1fr 340px;gap:14px;align-items:start}
+.muted{color:var(--tx3)}.t2{color:var(--tx2)}.ok{color:var(--ok)}.am{color:var(--amber)}.cr{color:var(--crim)}.cy{color:var(--cyan)}.vi{color:var(--vio)}
+.kpi{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:10px 14px}.kpi b{font-size:24px;display:block}.kpi span{color:var(--tx3);font-size:12px}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--ln);margin:0 0 14px}
+.tabs a{padding:8px 18px;color:var(--tx3);font-size:14px;border-bottom:2px solid transparent}.tabs a.on{color:var(--cyan);border-bottom-color:var(--cyan);font-weight:700}
+table{width:100%;border-collapse:collapse}th{color:var(--tx3);font-weight:400;text-align:left;font-size:12px;padding:5px 6px;border-bottom:1px solid var(--ln)}td{padding:7px 6px;border-bottom:1px solid var(--ln);vertical-align:top}
+tr.hov:hover td{background:var(--s2);cursor:pointer}
+.view{display:none}.view.on{display:block}
+.search{display:flex;gap:8px;margin-bottom:10px}.search input{flex:1;background:var(--s1);border:1px solid var(--ln2);border-radius:8px;padding:9px 12px;color:var(--tx);font:inherit;font-size:14px}.search input:focus{outline:none;border-color:var(--cyan)}
+.res{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:11px 14px;margin-bottom:8px;cursor:pointer}.res:hover{border-color:var(--cyan)}
+.res .tt{font-weight:700;font-size:14.5px}.res .ds{color:var(--tx2);margin:3px 0 5px}
+.ib{background:var(--s1);border:1px solid var(--ln);border-left:3px solid var(--amber);border-radius:10px;padding:11px 14px;margin-bottom:10px}
+.ib.k-conflict{border-left-color:var(--crim)}.ib.k-reg{border-left-color:var(--vio)}.ib.k-gap{border-left-color:var(--cyan)}.ib.k-due{border-left-color:var(--tx3)}.ib.k-deid{border-left-color:var(--ok)}
+.ib .hd{display:flex;gap:8px;align-items:center}.ib .hd b{font-size:14.5px}.ib .why{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.ib .why div{background:var(--s2);border-radius:7px;padding:7px 10px}.ib .why i{font-style:normal;color:var(--tx3);font-size:12px;display:block}
+.ib .act{display:flex;gap:8px;align-items:center}.ib.done{opacity:.4}
+.bar{height:8px;background:var(--s3);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--cyan)}
+.flow{display:flex;align-items:stretch;gap:0;margin-bottom:12px}
+.st{flex:1;background:var(--s2);border:1.5px solid var(--ln2);border-radius:8px;padding:8px 6px;text-align:center;cursor:pointer}.st:hover{border-color:var(--cyan)}.st.h{border-color:var(--ok)}
+.st b{display:block;font-size:20px}.st .d{color:var(--tx3);font-size:11.5px}.st .w{font-size:11.5px;color:var(--amber)}
+.ar{color:var(--tx3);font-size:18px;padding:0 3px;align-self:center}
+.mx td{text-align:center;padding:5px}.mx td:first-child{text-align:left}
+.cell{display:inline-block;width:46px;border-radius:5px;padding:2px 0;font-size:12px;cursor:pointer}
+.L3{background:rgba(61,214,140,.22);color:var(--ok)}.L2{background:rgba(34,211,238,.18);color:var(--cyan)}.L1{background:rgba(245,165,36,.2);color:var(--amber)}.L0{background:rgba(240,69,79,.2);color:var(--crim)}
+.chain{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.chain span{background:var(--s2);border:1px solid var(--ln2);border-radius:7px;padding:4px 9px}
+.body p{margin:0 0 8px;line-height:1.75}.body sup{color:var(--cyan)}
+.tl{border-left:2px solid var(--ln2);padding-left:12px;margin-left:4px}.tl div{margin-bottom:8px;position:relative}.tl div:before{content:"";position:absolute;left:-17px;top:6px;width:8px;height:8px;border-radius:4px;background:var(--ln2)}.tl div.k:before{background:var(--ok)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid var(--cyan);color:var(--tx);padding:9px 18px;border-radius:9px;display:none;z-index:50;max-width:700px}
+.note{background:rgba(180,156,255,.08);border:1px dashed var(--vio);border-radius:8px;padding:8px 12px;color:var(--tx2);margin-bottom:12px;font-size:12.5px}
+.filt{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.filt a{border:1px solid var(--ln2);border-radius:14px;padding:2px 11px;color:var(--tx2);font-size:12.5px}.filt a.on{border-color:var(--cyan);color:var(--cyan)}
+.lp ol{margin:0;padding-left:18px;line-height:1.8}.lp .p{color:var(--ok)}
+</style></head><body>
+<style>
+.mx2 td{text-align:center;padding:6px}.mx2 td:first-child{text-align:left}
+.cl{display:inline-block;min-width:108px;border-radius:6px;padding:3px 6px;font-size:12px;cursor:pointer;border:1px solid transparent}
+.cl.tg{border-color:var(--cyan)}.cl.np{background:var(--s2);color:var(--tx3);cursor:default}
+.g-ok{background:rgba(61,214,140,.14);color:var(--ok)}.g-am{background:rgba(245,165,36,.14);color:var(--amber)}.g-cr{background:rgba(240,69,79,.14);color:var(--crim)}
+.auto{color:var(--tx3);font-size:12px}
+.ib.k-gold{border-left-color:var(--ok)}.ib.k-leak{border-left-color:var(--crim);border-color:var(--crim)}
+</style>
+<div class="side">
+<div class="logo">安全咨询平台</div>
+<div class="grp r-c-g">项目里（驾驶舱）</div>
+<a class="it r-c" data-v="retro">结项复盘</a>
+<div class="grp">知识中心</div>
+<a class="it r-e r-a" data-v="inbox">待我处理 <span class="tag" id="sideInbox">4</span></a>
+<a class="it r-c r-e r-a" data-v="health">知识健康</a>
+<a class="it r-c r-e r-a" data-v="drop">投料箱</a>
+<a class="it r-a" data-v="plan">规划与规则</a>
+<div class="grp r-a-g">系统（负责人，排查用）</div>
+<a class="it r-a" data-v="sys">运行与审计</a>
+<div class="grp">说明</div>
+<a class="it" data-v="why">v3 改了什么</a>
+<a class="it" data-v="map">人工触点对照</a>
+</div>
+<div class="main">
+<div class="top"><div class="crumb" id="crumb"></div>
+<div class="role" id="role"><a data-r="c">顾问</a><a data-r="e">知识专家</a><a data-r="a">负责人</a></div></div>
+<div class="note" id="roleNote"></div>
+
+<div class="view" id="v-inbox">
+<h1>待我处理</h1><div class="sub">只有必须由你判断或担责的事。处理完就没有了；没有的时候这一页是空的。</div>
+<div class="filt"><span class="muted" id="budgetT" style="padding-top:2px"></span><a class="btn2 sm" style="margin-left:auto" onclick="batch()">同类批量同意</a></div>
+<div id="inbox"></div>
+<div class="auto" id="empty" style="display:none;padding:30px 0;text-align:center">今天没有需要你处理的事。</div>
+</div>
+
+<div class="view" id="v-health">
+<h1>知识健康</h1><div class="sub">知识够不够用、新不新。缺口识别、获取、起草、审核、到期复审都在后台自动进行，这里只看结果。</div>
+<div class="filt" id="regf"><span class="muted" style="padding-top:2px">地区：</span><a class="on" data-g="cn">中国大陆</a><a data-g="sea">东南亚</a><a data-g="af">非洲 7 国</a><a data-g="hk">港澳</a></div>
+<div class="g4" style="margin-bottom:12px">
+<div class="kpi"><b>1,284</b><span>可用条目</span></div>
+<div class="kpi"><b class="ok">96%</b><span>在有效期内（保鲜）</span></div>
+<div class="kpi"><b class="am">74%</b><span>SOC × 银行 关键章节就绪度（目标 ≥ 70%）</span></div>
+<div class="kpi"><b>86%</b><span>交付件引用命中率</span></div></div>
+<div class="gl"><div class="card"><h3>覆盖矩阵 <span class="muted" id="regT" style="font-size:12px">· 中国大陆</span></h3><table class="mx2" id="mx"></table>
+<div class="muted" style="margin-top:6px">格内：就绪度 · 趋势；青框 = 当前目标格；灰色 = 未规划（不算缺口）。新建产品或地区后，对应格子自动出现并自动补齐。</div></div>
+<div class="card"><h3 id="cellT">点左侧格子</h3><div id="cellBody" class="t2">看这一格哪些内容还不够，以及是否需要人。</div></div></div>
+</div>
+
+<div class="view" id="v-drop">
+<h1>投料箱</h1><div class="sub">平时想到的经验、手上的公开资料，交到这里就行，后面不用管。项目里的经验在结项复盘时交。</div>
+<div class="g2"><div class="card"><h3>交一条经验</h3><div class="t2" style="margin-bottom:8px">一句话：什么情形下、怎么做有效。提交前自动去掉客户名、IP、人名，给你看一眼再交。</div>
+<div style="background:var(--s2);border:1px solid var(--ln2);border-radius:8px;padding:10px;min-height:80px;color:var(--tx2)">城商行做差距分析时，远程运维堡垒机常只做了口令认证，整改建议里把“堡垒机接入动态口令”单列为高优先级，客户接受度高、改造成本低。</div>
+<div style="margin-top:8px;color:var(--tx2)"><label><input type="checkbox"> 这是公司做法</label>　<label><input type="checkbox"> 推荐为黄金样例（需写一句为什么好）</label><div class="muted">都不勾：类型由机器判断。</div></div>
+<div style="margin-top:8px;display:flex;gap:8px"><a class="btn" onclick="toast('已去标识（命中 0 项），已提交')">预览并提交</a><a class="btn2" onclick="toast('批量上传：拖入文件夹或压缩包；子文件夹名为“黄金样例”“公司做法”的按提名处理')">批量上传（文件夹 / 压缩包）</a></div></div>
+<div class="card"><h3>我交的 · 我报的</h3><table><tr><th>内容</th><th>状态</th></tr>
+<tr><td>堡垒机动态口令整改经验</td><td><span class="auto">处理中</span></td></tr>
+<tr><td>电力监控系统安全防护评估要点</td><td><span class="chip c-ok">已入库 · 被引用 3 次</span></td></tr>
+<tr><td>某次演练的日志样本</td><td><span class="chip c-cr">未收：含业务数据样本</span></td></tr>
+<tr><td>批次 · SOC 方法资料 236 份</td><td>入库 198 · <span class="am">退回 12（看原因）</span> · <span class="auto">处理中 26</span></td></tr>
+<tr><td>我报“有误”：日志留存 6 个月</td><td><span class="chip c-ok">已修正，回执 11-26</span></td></tr></table>
+<div class="muted" style="margin-top:6px">中间过程不展示；只告诉你结果，被退回时说明原因。</div></div></div>
+</div>
+
+<div class="view" id="v-plan">
+<h1>规划与规则</h1><div class="sub">负责人只定“要什么”和“边界”。定了之后，缺口识别、获取、保鲜都自动跑。</div>
+<div class="g2">
+<div class="card"><h3>服务产品与地区（规划）</h3><table>
+<tr><th>产品 / 地区</th><th>状态</th></tr>
+<tr><td>SOC 安全运营咨询 · 银行 / 电力</td><td><span class="chip c-ok">在用</span></td></tr>
+<tr><td>IRE 应急响应 · 银行 / 电力</td><td><span class="chip c-ok">在用</span></td></tr>
+<tr><td>数据安全治理 · 泰国</td><td><span class="chip c-am">新建 11-27 · 自动补齐中 38%</span></td></tr></table>
+<div style="margin-top:8px"><a class="btn" onclick="toast('新建后：自动识别缺口 → 自动获取 → 在知识健康里看进度')">新建产品 / 地区</a></div></div>
+<div class="card"><h3>只有这几件要你定</h3><div class="t2">① 新建或停用产品、行业、地区<br>② 新增公开资料来源（白名单）<br>③ 自动发布门槛的调整（机器只提建议）<br><span class="muted">其余全部自动；需要你时出现在“待我处理”。</span></div></div></div>
+</div>
+
+<div class="view" id="v-retro">
+<h1>结项复盘 · BANK-A（驾驶舱内）</h1><div class="sub">交付期间系统静默记下的候选，结项时勾一遍就行。确认去标识后成批交给知识中心。</div>
+<div class="card"><table><tr><th>候选</th><th>类型</th><th>系统依据</th><th>交不交</th></tr>
+<tr><td>堡垒机接入动态口令单列高优先级</td><td>公司做法</td><td>本项目 3 次改稿都往这个方向改</td><td><label><input type="checkbox" checked> 交</label></td></tr>
+<tr><td>D4 第 3 章 差距分析</td><td>黄金样例候选</td><td>审阅一次通过、客户无重大意见</td><td><label><input type="checkbox" checked> 交</label> <input placeholder="一句话：为什么好" style="background:var(--s2);border:1px solid var(--ln2);color:var(--tx);border-radius:5px;padding:2px 6px"></td></tr>
+<tr><td>日志源接入数量 42 类</td><td>经验数值</td><td>补“经验数值”缺口（IRE × 电力 需人）</td><td><label><input type="checkbox" checked> 交</label></td></tr></table>
+<div class="muted" style="margin:8px 0">去标识预览：客户名 → 某城商行；人名 3 处 → 占位符；规模 → 区间；地区 → 大区。</div>
+<a class="btn" onclick="toast('已确认去标识并交出 3 条；结果回到投料箱“我交的”')">确认去标识并交出</a></div></div>
+
+<div class="view" id="v-sys">
+<h1>运行与审计</h1><div class="sub">只用于排查和对账，平时不用看。需要你时会出现在“待我处理”。</div>
+<div class="card t2">现有页面归到这里：审计（按 Agent 筛选）· 指标看板 · 入库批次 · 来源登记 · 对比评测 · 质量事件 · 模型与运行配置。</div></div>
+
+<div class="view" id="v-map">
+<h1>人工触点对照（逻辑图 ↔ 界面）</h1><div class="sub">逻辑图里每一处要人的地方，都必须在界面上有落点；没有落点的就是断环。</div>
+<div class="card"><table>
+<tr><th>谁</th><th>要做的事</th><th>来自哪个闭环</th><th>界面落点</th></tr>
+<tr><td>负责人</td><td>新建 / 停用产品、行业、地区</td><td>触发 · 规划变更</td><td>规划与规则</td></tr>
+<tr><td>负责人</td><td>新增来源；来源失效且无替代</td><td>白名单外来源 · 来源失效</td><td>待我处理</td></tr>
+<tr><td>负责人</td><td>门槛调整建议</td><td>闭环 2 质量</td><td>待我处理（建议卡）→ 规划与规则生效</td></tr>
+<tr><td>负责人</td><td>卡住项、超时升级</td><td>闭环 6、7</td><td>待我处理</td></tr>
+<tr><td>负责人</td><td>泄漏事件确认</td><td>闭环 9</td><td>待我处理（最高优先）</td></tr>
+<tr><td>负责人</td><td>Agent 换模型 / 改提示词上线；漂移回退知悉</td><td>闭环 11</td><td>待我处理（附回归评测对比）</td></tr>
+<tr><td>负责人</td><td>客户删除确认</td><td>闭环 8</td><td>现有删除流程页；知识侧追溯自动跟随</td></tr>
+<tr><td>专家</td><td>公司做法认可、黄金样例认可</td><td>闭环 4</td><td>待我处理（同类可批量）</td></tr>
+<tr><td>专家</td><td>冲突裁决（含依据变更引起的做法冲突、审核两次不一致）</td><td>主线 6 · 闭环 10</td><td>待我处理</td></tr>
+<tr><td>专家</td><td>公司经验到期复认（自动续期待你定）</td><td>闭环 3</td><td>待我处理</td></tr>
+<tr><td>专家</td><td>每周 5 张抽检卡</td><td>闭环 2</td><td>待我处理</td></tr>
+<tr><td>项目经理</td><td>复盘勾选、确认去标识、提名黄金样例</td><td>闭环 4</td><td>驾驶舱 · 结项复盘</td></tr>
+<tr><td>顾问</td><td>投料（零星 / 批量，两个勾选）</td><td>触发 · 人交来的</td><td>投料箱</td></tr>
+<tr><td>顾问</td><td>报“有误”，收回执；看批次结果</td><td>闭环 2、5</td><td>引用角标“有误”；投料箱“我交的 · 我报的”</td></tr>
+<tr><td>顾问</td><td>看到“引用已变”提示</td><td>闭环 3</td><td>交付件写稿页（未签署稿）</td></tr>
+<tr><td>所有人</td><td>看覆盖与保鲜；查条目来历</td><td>—</td><td>知识健康；条目详情</td></tr>
+</table><div class="muted" style="margin-top:6px">提醒只在平台内（侧栏角标、首页待办），不接外部通知服务。</div></div></div>
+
+<div class="view" id="v-why">
+<h1>v3 改了什么</h1>
+<div class="card t2">
+<b>原则</b>：页面只放人要做的事；Agent 和程序在后台做的事不显示。<br><br>
+<b>灰显还是隐藏</b>：定为<b>隐藏</b>。只在一处用灰字：自己交的东西显示“处理中”，让人知道交上去了，但不展示走到哪一步；健康格子里“自动补齐中”也是灰字，表示不用管。<br><br>
+<b>删掉的页面</b>：总览全景、知识运转（流水线、卡住项、来源巡检、抽检信任度）。这些是机器的工作台，人不需要看；卡住超过时限的自动变成“待我处理”的一张卡。<br><br>
+<b>外部经验</b>：长期自动获取、自动保鲜（到期复审、法规变更），结果只体现在知识健康的“在有效期内”和各格就绪度上。<br><br>
+<b>新建产品 / 到期</b>：负责人新建产品或地区 → 自动识别缺口 → 自动获取 → 健康看板出现新格并显示补齐进度。<br><br>
+<b>人只在 4 处</b>：专家 · 待我处理；顾问 · 投料箱与结项复盘（在驾驶舱）；负责人 · 规划与规则；所有人 · 知识健康只读。<br><br>
+<b>待我处理按人分</b>：专家 6 类（公司做法认可、黄金样例认可、冲突裁决、公司经验到期复认、抽检卡；同类可批量，有每日时间预算）；负责人 5 类（泄漏事件置顶、新增 / 失效来源、Agent 变更上线、卡住与超时升级、门槛建议）。“审核例外”并入冲突裁决；“去标识确认”挪到结项复盘；“新领域缺口”取消。完整对照见“人工触点对照”。</div></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2600)}
+const NAMES={retro:'结项复盘',sys:'运行与审计',map:'人工触点对照',inbox:'待我处理',health:'知识健康',drop:'投料箱',plan:'规划与规则',why:'v3 改了什么'};
+function show(v){$$('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));$$('.side .it').forEach(x=>x.classList.toggle('on',x.dataset.v===v));$('#crumb').textContent='知识中心 / '+NAMES[v]}
+$$('.side .it').forEach(a=>a.onclick=()=>show(a.dataset.v));
+let role='e';
+function batch(){let n=0;IB.forEach(x=>{if(!x.done&&x.r===role&&(x.k==='spot'||x.k==='due')){x.done=1;n++}});toast(n?'已批量同意 '+n+' 张同类卡':'没有可批量的卡');renderInbox()}
+const RN={c:'顾问：看知识健康（只读）、用投料箱。项目经验在驾驶舱的结项复盘里交。',e:'知识专家：主要待在“待我处理”。',a:'负责人：定规划、来源和门槛；待我处理里只看归你的卡。'};
+const IB=[
+{k:'prac',r:'e',t:'公司做法认可 · 城商行堡垒机整改建议',a:'来自 BANK-A 结项复盘，已去标识，与现有 2 条做法不冲突',q:'这算不算公司推荐做法？',b:['认可','改后认可','不认可']},
+{k:'conflict',r:'e',t:'冲突裁决 · 日志留存期限',a:'两份依据写法不同：一份 6 个月，一份 180 天且限定范围',q:'以哪个为准，或两条都留并注明适用范围？',b:['选 A','选 B','都留并注明']},
+{k:'due',r:'e',t:'公司经验到期复认 · 电力行业演练脚本模板',a:'满 12 个月；近半年被引用 9 次，无负面反馈',q:'是否继续有效？',b:['继续有效','下线']},
+{k:'gold',r:'e',t:'黄金样例认可 · SOC × 银行 D4 第 3 章',a:'BANK-A 项目经理提名：一次通过、客户无重大意见；同章已有 1 份',q:'是否作为范本？更好的话替换旧的',b:['认可并保留旧的','认可并替换','不认可']},
+{k:'spot',r:'e',t:'抽检 · 控制项解读：双因素认证（本周第 2/5 张）',a:'已自动发布 14 天，被引用 4 次',q:'内容对不对？',b:['对','有误']},
+{k:'leak',r:'a',t:'泄漏事件 · 1 条已发布条目疑似残留单位名',a:'已自动下线；同批 37 条复查中；检测规则已补并过回归',q:'知悉并关闭事件？',b:['知悉']},
+{k:'agent',r:'a',t:'Agent 变更上线 · 知识审核换新模型',a:'回归评测 91 → 93 分，抽检题无退步',q:'是否切换？',b:['切换','暂不']},
+{k:'stuck',r:'a',t:'卡住 · 印尼来源 3 次下载失败（合并 4 项）',a:'已标“暂无可用来源”，健康格已注明；未找到替代来源',q:'提供替代来源，或接受暂缺？',b:['接受暂缺','我来给来源']},
+{k:'src',r:'a',t:'新增来源确认 · 泰国个人数据保护委员会官网',a:'新建“数据安全治理 · 泰国”后自动识别的缺口需要它；公开法规站点',q:'是否加入公开资料白名单？',b:['加入','不加入']}];
+function renderInbox(){const list=IB.filter(x=>!x.done&&x.r===role).sort((a,b)=>(b.k==='leak')-(a.k==='leak'));
+$('#inbox').innerHTML=list.map(x=>`<div class="ib ${x.k==='conflict'?'k-conflict':x.k==='due'?'k-due':x.k==='src'||x.k==='agent'?'k-reg':x.k==='gold'?'k-gold':x.k==='leak'?'k-leak':''}"><div class="hd"><b>${x.t}</b></div><div class="why"><div><i>已知情况</i>${x.a}</div><div><i>要你定</i>${x.q}</div></div><div class="act">${x.b.map((b,i)=>`<a class="${i?'btn2':'btn'} sm" onclick="done(${IB.indexOf(x)},'${b}')">${b}</a>`).join('')}</div></div>`).join('');
+$('#budgetT').textContent=role==='e'?'今日预计 '+list.length*2+' 分钟（预算 25 分钟）':'';$('#empty').style.display=list.length?'none':'block';$('#sideInbox').textContent=list.length||'';}
+function done(i,b){IB[i].done=1;toast('已记录：'+b);renderInbox()}
+const P=['SOC','IRE','DSG','RISK','GRC'],PN={SOC:'安全运营',IRE:'应急响应',DSG:'数据安全治理',RISK:'风险评估',GRC:'合规差距分析'},IND=['银行','电力','通用'];
+const N=[null];
+const MX={cn:[[[74,'↑',1],[68,'↑',1],[81,'→']],[[71,'↑',1],[63,'↑',1,1],[77,'→']],[[55,'↑'],N,[62,'↑']],[N,N,[70,'→']],[[66,'→'],[58,'↑'],[83,'→']]],
+sea:[[N,N,N],[N,N,N],[N,N,[38,'↑']],[N,N,N],[N,N,[52,'↑']]],
+af:[[N,N,N],[N,N,N],[N,N,N],[N,N,N],[N,N,[44,'↑']]],
+hk:[[N,N,N],[N,N,N],[N,N,[49,'↑']],[N,N,N],[N,N,[61,'→']]]};
+let reg='cn';
+function cls(v){return v>=70?'g-ok':v>=55?'g-am':'g-cr'}
+function renderMx(){const m=MX[reg];$('#mx').innerHTML='<tr><th>产品</th>'+IND.map(x=>`<th>${x}</th>`).join('')+'</tr>'+P.map((p,i)=>`<tr><td><b>${p}</b> <span class="muted">${PN[p]}</span></td>`+m[i].map((c,j)=>c[0]==null?'<td><span class="cl np">未规划</span></td>':`<td><span class="cl ${cls(c[0])} ${c[2]?'tg':''}" onclick="cell(${i},${j})">${c[0]}% ${c[1]}${c[3]?' · 需人':''}</span></td>`).join('')+'</tr>').join('')}
+function cell(i,j){const c=MX[reg][i][j];$('#cellT').textContent=P[i]+' × '+IND[j]+' · 就绪度 '+c[0]+'%';
+const ok=c[0]>=70,rows=[['依据','够'],['方法与模板','够'],['常见坑',ok?'够':'自动补齐中'],['经验数值',c[3]?'缺：只能靠结项复盘':(ok?'够':'自动补齐中')]];
+$('#cellBody').innerHTML='<table><tr><th>内容</th><th>情况</th></tr>'+rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1].startsWith('缺')?'<span class="am">'+r[1]+'</span>':r[1].startsWith('自动')?'<span class="auto">'+r[1]+'</span>':r[1]}</td></tr>`).join('')+'</table><div class="muted" style="margin-top:6px">'+(c[3]?'这一格需要人：项目经理在结项复盘时补经验数值。':'这一格不需要人。')+'</div>'}
+$$('#regf a').forEach(a=>a.onclick=()=>{reg=a.dataset.g;$$('#regf a').forEach(x=>x.classList.toggle('on',x===a));$('#regT').textContent='· '+a.textContent;renderMx();$('#cellT').textContent='点左侧格子';$('#cellBody').textContent='看这一格哪些内容还不够，以及是否需要人。'});
+function setRole(r){role=r;$$('#role a').forEach(a=>a.classList.toggle('on',a.dataset.r===r));$('#roleNote').textContent=RN[r];
+$$('.side .it').forEach(a=>{if(a.dataset.v==='why'||a.dataset.v==='map')return;a.style.display=a.classList.contains('r-'+r)?'':'none'});$$('.r-a-g').forEach(g=>g.style.display=r==='a'?'':'none');$$('.r-c-g').forEach(g=>g.style.display=r==='c'?'':'none');renderInbox();show(r==='c'?'drop':'inbox')}
+$$('#role a').forEach(a=>a.onclick=()=>setRole(a.dataset.r));
+renderMx();setRole('e');
+</script></body></html>

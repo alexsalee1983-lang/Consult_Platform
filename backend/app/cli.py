@@ -378,6 +378,37 @@ def kb_candidate_promote(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_agent_review_rerun(args: argparse.Namespace) -> int:
+    """积压重跑（四期试用缺陷，负责人 2026-11-25 同意）：待审版本里，规则预判上线前知识审核 Agent 判
+    “不重复、不冲突”没过的，各排一次 kb.agent_review（rerun）。--dry-run 只按规则预判类别打印计数，不排队。
+    自动发布照常受抽检和 KB_AGENT_AUTO_PUBLISH / 抽检不通过率暂停约束。"""
+    from .kb import agent_review, conflict_rules
+    from .models import KbVersion
+    from .services import jobs as _jobs
+
+    with SessionLocal() as db:
+        due = [v for v in db.scalars(select(KbVersion).where(KbVersion.status == "in_review").order_by(KbVersion.id))
+               if (agent_review.eligible(v) or agent_review.advisory(v)) and conflict_rules.rerun_due(v)]
+        if args.limit:
+            due = due[:args.limit]
+        if args.dry_run:
+            verdicts: dict[str, int] = {}
+            kinds: dict[str, int] = {}
+            for v in due:
+                pre = conflict_rules.prejudge(db, v)
+                verdicts[pre.verdict] = verdicts.get(pre.verdict, 0) + 1
+                for r in pre.relations:
+                    kinds[r.kind] = kinds.get(r.kind, 0) + 1
+            print(f"待重跑 {len(due)} 条（只统计，未排队）")
+            print("按结论：" + ("、".join(f"{k} {n}" for k, n in sorted(verdicts.items())) or "无"))
+            print("按相近条目关系：" + ("、".join(f"{k} {n}" for k, n in sorted(kinds.items())) or "无"))
+            return 0
+        queued = [_jobs.enqueue(db, "kb.agent_review", {"version_id": v.id, "rerun": True}, created_by="cli",
+                                max_attempts=3) for v in due]
+    print(f"已排队重跑 {len(queued)} 条")
+    return 0
+
+
 def deletion_scan(args: argparse.Namespace) -> int:
     """立即执行一次到期扫描（worker 每小时自动执行），为已到期的项目发起删除申请。"""
     from .project import deletion
@@ -440,6 +471,23 @@ def storage_provision(args: argparse.Namespace) -> int:
     return 0
 
 
+def indicators_cmd(args: argparse.Namespace) -> int:
+    """指标看板（三期 F2①）；--v4 只出 v4.0 验收口径一页汇总（四期 F2③）。只有数字，不出项目代号和正文。"""
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    from .services import indicators, indicators_v4
+
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=args.days)
+    with SessionLocal() as db:
+        if args.v4:
+            print(indicators_v4.render(indicators_v4.summary(db, start, end)))
+        else:
+            print(json.dumps(indicators.compute(db, start, end), ensure_ascii=False, indent=2))
+    return 0
+
+
 def backup_record(args: argparse.Namespace) -> int:
     """备份、恢复脚本（scripts/backup.sh、restore.sh）完成后记一条审计：只有时间戳、链头编号和字节数。"""
     if not re.fullmatch(r"\d{8}T\d{6}Z", args.stamp):
@@ -463,6 +511,20 @@ def verify_audit(args: argparse.Namespace) -> int:
     if not r.ok:
         print(f"问题：{r.error}" + (f"（id={r.error_id}）" if r.error_id else ""))
     return 0 if r.ok else 2
+
+
+def quality_fp_stats(args: argparse.Namespace) -> int:  # noqa: ARG001
+    """四期 A18②：各类阻断的驳回率（误报率）和是否已自动降为提醒。"""
+    from .project import contradictions
+
+    with SessionLocal() as db:
+        rows = contradictions.false_positive_stats(db)
+    print(f"阻断误报率（样本不少于 {contradictions.CALIBRATE_MIN} 条且驳回率不低于 "
+          f"{contradictions.CALIBRATE_RATE:.0%} 的类别自动降为提醒；机密与客户信息、资质用语不降）：")
+    for r in rows:
+        mark = "已降为提醒" if r["calibrated"] else ""
+        print(f"{r['by']:<6} {r['category']:<10} 阻断 {r['total']:>5}  驳回 {r['waived']:>5}  驳回率 {r['rate']:.1%}  {mark}")
+    return 0
 
 
 def usage_report(args: argparse.Namespace) -> int:
@@ -709,14 +771,19 @@ def kb_import(args: argparse.Namespace) -> int:
         user = _knowledge_user(db, args.as_user)
         if user is None:
             return 1
-        results = importer.import_dir(db, user, path, submit=args.submit)
+        try:
+            results = importer.import_dir(db, user, path, submit=args.submit, ai_baseline=args.ai_baseline)
+        except importer.rv.ReviewError as e:
+            print(str(e), file=sys.stderr)
+            return 1
     label = {"created": "新建", "revised": "修订", "unchanged": "无变化", "skipped": "跳过", "error": "失败"}
     for r in results:
         where = f" {r.doc_id}" if r.doc_id else ""
         print(f"  {label.get(r.action, r.action)}  {r.file}{where}" + (f"  —— {r.message}" if r.message else ""))
     counts = {k: sum(1 for r in results if r.action == k) for k in label}
     batches.record_cli("import", args.as_user, {**counts, "total": len(results), "submit": bool(args.submit)}, args.dir)
-    print("合计：" + "，".join(f"{label[k]} {n}" for k, n in counts.items() if n) +
+    print(("AI 基线草稿（虚拟数据免去标识，一位非作者知识专家拍板）" if args.ai_baseline else "") +
+          "合计：" + "，".join(f"{label[k]} {n}" for k, n in counts.items() if n) +
           ("；已提交审核，仍需双人审核后发布" if args.submit else "；均为草稿，在审批队列提交审核"))
     return 2 if counts["error"] else 0
 
@@ -732,7 +799,7 @@ def kb_export(args: argparse.Namespace) -> int:
         if user is None:
             return 1
         try:
-            r = transfer.export(db, user, Path(args.out))
+            r = transfer.export(db, user, Path(args.out), include_company=args.include_company)
         except transfer.TransferError as e:
             print(str(e), file=sys.stderr)
             return 1
@@ -795,6 +862,109 @@ def kb_source_registry(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_source_seed(args: argparse.Namespace) -> int:
+    """来源批量登记（四期 B25）：按资料仓的已批准来源清单（CSV）登记为候选或试用，规则与审计同页面登记。
+
+    已登记的地址跳过；坏行报行号、不影响其他行。转正式仍须另一位知识管理员在页面批准，本命令不做。
+    """
+    import csv
+    from pathlib import Path
+
+    from .kb import review as rv
+    from .kb import source_registry as sr
+    from .models import KbSource
+
+    path = Path(args.csv)
+    if not path.is_file():
+        print("来源清单文件不存在", file=sys.stderr)
+        return 1
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.username == args.as_user))
+        if user is None or not user.is_active:
+            print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
+            return 1
+        if not rv.is_knowledge_user(db, user):
+            print("只有知识专家、知识管理员能登记来源", file=sys.stderr)
+            return 1
+        made = skipped = 0
+        bad: list[str] = []
+        with path.open(encoding="utf-8-sig", newline="") as f:
+            for n, row in enumerate(csv.DictReader(f), start=2):
+                url = (row.get("url") or "").strip()
+                if url and db.scalar(select(KbSource.id).where(KbSource.url == url)) is not None:
+                    skipped += 1
+                    continue
+                try:
+                    src = sr.create(db, user, name=row.get("name") or "", url=url, license=row.get("license") or "",
+                                    authority_kind=(row.get("authority_kind") or "").strip(),
+                                    publisher=row.get("publisher") or "", note=row.get("note") or "")
+                    if args.to == "trial":
+                        sr.transition(db, user, src.code, "trial", "批量登记（资料仓已批准来源清单）")
+                except sr.SourceError as e:
+                    db.rollback()
+                    bad.append(f"第 {n} 行：{e.detail}")
+                    continue
+                made += 1
+    print(f"来源批量登记：新登记 {made} 个（{sr.STATUS_LABELS[args.to]}），跳过 {skipped} 个已登记，坏行 {len(bad)} 个")
+    for line in bad:
+        print(line, file=sys.stderr)
+    return 3 if bad else 0
+
+
+def kb_acquire_sources(args: argparse.Namespace) -> int:
+    """知识源清单（三期 B25①）：来源确认队列的缺口经网关交 kb-builder 列清单，程序核对后写成 JSON 供来源确认。"""
+    import json
+    from pathlib import Path
+
+    from .kb import source_list
+    with SessionLocal() as db:
+        try:
+            rep = source_list.suggest(db, actor=args.as_user or "cli")
+        except source_list.SourceListError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+    Path(args.out).write_text(json.dumps(rep.to_json(), ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"知识源清单：{len(rep.rows)} 行，需登记来源 {len(rep.needs_registration)} 行，丢弃 {rep.problems or 0}"
+          + ("（演示模式，未接入模型）" if rep.demo else ""))
+    return 0
+
+
+def extraction_week(args: argparse.Namespace) -> int:
+    """经验萃取一轮（四期 F4③）：超时收尾 → 3 类信号 → 三道过滤 → 派题（每人每周 ≤ 3 题）；只打印计数。"""
+    from .project import extraction_trigger as et
+    with SessionLocal() as db:
+        r = et.run_week(db, actor="cli")
+        st = et.stats(db)
+    print("经验萃取：" + "，".join(f"{k}={v}" for k, v in r.items()) + f"；跳过率 {st['skip_rate']:.0%}")
+    return 0
+
+
+def survey_import(args: argparse.Namespace) -> int:
+    """调研题库导入（四期 E2①）：整批校验后按题号增改；只打印计数。"""
+    from pathlib import Path
+
+    from .project import survey
+    try:
+        with SessionLocal() as db:
+            added, updated = survey.import_bank(db, [q for f in args.files for q in survey.load_bank_file(Path(f))])
+    except survey.SurveyError as e:
+        print(f"题库未导入：{e.detail}")
+        return 1
+    print(f"调研题库：新增 {added}，更新 {updated}")
+    return 0
+
+
+def kb_acquire_now(args: argparse.Namespace) -> int:
+    """立即全量采集（四期，负责人 11-27）：新正式来源登记首采缺口并放大 cap 排计划；下发包仍由 kb-acquire-dispatch 出。"""
+    from datetime import date
+
+    from .kb import gap_pool
+    with SessionLocal() as db:
+        out = gap_pool.first_collect(db, date.today(), cap=args.cap)
+    print("立即全量：" + "，".join(f"{k}={v}" for k, v in out.items()))
+    return 0
+
+
 def kb_acquire_dispatch(args: argparse.Namespace) -> int:
     """采集下发包导出（三期 B25③）：本周“直接采集”的缺口，只含网址与采集规则，交采集机。"""
     import json
@@ -821,12 +991,28 @@ def kb_acquire_import(args: argparse.Namespace) -> int:
     if not batch.is_dir():
         print("回传批次目录不存在", file=sys.stderr)
         return 1
+    if (args.manifest or args.auto_manifest) and not args.as_user:
+        print("带 --manifest / --auto-manifest 入库时必须指定 --as", file=sys.stderr)
+        return 1
     with SessionLocal() as db:
         report, closed = gap_pool.import_return(db, batch)
     if not report.ok:
         print("回传批次核对未通过，整批不入库：" + "；".join(report.problems[:20]), file=sys.stderr)
         return 2
-    print(f"回传批次核对通过：{report.count} 个文件，关闭缺口 {closed} 个")
+    print(f"回传批次核对通过：{report.count} 个文件，关闭缺口 {closed} 个"
+          + (f"，{report.manual} 个取不到的转需人工下载" if report.manual else ""))
+    if args.auto_manifest:
+        import tempfile
+
+        with SessionLocal() as db:
+            text, unmatched = gap_pool.publish_manifest(db, batch)
+        if unmatched:
+            print(f"{len(unmatched)} 个文件找不到正式来源，未入库（先在来源登记表登记后重导）：" + "、".join(unmatched[:20]))
+        if len(text.splitlines()) <= 1:
+            return 0
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8") as fh:
+            fh.write(text)
+        args.manifest = fh.name
     if not args.manifest:
         return 0
     if not args.as_user:
@@ -834,6 +1020,20 @@ def kb_acquire_import(args: argparse.Namespace) -> int:
         return 1
     return kb_source_publish(argparse.Namespace(manifest=args.manifest, dir=str(batch), as_user=args.as_user,
                                                 report=args.report))
+
+
+def kb_gap_manual(args: argparse.Namespace) -> int:
+    """登记“需人工下载”缺口（四期 B25）：资料仓 backlog 里自动取不到的条目，进知识审批页“需人工下载”清单。"""
+    from .kb import acquisition, gap_pool
+
+    with SessionLocal() as db:
+        try:
+            g = gap_pool.mark_manual(db, args.key.strip(), args.reason, create=True, event_ref=args.ref, actor="cli")
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+    print(f"缺口 {g.id} 已转需人工下载（{acquisition.MANUAL_REASONS[args.reason]}）")
+    return 0
 
 
 def kb_source_publish(args: argparse.Namespace) -> int:
@@ -913,7 +1113,7 @@ def agent_eval_lint(args: argparse.Namespace) -> int:
 
     from .agents import evalgate
 
-    n, issues, extras = evalgate.run(Path(args.path))
+    n, issues, extras = evalgate.run(Path(args.path), [Path(d) for d in args.entries or []])
     for i in issues:
         print(f"  {i}")
     print(f"评测门：{n} 个文件，问题 {len(issues)} 处；扩展：{'、'.join(extras) or '无（A24 未接入）'}")
@@ -999,6 +1199,16 @@ def kb_assembly_eval(args: argparse.Namespace) -> int:
             print(f"用户 {args.as_user} 不存在或已停用", file=sys.stderr)
             return 1
         try:
+            if args.gate:
+                ok, line, base, report = ae.gate(db, user, ae.load(Path(args.evalset)))
+                print(ae.format_report(base))
+                print()
+                print(ae.format_report(report))
+                print(line)
+                if args.out:
+                    Path(args.out).write_text(json.dumps(report.to_json(), ensure_ascii=False, indent=2),
+                                              encoding="utf-8")
+                return 0 if ok else 3
             report = ae.run(db, user, ae.load(Path(args.evalset)), strategy=args.strategy)
             verdict = None
             if args.baseline:
@@ -1134,6 +1344,8 @@ def main(argv: list[str] | None = None) -> int:
     a = sub.add_parser("verify-audit", help="校验审计哈希链（发现问题时退出码为 2）")
     a.add_argument("--expect-head", default=None, help="之前记下的链头哈希，校验它仍在链上")
     a.set_defaults(func=verify_audit)
+    sub.add_parser("quality-fp-stats", help="各类阻断的驳回率（误报率）与自动校准状态（四期 A18②）"
+                   ).set_defaults(func=quality_fp_stats)
     us = sub.add_parser("usage-report", help="大模型用量汇总")
     us.add_argument("--days", type=int, default=30)
     us.add_argument("--by", default="username,project_code,model",
@@ -1149,10 +1361,13 @@ def main(argv: list[str] | None = None) -> int:
     ki.add_argument("dir", help="条目文件所在目录（*.md，带元数据头）")
     ki.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份导入")
     ki.add_argument("--submit", action="store_true", help="导入后一并提交审核")
+    ki.add_argument("--ai-baseline", action="store_true",
+                    help="AI 基线草稿：只收专家萃取来源的虚拟样例（黄金样例、公司做法），免去标识，生产环境拒绝")
     ki.set_defaults(func=kb_import)
     ke = sub.add_parser("kb-export", help="导出已发布的公开知识及审核记录、哈希，交生产环境导入")
     ke.add_argument("out", help="导出目录（必须为空或不存在）")
     ke.add_argument("--as", dest="as_user", required=True, help="以哪个知识专家或知识管理员的身份导出")
+    ke.add_argument("--include-company", action="store_true", help="另含已发布的公司做法类条目（只限测试 / 试用环境，生产拒绝）")
     ke.set_defaults(func=kb_export)
     kx = sub.add_parser("kb-import-export", help="导入 kb-export 的导出包：校验哈希、自动核验，通过的保留原审核人发布")
     kx.add_argument("dir", help="导出目录")
@@ -1194,18 +1409,43 @@ def main(argv: list[str] | None = None) -> int:
     ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
     ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     ksp.set_defaults(func=kb_source_publish)
+    kas = sub.add_parser("kb-acquire-sources", help="知识源清单：来源确认队列的缺口经网关交 kb-builder 列清单，程序核对不编造网址")
+    kas.add_argument("--out", required=True, help="清单 JSON 文件")
+    kas.add_argument("--as", dest="as_user", default="", help="发起人（记用量与审计）")
+    kas.set_defaults(func=kb_acquire_sources)
+    ew = sub.add_parser("extraction-week", help="经验萃取一轮（四期 F4③）：收信号、先查后问过滤、派题、超时收尾")
+    ew.set_defaults(func=extraction_week)
+    si = sub.add_parser("survey-import", help="导入调研题库文件（四期 E2①，E1 题库格式 YAML，可多个）")
+    si.add_argument("files", nargs="+")
+    si.set_defaults(func=survey_import)
+    kan = sub.add_parser("kb-acquire-now", help="立即全量采集：新正式来源登记首采缺口，按放大的上限排一次计划（已采过的不重开）")
+    kan.add_argument("--cap", type=int, default=2000, help="本次计划上限（默认 2000，每周例行为 20）")
+    kan.set_defaults(func=kb_acquire_now)
     kad = sub.add_parser("kb-acquire-dispatch", help="导出采集下发包：本周直接采集的缺口网址与规则（白名单外拒绝）")
     kad.add_argument("--out", required=True, help="下发包 JSON 文件")
     kad.set_defaults(func=kb_acquire_dispatch)
     kai = sub.add_parser("kb-acquire-import", help="导入采集回传批次：核对清单、哈希、白名单，通过才关缺口并可接着自动核验发布")
     kai.add_argument("batch", help="回传批次目录（含 manifest.json）")
     kai.add_argument("--manifest", default="", help="下载清单；给了就接着走 kb-source-publish")
+    kai.add_argument("--auto-manifest", action="store_true",
+                     help="按来源登记表自动生成下载清单（名称、发布机关取正式来源）再走 kb-source-publish；须带 --as")
     kai.add_argument("--as", dest="as_user", default="", help="导入人（知识专家或知识管理员）")
     kai.add_argument("--report", default="", help="核验记录写成 JSON 文件")
     kai.set_defaults(func=kb_acquire_import)
+    kgm = sub.add_parser("kb-gap-manual", help="登记需人工下载的缺口（网址或编号），进知识审批页“需人工下载”清单")
+    kgm.add_argument("key", help="官方网址，或没有网址时用“国家 法规名称”")
+    kgm.add_argument("--reason", required=True, choices=("blocked", "dns", "timeout", "no_file", "not_found", "other"),
+                     help="原因类别")
+    kgm.add_argument("--ref", default="", help="事件编号（如 BACKLOG-12），只许编号字符")
+    kgm.set_defaults(func=kb_gap_manual)
     ksr = sub.add_parser("kb-source-registry", help="导出来源登记表里试用、正式的来源（CSV，供采集机按表抓取）")
     ksr.add_argument("--json", action="store_true", help="输出 JSON")
     ksr.set_defaults(func=kb_source_registry)
+    kss = sub.add_parser("kb-source-seed", help="按资料仓已批准来源清单（CSV）批量登记为候选或试用；转正式仍须知识管理员在页面批准")
+    kss.add_argument("csv", help="来源清单 CSV（列：name,url,publisher,license,authority_kind,note）")
+    kss.add_argument("--as", dest="as_user", required=True, help="登记人（知识专家或知识管理员）")
+    kss.add_argument("--to", choices=("candidate", "trial"), default="candidate", help="登记后的状态，默认候选")
+    kss.set_defaults(func=kb_source_seed)
     sub.add_parser("kb-reconfirm-scan", help="立即扫描复审到期的公开知识条目，排知识审核 Agent 复查（worker 每小时自动执行）")         .set_defaults(func=kb_reconfirm_scan)
     ke = sub.add_parser("kb-eval", help="依据查询评测：准确率、命中率、相似度分布（准确率 ≥ 90%% 时退出码 0）")
     ke.add_argument("questions", help="评测题目文件（YAML）")
@@ -1227,12 +1467,19 @@ def main(argv: list[str] | None = None) -> int:
                          "给 --baseline 时命中率不低于基线 + --min-gain 退出码 0，否则 3")
     kae.add_argument("evalset", help="评测集文件（YAML，每章 3～5 条应命中知识）")
     kae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份检索（可见范围按该用户）")
-    kae.add_argument("--strategy", default="baseline", choices=["baseline", "chapter"],
-                     help="baseline 交付链步骤固定查询（现行做法）；chapter 章节查询")
+    kae.add_argument("--strategy", default="baseline", choices=["baseline", "chapter", "slots"],
+                     help="baseline 交付链步骤固定查询（现行做法）；chapter 章节查询；slots A12 按知识槽位装配")
     kae.add_argument("--out", default="", help="把明细写成 JSON 文件（可作下次的 --baseline）")
     kae.add_argument("--baseline", default="", help="基线报告 JSON（--out 写出的）")
     kae.add_argument("--min-gain", type=float, default=0.0, help="要求比基线高出多少（如 0.01 = 1 个百分点）")
+    kae.add_argument("--gate", action="store_true",
+                     help="A12 程序门：同时跑 baseline 和 slots，按槽位装配命中率高于基线才返回 0（否则 3）")
     kae.set_defaults(func=kb_assembly_eval)
+    kar = sub.add_parser("kb-agent-review-rerun",
+                         help="积压重跑：规则预判上线前知识审核 Agent 判“不重复、不冲突”没过的待审版本各重跑一次")
+    kar.add_argument("--limit", type=int, default=None, help="最多排几条")
+    kar.add_argument("--dry-run", action="store_true", help="只按规则预判类别打印计数，不排队")
+    kar.set_defaults(func=kb_agent_review_rerun)
     kcp = sub.add_parser("kb-candidate-promote",
                          help="候选影子期晋级：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，抽检不通过的退回人工（worker 每天自动执行）")
     kcp.add_argument("--dry-run", action="store_true", help="只列出会晋级、退回的候选，不改动")
@@ -1247,7 +1494,8 @@ def main(argv: list[str] | None = None) -> int:
     ae.add_argument("--answers", default="", help="把每题答案原文写到目录（<题号>.md，只限开发、测试环境，回放核对用）")
     ae.set_defaults(func=agent_eval)
     al = sub.add_parser("agent-eval-lint", help="评测门（三期 C8，CI 跑，不连模型）：评测集格式、红线、资质用语，全部通过时退出码 0")
-    al.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
+    al.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）；装配评测集（有 chapters）也可")
+    al.add_argument("--entries", action="append", help="条目目录（可多次）：核对装配评测集 expect 的 key 都存在（四期 F6）")
     al.set_defaults(func=agent_eval_lint)
     am3 = sub.add_parser("agent-eval-majority", help="真模型多轮判定（三期 C8，测试机用）：多份 agent-eval --out 结果按每题多数判定，红线题一轮失败即不通过")
     am3.add_argument("reports", nargs="+", help="各轮 agent-eval --out 写出的 JSON")
@@ -1262,6 +1510,10 @@ def main(argv: list[str] | None = None) -> int:
     ks.add_argument("--drop-source", action="store_true", help="核对一致后删掉主库里的知识区表（删数据，先经负责人同意）")
     ks.set_defaults(func=kb_split)
     sub.add_parser("storage-provision", help="对象存储最小权限：用根账号建桶、建应用账号、挂只限两个桶的策略（可重复执行）")         .set_defaults(func=storage_provision)
+    ind = sub.add_parser("indicators", help="指标看板（只有数字）；--v4 出 v4.0 验收口径汇总（萃取跳过率、四格分列、四格就绪度）")
+    ind.add_argument("--days", type=int, default=30)
+    ind.add_argument("--v4", action="store_true")
+    ind.set_defaults(func=indicators_cmd)
     br = sub.add_parser("backup-record", help="备份 / 恢复脚本完成后记审计（由 scripts/backup.sh、restore.sh 调用）")
     br.add_argument("--op", choices=["create", "restore"], required=True)
     br.add_argument("--stamp", required=True)

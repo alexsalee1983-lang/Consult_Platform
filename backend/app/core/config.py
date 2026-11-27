@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # 起草引用校验（二期 B8）：解读、映射、案例、异议应答引用的“文件 + 条款号”在库里找不到依据原文时不能提交审核。
     # 关掉只显示“待核”、不拦提交（例如依据原文还没切条入库的过渡期）。
     kb_citation_gate: bool = True
+    # 四期 B28①：知识条目可选的语种与辖区（逗号分隔，app/kb/multilang.py）。辖区默认含负责人 2026-11-16 定的
+    # 7 个非洲国家（埃及、科特迪瓦、塞内加尔、南非、安哥拉、埃塞俄比亚、尼日利亚）和港、澳、泰、印尼、越、新、马
+    kb_languages: str = "zh,zh-Hant,en,fr,pt,ar,th,id,vi,ms,am"
+    kb_jurisdictions: str = "CN,HK,MO,TH,ID,VN,SG,MY,EG,CI,SN,ZA,AO,ET,NG"
     # 三期 F4 最小版：改稿差异转候选（app/project/revision_mining.py）。只在测试机、试用机虚拟数据上开；生产环境一律不生效
     f4_revision_mining: bool = False
     # 依据原文自动核验发布（二期 B10，决策记录 2026-11-15）：kb-source-publish 核验通过的 SRC 由平台自动发布，
@@ -90,6 +94,8 @@ class Settings(BaseSettings):
     kb_sample_rate_src: float = 0.0
     kb_sample_rate_src_partial: float = 0.4   # 有条款被机密级检测退回的那几份（负责人 2026-11-16）
     kb_sample_fail_max: float = 0.1
+    # 四期 E3① 答案池：自动确认的事实按此比例随机进人工抽检队列；自适应调比由 F5（#473）替换 survey.spot_rate()
+    survey_spot_rate: float = 0.1
     # 知识审核 Agent（二期 B11，二期开发计划第十二节第二级）：公开资料的解读、映射、方法和只含公开资料的案例、异议应答，
     # 提交后由程序规则 + 知识审核 Agent（经网关）逐项检查，全部通过的自动发布并按比例抽检，存疑的进人工队列。
     # 最近 20 次抽检不通过率超过 KB_SAMPLE_FAIL_MAX 时暂停；超过一半时抽检比例加倍。
@@ -108,6 +114,8 @@ class Settings(BaseSettings):
     # 就绪度看板（三期 F2②）读哪些章节级装配评测集（A24 格式，逗号分隔的文件或目录，目录取其中 *.yaml）；
     # 留空用平台回归样例 knowledge/eval/assembly_samples.yaml。真实评测集在私有资料仓，部署机指到 /srv/knowledge/downloads 下
     kb_readiness_evalsets: str = ""
+    # 四格关键章节就绪度目标（四期 F2③，按三期实测校准后填）：如 "SOC·银行=0.7,IRE·电力=0.6"；没配的格看板显示“未校准”
+    kb_readiness_targets: str = ""
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
 
@@ -133,6 +141,12 @@ class Settings(BaseSettings):
     auto_review_idle_hours: float = 24    # 顾问最后一次修改之后这么久没再改才自动评审
     # 门禁通过后自动提交签署的交付件（自主度 L3）；不在其中的为 L2，由顾问看过标出的问题后提交（决策记录 2026-11-18）
     auto_submit_deliverables: str = "D1,D2,D6,D8"
+    # 四期 A26（负责人 2026-11-25）：机械问题一键修订最多自动修几轮，超出转人工
+    revise_max_rounds: int = 2
+    # 写签分离豁免的交付件（对内件，起草人 / 最后修改人也能签）；其余对客户交付件阻断
+    sign_separation_exempt: str = "D3"
+    # 门禁 0 问题时“核对与签署合并”、项目经理可批量签的交付件
+    merged_sign_deliverables: str = "D3"
     # 普通检索的重排分数下限：只挡掉趋近 0 分的无关结果（测试 #34：该查不到的 S011 得分 0.0003～0.0008）。
     # 比依据查询宽得多，宁可多给几条弱相关的；已定（决策记录 2026-11-20）；与 KB_BASIS_MIN_RERANK 一起，生产换向量或重排模型后重新校准。
     kb_search_min_rerank: float = 0.005

@@ -18,6 +18,7 @@ PROTECTED = [
     ("GET", "/api/projects"),
     ("GET", "/api/portfolio"),
     ("GET", "/api/indicators"),
+    ("GET", "/api/projects/BANK-A/automation"),
     ("GET", "/api/quality-incidents"),
     ("POST", "/api/quality-incidents"),
     ("GET", "/api/quality-incidents/1"),
@@ -32,7 +33,9 @@ PROTECTED = [
     ("GET", "/api/expert-bench/templates"),
     ("POST", "/api/expert-bench/fill"),
     ("POST", "/api/expert-bench/cards/1/answer"),
+    ("POST", "/api/expert-bench/deid-preview"),
     ("GET", "/api/projects/BANK-A"),
+    ("GET", "/api/projects/BANK-A/panorama"),
     ("POST", "/api/projects"),
     ("GET", "/api/catalog/products"),
     ("GET", "/api/confirmations"),
@@ -74,6 +77,23 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/summary-cards/template"),
     ("POST", "/api/projects/BANK-A/summary-cards"),
     ("POST", "/api/projects/BANK-A/summary-cards/S-01/withdraw"),
+    ("GET", "/api/projects/BANK-A/survey/questions"),
+    ("POST", "/api/projects/BANK-A/survey/packs"),
+    ("GET", "/api/projects/BANK-A/survey/packs"),
+    ("POST", "/api/projects/BANK-A/survey/packs/P-01/results"),
+    ("GET", "/api/projects/BANK-A/survey/facts"),
+    ("POST", "/api/projects/BANK-A/survey/facts/1/confirm"),
+    ("GET", "/api/projects/BANK-A/survey/pool"),
+    ("GET", "/api/projects/BANK-A/survey/spot-checks"),
+    ("POST", "/api/projects/BANK-A/survey/facts/1/spot-check"),
+    ("POST", "/api/projects/BANK-A/survey/selfeval"),
+    ("GET", "/api/projects/BANK-A/survey/selfeval"),
+    ("POST", "/api/projects/BANK-A/survey/selfeval/S-01/sent"),
+    ("GET", "/api/projects/BANK-A/survey/selfeval/S-01/template.xlsx"),
+    ("POST", "/api/projects/BANK-A/survey/selfeval/S-01/import"),
+    ("POST", "/api/projects/BANK-A/survey/selfeval/S-01/import-xlsx"),
+    ("DELETE", "/api/projects/BANK-A/survey/selfeval/S-01/import"),
+    ("GET", "/api/projects/BANK-A/survey/agenda"),
     ("GET", "/api/projects/BANK-A/deliverables/D4"),
     ("GET", "/api/projects/BANK-A/knowledge-updates"),
     ("GET", "/api/projects/BANK-A/assessment"),
@@ -81,12 +101,22 @@ PROTECTED = [
     ("PUT", "/api/projects/BANK-A/deliverables/D4/outline"),
     ("GET", "/api/projects/BANK-A/deliverables/D1/form"),      # 四期 A14
     ("POST", "/api/projects/BANK-A/deliverables/D1/form"),
+    ("POST", "/api/projects/BANK-A/deliverables/D1/form/import"),   # 四期 A28②
+    ("GET", "/api/projects/BANK-A/deliverables/D1/form/import"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
+    ("GET", "/api/revision-features/summary"),   # 四期 F4②
+    ("GET", "/api/extraction/questions"),   # 四期 F4③
+    ("POST", "/api/extraction/questions/1/answer"),
+    ("POST", "/api/extraction/questions/1/skip"),
+    ("GET", "/api/extraction/stats"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/sections/1/assist"),   # 三期 A15 写稿助手
     ("GET", "/api/projects/BANK-A/deliverables/D4/export"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/export?format=pptx"),
+    ("GET", "/api/projects/BANK-A/stages"),
+    ("GET", "/api/projects/BANK-A/stages/分析/pack"),
+    ("GET", "/api/projects/BANK-A/weekly-brief"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/reviews"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/reviews"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/reviews/1"),
@@ -95,6 +125,12 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/submit"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/sign"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/return"),
+    ("POST", "/api/projects/BANK-A/deliverables/D3/signoff/merged"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/revise"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/revise"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/client-feedback"),
+    ("GET", "/api/deliverables/batch-sign"),
+    ("POST", "/api/deliverables/batch-sign"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1/diff"),
     ("POST", "/api/projects/BANK-A/runs"),
     ("GET", "/api/projects/BANK-A/runs"),
@@ -133,6 +169,8 @@ PROTECTED = [
     ("GET", "/api/kb/sources/BANK-A/events"),
     ("GET", "/api/kb/sources/confirm-queue"),
     ("POST", "/api/kb/sources/confirm-queue/decide"),
+    ("GET", "/api/kb/sources/manual-queue"),
+    ("POST", "/api/kb/sources/manual-queue/1/upload"),
     ("GET", "/api/kb/intake"),
     ("GET", "/api/kb/intake/1"),
     ("GET", "/api/kb/intake/1/deid"),
@@ -150,6 +188,7 @@ PROTECTED = [
     ("POST", "/api/kb/versions/1/submit"),
     ("POST", "/api/kb/versions/1/review"),
     ("GET", "/api/kb/review-queue"),
+    ("GET", "/api/kb/recheck-queue"),
     ("GET", "/api/kb/practice-queue"),
     ("POST", "/api/kb/practice-queue/decide"),
     ("GET", "/api/kb/practice-queue/stats"),
@@ -200,7 +239,7 @@ def test_every_api_route_is_protected_or_public(client):
                 .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1") \
                 .replace("{rid}", "1").replace("{deletion_id}", "1").replace("{incident_id}", "1") \
                 .replace("{consent_id}", "1").replace("{card}", "S-01") \
-                .replace("{version}", "abc")
+                .replace("{version}", "abc").replace("{phase}", "分析")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 

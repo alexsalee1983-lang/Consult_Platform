@@ -41,7 +41,8 @@ services:
 
   redis:
     logging: *default-logging
-    image: redis:7-alpine
+    # 在官方 redis:7-alpine 上升级 libssl3/libcrypto3 修 CVE-2026-124709，见 deploy/redis/Dockerfile
+    build: ./deploy/redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:

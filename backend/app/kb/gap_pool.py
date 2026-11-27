@@ -2,6 +2,8 @@
 
 合并、打分、排计划的规则在 app/kb/acquisition.py（B25①，纯逻辑）；本模块只负责落表：
 - record：信号按 gap_key 并入未关闭的缺口，同一事件编号只算一次；已关闭的缺口又来新信号就重新打开。
+- first_collect：立即全量（kb-acquire-now），只给从没登记过缺口的正式来源记首采信号，再放大 cap 排一次计划。
+- patrol：每周任务先给每个正式来源登记一条定时巡检信号（事件编号按 ISO 周，同周不重复，采集关闭后下周重开）。
 - run_week：每周后台任务（worker 每周排一次 kb.gap_week），白名单取 B16 正式来源的网址前缀，
   结果写回每个缺口的 plan / score / planned_at；审计只记各路数量。
 - close / stats：关闭原因固定四类；关闭率与平均关闭时长供 F2 看板。
@@ -10,6 +12,8 @@
   仍要等来源由另一人批准转正式、进白名单，下周任务才把它排进 direct 出下发包；不做即关闭（dropped）。
 - dispatch_package / import_return：本周“直接采集”的缺口出下发包（只有网址与规则）；采集机回传批次先 verify_return，
   通过才关缺口（collected）并交 kb-source-publish；审计只记数量和问题类别，不记文件名。
+- mark_manual / manual_queue（四期 B25）：采集机取不到的网址（回传 manifest 的 failed）转“需人工下载”（plan manual，
+  记原因类别）；资料仓 backlog 的老条目用 kb-gap-manual 登记。人工上传原件的处理在 app/kb/gap_manual.py。
 不存原文：gap_key 是编号或网址，events 只是事件编号（acquisition.EVENT_REF 校验）。
 """
 from __future__ import annotations
@@ -35,6 +39,9 @@ JOB_KIND = "kb.gap_week"
 CLOSE_REASONS = {"published": "已入库", "collected": "已采集", "dropped": "不做", "duplicate": "重复"}
 DEFAULT_CAP = 20
 CONFIRMED = "confirmed"          # 来源确认已通过、等来源转正式
+MANUAL = "manual"                # 需人工下载：采集机取不到，等人上传原件
+UPLOADED = "uploaded"            # 原件已上传、后台核对入库中
+HELD = (MANUAL, UPLOADED)        # 每周计划不再重排这两类
 DECISIONS = ("approve", "reject")
 
 
@@ -89,7 +96,8 @@ def run_week(db: Session, today: date, *, thresholds: dict[str, int] | None = No
     # 来源确认过的缺口不再回队列：来源转正式（进白名单）后直接采集，之前一直等着
     held = [r for r in rows if r.plan == CONFIRMED and not acq.in_whitelist(r.gap_key, wl)]
     promoted = {r.gap_key for r in rows if r.plan == CONFIRMED and acq.in_whitelist(r.gap_key, wl)}
-    rows = [r for r in rows if r not in held]
+    manual = [r for r in rows if r.plan in HELD]
+    rows = [r for r in rows if r not in held and r.plan not in HELD]
     gaps = {r.gap_key: acq.Gap(key=r.gap_key, kinds=dict(r.kinds or {}), events=list(r.events or []),
                                impact=r.impact, due=r.due, authority=r.authority) for r in rows}
     plan = acq.plan_week([g for k, g in gaps.items() if k not in promoted], today, thresholds=thresholds or {},
@@ -107,6 +115,8 @@ def run_week(db: Session, today: date, *, thresholds: dict[str, int] | None = No
     out = {lane: len(gs) for lane, gs in lanes.items()}
     if held:
         out[CONFIRMED] = len(held)
+    if manual:
+        out[MANUAL] = len(manual)
     audit.record(db, actor=actor, action="kb.gap.week", result="allowed", today=today.isoformat(), **out)
     return out
 
@@ -200,7 +210,8 @@ def import_return(db: Session, batch: Path, *, actor: str = "cli") -> tuple[acq.
             cats[c] = cats.get(c, 0) + 1
         audit.record(db, actor=actor, action="kb.gap.return", result="blocked", problems=cats)
         return report, 0
-    rows = json.loads((batch / acq.RETURN_MANIFEST).read_text(encoding="utf-8"))["files"]
+    manifest = json.loads((batch / acq.RETURN_MANIFEST).read_text(encoding="utf-8"))
+    rows = manifest["files"]
     closed = 0
     for url in sorted({str(r["url"]) for r in rows}):
         try:
@@ -208,8 +219,100 @@ def import_return(db: Session, batch: Path, *, actor: str = "cli") -> tuple[acq.
             closed += 1
         except LookupError:
             pass
-    audit.record(db, actor=actor, action="kb.gap.return", result="allowed", files=report.count, closed=closed)
+    failed = manifest.get("failed") if isinstance(manifest, dict) else None
+    for f in failed if isinstance(failed, list) else []:
+        url = str(f.get("url", "")) if isinstance(f, dict) else ""
+        row = db.scalar(select(KbGap).where(KbGap.gap_key == url, KbGap.status == "open")) if url else None
+        if row is not None and row.plan not in HELD:
+            mark_manual(db, url, acq.manual_reason(str(f.get("reason", ""))), actor=actor)
+            report.manual += 1
+    extra = {"manual": report.manual} if report.manual else {}
+    audit.record(db, actor=actor, action="kb.gap.return", result="allowed", files=report.count, closed=closed, **extra)
     return report, closed
+
+
+def mark_manual(db: Session, key: str, reason: str, *, create: bool = False, event_ref: str = "",
+                actor: str = "platform") -> KbGap:
+    """缺口转“需人工下载”。create：没有未关闭的缺口就按业务需求信号新建（资料仓 backlog 老条目用）。"""
+    if reason not in acq.MANUAL_REASONS:
+        raise ValueError(f"原因只能是：{'、'.join(acq.MANUAL_REASONS)}")
+    row = db.scalar(select(KbGap).where(KbGap.gap_key == key, KbGap.status == "open"))
+    if row is None:
+        if not create:
+            raise LookupError("没有这个未关闭的缺口")
+        record(db, [acq.Signal(key, "business", event_ref or f"manual-{utcnow():%Y%m%d}", impact=3)])
+        row = db.scalar(select(KbGap).where(KbGap.gap_key == key, KbGap.status == "open"))
+        assert row is not None
+    row.plan, row.manual_reason, row.updated_at = MANUAL, reason, utcnow()
+    db.commit()
+    audit.record(db, actor=actor, action="kb.gap.manual", result="allowed", reason=reason, gap_id=row.id)
+    return row
+
+
+def manual_queue(db: Session) -> list[dict[str, Any]]:
+    """需人工下载清单（含已上传处理中的），分数高的在前；in_whitelist：网址在正式来源里，上传后能直接入库。"""
+    wl = whitelist(db)
+    rows = db.scalars(select(KbGap).where(KbGap.status == "open", KbGap.plan.in_(HELD))
+                      .order_by(KbGap.score.desc(), KbGap.id))
+    out = []
+    for r in rows:
+        is_url = urlsplit(r.gap_key).scheme in ("http", "https")
+        out.append({"id": r.id, "gap_key": r.gap_key, "plan": r.plan, "reason": r.manual_reason,
+                    "reason_label": acq.MANUAL_REASONS.get(r.manual_reason, ""), "is_url": is_url,
+                    "in_whitelist": is_url and acq.in_whitelist(r.gap_key, wl), "impact": r.impact,
+                    "authority": r.authority, "score": r.score, "opened_at": r.opened_at, "updated_at": r.updated_at})
+    return out
+
+
+
+PUBLISH_COLUMNS = ["文件名", "名称", "发布机关", "原网址", "现行状态", "获取方式", "sha256"]
+
+
+def publish_manifest(db: Session, batch: Path) -> tuple[str, list[str]]:
+    """回传批次 → 下载清单 CSV（供 kb-source-publish）：名称、发布机关取来源登记表里网址前缀最长匹配的正式来源。
+
+    找不到登记来源的文件不进清单，返回文件名列表，由人登记来源后再导；现行状态先记“现行”，生命周期由 B26 跟踪。
+    """
+    import csv
+    import io
+
+    rows = json.loads((batch / acq.RETURN_MANIFEST).read_text(encoding="utf-8"))["files"]
+    srcs = list(db.scalars(select(KbSource).where(KbSource.status == "active")))  # 与 whitelist() 同口径
+    out = io.StringIO()
+    w = csv.DictWriter(out, fieldnames=PUBLISH_COLUMNS, lineterminator=chr(10))
+    w.writeheader()
+    unmatched: list[str] = []
+    for r in rows:
+        url = str(r.get("url", ""))
+        hits = [s for s in srcs if acq.in_whitelist(url, (s.url,))]
+        if not hits:
+            unmatched.append(str(r.get("file", "")))
+            continue
+        s = max(hits, key=lambda x: len(x.url))
+        w.writerow({"文件名": r["file"], "名称": s.name, "发布机关": s.publisher, "原网址": url,
+                    "现行状态": "现行", "获取方式": "已下载", "sha256": str(r.get("sha256", "")).lower()})
+    return out.getvalue(), unmatched
+
+def patrol(db: Session, today: date) -> int:
+    """正式来源定时巡检：白名单内的定时巡检缺口由 run_week 排进 direct、出下发包。"""
+    y, w, _ = today.isocalendar()
+    ref = f"patrol-{y}W{w:02d}"
+    srcs = db.scalars(select(KbSource).where(KbSource.status == "active").order_by(KbSource.id)).all()
+    if srcs:
+        record(db, [acq.Signal(s.url, "schedule", ref, authority=s.authority_level or 3) for s in srcs])
+    return len(srcs)
+
+
+def first_collect(db: Session, today: date, *, cap: int = 2000, actor: str = "cli") -> dict[str, int]:
+    """立即全量（负责人 2026-11-27）：从没登记过缺口的正式来源记一条首采信号，再按放大的 cap 排一次计划。
+    已采过、已关闭的缺口不重开；之前因每周上限顺延的未关闭缺口一并排进来。"""
+    seen = set(db.scalars(select(KbGap.gap_key)))
+    srcs = [s for s in db.scalars(select(KbSource).where(KbSource.status == "active").order_by(KbSource.id))
+            if s.url not in seen]
+    if srcs:
+        ref = f"first-{today:%Y%m%d}"
+        record(db, [acq.Signal(s.url, "schedule", ref, authority=s.authority_level or 3) for s in srcs])
+    return {"new": len(srcs), **run_week(db, today, cap=cap, actor=actor)}
 
 
 @jobs.handler(JOB_KIND)
@@ -218,4 +321,5 @@ def _job(payload: dict, ctx: jobs.JobContext | None) -> None:
 
     today = date.fromisoformat(payload["today"]) if payload.get("today") else utcnow().date()
     with SessionLocal() as db:
+        patrol(db, today)
         run_week(db, today, cap=int(payload.get("cap", DEFAULT_CAP)))

@@ -1,6 +1,6 @@
 """写稿助手 v1（三期 A15）。要求业务角色 + 项目成员（非成员 404）；规则见 app/project/assist.py。
 
-POST /api/projects/{code}/deliverables/{dcode}/sections/{seq}/assist    侧栏问 / 改，SSE 流式返回（event: delta / done / error）
+POST /api/projects/{code}/deliverables/{dcode}/sections/{seq}/assist    侧栏问 / 改 / 三个一键工作流（A16③），SSE 流式返回（event: delta / done / error）
 
 停止：前端断开连接即可，服务端随之关闭模型流，不写回任何内容。
 被机密级拦截 422（不调模型）；严格档用外部模型 403；开始输出前模型不可用 502。助手只给文字，不写交付件。
@@ -10,7 +10,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from ..agents import call, runtime, tools
@@ -28,11 +28,17 @@ router = APIRouter(prefix="/api/projects", tags=["assist"], dependencies=[Depend
 
 
 class AssistIn(BaseModel):
-    mode: Literal["ask", "edit"] = "ask"
-    prompt: str = Field(min_length=1, max_length=2_000)
+    mode: Literal["ask", "edit", "cite", "check", "summary"] = "ask"
+    prompt: str = Field(default="", max_length=2_000)   # 一键工作流可不填（作补充要求）
     speed: Literal["fast", "deep"] = "fast"
     context: str | None = Field(default=None, max_length=200_000)   # 编辑中的正文；不传取当前版本
     selection: str = Field(default="", max_length=20_000)
+
+    @model_validator(mode="after")
+    def _need_prompt(self) -> "AssistIn":
+        if self.mode in ("ask", "edit") and not self.prompt.strip():
+            raise ValueError("问和改需要填写问题或修改要求")
+        return self
 
 
 @router.post("/{code}/deliverables/{dcode}/sections/{seq}/assist")
@@ -57,6 +63,8 @@ def assist_section(code: str, dcode: str, seq: int, body: AssistIn, db: Session 
             "agent": assist.AGENT, "prompt_version": p.version, "prompt_chars": len(body.prompt),
             "prompt_sha": audit.digest(body.prompt), "context_chars": len(body.context or ""),
             "selection_chars": len(body.selection), "kb_refs": len(p.refs)}
+    if p.findings:          # 只记计数，不记句子和用语原文
+        meta |= {"unsourced": p.findings["unsourced"], "qualification": len(p.findings["qualification"])}
     gen = call.stream(db, assist.AGENT, p.message, actor=username, system=p.system, project=project,
                       level=p.level, level_override=True)
     try:
@@ -88,7 +96,7 @@ def assist_section(code: str, dcode: str, seq: int, body: AssistIn, db: Session 
                                      sources=sources["counts"], unresolved=len(sources["unresolved"]), **meta)
                     yield _sse("done", {"mode": body.mode, "speed": body.speed, "level": p.level, "model": item.model,
                                         "demo": item.demo, "prompt_version": p.version, "text": item.text,
-                                        "sources": sources, "references": p.refs})
+                                        "sources": sources, "references": p.refs, "findings": p.findings})
                     return
                 yield _sse("delta", {"text": item})
                 item = next(gen)

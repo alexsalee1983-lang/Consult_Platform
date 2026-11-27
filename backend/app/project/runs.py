@@ -3,9 +3,10 @@
 SOC 的步骤（《Agent组开发项目方案》第五节，配置在 products/soc.yaml）：
   ③ facts       调研访谈 Agent：读本项目证据（纪要、资料、现场观察）→ 写 D3 事实清单
   ④ gap         依据与差距分析 Agent：读 D3、检索依据库 → 差距分析表、业务影响 TOP 5、依据库缺口（存运行记录）
+  ④ draft       报告与汇报 Agent：读差距分析和 D3 → 写 D4 现状评估报告初稿（四期 D4 从第 7 步前移；差距分析得出草稿发现时
+                平台先发“发现表确认”卡，顾问确认发现表后才起草，见 _ask_to_confirm_findings、on_card_resolved）
   ⑤ design      方案设计 Agent：读差距分析和 D3 → 目标运营模型、路线图草案（存运行记录；方案取舍发卡暂停）
   ⑥ policy      制度起草 Agent：读目标运营模型和 D3 → 写 D6 制度文件包
-  ⑦ draft       报告与汇报 Agent：读差距分析和 D3 → 写 D4 现状评估报告初稿
   ⑦ design_doc  报告与汇报 Agent：读目标运营模型和差距分析 → 写 D5 设计方案
   ⑦ roadmap     报告与汇报 Agent：同上 → 写 D7 实施路线图
   ⑦ briefing    报告与汇报 Agent：读 D4、D5、D7 → 写 D8 高层汇报
@@ -100,6 +101,7 @@ CONDENSE_RULES = ("把下面的证据提炼成要点，供后续起草使用：�
                   "每条要点末尾保留来源编号（如 [D-01] [I-02] [O-03] [S-01]），不推断、不评价，"
                   "不写人名、机构名和网络标识；只输出要点列表。")
 MAX_CARDS = 3                # 一步最多发几张确认卡
+FINDINGS_KIND = "发现表确认"   # 四期 D4：差距分析后平台发的检查点卡（confirmations.KINDS）
 
 
 @dataclass(frozen=True)
@@ -253,11 +255,25 @@ def cancel(db: Session, user: User, project: Project, run: AgentRun) -> AgentRun
 
 
 def on_card_resolved(db: Session, card: Confirmation) -> AgentRun | None:
-    """顾问处理了一张卡：如果某次运行在等这张卡、且它等的卡都处理完了，就继续跑。"""
+    """顾问处理了一张卡：如果某次运行在等这张卡、且它等的卡都处理完了，就继续跑。
+    发现表确认卡（四期 D4）：选 B 取消在等它的运行，发现保持草稿；其余（选 A 或写意见）草稿发现转为已确认，意见交给后续步骤。"""
+    rejected = card.kind == FINDINGS_KIND and card.choice == "B"
+    if card.kind == FINDINGS_KIND and not rejected:
+        findings.confirm_drafts(db, card.project)
+        db.commit()
     runs = db.scalars(select(AgentRun).where(AgentRun.project_id == card.project_id, AgentRun.status == "waiting"))
     for run in runs:
         if card.id not in (run.waiting_cards or []):
             continue
+        if rejected:
+            if _lock(db, run) == "waiting":
+                run.status, run.waiting_cards = "cancelled", []
+                run.updated_at = run.finished_at = utcnow()
+                audit.record(db, actor=card.resolved_by or "system", action="run.cancel", result="allowed",
+                             project_code=card.project.code, run_id=run.id, step=_step_key(db, card.project, run),
+                             reason="findings_rejected")
+            db.commit()
+            return run
         pending = db.scalars(select(Confirmation.id).where(Confirmation.id.in_(run.waiting_cards),
                                                            Confirmation.status == "open")).all()
         if pending:
@@ -598,6 +614,8 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
             if step.agent == assessment.GAP_AGENT:            # 三期 F1：差距分析表同步成发现
                 findings.sync_from_gap(db, project, record.output, step.agent, run.id)
         card_ids = _send_cards(db, user, project, run, step, cards)
+        if step.agent == assessment.GAP_AGENT:                # 四期 D4：确认发现表检查点
+            card_ids += _ask_to_confirm_findings(db, user, project, run, step, card_ids)
     except tools.ToolError as e:
         raise StepFailed(f"写入被拒绝（{e.status}）") from e
     record.refs["cards"] = card_ids
@@ -668,6 +686,25 @@ def _ask_for_evidence(db: Session, user: User, project: Project, run: AgentRun, 
     audit.record(db, actor="worker", action="run.step", result="allowed", project_code=project.code, run_id=run.id,
                  step=step.key, agent=step.agent, cards=1, next="waiting", reason="no_evidence")
     db.commit()
+
+
+def _ask_to_confirm_findings(db: Session, user: User, project: Project, run: AgentRun, step: Step,
+                             sent: list[int]) -> list[int]:
+    """四期 D4（负责人 2026-11-25）：差距分析同步出草稿发现时发“发现表确认”卡，运行停在下一步之前，
+    顾问确认发现表后才起草 D4 等后续交付件。没有草稿发现、或这是最后一步时不发卡。"""
+    drafts = sum(f.status == "draft" for f in findings.list_for_project(db, project))
+    chain = steps(db, project)
+    if not drafts or run.step_index + 1 >= len(chain):
+        return []
+    nxt = chain[run.step_index + 1]
+    r = tools.invoke(db, user, step.agent, "confirm.create", {
+        "kind": FINDINGS_KIND,
+        "title": f"请确认发现表：差距分析得出 {drafts} 条待确认发现，确认后再起草第 {nxt.number} 步{nxt.name}",
+        "options": ["A 确认发现表：草稿发现按 Agent 初判转为已确认，继续起草", "B 取消本次运行：先补证据或调整后重新发起"],
+        "recommendation": "A", "reason": "后续交付件的结论只能来自顾问确认过的发现",
+        "impact": "选 A 或写下修改意见后继续，意见作为顾问已确认事项交给后续步骤；选 B 本次运行取消，发现保持草稿"},
+        project.code)
+    return [] if r["id"] in sent else [r["id"]]
 
 
 def _write_deliverable(db: Session, user: User, project: Project, step: Step,

@@ -17,7 +17,7 @@ ItemMeta / VersionContent）：
 | 能力域标签 | capabilities | CAPABILITIES：管理 / 运营 / 技术支撑（列表） |
 | 适用行业 | industries | 中文列表，取值见 INDUSTRIES，通用的填 ["通用"] |
 | 密级 | classification | internal 内部 / restricted 受限 |
-| 脱敏状态 | KbVersion.deid_status | pending 未脱敏 / passed 已脱敏 / not_needed 无需脱敏 |
+| 脱敏状态 | KbVersion.deid_status | pending 未脱敏 / passed 已脱敏 / not_needed 无需脱敏 / virtual 虚拟基线免脱敏（非生产） |
 | 来源 | source_type | expert 专家萃取 / project 项目沉淀 / public 公开资料 / internal 公司内部制度改造 |
 | 授权编号、标准编号 | source_detail | internal 必填 |
 | 负责人 | KbItem.owner | 用户名 |

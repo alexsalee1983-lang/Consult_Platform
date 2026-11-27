@@ -33,6 +33,8 @@ MATRIX = [
     (("GET", "/api/projects", None),                    (200, 200, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A", None),             (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
+    # 项目全景（四期 A25①）：项目成员可看，非成员 404
+    (("GET", "/api/projects/BANK-A/panorama", None),    (200, 404, 403, 403, 403)),
     # 项目总览（方案 A）：只给项目负责人；顾问 403（负责人 200 在 test_portfolio 里测）
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
     # 指标看板（三期 F2）：只给项目负责人（负责人 200 在 test_indicators 里测）
@@ -54,12 +56,14 @@ MATRIX = [
     (("GET", "/api/my-tasks", None),                    (200, 200, 403, 403, 403)),
     (("POST", "/api/my-tasks/return", {"kind": "confirmation", "ref_id": 999999, "reason": "依据不对"}),
                                                         (404, 404, 403, 403, 403)),
-    # 专家工作台（四期 B23①）：只给知识专家（200 在 test_expert_bench 里测），矩阵里的角色全部 403
+    # 专家工作台（四期 B23①②）：只给知识专家（200 在 test_expert_bench 里测），矩阵里的角色全部 403
     (("GET", "/api/expert-bench/cards", None),          (403, 403, 403, 403, 403)),
     (("GET", "/api/expert-bench/templates", None),      (403, 403, 403, 403, 403)),
     (("POST", "/api/expert-bench/fill", {"template": "practice", "fill": {"how": "示范"}}),
                                                         (403, 403, 403, 403, 403)),
     (("POST", "/api/expert-bench/cards/999999/answer", {"answers": [{"id": "keep", "choice": "yes"}]}),
+                                                        (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/deid-preview", {"texts": {"how": "示范"}}),
                                                         (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
@@ -107,6 +111,41 @@ MATRIX = [
     (("POST", "/api/projects/BANK-A/summary-cards", {"cards": [{"item": "账号复核", "finding": "未复核"}]}),
      (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/summary-cards/S-01/withdraw", None), (404, 404, 403, 403, 403)),
+    # 调研助手（四期 E2①）：成员看题目、包、确认单 200；不存在的包 / 事实 404；GRID-B 非成员 404
+    (("GET", "/api/projects/BANK-A/automation", None), (200, 404, 403, 403, 403)),   # 四期 F5
+    (("GET", "/api/projects/GRID-B/automation", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/survey/questions", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/survey/packs", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/survey/facts", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/survey/packs/P-99/results", {"pack_hash": "0", "responses": []}),
+     (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/survey/facts/999999/confirm", {"confirmed_role": "负责人"}),
+     (404, 404, 403, 403, 403)),
+    # 答案池（四期 E3①）：成员看池子和抽检队列 200；不存在的事实 404；GRID-B 非成员 404
+    (("GET", "/api/projects/BANK-A/survey/pool", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/survey/spot-checks", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/survey/facts/999999/spot-check", {"passed": True}), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/survey/pool", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/survey/agenda", None), (200, 404, 403, 403, 403)),   # 四期 E3③
+    (("GET", "/api/projects/GRID-B/survey/agenda", None), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/survey/facts/999999/spot-check", {"passed": False}),
+     (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/survey/packs", None), (404, 404, 403, 403, 403)),
+    # 客户自评包（四期 E3②）：成员看清单 200；不存在的包 404；GRID-B 非成员 404
+    (("GET", "/api/projects/BANK-A/survey/selfeval", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/survey/selfeval", {"pack": "P-99", "respondent_role": "负责人",
+                                                       "due_date": "2099-01-01"}), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/survey/selfeval/S-99/sent", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/survey/selfeval/S-99/template.xlsx", None), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/survey/selfeval/S-99/import", {"version": 1, "pack_hash": "0", "answers": []}),
+     (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/survey/selfeval/S-99/import-xlsx", None), (404, 404, 403, 403, 403)),
+    (("DELETE", "/api/projects/BANK-A/survey/selfeval/S-99/import", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/survey/selfeval", None), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/survey/selfeval", {"pack": "P-01", "respondent_role": "负责人",
+                                                       "due_date": "2099-01-01"}), (404, 404, 403, 403, 403)),
+    (("DELETE", "/api/projects/GRID-B/survey/selfeval/S-01/import", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/survey/facts", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/GRID-B/consents", None), (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/consents", {"doc_ref": "计划-1", "signed_on": "2026-01-01"}),
      (404, 404, 403, 403, 403)),
@@ -124,12 +163,24 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B/deliverables/D2/export", None), (404, 404, 403, 403, 403)),
     # 改稿差异转候选（三期 F4）：开关默认关，成员也 404；非成员 404、非业务角色 403（开关打开的行为在 test_revision_mining）
     (("POST", "/api/projects/BANK-A/deliverables/D7/revision-candidates", None), (404, 404, 403, 403, 403)),
+    # 改稿与驳回特征汇总（四期 F4②）：只给项目负责人、知识管理员，顾问 403（负责人与开关行为在 test_revision_features）
+    (("GET", "/api/revision-features/summary", None), (403, 403, 403, 403, 403)),
+    (("GET", "/api/revision-features/summary?project=BANK-A", None), (403, 403, 403, 403, 403)),
+    # 经验萃取问题（四期 F4③）：只给知识专家，其他角色 403（专家与开关行为在 test_extraction_trigger）
+    (("GET", "/api/extraction/questions", None), (403, 403, 403, 403, 403)),
+    (("POST", "/api/extraction/questions/1/answer", {"body": "x"}), (403, 403, 403, 403, 403)),
+    (("POST", "/api/extraction/questions/1/skip", None), (403, 403, 403, 403, 403)),
+    (("GET", "/api/extraction/stats", None), (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export?format=pptx", None), (200, 404, 403, 403, 403)),
     (("PUT", "/api/projects/GRID-B/deliverables/D2/outline", OUTLINE), (404, 404, 403, 403, 403)),
     # 四期 A14 D1/D2 表单：成员可看；空表提交 422（必填未填，不写入）；非成员 404
     (("GET", "/api/projects/BANK-A/deliverables/D1/form", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/deliverables/D1/form", {"values": {}}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/deliverables/D2/form", {"values": {}}), (404, 404, 403, 403, 403)),
+    # 四期 A28② 合同导入：成员无文件 422、查状态 200；非成员 404
+    (("POST", "/api/projects/BANK-A/deliverables/D1/form/import", None), (422, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D1/form/import", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D1/form/import", None), (404, 404, 403, 403, 403)),
     # 质量门禁与签署（M3 ⑤）：成员可看；发起评审在 test_quality 里测（这里发起会留下排队的评审）。
     # member 是 BANK-A 项目经理：D7 没有评审，提交签署门禁不过 409；不在待签署状态，退回 409
     (("GET", "/api/projects/BANK-A/deliverables/D7/reviews", None), (200, 404, 403, 403, 403)),
@@ -140,6 +191,14 @@ MATRIX = [
     (("POST", "/api/projects/BANK-A/deliverables/D7/signoff/return", {"comment": "退回理由"}),
      (409, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/deliverables/D2/signoff/sign", {}), (404, 404, 403, 403, 403)),
+    # 交付件页四模式（四期 A26）：D3 合并签、一键修订、客户意见、批量签；非成员 404，规则在 test_a26_deliv 里测
+    (("POST", "/api/projects/GRID-B/deliverables/D3/signoff/merged", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7/revise", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D2/revise", None), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D2/client-feedback", {"items": [{"text": "意见"}]}),
+     (404, 404, 403, 403, 403)),
+    (("GET", "/api/deliverables/batch-sign", None), (200, 200, 403, 403, 403)),
+    (("POST", "/api/deliverables/batch-sign", {"items": [{"project": "GRID-B"}]}), (200, 200, 403, 403, 403)),
     # 驳回评审 Agent 的阻断（M3 ⑧）：评审不存在 404；非成员 404；驳回规则在 test_quality 里测
     (("POST", "/api/projects/BANK-A/deliverables/D7/reviews/999999/waivers", {"issue": 0, "reason": "理由"}),
      (404, 404, 403, 403, 403)),
@@ -175,16 +234,24 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B/knowledge-updates", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/assessment", None), (200, 404, 403, 403, 403)),        # A10：只给项目成员
     (("GET", "/api/projects/GRID-B/assessment", None), (404, 404, 403, 403, 403)),
+    # 四期 A27：阶段、阶段包、本周简报只给项目成员
+    (("GET", "/api/projects/BANK-A/stages", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/stages", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/stages/分析/pack", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/weekly-brief", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/weekly-brief", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/kb/search?q=值班", None),            (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/sources", None),                  (403, 403, 403, 403, 403)),   # 来源登记表只限知识专家、知识管理员（B16）
     (("POST", "/api/kb/sources/SR-999999/status", {"to": "trial"}), (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/sources/confirm-queue", None),    (403, 403, 403, 403, 403)),   # 来源确认队列（B25②），同上
     (("POST", "/api/kb/sources/confirm-queue/decide", {"gap_ids": [999999], "decision": "reject"}),
      (403, 403, 403, 403, 403)),
+    (("GET", "/api/kb/sources/manual-queue", None),     (403, 403, 403, 403, 403)),   # 需人工下载（四期 B25），同上
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/readiness", None),                (403, 403, 403, 403, 403)),   # F2②：知识专家、知识管理员、项目负责人
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
+    (("GET", "/api/kb/recheck-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/practice-queue", None),           (403, 403, 403, 403, 403)),   # 公司做法确认队列（三期 B17），同上
     (("GET", "/api/kb/practice-queue/stats", None),     (403, 403, 403, 403, 403)),
     (("POST", "/api/kb/practice-queue/decide", {"items": [{"version_id": 999999, "decision": "adopt"}]}), (403, 403, 403, 403, 403)),
@@ -208,6 +275,11 @@ MATRIX = [
     (("POST", "/api/agents/consultant-lead/tools/project.read", {"project_code": "BANK-A"}),
                                                         (200, 404, 403, 403, 403)),
     (("POST", "/api/agents/kb-builder/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (403, 403, 403, 403, 403)),
+    # 三期 C6-P（迁移 0045）：咨询协调与咨询师同权（非成员 404）；知识采集在采集机区，任何平台工具 403
+    (("POST", "/api/agents/consult-coordinator/tools/project.read", {"project_code": "BANK-A"}),
+                                                        (200, 404, 403, 403, 403)),
+    (("POST", "/api/agents/kb-collector/tools/kb.search", {"args": {"query": "值班"}}),
                                                         (403, 403, 403, 403, 403)),
     # 去标识检查（三期 C7，迁移 0048）：只授权 kb-builder，不涉及项目；交付侧 Agent 调用一律 403
     (("POST", "/api/agents/kb-builder/tools/deid.check", {"args": {"text": "告警分级按影响范围分三级。"}}),
@@ -406,7 +478,7 @@ def test_add_member_via_cli_bootstraps_project_without_manager():
 def test_create_project_via_cli():
     """一期没有网页立项：命令行建项目和 D1～D8，必须定档、指定首位项目经理；只有成员能看到。"""
     import secrets
-    code = f"QA-{secrets.token_hex(2).upper()}"
+    code = f"QA-{secrets.token_hex(3).upper()}"
     mgr = create_user((CONSULTANT,))
     other = create_user((CONSULTANT,))
     assert cli_main(["create-project", "--code", code, "--tier", "standard", "--manager", mgr[0],

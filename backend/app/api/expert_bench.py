@@ -3,7 +3,9 @@
 GET  /api/expert-bench/cards                      问答卡（按影响 × 不确定度排，带每日额度）与大白话词表
 GET  /api/expert-bench/templates                  按类型填空卡的格子
 POST /api/expert-bench/fill                       填空拼成正文（过机密级检测），只预览不保存
-POST /api/expert-bench/cards/{version_id}/answer  回答换成审核决定；不在本人卡片里的 404
+POST /api/expert-bench/cards/{version_id}/answer  回答换成审核决定；不在本人卡片里的 404；
+                                                  自己写的文字有可识别信息且没确认（deid_ack）409
+POST /api/expert-bench/deid-preview               四期 B23②：自己写的文字先去标识给专家看，不保存
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -30,6 +32,11 @@ class AnswerIn(BaseModel):
     fill: dict[str, str] | None = None
     comment: str = Field(default="", max_length=1000)
     elapsed_ms: int = 0
+    deid_ack: bool = False
+
+
+class PreviewIn(BaseModel):
+    texts: dict[str, str]
 
 
 class FillIn(BaseModel):
@@ -78,7 +85,15 @@ def answer(version_id: int, body: AnswerIn, db: Session = Depends(get_db),
     _expert(db, user)
     try:
         return eb.answer(db, user, version_id, [a.model_dump() for a in body.answers], fill=_fill_ok(body.fill),
-                         comment=body.comment, elapsed_ms=body.elapsed_ms)
+                         comment=body.comment, elapsed_ms=body.elapsed_ms, deid_ack=body.deid_ack)
     except rv.ReviewError as e:
         db.rollback()
         raise HTTPException(e.status, str(e)) from e
+
+
+@router.post("/deid-preview")
+def deid_preview(body: PreviewIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _expert(db, user)
+    if len(body.texts) > eb.MAX_PREVIEW_KEYS or any(len(k) > 24 or len(v) > 2000 for k, v in body.texts.items()):
+        raise HTTPException(422, "预览内容太长")
+    return eb.deid_preview(body.texts)

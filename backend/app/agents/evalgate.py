@@ -9,6 +9,14 @@
 用模拟模型逐题跑通（md 能裁剪、网关不拦、评分不报错）在 `tests/test_eval_gate.py`，随 pytest 进 CI。
 真模型回归不进 CI：测试机攒批跑，每题 3 轮多数判定（`docs/测试交接规范.md` 第 5 节）。
 
+A12 程序门（三期，`app/kb/assembly_eval.gate`）：按槽位装配的命中率必须严格高于 A24 固定查询基线，
+CI 随 pytest 用样例条目和 `knowledge/eval/assembly_samples.yaml` 跑（`tests/test_kb_assembly_eval.py`），
+测试机对真实评测集跑 `kb-assembly-eval <评测集> --as <用户> --gate`（退出码 3 为未通过）。
+
+四期 F6 一致性检查：must_not 不得命中否定式免责句（`quality.NEGATED_SAMPLES`，#436）；控制项编号（SOC.ORG.01、
+SOC.ORG.A1）不算网址（#334）；装配评测集（顶层有 chapters）给了 `--entries` 条目目录时，expect 的 key 必须在条目里
+（顶层 `absent` 列出故意缺槽的 key，#463）；判据自检 `self_check()` 每次随评测门跑。
+
 A24（章节级装配评测）接入点：`EXTRA_CHECKS`。A24 合并后在它的模块里 `register(...)`，
 或在 `_load_extra()` 里按模块名导入；未合并时导入失败即跳过，本模块不依赖它。
 """
@@ -19,6 +27,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 from ..project import quality
 from ..services import guard
 from . import evalset
@@ -26,6 +36,8 @@ from . import evalset
 URL = re.compile(r"https?://|www\.|\b[\w-]+\.(?:com|cn|net|org|gov|edu)(?:\.cn)?\b(?!\.\d)", re.I)  # 后接“.数字”的是控制项编号（如 SOC.ORG.01），不算网址
 # 像真实单位的全称：“××股份有限公司”“××有限责任公司”“××集团”“××银行股份”等；虚拟客户只写代号
 ENTITY = re.compile(r"[一-龥]{2,20}(?:股份有限公司|有限责任公司|有限公司|集团公司|集团有限|银行股份|农村商业银行|商业银行股份)")
+# 控制项编号：大写段用点连接、最后一段带数字（SOC.ORG.01、SOC.ORG.A1、SOC.NET.02）；先抹掉再判网址
+CONTROL_ID = re.compile(r"\b(?!WWW\.)[A-Z][A-Z0-9]{1,7}(?:\.[A-Z0-9]{1,8})*\.[A-Z]{0,3}\d[A-Z0-9]*\b")
 CUSTOMER_CODE = re.compile(r"\b[A-Z]{2,8}-[A-Z][0-9]?\b")
 
 
@@ -61,6 +73,18 @@ def _strings(v: object) -> list[str]:
     return []
 
 
+def url_hit(text: str) -> bool:
+    return bool(URL.search(CONTROL_ID.sub(" ", text)))
+
+
+def self_check() -> list[Issue]:
+    """判据自检：控制项编号不被网址规则命中、否定式免责句不被资质用语规则命中。"""
+    out = [Issue("-", "-", "判据", f"网址规则误判控制项编号 {s}") for s in ("SOC.ORG.01", "SOC.ORG.A1") if url_hit(s)]
+    out += [Issue("-", "-", "判据", "资质用语规则误判否定式免责句") for s in quality.NEGATED_SAMPLES
+            if quality.qualification_hits(s)]
+    return out
+
+
 def _qualif(text: str) -> int:
     return quality.qualification_hits(evalset._unquoted(text))
 
@@ -72,7 +96,7 @@ def check_case(name: str, c: dict) -> list[Issue]:
     if guard.check(prompt).blocked:
         out.append(Issue(name, cid, "红线", "题面被机密级检测拦下"))
     for s in _strings(c):
-        if URL.search(s):
+        if url_hit(s):
             out.append(Issue(name, cid, "红线", "含网址（评测题不放链接）"))
             break
     for s in _strings(c):
@@ -86,7 +110,56 @@ def check_case(name: str, c: dict) -> list[Issue]:
                 out.append(Issue(name, cid, "资质用语", f"{key} 要求模型说出测评 / 认证结论用语"))
     if c.get("kind", "redline") == "golden" and _qualif(prompt):
         out.append(Issue(name, cid, "资质用语", "黄金样例题面含测评 / 认证结论用语"))
+    for pat in c.get("must_not", []) or []:
+        if isinstance(pat, str) and any(re.search(pat, s) for s in quality.NEGATED_SAMPLES):
+            out.append(Issue(name, cid, "一致性", f"must_not {pat[:40]} 会命中否定式免责句（只抓肯定式）"))
     return out
+
+
+_ENTRY_KEY = re.compile(r"\A(?:﻿)?---[ \t]*\n(?:.*\n)*?key:[ \t]*['\"]?([a-z0-9][a-z0-9-]{1,62}[a-z0-9])['\"]?[ \t]*$",
+                        re.M)
+
+
+def entry_keys(dirs: list[Path]) -> set[str]:
+    """条目目录（递归 *.md）里元数据头的 key（只读 key 一行；草稿缺别的字段也算存在）。"""
+    keys: set[str] = set()
+    for d in dirs:
+        for f in sorted(Path(d).rglob("*.md")):
+            try:
+                m = _ENTRY_KEY.match(f.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                continue
+            if m:
+                keys.add(m.group(1))
+    return keys
+
+
+def check_assembly(path: Path, keys: set[str] | None) -> list[Issue]:
+    """装配评测集：格式按 assembly_eval.load；给了条目 key 时 expect 必须都在（absent 声明的除外）。"""
+    from ..kb import assembly_eval
+
+    try:
+        ev = assembly_eval.load(path)
+    except assembly_eval.AssemblyEvalError as e:
+        return [Issue(path.name, "-", "格式", str(e))]
+    if keys is None:
+        return []
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    absent = {str(k) for k in raw.get("absent") or []}
+    out = []
+    for ch in ev["chapters"]:
+        miss = [str(k) for k in ch["expect"] if str(k) not in keys and str(k) not in absent]
+        if miss:
+            out.append(Issue(path.name, str(ch["id"]), "一致性", f"expect 的 key 在条目里找不到：{'、'.join(miss)}"))
+    return out
+
+
+def _is_assembly(path: Path) -> bool:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return False
+    return isinstance(data, dict) and "chapters" in data
 
 
 def check_file(path: Path) -> list[Issue]:
@@ -115,13 +188,17 @@ def _load_extra() -> list[str]:
     return loaded
 
 
-def run(path: Path) -> tuple[int, list[Issue], list[str]]:
-    """返回 (文件数, 问题, 已接入的扩展)。"""
+def run(path: Path, entries: list[Path] | None = None) -> tuple[int, list[Issue], list[str]]:
+    """返回 (文件数, 问题, 已接入的扩展)。entries 为条目目录（装配评测集 key 核对用）。"""
     files = sorted(path.glob("*.yaml")) if path.is_dir() else [path]
     extras = _load_extra()
+    keys = entry_keys(entries) if entries else None
     seen: dict[str, str] = {}
-    issues: list[Issue] = []
+    issues: list[Issue] = self_check()
     for f in files:
+        if _is_assembly(f):
+            issues += check_assembly(f, keys)
+            continue
         issues += check_file(f)
         try:
             ids = [str(c.get("id")) for c in evalset.load(f) if isinstance(c, dict)]

@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / "knowledge" / "controls" / "v0.yaml"
 QUESTION_BANK = ROOT / "knowledge" / "question_bank"  # 样例；正文在资料仓，由 test_question_bank.py 校验
 
-PRODUCTS = {"SOC", "IRE"}
+PRODUCTS = {"SOC", "IRE", "DSM", "ISO", "NSG"}
+FOUR_GRID = {"SOC", "IRE"}  # 有银行、电力行业专属项的产品；DSM、ISO、NSG 四期 C21 先只有通用项
 INDUSTRIES = {"通用", "银行", "电力"}
 STATUSES = {"draft", "active", "retired"}
 # 资质边界：控制项名称不得出现结论性用语
@@ -38,7 +39,17 @@ def test_header(catalog: dict) -> None:
 
 
 def test_count_in_range(catalog: dict) -> None:
-    assert 60 <= len(catalog["controls"]) <= 90
+    by_product = {p: sum(1 for c in catalog["controls"] if c["product"] == p) for p in PRODUCTS}
+    assert 60 <= by_product["SOC"] + by_product["IRE"] <= 90
+    for p in PRODUCTS - FOUR_GRID:
+        assert 10 <= by_product[p] <= 40, (p, by_product[p])
+
+
+def test_domains_match_product_config(catalog: dict) -> None:
+    """控制项清单的评估域与产品配置 baseline.domains 一致（题库、A25 资料清单按域取数）。"""
+    for p in PRODUCTS:
+        cfg = yaml.safe_load((ROOT / "products" / f"{p.lower()}.yaml").read_text(encoding="utf-8"))
+        assert catalog["domains"][p] == cfg["baseline"]["domains"], p
 
 
 def test_fields_and_values(catalog: dict) -> None:
@@ -62,12 +73,15 @@ def test_fields_and_values(catalog: dict) -> None:
 
 def test_four_grid_coverage(catalog: dict) -> None:
     """四格（SOC、IRE × 银行、电力）每格都有行业专属控制项，每个评估域至少 2 项。"""
-    for p in PRODUCTS:
+    for p in FOUR_GRID:
         for ind in ("银行", "电力"):
             assert any(c["product"] == p and ind in c["industries"] for c in catalog["controls"]), (p, ind)
         for d in catalog["domains"][p]:
             n = sum(1 for c in catalog["controls"] if c["product"] == p and c["domain"] == d)
             assert n >= 2, (p, d)
+    for p in PRODUCTS - FOUR_GRID:
+        for d in catalog["domains"][p]:
+            assert sum(1 for c in catalog["controls"] if c["product"] == p and c["domain"] == d) >= 2, (p, d)
 
 
 def test_question_bank_controls_included(catalog: dict) -> None:
@@ -138,5 +152,6 @@ def test_applicability_and_params(catalog: dict) -> None:
 def test_params_present_for_obvious_cases(catalog: dict) -> None:
     """保留期、响应时限、演练频次等组织定义参数至少覆盖到这些项。"""
     by_id = {c["id"]: c for c in catalog["controls"]}
-    for cid in ("SOC.TEC.05", "SOC.PRC.02", "SOC.PRC.05", "IRE.GOV.02", "IRE.RPT.02"):
+    for cid in ("SOC.TEC.05", "SOC.PRC.02", "SOC.PRC.05", "IRE.GOV.02", "IRE.RPT.02",
+                "DSM.MON.01", "DSM.MON.02", "ISO.RSK.01", "ISO.PER.01", "NSG.OPS.01"):
         assert by_id[cid].get("params"), cid
