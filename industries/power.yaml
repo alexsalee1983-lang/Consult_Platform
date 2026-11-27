@@ -4,6 +4,7 @@
 #   依据：ind-power-ref-ics-protection-rule（L4）、ind-power-ref-nea-cyber-rule（L4），条款均已对原文核过
 #   调研题与追问：ind-power-tpl-soc-questions（11 题）、ind-power-tpl-ire-questions（9 题）
 #   术语：ind-power-gls-terms；组织惯例：ind-power-mtd-org-conventions；档位提示：ind-power-mtd-strict-tier-hint
+#   L2 草稿（四期 B36，待专家确认，确认前 level 保持 L1）：判断规则 ind-power-mtd-soc-judgment-rules、ind-power-mtd-ire-judgment-rules；黄金样例 ind-power-gld-*（见 docs/验收/四期-B36行业包L2核对表.md）
 code: POWER
 name: 电力
 aliases: [电力, 电网, 发电]
@@ -76,5 +77,5 @@ gates:
   message: 交付件出现了防护评估或检查结论性表述；只能写差距分析、符合性初判、整改建议
 instructions:
   facts: 行业包“电力”：整理事实时按安全分区（生产控制区、管理信息区、安全接入区）分章；生产控制区只用访谈与文档核对得到的事实，不引入主动扫描结果；电力类调研题与追问见知识库条目 ind-power-tpl-soc-questions、ind-power-tpl-ire-questions。
-  gap: 行业包“电力”：差距分析须按安全分区（生产控制区、管理信息区）分别列出现状和差距，并补查电力监控系统安全防护的相关要求（依据只来自知识库，未入库的标【依据待核实】）。
+  gap: 行业包“电力”：差距分析须按安全分区（生产控制区、管理信息区）分别列出现状和差距，并补查电力监控系统安全防护的相关要求（依据只来自知识库，未入库的标【依据待核实】）。判断规则见知识库条目 ind-power-mtd-soc-judgment-rules、ind-power-mtd-ire-judgment-rules（按产品取用，检索不到时不引用）。
   policy: 行业包“电力”：起草预案时区分通用网络安全事件预案与电力监控系统专项预案；启动、向电力调度机构和派出机构报告、现场保护三个环节须写明岗位与时限。

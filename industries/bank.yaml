@@ -4,6 +4,7 @@
 #   依据：ind-bank-ref-pbc-incident-report（L4，条款已对原文核过）、ind-bank-ref-itm-outsource-bcp（要点级，条款号待核）
 #   调研题与追问：ind-bank-tpl-soc-questions（11 题）、ind-bank-tpl-ire-questions（9 题）
 #   术语：ind-bank-gls-terms；组织惯例：ind-bank-mtd-org-conventions
+#   L2 草稿（四期 B36，待专家确认，确认前 level 保持 L1）：判断规则 ind-bank-mtd-soc-judgment-rules、ind-bank-mtd-ire-judgment-rules；黄金样例 ind-bank-gld-*（见 docs/验收/四期-B36行业包L2核对表.md）
 code: BANK
 name: 银行
 aliases: [银行, 银行业, 商业银行]
@@ -79,5 +80,5 @@ gates:
   message: 交付件出现了监管或检查结论性表述；只能写差距分析、符合性初判、整改建议
 instructions:
   facts: 行业包“银行”：整理事实时按渠道（网银、手机银行、柜面、支付清算、外联接口）分章，并单列“事件分级与报告机制”和“外包与第三方”；银行类调研题与追问见知识库条目 ind-bank-tpl-soc-questions、ind-bank-tpl-ire-questions。
-  gap: 行业包“银行”：差距分析须补查银行业监管文件中与本产品相关的要求（依据只来自知识库，未入库的标【依据待核实】），并说明与等保要求重叠的部分；事件报告时限、分级标准、外包管理各列一项。
+  gap: 行业包“银行”：差距分析须补查银行业监管文件中与本产品相关的要求（依据只来自知识库，未入库的标【依据待核实】），并说明与等保要求重叠的部分；事件报告时限、分级标准、外包管理各列一项。判断规则见知识库条目 ind-bank-mtd-soc-judgment-rules、ind-bank-mtd-ire-judgment-rules（按产品取用，检索不到时不引用）。
   policy: 行业包“银行”：起草流程或预案时，升级与对外报告环节须对应人民银行事件报告办法的分级与时限，联系人写岗位不写姓名。
