@@ -5,6 +5,7 @@ import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import AssistPanel from "../components/AssistPanel.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
+import Customizations from "../components/Customizations.jsx";
 import DocBody from "../components/DocBody.jsx";
 import DeliverableForm from "../components/DeliverableForm.jsx";
 import { BatchSign, ClientFeedback, ModeBar, RevisePanel } from "../components/DeliverableModes.jsx";
@@ -624,6 +625,7 @@ export default function Deliverable({ code, dcode }) {
               {cards.length === 0 && <li className="sub">本交付件没有待确认事项。<Link to={`/project/${encodeURIComponent(code)}`}>回驾驶舱</Link></li>}
             </ul>
           </section>
+          <Customizations code={code} dcode={dcode} seq={cur} editable={editable && !signed} onChanged={load} />
           {mode === 1 && <RevisePanel code={code} dcode={dcode} rv={rv} editable={editable} onChanged={load} />}
           <SignFlow code={code} dcode={dcode} d={d} so={so} isManager={isManager} onChanged={load} />
           {mode === 3 && !so.merged && <ClientFeedback code={code} dcode={dcode} sections={d.sections} onChanged={load} />}

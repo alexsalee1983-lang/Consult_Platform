@@ -1,0 +1,9 @@
+
+ RUN  v4.1.12 C:/Alex_Work/cp-wt-a30/frontend
+
+
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+   Start at  16:37:37
+   Duration  37.69s (transform 9.23s, setup 0ms, import 11.15s, tests 3.03s, environment 20.17s)
+
