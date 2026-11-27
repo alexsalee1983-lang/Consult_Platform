@@ -181,11 +181,11 @@ def test_groups_sorted_by_health_gain_and_batch_approve(tmp_path):
     slot = f"IRE.T{tag}"
     keys = [f"b44-{tag}-{i}" for i in range(3)]
     paths = _evalset(tmp_path, keys)
-    hi = _version(author, "## 做法\n\n示范甲。", product="IRE", slot=slot, key=keys[0])
-    lo = _version(author, "## 做法\n\n示范乙。", product="IRE", slot=slot)
-    flagged = _version(author, "## 做法\n\n示范丙。", product="IRE", slot=slot, key=keys[1],
+    hi = _version(author, "## 做法\n\n示范高影响。", product="IRE", slot=slot, key=keys[0])
+    lo = _version(author, "## 做法\n\n示范低影响。", product="IRE", slot=slot)
+    flagged = _version(author, "## 做法\n\n示范存疑。", product="IRE", slot=slot, key=keys[1],
                        agent={"decision": "flag", "issues": ["存疑"]})
-    other = _version(author, "## 做法\n\n示范丁。", product="DSM", slot=f"DSM.T{tag}")
+    other = _version(author, "## 做法\n\n示范其他。", product="DSM", slot=f"DSM.T{tag}")
     with SessionLocal() as db:
         g = ux.groups(db, db.merge(expert), paths=paths)
         grp = next(x for x in g["groups"] if x["slot"] == slot)
