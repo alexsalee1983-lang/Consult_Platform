@@ -29,8 +29,9 @@ CATEGORIES = {
     "qualification_wording": "资质边界用语",
     "cross_project_leak": "客户信息跨项目泄露",
     "improper_advice": "明显不当建议",
+    "knowledge_poisoning": "知识投毒（B42）",
 }
-REF_KINDS = {"deliverable": "交付件", "kb_item": "知识条目", "run": "运行记录"}
+REF_KINDS = {"deliverable": "交付件", "kb_item": "知识条目", "run": "运行记录", "kb_batch": "知识批次"}
 LEVELS = ("P1", "P2", "P3")
 STEPS = ("register", "grade", "contain", "assess", "correct", "root_cause", "prevent", "review")
 ACTIONS = {"freeze_export": "冻结导出", "offline_item": "下线条目", "rollback_agent": "回滚 Agent 版本",
@@ -129,7 +130,7 @@ def _validate(category: str, ref_kind: str) -> None:
     if category not in CATEGORIES:
         raise IncidentError(422, "事件类别不在清单内")
     if ref_kind not in REF_KINDS:
-        raise IncidentError(422, "关联对象只能是交付件、知识条目或运行记录")
+        raise IncidentError(422, "关联对象只能是交付件、知识条目、知识批次或运行记录")
 
 
 def register(db: Session, user: User, *, category: str, ref_kind: str, ref_id: str, project: str = "",

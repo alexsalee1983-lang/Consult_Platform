@@ -282,3 +282,47 @@ def _check(text: str) -> GuardResult:
     for kind in {f.kind for f in findings}:
         metrics.GUARD_BLOCKS.labels(kind).inc()
     return GuardResult(bool(findings), findings)
+
+
+# ---------- 写给 AI 的指令（四期 B42 投毒防护第②层，只用于知识入口） ----------
+# 知识条目只当参考资料：正文里出现“忽略之前的指令”“你现在扮演”这类写给模型的话，按疑似投毒处理。
+# 与 check() 分开：对话、项目资料里讨论提示词注入是正常内容，不受影响。
+_INSTRUCTION_PATTERNS = (
+    ("ignore_rules", r"(?:忽略|无视|忘记|忘掉)\s*(?:你|您)?\s*(?:之前|以上|上面|前面|上述|先前|此前|所有|全部|一切)的?\s*"
+                     r"(?:所有|全部|一切)?的?\s*(?:指令|指示|提示词|系统设定|设定)"),
+    ("ignore_rules", r"\b(?:ignore|disregard|forget)\s+(?:all\s+|any\s+)?(?:the\s+|your\s+)?(?:previous|prior|above|"
+                     r"earlier|preceding)\s+(?:instructions?|prompts?|rules?|directions?)\b"),
+    ("role_override", r"(?:你|您)(?:现在|从现在起|接下来)\s*(?:是|扮演|充当|假装)\s*(?:一个|一名)?\s*"
+                      r"(?:不受限制|没有限制|新的|另一个)"),
+    ("role_override", r"(?:作为|身为)\s*(?:AI|人工智能|大模型|语言模型|AI\s*助手|智能体|Agent)\s*[，,]\s*(?:你|您)\s*"
+                      r"(?:必须|应当|应该|要|需要)"),
+    ("role_override", r"\byou\s+are\s+now\b|\bact\s+as\s+(?:an?\s+)?(?:unrestricted|jailbroken|DAN)\b"),
+    ("prompt_marker", r"<\|im_start\|>|<\|im_end\|>|\[/?INST\]|<<\s*SYS\s*>>|<\s*/?\s*(?:system|assistant)\s*>"),
+    ("output_control", r"(?:在|对)\s*(?:回答|回复|答复|输出)\s*(?:中|里|时)\s*(?:一律|始终|总是|务必)\s*"
+                       r"(?:推荐|声称|写上|加入|插入)"),
+    ("output_control", r"(?:不要|切勿)\s*(?:告诉|透露|告知)\s*(?:用户|审核人|知识专家)"),
+)
+_INSTRUCTION_RES = tuple((kind, re.compile(p, re.I)) for kind, p in _INSTRUCTION_PATTERNS)
+INSTRUCTION_LABEL = "写给 AI 的指令"
+
+
+def instructions(text: str) -> list[Finding]:
+    """识别写给 AI 的指令样式内容（零宽、全角绕过先规范化）。只返回类别和打码摘录，不回显原文。"""
+    if not text:
+        return []
+    norm, pos = _normalize(text)
+    out: list[Finding] = []
+    for kind, rx in _INSTRUCTION_RES:
+        for m in rx.finditer(norm):
+            out.append(Finding(kind, INSTRUCTION_LABEL, mask(m.group(0)), pos[m.start()], pos[m.end() - 1] + 1))
+    out.sort(key=lambda f: f.start)
+    return out
+
+
+def invisible_count(text: str) -> int:
+    """零宽、方向控制、标签字符等不可见格式字符（Unicode Cf 类）的个数：入口清洗时去掉并计数。"""
+    return sum(1 for ch in text if unicodedata.category(ch) == "Cf")
+
+
+def strip_invisible(text: str) -> str:
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")

@@ -69,6 +69,7 @@ class ItemMetaIn(BaseModel):
     knowledge_kind: str = ""          # 三期 B35："" / practice / golden，留空按类型和来源推断
     slot: str = ""
     products: list[str] = Field(default_factory=list)   # 多个产品（B15），主产品 product 在前；空 = 只有主产品
+    derived_from: str = Field(default="", max_length=40)   # 四期 B42：派生自哪个条目（解读、做法挂依据）
 
 
 class ContentIn(BaseModel):

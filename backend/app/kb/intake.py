@@ -77,6 +77,13 @@ def submit(db: Session, user: User, filename: str, data: bytes, content_type: st
                                 "findings": [{"kind": f.kind, "label": f.label, "excerpt": f.excerpt}
                                              for f in result.findings[:10]]})
 
+    from . import poison                    # 四期 B42：限流、写给 AI 的指令整份退回
+
+    try:
+        poison.check_intake(db, user, filename, doc.full_text())
+    except poison.PoisonError as e:
+        raise IntakeError(e.status, str(e)) from e
+
     if not storage.enabled():
         raise IntakeError(503, "对象存储未启用，暂时不能投料")
     sha = hashlib.sha256(data).hexdigest()
@@ -95,7 +102,7 @@ def submit(db: Session, user: User, filename: str, data: bytes, content_type: st
     db.commit()
     audit.record(db, actor=user.username, action="kb.intake", result="allowed", project_code=project,
                  upload_id=up.id, ext=_ext(filename),
-                 size=len(data), sha256=sha[:16], job_id=job_id)
+                 size=len(data), sha256=sha[:16], job_id=job_id, hidden=doc.hidden)
     return IntakeResult(up, job_id)
 
 

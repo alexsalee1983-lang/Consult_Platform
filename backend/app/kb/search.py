@@ -394,6 +394,10 @@ def search(db: Session, user: User, query: str, *, layer: str = "", product: str
     rank_of = {cid: authority.sort_rank(lv) for cid, lv in levels.items()}
     group, weight = _priorities(db, set(scores) | pinned, product if include_general and product != "GEN" else "",
                                 boost_tags, boost_refs)
+    from . import poison                             # 四期 B42 第④层：单一来源未经第二来源确认的降权
+
+    for cid in poison.single_source_chunks(db, set(scores) | pinned):
+        weight[cid] = weight.get(cid, 1.0) * poison.SINGLE_SOURCE_WEIGHT
 
     if rerank_status == "ok":
         # 重排分数要达到门槛：依据查询用 KB_BASIS_MIN_RERANK，普通检索用更低的 KB_SEARCH_MIN_RERANK（只挡掉趋近 0 分的

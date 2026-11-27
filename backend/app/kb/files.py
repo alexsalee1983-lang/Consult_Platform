@@ -48,7 +48,8 @@ from .items import ItemMeta, VersionContent
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$")
 META_KEYS = ("layer", "domain", "product", "doc_type", "stage", "capabilities", "industries", "classification",
              "visible_roles", "owner", "tags", "control_ids",
-             "language", "jurisdiction", "translation_of", "translation_notice")   # 后四项：四期 B28①
+             "language", "jurisdiction", "translation_of", "translation_notice",   # 这四项：四期 B28①
+             "derived_from")                                            # 四期 B42
 CONTENT_KEYS = ("title", "source_type", "source_detail", "summary", "applicability", "change_note", "ref_document",
                 "ref_version", "ref_status", "ref_code", "ref_replaced_by",
                 "ref_replaces", "ref_amends", "model")

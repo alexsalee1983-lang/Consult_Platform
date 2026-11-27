@@ -42,6 +42,14 @@ MATRIX = [
     # AI 质量事件台账（四期 F3）：台账只给项目负责人；登记挂 BANK-A 须是成员（非成员 404）；
     # 他人事件详情和处置 404（负责人、项目经理、登记人在 test_quality_incidents 里测）
     (("GET", "/api/quality-incidents", None),           (403, 403, 403, 403, 403)),
+    # 四期 B42 投毒处置：只给知识管理员、咨询业务负责人（报告另含知识专家），顾问和非业务角色一律 403
+    (("GET", "/api/kb/poison", None),                   (403, 403, 403, 403, 403)),
+    (("GET", "/api/kb/poison/999999", None),            (403, 403, 403, 403, 403)),
+    (("POST", "/api/kb/poison/report", {"doc_id": "GOV-0001", "note": "x"}), (403, 403, 403, 403, 403)),
+    (("POST", "/api/kb/poison/999999/propose", {"decision": "clear"}), (403, 403, 403, 403, 403)),
+    (("POST", "/api/kb/poison/999999/decide", {"approve": True}), (403, 403, 403, 403, 403)),
+    (("POST", "/api/kb/poison/999999/notice", {"action": "dismiss"}), (403, 403, 403, 403, 403)),
+    (("POST", "/api/kb/poison/versions/999999/corroborate", None), (403, 403, 403, 403, 403)),
     (("POST", "/api/quality-incidents", {"category": "bogus", "ref_kind": "run", "ref_id": "1", "project": "BANK-A"}),
      (422, 422, 403, 403, 403)),
     (("GET", "/api/quality-incidents/999999", None),    (404, 404, 403, 403, 403)),

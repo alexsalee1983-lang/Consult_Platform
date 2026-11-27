@@ -60,6 +60,10 @@ class KbItem(KbBase):
     current_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("kb_versions.id", use_alter=True, name="fk_kb_items_current_version"), nullable=True)
     retired: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 投毒防护（四期 B42，知识区迁移 k0024，app/kb/poison.py）：derived_from 派生自哪个条目（一键清除时一起清除）；
+    # frozen_by 冻结它的投毒事件编号（冻结时 retired 置真、检索不到，恢复时还原）
+    derived_from: Mapped[str] = mapped_column(String(40), default="", server_default="", index=True)
+    frozen_by: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_by: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -144,6 +148,11 @@ class KbVersion(KbBase):
     # 起草模型与家族（三期 G2③，知识区迁移 k0016）：Agent 起草导入时记，专家修订没写模型的沿用上一版；知识审核据此换家族
     model: Mapped[str] = mapped_column(String(100), server_default="")
     model_family: Mapped[str] = mapped_column(String(32), server_default="")
+    # 投毒防护（四期 B42，k0024）：batch_key 投料批次；poison_flags 命中的防护类别（有值即须专家人工审核）；
+    # single_source 只有一个人提供的说法，检索降权，非作者知识专家确认有第二来源后清除
+    batch_key: Mapped[str] = mapped_column(String(64), default="", server_default="", index=True)
+    poison_flags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    single_source: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sql_false())
 
     item: Mapped[KbItem] = relationship(back_populates="versions", foreign_keys=[item_id])
     reviews: Mapped[list["KbReview"]] = relationship(back_populates="version", order_by="KbReview.id")
@@ -408,4 +417,36 @@ class KbGap(KbBase):
     reopened: Mapped[int] = mapped_column(Integer, default=0)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbPoisonIncident(KbBase):
+    """投毒事件（四期 B42，知识区迁移 k0024；规则只在 app/kb/poison.py）。
+
+    trigger：instruction 指令样式内容 / report 人工报告 / rate_limit 提交过快 / intake_instruction 投料被退回；
+    status：notice 待负责人看（不冻结）/ frozen 已冻结待知识管理员核实 / proposed 已提处置意见待负责人批准 /
+    closed 已执行或已关闭。proposal：clear 清除 / partial 部分清除 / restore 恢复。说明只记长度和摘要哈希。"""
+    __tablename__ = "kb_poison_incidents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    trigger: Mapped[str] = mapped_column(String(24))
+    scope_kind: Mapped[str] = mapped_column(String(12), default="")          # batch / submitter
+    scope_value: Mapped[str] = mapped_column(String(64), default="")
+    submitter: Mapped[str] = mapped_column(String(64), default="", index=True)
+    categories: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="frozen", index=True)
+    frozen_items: Mapped[list | None] = mapped_column(JSON, nullable=True)   # 本事件冻结的条目 id
+    affected: Mapped[list | None] = mapped_column(JSON, nullable=True)       # 受影响条目 [{doc_id, derived}]
+    reported_by: Mapped[str] = mapped_column(String(64))
+    note_len: Mapped[int] = mapped_column(Integer, default=0)
+    note_sha: Mapped[str] = mapped_column(String(16), default="")
+    proposal: Mapped[str] = mapped_column(String(12), default="")
+    proposal_items: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    proposed_by: Mapped[str] = mapped_column(String(64), default="")
+    proposed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[str] = mapped_column(String(64), default="")
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    quality_incident_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # 主库台账，不建外键
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
