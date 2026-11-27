@@ -16,6 +16,9 @@
 
 审计只记项目、交付件编号、修订号、各章版本号、文件大小和摘要哈希、模板类别（内置 / 配置）、是否草稿和导出编号，
 不记正文、章节标题和模板路径。
+
+四期 A32①（Word 回传）：文档属性“标识”写 EXPORT_MARK + 导出编号；套模板且 {{正文}} 后还有模板内容时，
+在正文末尾放书签 BODY_END_BOOKMARK，回传时据此只读正文部分（规则见 app/project/word_return.py）。
 """
 from __future__ import annotations
 
@@ -53,6 +56,8 @@ TZ = ZoneInfo("Asia/Shanghai")
 MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 DRAFT_MARK = "草稿 · 未经签署 · 仅供内部审阅"
 BODY_MARK = "{{正文}}"
+EXPORT_MARK = "CP-EXPORT-"                 # 文档属性“标识”= EXPORT_MARK + 导出编号（四期 A32① Word 回传凭此匹配）
+BODY_END_BOOKMARK = "cp_body_end"
 KIND_NAMES = {"document": "客户资料", "interview": "访谈纪要", "observation": "现场观察"}
 STATUS_NAMES = {"not_started": "未开始", "drafting": "起草中", "review": "待审核", "signed": "已签署"}
 
@@ -396,9 +401,16 @@ def export_deliverable(db: Session, user: User, project: Project, d: Deliverable
             w._inline(w._para(), "（本章还没有正文）")
             continue
         w.body(_xml_safe(v.body))
-    if anchor is not None:
+    if anchor is not None:                                     # 正文结束书签：回传时不把模板尾部内容算进末章
+        for tag in ("w:bookmarkEnd", "w:bookmarkStart"):
+            el = etree.Element(qn(tag))
+            el.set(qn("w:id"), "9999")
+            if tag == "w:bookmarkStart":
+                el.set(qn("w:name"), BODY_END_BOOKMARK)
+            anchor._p.addnext(el)
         anchor._p.getparent().remove(anchor._p)
     notes.save()
+    doc.core_properties.identifier = EXPORT_MARK + export_id
 
     footer = f"导出：{user.username}　{now:%Y-%m-%d %H:%M}　导出编号 {export_id}　{project.code} {d.code} v{d.revision}"
     _mark_pages(doc, draft, footer)

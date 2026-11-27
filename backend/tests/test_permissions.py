@@ -157,6 +157,13 @@ MATRIX = [
     (("PUT", "/api/projects/BANK-A/deliverables/D7/sections/1", SECTION), (201, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
+    # 四期 A32 顾问便利性：Word 回传（成员无文件 422）、知识侧栏、确认卡证据并排；非成员 404
+    (("POST", "/api/projects/BANK-A/deliverables/D7/word-return", None), (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D2/word-return", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/kb-suggest", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/deliverables/D2/sections/1/kb-suggest", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/confirmations/evidence", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/confirmations/evidence", None), (404, 404, 403, 403, 403)),
     # 三期 A15 写稿助手：项目成员可用（演示模式流式返回），非成员 404
     (("POST", "/api/projects/BANK-A/deliverables/D7/sections/1/assist", {"prompt": "这一章怎么写？"}), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export", None), (200, 404, 403, 403, 403)),
