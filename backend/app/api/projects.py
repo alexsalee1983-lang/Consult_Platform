@@ -32,6 +32,7 @@ from ..core.permissions import (
 from ..models import Confirmation, Project, ProjectMember, User
 from ..project import configs
 from ..project import confirmations as conf_svc
+from ..project import customizations as cust_svc
 from ..project import retention
 from ..project import runs as run_svc
 from ..project import revise as revise_svc
@@ -172,9 +173,11 @@ def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db), user: User
     if c is None or membership(db, c.project_id, user.id) is None:
         raise HTTPException(404, "待确认事项不存在")
     try:
+        cust_svc.check_can_resolve(db, user, c)   # 四期 A30：结构类定制项审批卡只给项目经理
         c = conf_svc.resolve(db, user, c, body.choice, body.resolution)
-    except conf_svc.ConfirmationError as e:
+    except (conf_svc.ConfirmationError, cust_svc.CustomizationError) as e:
         raise HTTPException(e.status, e.detail) from e
+    cust_svc.on_card_resolved(db, user, c)   # 四期 A30：定制项确认卡、审批卡处理后改定制项状态
     run_svc.on_card_resolved(db, c)   # 交付链在等这张卡时，卡都处理完就继续
     revise_svc.on_card_resolved(db, user, c)   # 四期 A26：客户意见都处理完、有采纳的，自动生成修订稿
     return _conf_out(c)

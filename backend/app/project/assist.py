@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from ..agents import knowledge, runtime
 from ..models import Deliverable, DeliverableSection, Project, User
 from . import deliverables as svc
-from . import quality
+from . import customizations, quality
 
 AGENT = "report-writer"
 SPEED_LEVEL = {"fast": "light", "deep": "reasoning"}
@@ -138,5 +138,7 @@ def prepare(db: Session, user: User, project: Project, d: Deliverable, s: Delive
         query = (prompt.strip() or f"{d.title} {s.title}")[:500]
     kb_block, refs = knowledge.retrieve(db, user, AGENT, project, query)
     system = runtime.system_prompt(doc, card, kb_block)
-    return Prepared(system=system, message=build_message(d, s, mode, prompt, context, selection),
+    custom = customizations.prompt_block(db, project, d.code, s.seq)          # 四期 A30：本章适用的定制项
+    message = build_message(d, s, mode, prompt, context, selection) + (f"\n\n{custom}" if custom else "")
+    return Prepared(system=system, message=message,
                     level=SPEED_LEVEL[speed], refs=refs, version=doc.version, findings=findings(mode, text))
