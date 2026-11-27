@@ -32,7 +32,7 @@ def test_updated_and_retired_items_flag_sections_until_rewritten():
 
         v1 = rv.new_item(db, u[expert[0]], ItemMeta(layer="L4", domain="OPS", product="GEN", doc_type="REF",
                                                     stage="通用", capabilities=["运营"], visible_roles=["consultant"]),
-                         _content(f"影响测试 {secrets.token_hex(2)}", "## 8.1.5 集中管控\n\n应集中分析。"))
+                         _content(f"影响测试 {secrets.token_hex(4)}", "## 8.1.5 集中管控\n\n应集中分析。"))
         publish(v1)
         doc_id = v1.item.doc_id
 

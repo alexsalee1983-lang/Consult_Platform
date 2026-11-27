@@ -37,7 +37,7 @@ def test_matrix_counts_item_under_every_product(monkeypatch):
 
 
 def test_list_filter_and_stats_read_labels(people):  # noqa: F811
-    tag = secrets.token_hex(2)
+    tag = secrets.token_hex(4)
     hit = _multi(people, f"多产品列表-{tag}", ["SOC", "ISO"])
     c = logged_in_client(app, create_user(("knowledge_expert",)))
     try:
@@ -54,7 +54,7 @@ def test_list_filter_and_stats_read_labels(people):  # noqa: F811
 
 
 def test_match_products_industries_and_visibility(people):  # noqa: F811
-    tag = secrets.token_hex(2)
+    tag = secrets.token_hex(4)
     multi = _multi(people, f"装配多产品-{tag}", ["SOC", "ISO"])
     general = _publish(people, f"装配通用-{tag}", "## 通用\n\n通用要点。", product="GEN", stage="通用", layer="L1")
     hidden = _multi(people, f"装配受限-{tag}", ["ISO"], classification="restricted", visible=["admin"])
@@ -84,7 +84,7 @@ def test_similar_items_by_product_label(people):  # noqa: F811
     with SessionLocal() as db:
         if db.get_bind(KbItem).dialect.name != "postgresql":
             pytest.skip("查重只在 PostgreSQL 上可用")
-    tag = secrets.token_hex(2)
+    tag = secrets.token_hex(4)
     multi = _multi(people, f"查重值守交接规程{tag}", ["SOC", "ISO"])
     with SessionLocal() as db:
         u = db.merge(people["author"])

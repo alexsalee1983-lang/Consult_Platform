@@ -179,7 +179,7 @@ def test_product_d1_to_d8(product: str, modules: list[str], client: str, materia
     lead = logged_in_client(app, create_user((PROJECT_LEAD,)))
     mgr_user = create_user((CONSULTANT,))
     mgr = logged_in_client(app, mgr_user)
-    code = f"{client}-E{secrets.token_hex(2).upper()}"
+    code = f"{client}-E{secrets.token_hex(3).upper()[:5]}"
     try:
         r = lead.post("/api/projects", json={"code": code, "tier": "standard", "product": product,
                                              "modules": modules, "manager": mgr_user[0], "industry": "其他"})

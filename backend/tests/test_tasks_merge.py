@@ -45,7 +45,7 @@ def test_my_tasks_covers_all_former_workbench_kinds_with_one_count():
     multi = create_user(("consultant", "project_lead", "knowledge_expert", "knowledge_admin"), {code: "manager"})
     me = multi[0]
     writer = create_user(("knowledge_expert",))[0]
-    tag = secrets.token_hex(2).upper()
+    tag = secrets.token_hex(3).upper()
     vid = _version(f"{tag}A", writer)
     recheck_id = _version(f"{tag}R", writer, status="published", single=True)
     with SessionLocal() as db:
@@ -83,7 +83,7 @@ def test_my_tasks_covers_all_former_workbench_kinds_with_one_count():
 def test_return_kb_content_hides_both_review_roles_of_that_version():
     multi = create_user(("knowledge_expert", "knowledge_admin"))
     writer = create_user(("knowledge_expert",))[0]
-    vid = _version(f"{secrets.token_hex(2).upper()}B", writer)
+    vid = _version(f"{secrets.token_hex(3).upper()}B", writer)
     with logged_in_client(app, multi) as c:
         r = c.post("/api/my-tasks/return", json={"kind": "kb_content", "ref_id": vid, "reason": "依据不对"})
         assert r.status_code == 202, r.text

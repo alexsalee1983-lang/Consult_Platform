@@ -167,7 +167,7 @@ def test_return_reason_goes_through_guard():
 def test_knowledge_tasks_use_agent_flag_and_mark_uncertain_fields():
     from app.models.kb import KbItem, KbReview, KbVersion
     expert, other = create_user(("knowledge_expert",)), create_user(("knowledge_expert",))
-    tag = secrets.token_hex(2).upper()
+    tag = secrets.token_hex(3).upper()
     with SessionLocal() as db:
         ids = {}
         for n, (sample, decision, author) in {"flag": ("pending", "flag", other[0]),

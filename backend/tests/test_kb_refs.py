@@ -128,7 +128,7 @@ def _publish(title: str, retire: bool = False) -> str:
 
 
 def test_resolve_by_doc_id():
-    live, gone = _publish(f"解析测试-现行{secrets.token_hex(2)}"), _publish("解析测试-下线", retire=True)
+    live, gone = _publish(f"解析测试-现行{secrets.token_hex(4)}"), _publish("解析测试-下线", retire=True)
     with SessionLocal() as db:
         r = refs.resolve(db, [live, gone, "L2-OPS-SOC-TPL-99999", "KB-999990", live])
     assert set(r) == {live, gone}

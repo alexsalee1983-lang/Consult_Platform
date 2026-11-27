@@ -69,7 +69,7 @@ def test_spot_state_tightens_then_recovers_then_relaxes():
 
 def test_adaptive_rate_reads_latest_audit_verdicts():
     code = _project()
-    action = f"f5test.spot_{secrets.token_hex(2)}"            # 独立动作名，不受其他测试的抽检记录影响
+    action = f"f5test.spot_{secrets.token_hex(4)}"            # 独立动作名，不受其他测试的抽检记录影响
     _log(code, action)
     _log(code, action, result="failed")
     with SessionLocal() as db:
