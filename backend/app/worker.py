@@ -113,6 +113,20 @@ def _scan_selfeval() -> None:
         log.warning("客户自评包提醒扫描出错：%s", type(e).__name__)
 
 
+def _scan_loops() -> None:
+    """四期 A31：确认卡 3 个工作日提醒、7 天升级项目经理；签署件引用条目下线发勘误卡（可重复执行）。"""
+    from .project import loops
+
+    try:
+        with SessionLocal() as db:
+            reminded = loops.scan_reminders(db)
+            errata = loops.scan_errata(db)
+        if reminded or errata:
+            log.info("确认卡提醒与升级 %d 张，勘误卡 %d 张", reminded, errata)
+    except Exception as e:  # noqa: BLE001
+        log.warning("交付侧闭环扫描出错：%s", type(e).__name__)
+
+
 def _scan_reconfirm() -> None:
     """平台规则（人工环节复查 K7）：复审到期的公开知识条目排知识审核 Agent 复查（可重复执行，本周期查过的不再排）。"""
     try:
@@ -214,6 +228,13 @@ def _weekly() -> None:
                 jobs.enqueue(db, gap_pool.JOB_KIND, created_by="platform", max_attempts=2)
     except Exception as e:  # noqa: BLE001
         log.warning("缺口池每周计划出错：%s", type(e).__name__)
+    try:                                   # 四期 A31⑩：无内容指标的漂移监测，只进审计
+        from .project import loops
+
+        with SessionLocal() as db:
+            loops.record_drift(db)
+    except Exception as e:  # noqa: BLE001
+        log.warning("质量漂移监测出错：%s", type(e).__name__)
 
 
 def _sync_runtime_config() -> None:
@@ -242,6 +263,7 @@ def main() -> None:
             _sync_runtime_config()
             _scan_due()
             _scan_selfeval()
+            _scan_loops()
             _scan_reconfirm()
             _auto_flow()
             _verify_audit()

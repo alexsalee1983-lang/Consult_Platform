@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from ..core import audit, metrics
 from ..core.db import utcnow
 from ..models import Job
+from . import llm_lane
 
 WAKE_KEY = "jobs:wake"
 MAX_PAYLOAD = 4096
@@ -173,7 +174,8 @@ def _run(db: Session, job: Job) -> str:
     try:
         if fn is None:
             raise JobError(f"没有处理器：{job.kind}", retry=False)
-        fn(json.loads(job.payload or "{}"), ctx)
+        with llm_lane.lane(llm_lane.for_job(job.kind)):     # A31⑪：kb.* 为知识后台，其余为交付链
+            fn(json.loads(job.payload or "{}"), ctx)
     except Exception as e:  # noqa: BLE001
         db.rollback()
         retry = getattr(e, "retry", True)

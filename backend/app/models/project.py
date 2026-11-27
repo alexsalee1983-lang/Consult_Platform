@@ -30,6 +30,9 @@ class Project(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 组织类型（迁移 0038，取值见 app/project/configs.ORG_TYPES，可空）：经验按组织类型分层用
     org_type: Mapped[str] = mapped_column(String(16), server_default="")
+    # 四期 A31⑦（主链 0060）：项目终止。终止后停止自动推进、关闭待办，保留期从终止日起算（app/project/loops.py）
+    terminated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    terminated_by: Mapped[str] = mapped_column(String(64), server_default="")
 
     deliverables: Mapped[list["Deliverable"]] = relationship(
         back_populates="project", order_by="Deliverable.code", cascade="all, delete-orphan"
@@ -86,6 +89,10 @@ class Confirmation(Base):
     choice: Mapped[str] = mapped_column(String(8), default="")       # 顾问选的选项 key；自己写意见时为空
     resolved_by: Mapped[str] = mapped_column(String(64), default="")
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 四期 A31（主链 0060）：平台卡关联的对象（evidence:D-03 / run:12 / deliverable:D4 / section:D4:3），
+    # 提醒阶段 0 / 1 三个工作日未处理已提醒 / 2 七天未处理已升级项目经理（app/project/loops.py）
+    subject: Mapped[str] = mapped_column(String(64), server_default="")
+    remind_stage: Mapped[int] = mapped_column(Integer, server_default="0")
 
     project: Mapped[Project] = relationship(back_populates="confirmations")
 

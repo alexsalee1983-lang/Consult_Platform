@@ -52,6 +52,7 @@ class SectionRow(BaseModel):
     sources: dict
     unresolved: list[str]
     knowledge_updates: list[dict] = []   # 引用的知识条目已更新 / 下线（二期 B4）
+    stale: str = ""                      # 上游变更后待复核的原因（四期 A31⑫），空 = 无
 
 
 class DeliverableDetail(BaseModel):
