@@ -108,6 +108,11 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/deliverables/D4/errata"),       # 四期 A31②
     ("GET", "/api/projects/BANK-A/outputs"),                       # 四期 A33
     ("GET", "/api/projects/BANK-A/outputs/export?stage=启动"),
+    ("GET", "/api/projects/BANK-A/outputs/export"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/review-list"),                 # 四期 A35
+    ("POST", "/api/projects/BANK-A/deliverables/D4/sections/1/intent"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/refresh"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/sections/1/rollback"),
     ("GET", "/api/projects/BANK-A/knowledge-updates"),
     ("GET", "/api/projects/BANK-A/assessment"),
     ("GET", "/api/projects/BANK-A/confirmations"),
@@ -145,6 +150,7 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/submit"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/sign"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/return"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/merged"),
     ("POST", "/api/projects/BANK-A/deliverables/D3/signoff/merged"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/revise"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revise"),
@@ -266,7 +272,7 @@ def test_every_api_route_is_protected_or_public(client):
                 .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1") \
                 .replace("{rid}", "1").replace("{deletion_id}", "1").replace("{incident_id}", "1") \
                 .replace("{consent_id}", "1").replace("{card}", "S-01") \
-                .replace("{version}", "abc").replace("{phase}", "分析")
+                .replace("{version}", "abc").replace("{phase}", "分析")                 .replace("{s}", "S-01").replace("{qid}", "1").replace("{pack}", "P-01").replace("{answer_id}", "1")                 .replace("{alarm_id}", "1").replace("{gap_id}", "1")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 

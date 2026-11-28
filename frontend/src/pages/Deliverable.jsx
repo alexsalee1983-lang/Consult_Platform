@@ -10,6 +10,7 @@ import Customizations from "../components/Customizations.jsx";
 import DocBody from "../components/DocBody.jsx";
 import DeliverableForm, { StartChoices } from "../components/DeliverableForm.jsx";
 import { BatchSign, ClientFeedback, ModeBar, RevisePanel } from "../components/DeliverableModes.jsx";
+import { RefreshPanel, ReviewList, useReviewList } from "../components/Rework.jsx";
 import { modeOf, separationNote } from "../delivModes.js";
 import { noteAfterInsert, spliceText } from "../editor/assist.js";
 import { applyReplace } from "../editor/selectEdit.js";
@@ -529,6 +530,8 @@ export default function Deliverable({ code, dcode }) {
   const [form, setForm] = useState(null);        // A14②：D1、D2 表单定义，没有表单为 null
   const [formOpen, setFormOpen] = useState(false);
   const [wr, setWr] = useState(null);            // A32①：Word 回传结果
+  const [rl, loadRl] = useReviewList(code, dcode);   // A35 审阅清单
+  const [intentTick, setIntentTick] = useState(0);  // A35 保存后识别改动意图
   const wrInput = useRef(null);
 
   const loadForm = useCallback(() => {
@@ -544,10 +547,11 @@ export default function Deliverable({ code, dcode }) {
       setCards(cc.filter((c) => c.deliverable_code === dcode));
       setError(null);
       api.reviseState(code, dcode).then(setRv).catch(() => setRv(null));
+      loadRl();
     } catch (e) {
       setError(e);
     }
-  }, [code, dcode]);
+  }, [code, dcode, loadRl]);
 
   useEffect(() => {
     setD(null); setSo(null); setRv(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false); setContractFile(null);
@@ -558,7 +562,8 @@ export default function Deliverable({ code, dcode }) {
   }, [code, dcode, load, loadForm]);
 
   // 评审在后台跑：排队或进行中时每 3 秒刷新一次
-  const active = (so?.latest_review && ["queued", "running"].includes(so.latest_review.status)) || ["queued", "running"].includes(rv?.status);
+  const active = (so?.latest_review && ["queued", "running"].includes(so.latest_review.status)) || ["queued", "running"].includes(rv?.status)
+    || ["queued", "running"].includes(rl?.refresh?.status);   // A35 不满意刷新在后台重新起草
   useEffect(() => {
     if (!active) return undefined;
     const t = setInterval(load, 3000);
@@ -656,6 +661,7 @@ export default function Deliverable({ code, dcode }) {
             form={formOpen ? null : form} onForm={() => { setContractFile(null); setFormOpen(true); }}
             onContract={(f) => { setContractFile(f); setFormOpen(true); }}
             onOutline={async (titles) => { await api.putOutline(code, dcode, titles); await load(); }} />
+          <ReviewList rl={rl} onPick={setSeq} />
           <section className="pnl pad" aria-label="来源构成">
             <span className="cap">全文来源构成</span>
             <SourceBar counts={d.totals} />
@@ -666,7 +672,7 @@ export default function Deliverable({ code, dcode }) {
           {formOpen && form ? <DeliverableForm code={code} dcode={dcode} form={form} initialFile={contractFile}
             onCancel={() => { setFormOpen(false); setContractFile(null); }}
             onDone={async () => { setFormOpen(false); setContractFile(null); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
-            : cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
+            : cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={async () => { await load(); setIntentTick((t) => t + 1); }} sections={d.sections} />
             : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以点左侧“写大纲”旁边的“按表单成稿”或“按合同生成”，或自己写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
@@ -677,6 +683,7 @@ export default function Deliverable({ code, dcode }) {
               {cards.length === 0 && <li className="sub">本交付件没有待确认事项。<Link to={`/project/${encodeURIComponent(code)}`}>回驾驶舱</Link></li>}
             </ul>
           </section>
+          <RefreshPanel code={code} dcode={dcode} seq={cur} rl={rl} editable={editable} intentTick={intentTick} onChanged={load} />
           <Customizations code={code} dcode={dcode} seq={cur} editable={editable && !signed} onChanged={load} />
           {mode === 1 && <RevisePanel code={code} dcode={dcode} rv={rv} editable={editable} onChanged={load} />}
           <SignFlow code={code} dcode={dcode} d={d} so={so} isManager={isManager} onChanged={load} />

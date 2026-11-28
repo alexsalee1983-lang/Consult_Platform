@@ -192,6 +192,11 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B/deliverables/D2/export", None), (404, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/outputs", None), (200, 404, 403, 403, 403)),           # 四期 A33
     (("GET", "/api/projects/GRID-B/outputs", None), (404, 404, 403, 403, 403)),
+    # 四期 A35 改稿：审阅清单、不满意刷新（口径类只给去向，不排任务），项目成员可用，非成员 404
+    (("GET", "/api/projects/BANK-A/deliverables/D7/review-list", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/deliverables/D2/review-list", None), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/deliverables/D7/refresh", {"reason": "口径不对"}), (202, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D2/refresh", {"reason": "口径不对"}), (404, 404, 403, 403, 403)),
     # 改稿差异转候选（三期 F4）：开关默认关，成员也 404；非成员 404、非业务角色 403（开关打开的行为在 test_revision_mining）
     (("POST", "/api/projects/BANK-A/deliverables/D7/revision-candidates", None), (404, 404, 403, 403, 403)),
     # 改稿与驳回特征汇总（四期 F4②）：只给咨询业务负责人、知识管理员，顾问 403（负责人与开关行为在 test_revision_features）

@@ -15,6 +15,7 @@ from .api import extraction as extraction_api   # 四期 F4③
 from .api import agent_md as agent_md_api   # 四期 F3②e
 from .api import stages as stages_api   # 四期 A27
 from .api import customizations as customizations_api   # 四期 A30
+from .api import rework as rework_api   # 四期 A35
 from .api import consultant_aids   # 四期 A32
 from .core import audit as core_audit
 from .core.auth import authenticate
@@ -111,4 +112,5 @@ app.include_router(expert_bench.router)
 app.include_router(survey.router)
 app.include_router(stages_api.router)
 app.include_router(customizations_api.router)
+app.include_router(rework_api.router)
 app.include_router(consultant_aids.router)
