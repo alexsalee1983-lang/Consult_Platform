@@ -102,7 +102,7 @@ textarea.inp{min-height:54px;resize:vertical}
 
 <!-- ============ 整体逻辑图 ============ -->
 <div class="page on" id="p-arch">
-  <div class="crumb">示意 11 · 2026-11-28 · 对应 docs/交付链输入输出方案.md</div>
+  <div class="crumb">示意 11 · 2026-11-28 · 对应 docs/交付链输入输出方案.md v0.3</div><div class="mut">v0.3 已定、本示意未重画：新增“需求”页（定制项、决定记录、变更单）；全景节点“卡在谁手里”标签与“只看我的”；顾问对话改为右侧抽屉；要点卡体检与需求澄清清单。</div>
   <h1>整体逻辑：人提供信息和决定，机器负责成文，人审稿改稿</h1>
   <div class="sub">颜色：<span class="chip c-am">人</span> <span class="chip c-cy">程序</span> <span class="chip c-vi">大模型（经网关）</span> <span class="chip c-ok">公司知识</span></div>
 
@@ -272,7 +272,7 @@ textarea.inp{min-height:54px;resize:vertical}
 
 <!-- ============ 输出 ============ -->
 <div class="page" id="p-out">
-  <div class="crumb">BANK-A / 输出</div><h1>输出 · 每个交付件是一个输出包</h1>
+  <div class="crumb">BANK-A / 输出</div><h1>输出 · 每个交付件是一个输出包</h1><div class="row" style="margin:6px 0 10px"><a class="btn2" data-t="按阶段打包导出全部组件；未签署带“草稿”水印">阶段包一键导出</a></div>
   <div class="sub">组件清单取自产品配置（按黄金样例定默认），定制项可增减（增删须项目经理确认）。图例：<span class="cmp d">数据表</span> <span class="cmp w">文稿</span> <span class="cmp p">汇报</span> <span class="cmp x">客户用表单</span></div>
   <div class="g4">
     <div class="card"><div class="sb"><h3>D1 启动包</h3><span class="chip c-ok">已签</span></div><div class="mut">程序模板</div><div class="pk"><span class="cmp w">范围确认单</span><span class="cmp d">计划与里程碑</span><span class="cmp p">启动会 PPT</span><span class="cmp d">定制项清单</span><span class="cmp x">资料需求初单</span><span class="cmp d">前提与风险</span></div><div class="row" style="margin-top:8px"><a class="btn2 sm" data-go="d1">打开</a></div></div>
@@ -298,7 +298,7 @@ textarea.inp{min-height:54px;resize:vertical}
 
 <!-- ============ D1 ============ -->
 <div class="page" id="p-d1">
-  <div class="crumb">BANK-A / 输出 / D1 启动包</div><h1>D1 启动包 · 程序模板</h1>
+  <div class="crumb">BANK-A / 输出 / D1 启动包</div><h1>D1 启动包 · 程序模板</h1><div class="row" style="margin:6px 0 10px"><a class="btn2" data-t="下载 Word（未签署带“草稿”水印）">导出 Word</a><a class="btn2" data-t="下载 PPT（未签署带“草稿”水印）">导出 PPT</a><a class="btn2" data-t="下载 Excel（未签署带“草稿”水印）">导出 Excel</a></div>
   <div class="sub">内容相对确定，不调模型：输入卡 → 程序按模板成稿 → 门禁 → 项目经理签 → 客户确认。资质边界、数据保护段由程序写死。</div>
   <div class="g2">
     <div class="card"><h2>输入（项目经理）</h2>
@@ -321,7 +321,7 @@ textarea.inp{min-height:54px;resize:vertical}
 
 <!-- ============ D4 审稿改稿 ============ -->
 <div class="page" id="p-d4">
-  <div class="top"><div><div class="crumb">BANK-A / 输出 / D4 差距分析 · 第 2 版 · 评审与修订</div><h1>D4 差距分析报告</h1></div>
+  <div class="top"><div><div class="crumb">BANK-A / 输出 / D4 差距分析 · 第 2 版 · 评审与修订</div><h1>D4 差距分析报告</h1><div class="mut">D2、D3、D5～D8 与结项复盘的交付件页同此结构</div><div class="row" style="margin:6px 0 10px"><a class="btn2" data-t="下载 Word（未签署带“草稿”水印）">导出 Word</a><a class="btn2" data-t="下载 PPT（未签署带“草稿”水印）">导出 PPT</a><a class="btn2" data-t="下载 Excel（未签署带“草稿”水印）">导出 Excel</a></div></div>
     <div style="margin-left:auto" class="row"><span class="chip c-am">草稿 · 待顾问审核</span><span class="chip c-cy">标准档</span><a class="btn2 sm" data-t="本次变化摘要：上一版后事实 F-047 定案为 5×8，第 3.2 节、热力图同步更新；新增定制项“偏监管视角”影响 4 处">本次变化摘要</a><a class="btn2 sm" data-t="差异说明：相对黄金样例（城商行 SOC）增 1 节（监管检查意见对照，来自定制项）、删 0、第 4 章因客户无 SOAR 缩短">相对黄金样例差异</a></div></div>
   <div class="dl">
     <div class="card"><div class="sb"><h3>审阅清单 · 按风险排序</h3><span class="mono mut">7</span></div>
@@ -400,7 +400,7 @@ textarea.inp{min-height:54px;resize:vertical}
       <tr><td>☑</td><td>城商行夜间值班“先外包后自建”取舍写法</td><td>公司做法</td><td>客户一次通过，无意见</td></tr>
       <tr><td>☑</td><td>D5 第 2 章（目标运营模型）</td><td>黄金样例提名</td><td>修改率最低、评审 0 问题</td></tr>
       <tr><td>☐</td><td>定制项“增加监管检查意见对照一节”</td><td>行业包候选</td><td>近 3 个银行项目都出现</td></tr></table>
-      <div class="row" style="margin-top:10px"><a class="btn" data-t="已交知识中心，专家认可后入库；复盘条目泛化防再识别">去标识预览并提交</a><a class="btn2" data-t="需写理由，计入跳过率">本项目无可沉淀</a></div>
+      <div class="row" style="margin-top:10px"><a class="btn2" data-t="逐条预览去标识后的候选，可修改、取消勾选；经验积累同意未签或已撤回时不可用">① 预览去标识结果</a><a class="btn" data-t="预览后可点：已交知识中心，专家认可后入库；去标识确认记审计">② 提交知识中心</a><a class="btn2" data-t="需写理由，计入跳过率">本项目无可沉淀</a></div><div class="mut" style="margin-top:6px">复盘提交后，到“设置 · 结项与删除”点结项（附核对清单）。</div>
       <div class="mut" style="margin-top:6px">合同勾选“不参与经验积累”时此栏关闭；严格档只按摘要卡生成候选。</div></div>
   </div>
 </div>
