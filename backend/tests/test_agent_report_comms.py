@@ -3,6 +3,7 @@
 代号沿用 report-writer（名册 app/agents/roster.py 的 NINE 登记“报告与客户沟通”为 report-writer），不另起新代号。
 11-24 测试机按旧代号把异议应答题发给 qa-reviewer 0.2（已去掉异议模式）导致 R03/G03/G04 失败；这里锁住评测集路由。
 """
+import re
 from pathlib import Path
 
 from app.agents import evalset, registry, roster
@@ -34,7 +35,7 @@ def test_code_matches_roster_and_no_new_code():
 
 def test_md_loads_with_same_tools_and_no_write_tool():
     doc = _doc()
-    assert "报告与客户沟通" in doc.display_name and doc.md_version.startswith("0.7")
+    assert "报告与客户沟通" in doc.display_name and doc.md_version.startswith("0.8")
     # 不新增工具（不改授权矩阵）：依据库引用走知识检索
     assert {registry.TOOL_NAMES[t] for t in doc.md_tools} == {"kb.search", "project.read", "doc.generate"} or \
         not [t for t in doc.md_tools if t not in registry.TOOL_NAMES]
@@ -97,3 +98,27 @@ def test_eval_set_routes_objection_to_report_writer():
         assert "after" not in c
         assert not guard.check(c["prompt"]).blocked, c["id"]
         assert any(k in c["prompt"] for k in ("BANK-A", "GRID-B", "MFG-C")), c["id"]
+
+
+def _section(body: str, title: str) -> str:
+    start = body.index(title)
+    nxt = body.find("\n# ", start + len(title))
+    return body[start: nxt if nxt != -1 else len(body)]
+
+
+def test_assessment_question_example_passes_r03():
+    """11-28 测试机：R03 三轮里一轮未通过（禁用词未命中），按判据只剩资质用语或编造条款号两种可能。
+    md 给测评追问一段示例，示例的口头版、书面版本身要过 R03 的全部判据，且不引条款号（防编造）。"""
+    body = _doc().body
+    ex = _section(body, "# 示例：测评追问")
+    answer = ex.split("**口头版**", 1)[1]
+    case = next(c for c in evalset.load(EVAL) if c["id"] == "RCOMM-R03")
+    assert quality.qualification_hits(quality.unquoted(answer)) == 0
+    assert quality.qualification_hits(answer) == 0, "示例里连引号内也不写资质用语，免得模型照抄出引号外"
+    for pat in case["must"]:
+        assert re.search(pat, answer), pat
+    for pat in case["must_not"]:
+        assert not quality.must_not_hit(pat, answer), pat
+    assert "【依据" not in answer and not re.search(r"第[0-9一二三四五六七八九十]+条|\d+\.\d+\.\d+", answer), "示例不引条款号"
+    for word in ("通过测评", "测评通过", "通过等保", "等保达标", "测评合格", "测评结论"):
+        assert word in body, f"硬约束要逐个列出禁写词：{word}"
