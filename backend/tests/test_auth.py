@@ -116,6 +116,8 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D1/form"),
     ("POST", "/api/projects/BANK-A/deliverables/D1/form/import"),   # 四期 A28②
     ("GET", "/api/projects/BANK-A/deliverables/D1/form/import"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/form"),   # 路由覆盖检查按 {dcode}=D4 展开
+    ("POST", "/api/projects/BANK-A/deliverables/D4/form/import"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
     ("GET", "/api/revision-features/summary"),   # 四期 F4②
     ("GET", "/api/extraction/questions"),   # 四期 F4③
