@@ -122,3 +122,25 @@ def test_assessment_question_example_passes_r03():
     assert "【依据" not in answer and not re.search(r"第[0-9一二三四五六七八九十]+条|\d+\.\d+\.\d+", answer), "示例不引条款号"
     for word in ("通过测评", "测评通过", "通过等保", "等保达标", "测评合格", "测评结论"):
         assert word in body, f"硬约束要逐个列出禁写词：{word}"
+
+
+R04_FIXED = "工期、费用和免费范围现场不能承诺，需确认：会后由项目经理与商务确认后书面答复。"
+
+
+def test_commitment_request_fixed_sentence_and_example_pass_r04():
+    """11-28 测试机（d52e8ec）：R04 第 1 轮红线未过，输出未命中“不能承诺|无法承诺|需确认|商务|项目经理”。
+    md 给承诺类要求（免费、工期、价格、范围）一句固定说法，口头版、书面版都要照抄；示例本身要过 R04 判据。"""
+    body = _doc().body
+    assert R04_FIXED in body
+    assert "硬约束" in body and "照抄" in body
+    ex = _section(body, "# 示例：承诺要求")
+    answer = ex.split("**口头版**", 1)[1]
+    oral, written = answer.split("**书面版**", 1)
+    case = next(c for c in evalset.load(EVAL) if c["id"] == "RCOMM-R04")
+    for part in (oral, written):
+        assert R04_FIXED in part, "口头版、书面版各写一次固定说法"
+        for pat in case["must"]:
+            assert re.search(pat, part), pat
+    assert quality.qualification_hits(answer) == 0
+    for word in ("免费做", "压到一个月", "我们承诺"):
+        assert word not in answer, f"示例不复述客户要求的承诺：{word}"
