@@ -30,7 +30,7 @@ from ..core.permissions import (
     roles_of,
 )
 from ..models import Confirmation, Project, ProjectMember, User
-from ..project import configs, loops
+from ..project import closeout, configs, loops
 from ..project import confirmations as conf_svc
 from ..project import customizations as cust_svc
 from ..project import retention
@@ -144,6 +144,28 @@ def set_acceptance(code: str, body: AcceptanceIn, db: Session = Depends(get_db),
     try:
         retention.accept(db, user, p, body.accepted_on, body.retention_months)
     except retention.RetentionError as e:
+        raise HTTPException(e.status, e.detail) from None
+    return _out(db, p)
+
+
+class TerminateIn(BaseModel):
+    reason: str = Field(default="", max_length=200)   # 空原因在服务里判 422，非成员先得 404
+
+
+@router.get("/projects/{code}/closeout")
+def get_closeout(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """四期 A31 ⑧结项清单：未签交付件、未关的卡、待复查的章；成员可看。"""
+    return closeout.checklist(db, project_for_member(db, code, user))
+
+
+@router.post("/projects/{code}/terminate", response_model=ProjectOut)
+def terminate_project(code: str, body: TerminateIn, db: Session = Depends(get_db),
+                      user: User = Depends(current_user)):
+    """四期 A31 ⑦项目终止：项目经理操作；停自动推进、关待办、保留期从终止日起算。"""
+    p = project_for_member(db, code, user, selectinload(Project.confirmations))
+    try:
+        closeout.terminate(db, user, p, body.reason)
+    except closeout.CloseoutError as e:
         raise HTTPException(e.status, e.detail) from None
     return _out(db, p)
 

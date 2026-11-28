@@ -157,6 +157,8 @@ PROTECTED = [
     ("PUT", "/api/projects/BANK-A/members/x"),
     ("DELETE", "/api/projects/BANK-A/members/x"),
     ("POST", "/api/projects/BANK-A/acceptance"),
+    ("GET", "/api/projects/BANK-A/closeout"),
+    ("POST", "/api/projects/BANK-A/terminate"),
     ("GET", "/api/deletions"),
     ("GET", "/api/deletions/1"),
     ("POST", "/api/deletions/1/confirm"),
