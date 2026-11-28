@@ -9,7 +9,7 @@
 - kb_poison_incidents：投毒事件（冻结 → 知识管理员提处置意见 → 咨询业务负责人批准后执行），说明只记长度和哈希。
 
 Revision ID: k0024_kb_poison
-Revises: k0023_kb_expert_assign
+Revises: k0025_kb_item_grade
 Create Date: 2026-11-27
 """
 from collections.abc import Sequence
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0024_kb_poison"
-down_revision: str | None = "k0023_kb_expert_assign"
+down_revision: str | None = "k0025_kb_item_grade"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
