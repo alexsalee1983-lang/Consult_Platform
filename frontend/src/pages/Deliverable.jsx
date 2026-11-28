@@ -55,7 +55,7 @@ function SourceBar({ counts }) {
   );
 }
 
-function Toc({ d, seq, onPick, editable, onOutline }) {
+export function Toc({ d, seq, onPick, editable, onOutline, form = null, onForm, onContract }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
@@ -78,7 +78,12 @@ function Toc({ d, seq, onPick, editable, onOutline }) {
   return (
     <section className="pnl pad" aria-label="目录">
       <div className="sb"><span className="cap">目录</span>
-        {editable && !editing && <button className="btn sm" onClick={() => { setText(d.sections.map((s) => s.title).join("\n")); setEditing(true); }}>{d.sections.length ? "改大纲" : "写大纲"}</button>}
+        {editable && !editing && (
+          <span className="row">
+            <button className="btn sm" onClick={() => { setText(d.sections.map((s) => s.title).join("\n")); setEditing(true); }}>{d.sections.length ? "改大纲" : "写大纲"}</button>
+            <StartChoices form={form} onForm={onForm} onContract={onContract} />
+          </span>
+        )}
       </div>
       {editing ? (
         <>
@@ -584,7 +589,6 @@ export default function Deliverable({ code, dcode }) {
         <select className="sm" aria-label="切换交付件" value={d.code} onChange={(e) => navigate(`/project/${encodeURIComponent(code)}/deliverables/${e.target.value}`)}>
           {p.deliverables.map((x) => <option key={x.code} value={x.code}>{x.code} {x.title}</option>)}
         </select>
-        {editable && form?.writable && !formOpen && <button className="btnp" onClick={() => setFormOpen(true)}>按表单成稿</button>}
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportWord)}>{exporting ? "导出中…" : "导出 Word"}</button>
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportPpt)}>导出 PPT</button>
       </TopBar>
@@ -603,9 +607,9 @@ export default function Deliverable({ code, dcode }) {
       {strict && <div className="note-amber">严格档项目：这里只写占位符版本（【客户】【系统A】【人员1】），来源标 [S-xx]，不写真名、IP、产品名和原话，平台写入时检查。导出的 Word 带回现场，用现场工具按对照表回填成正式稿。</div>}
       <div className="kb3">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-          {editable && !formOpen && <StartChoices form={form} onForm={() => { setContractFile(null); setFormOpen(true); }}
-            onContract={(f) => { setContractFile(f); setFormOpen(true); }} />}
           <Toc d={d} seq={cur} onPick={setSeq} editable={editable}
+            form={formOpen ? null : form} onForm={() => { setContractFile(null); setFormOpen(true); }}
+            onContract={(f) => { setContractFile(f); setFormOpen(true); }}
             onOutline={async (titles) => { await api.putOutline(code, dcode, titles); await load(); }} />
           <section className="pnl pad" aria-label="来源构成">
             <span className="cap">全文来源构成</span>
@@ -618,7 +622,7 @@ export default function Deliverable({ code, dcode }) {
             onCancel={() => { setFormOpen(false); setContractFile(null); }}
             onDone={async () => { setFormOpen(false); setContractFile(null); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
             : cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
-            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以用左侧的“从合同生成”或“按表单成稿”，或先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
+            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以点左侧“写大纲”旁边的“按表单成稿”或“按合同生成”，或自己写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
           <section className="pnl pad" aria-label="待你确认">

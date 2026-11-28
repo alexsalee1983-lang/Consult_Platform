@@ -15,6 +15,7 @@ vi.mock("../auth.jsx", async (orig) => ({
 }));
 
 const { default: Login } = await import("./Login.jsx");
+const { Toc } = await import("./Deliverable.jsx");
 const { default: Projects } = await import("./Projects.jsx");
 const { default: Overview } = await import("./Overview.jsx");
 const { OutputPage, ProjectLayout, SettingsPage } = await import("./ProjectPages.jsx");
@@ -343,7 +344,7 @@ test("启动包两种成稿入口：大纲上方并排“从合同生成”“�
   const calls = [];
   const el = await render(<StartChoices form={D1_FORM} onForm={() => calls.push("form")} onContract={(f) => calls.push(f.name)} />);
   const box = el.querySelector('[aria-label="成稿方式"]');
-  expect(box.textContent).toContain("从合同生成");
+  expect(box.textContent).toContain("按合同生成");
   const btn = [...box.querySelectorAll("button")].find((b) => b.textContent === "按表单成稿");
   await act(async () => btn.click());
   const input = box.querySelector('input[aria-label="合同文件"]');
@@ -399,4 +400,19 @@ test("配人提示：已有其他成员、不是项目经理、或已在设置�
   c = await LAYOUT("/project/BANK-A/settings");
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   expect(c.querySelector('[aria-label="待配项目成员"]')).toBeNull();
+});
+
+test("写大纲那一行右边直接并排“按表单成稿”“按合同生成”，不用展开（负责人 11-28）", async () => {
+  const calls = [];
+  const d = { sections: [] };
+  const el = await render(<Toc d={d} seq={0} onPick={() => {}} editable onOutline={async () => {}}
+    form={D1_FORM} onForm={() => calls.push("form")} onContract={(f) => calls.push(f.name)} />);
+  const row = el.querySelector('[aria-label="目录"] .sb');
+  const labels = [...row.querySelectorAll("button, label")].map((b) => b.textContent.trim());
+  expect(labels).toEqual(["写大纲", "按表单成稿", "按合同生成"]);
+  await act(async () => [...row.querySelectorAll("button")].find((b) => b.textContent === "按表单成稿").click());
+  const input = row.querySelector('input[aria-label="合同文件"]');
+  Object.defineProperty(input, "files", { value: [new File(["合同"], "合同.docx")] });
+  await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(calls).toEqual(["form", "合同.docx"]);
 });
