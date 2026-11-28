@@ -14,6 +14,7 @@ from .api import extraction as extraction_api   # 四期 F4③
 from .api import agent_md as agent_md_api   # 四期 F3②e
 from .api import stages as stages_api   # 四期 A27
 from .api import kb_poison as kb_poison_api   # 四期 B42
+from .api import consultant_aids   # 四期 A32
 from .core import audit as core_audit
 from .core.auth import authenticate
 from .core.bootstrap import check_db_accounts, check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
@@ -108,3 +109,4 @@ app.include_router(tasks.router)
 app.include_router(expert_bench.router)
 app.include_router(survey.router)
 app.include_router(stages_api.router)
+app.include_router(consultant_aids.router)
