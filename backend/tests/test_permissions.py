@@ -223,6 +223,11 @@ MATRIX = [
     (("POST", "/api/projects/GRID-B/deliverables/D2/client-feedback", {"items": [{"text": "意见"}]}),
      (404, 404, 403, 403, 403)),
     (("GET", "/api/deliverables/batch-sign", None), (200, 200, 403, 403, 403)),
+    # 项目定制项（四期 A30）：成员可看可提，非成员和别的项目的定制项 404；结构类审批只给项目经理，在 test_customizations 里测
+    (("GET", "/api/projects/BANK-A/customizations", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/customizations", {"source": "chat", "text": "D4 表格加编号列"}),
+     (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/customizations/999999/withdraw", None), (404, 404, 403, 403, 403)),
     (("POST", "/api/deliverables/batch-sign", {"items": [{"project": "GRID-B"}]}), (200, 200, 403, 403, 403)),
     # 驳回评审 Agent 的阻断（M3 ⑧）：评审不存在 404；非成员 404；驳回规则在 test_quality 里测
     (("POST", "/api/projects/BANK-A/deliverables/D7/reviews/999999/waivers", {"issue": 0, "reason": "理由"}),

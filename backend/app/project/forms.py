@@ -268,5 +268,7 @@ def submit(db: Session, user: User, project: Project, d: Deliverable, form: Form
         from . import stages                           # stages 引用交付件服务，延迟导入免循环
         db.refresh(project)
         stages.plan_writeback(db, project, user.username)
+        from . import customizations                   # A30：客户要求栏逐条转成项目定制项（客户书面要求层）
+        customizations.from_d1(db, user, project, _clean(form, values).get("client_requirements", ""))
         db.refresh(d)
     return d
