@@ -85,7 +85,7 @@ def test_b25_five_steps_end_to_end(tmp_path):
     steps: list[dict] = []
     model = _Model()
     gateway.set_transport(httpx.MockTransport(model.handler))
-    admin, admin2, expert = _user("knowledge_admin"), _user("knowledge_admin"), _user("knowledge_expert")
+    admin, expert = _user("knowledge_admin"), _user("knowledge_expert")
 
     # ① 虚拟缺口进缺口池，白名单外 → 来源确认；知识源清单经网关交 kb-builder，程序核对丢弃编造网址
     with SessionLocal() as db:
@@ -107,11 +107,12 @@ def test_b25_five_steps_end_to_end(tmp_path):
                                       {"name": "示范部法规库（虚拟）", "url": PREFIX, "license": "政府公开发布",
                                        "authority_kind": "法律"})
         code = out["source"]
-        reg.transition(db, admin, code, "trial")
-        reg.transition(db, admin2, code, "active")
+        # 四期 B43：官方域名白名单内的法律类来源规则核对通过，登记即自动转正式，不再等另一位知识管理员
+        src = reg.get(db, code)
+        assert src.status == "active" and src.approved_by == reg.AUTO_ACTOR
         week2 = gap_pool.run_week(db, utcnow().date(), thresholds={"external": 1, "usage": 1})
         assert db.scalar(select(KbGap.plan).where(KbGap.id == gid)) == "direct"
-    steps.append({"step": "② 来源确认", "ok": True, "source": code, "approved_by_other_admin": True,
+    steps.append({"step": "② 来源确认", "ok": True, "source": code, "auto_activated": True,
                   "plan_after": week2})
 
     # ③ 下发包：只含网址与规则，程序检查无条目正文

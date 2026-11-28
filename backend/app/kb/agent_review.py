@@ -19,6 +19,11 @@
   直接退回、不调模型；同一依据文件的不同条款、较新版本、原文，管辖地或行业不同的判不冲突；依据版本较旧的判不过转人工；
   其余相近条目连同依据文件、版本、行业和摘要交 Agent。规则判掉全部相近条目时这一项以规则为准。
 - 积压重跑：python -m app.cli kb-agent-review-rerun，对规则预判上线前“不重复、不冲突”没过的待审版本各重跑一次（rerun）。
+- 收录标准与判定（四期 B43，app/kb/intake_criteria.py）：Agent 同时按 6 条收录标准和按类型的固定问题给出四种判定之一，
+  记在 findings.intake / findings.verdict；只有判定“收录”的才可能自动发布。KB_INTAKE_VERDICT_LIVE 开启后，“不收 /
+  合并为印证 / 退回补充”由平台直接退回（status=rejected），关闭时只转人工。规则判真重复记“合并为印证”。
+- 公开资料合规关（四期 B43，app/kb/compliance_auto.py）：第二级版本审完即按程序规则 + Agent 意见判合规，通过的平台记
+  合规审核通过（内容存疑的只剩内容审核），例外才留给知识管理员。
 """
 from __future__ import annotations
 
@@ -35,7 +40,8 @@ from ..core.config import get_settings
 from ..core.db import utcnow
 from ..models import KbItem, KbReview, KbVersion
 from ..services import gateway, guard, jobs
-from . import autopublish, candidate, citations, conflict_rules
+from . import autopublish, candidate, citations, compliance_auto, conflict_rules
+from . import intake_criteria as ic
 from . import review as rv
 
 AGENT = "kb-reviewer"
@@ -68,7 +74,8 @@ OUTPUT_RULES = """
 
 七项必须都给出；拿不准的 pass 写 false、理由以“存疑：”开头。
 no_conflict 只对照“相近条目”一节逐条列出摘要的条目判断：与其中某条内容重复或要求矛盾才写 false，理由里写出对方的 KB 编号；
-“已由规则判定”的条目不再判断；没有列出相近条目时写 true。"""
+“已由规则判定”的条目不再判断；没有列出相近条目时写 true。
+在同一个 JSON 对象里""" + ic.OUTPUT_FIELDS
 
 
 @dataclass
@@ -196,7 +203,8 @@ def _message(db: Session, v: KbVersion, cites: list[citations.Citation],
     return (f"# 待审条目\n交付物类型：{item.doc_type}　行业：{'、'.join(item.industries or [])}　服务产品：{item.product}\n"
             f"标题：{v.title}\n摘要：{v.summary}\n适用条件：{v.applicability}\n"
             f"依据文件：{v.ref_document} {v.ref_version} {v.ref_code}\n来源：{v.source_detail}\n\n"
-            f"## 正文\n{v.body[:MAX_BODY]}\n\n# 引用到的依据原文\n{sources}\n\n# 相近条目\n{sim}")
+            f"## 正文\n{v.body[:MAX_BODY]}\n\n# 引用到的依据原文\n{sources}\n\n# 相近条目\n{sim}\n\n"
+            f"{ic.prompt_block(item.doc_type, item.knowledge_kind)}")
 
 
 def _clean(data: dict) -> tuple[dict, list[dict], str]:
@@ -238,7 +246,8 @@ def _agent(db: Session, v: KbVersion, cites: list[citations.Citation],
     if out.demo:
         return "skipped", "未接入模型（演示模式）", {}, doc.version, out.model
     checks, issues, conclusion = _clean(r.data)
-    findings = {"checks": checks, "issues": issues, "conclusion": conclusion}
+    findings = {"checks": checks, "issues": issues, "conclusion": conclusion,
+                "intake": ic.clean(r.data, v.item.doc_type, v.item.knowledge_kind)}
     if out.family:
         findings |= {"model_family": out.family, "degraded": out.degraded}
     return "ok", "", findings, doc.version, out.model
@@ -307,17 +316,27 @@ def run(db: Session, v: KbVersion, rerun: bool = False) -> Outcome:
                                               "format_tidied": tidied}
         if tidied:
             findings["note"] = (findings["note"] + "；" if findings["note"] else "") + "已自动整理格式"
+    live = get_settings().kb_intake_verdict_live
+    decision = ic.decide(findings.get("intake", {}), v.item.doc_type, v.item.knowledge_kind, rules_failed=failed,
+                         checks_passed=status == "ok" and agent_passed(findings), live=live)
+    findings["verdict"] = decision.to_json()
     if advisory(v):
         return _advise(db, v, failed, status, findings, prompt_version, model)
+    if live and status == "ok" and decision.verdict != "include":
+        return _verdict_return(db, v, failed, findings, decision, prompt_version, model, rerun)
     suspended = autopublish.suspended(db, KIND)
-    ok = not failed and status == "ok" and agent_passed(findings) and not suspended
+    ok = (not failed and status == "ok" and agent_passed(findings) and decision.verdict == "include"
+          and not suspended)
     if suspended and not failed and status == "ok" and agent_passed(findings):
         findings["note"] = f"Agent 审核通过，但自动发布已暂停（{suspended}），转人工审核"
-    summary = ("知识审核 Agent：七项检查通过" if ok else
+    summary = ("知识审核 Agent：七项检查通过，收录判定：收录" if ok else
                "知识审核 Agent：存疑，转人工审核"
                + (f"；程序规则未过：{'、'.join(RULES[k] for k in failed)}" if failed else "")
+               + (f"；收录判定：{decision.label}（{'、'.join(decision.reasons[:4])}）"
+                  if status == "ok" and decision.verdict != "include" else "")
                + (f"；{findings['note']}" if findings["note"] else ""))
     _save(db, v, decision="approve" if ok else "flag", comment=summary[:1000], findings=findings)
+    compliance_auto.run(db, v, findings)        # 四期 B43：合规关自动为主，例外才留给知识管理员
     out = Outcome("published" if ok else "manual", rules_failed=failed, agent=status, note=note)
     if ok:
         v.auto_review = KIND
@@ -337,8 +356,26 @@ def run(db: Session, v: KbVersion, rerun: bool = False) -> Outcome:
                  version=v.version, outcome=out.status, rules_failed=failed, agent=AGENT, agent_status=status,
                  prompt_version=prompt_version, model=model, issues=len(findings.get("issues", [])),
                  sampled=out.sampled, suspended=bool(suspended), rerun=rerun, prejudge=_counts(pre),
-                 **_hetero(findings))
+                 verdict=decision.verdict, **_hetero(findings))
     return out
+
+
+def _verdict_return(db: Session, v: KbVersion, failed: list[str], findings: dict, decision: ic.Decision,
+                    prompt_version: str, model: str, rerun: bool) -> Outcome:
+    """KB_INTAKE_VERDICT_LIVE 开启：不收、合并为印证、退回补充由平台直接退回（同人工驳回，改了再建新版本提交）。"""
+    merge_with = findings.get("intake", {}).get("merge_with", "")
+    _save(db, v, decision="reject",
+          comment=(f"知识审核 Agent：收录判定“{decision.label}”，平台退回（{'、'.join(decision.reasons[:6])}）"
+                   + (f"；印证 {merge_with}" if decision.verdict == "merge" and merge_with else ""))[:1000],
+          findings=findings)
+    v.status = "rejected"
+    db.commit()
+    db.refresh(v)
+    audit.record(db, actor=AGENT, action="kb.agent_review", result="allowed", doc_id=v.item.doc_id,
+                 version=v.version, outcome="verdict_return", verdict=decision.verdict, rules_failed=failed,
+                 agent=AGENT, agent_status="ok", prompt_version=prompt_version, model=model,
+                 issues=len(findings.get("issues", [])), rerun=rerun, **_hetero(findings))
+    return Outcome("rejected", rules_failed=failed, agent="ok", note=decision.label)
 
 
 def _save(db: Session, v: KbVersion, decision: str, comment: str, findings: dict) -> None:
@@ -363,9 +400,11 @@ def _duplicate(db: Session, v: KbVersion, failed: list[str], pre: conflict_rules
     """规则判真重复（正文规范化后与已发布条目相同）：本版本不发布，退回（同人工驳回），不调模型。"""
     ids = [r.doc_id for r in pre.of("duplicate")]
     findings = {"checks": {"no_conflict": pre.check()}, "issues": [], "conclusion": "存疑", "rules_failed": failed,
-                "agent": "skipped", "note": "规则预判真重复，未交 Agent", "prejudge": pre.summary(), "duplicate_of": ids}
+                "agent": "skipped", "note": "规则预判真重复，未交 Agent", "prejudge": pre.summary(), "duplicate_of": ids,
+                "verdict": ic.Decision("merge", ["规则预判真重复"], False).to_json()}
     _save(db, v, decision="reject",
-          comment=f"知识审核 Agent（规则预判）：与已发布的 {'、'.join(ids)} 正文相同，真重复，退回、不发布"[:1000],
+          comment=(f"知识审核 Agent（规则预判）：与已发布的 {'、'.join(ids)} 正文相同，真重复，"
+                   "收录判定“合并为印证”，退回、不发布")[:1000],
           findings=findings)
     v.status = "rejected"
     db.commit()

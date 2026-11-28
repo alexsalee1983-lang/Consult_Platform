@@ -16,6 +16,8 @@
 - AI 基线草稿（负责人 2026-11-27）：虚拟客户的黄金样例、公司做法基线稿，非生产环境经 kb-import --ai-baseline 导入，
   来源只能是专家萃取，deid_status=virtual（虚拟数据免去标识），按第三级由一位非作者知识专家拍板；生产环境导入、提交都拒绝。
 - 发布：正文按章节切片写入 kb_chunks（PostgreSQL 自动建中文全文索引）；条目的现行版本切到新版本，旧版本“已替代”。
+- 公开资料合规关自动为主（四期 B43，app/kb/compliance_auto.py）：程序规则 + 知识审核 Agent 判合规，通过的由平台记一条
+  合规审核通过（reviewer=platform:compliance），例外（去标识没过、来源不在白名单、疑似投毒、抽检差错超门槛等）才留给知识管理员。
 - 下线：条目标记下线，现行版本“已下线”，检索不再返回；历史版本全部保留。
 所有操作写审计（只记编号、状态、角色，不记正文）。
 """
@@ -238,8 +240,14 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
     audit.record(db, actor=user.username, action="kb.submit", result="allowed", doc_id=v.item.doc_id,
                  version=v.version, flags=v.poison_flags or [], single_source=v.single_source)
     from . import agent_review              # 公开资料的解读、映射等交知识审核 Agent（二期 B11），后台执行；
+    job = None
     if get_settings().kb_agent_auto_publish or level3(v):   # 第三级只出意见（B12），不受自动发布开关影响
-        agent_review.enqueue(db, v, created_by=user.username)
+        job = agent_review.enqueue(db, v, created_by=user.username)
+    if job is None:                         # 四期 B43：不交 Agent 的公开资料，合规关按程序规则自动判，例外留给知识管理员
+        from . import compliance_auto
+
+        if compliance_auto.run(db, v) is not None:
+            db.commit()
     return v
 
 
@@ -289,7 +297,7 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
                  version=v.version, role=role, decision=decision)
     approved = {r.review_role for r in v.reviews if r.decision == "approve" and r.review_role in ROLE_OF}
     if v.status == "in_review" and approved >= set(required_roles(v)):
-        reviewers = {r.reviewer for r in v.reviews if r.decision == "approve"}
+        reviewers = {r.reviewer for r in v.reviews if r.decision == "approve" and not r.reviewer.startswith("platform")}
         v.single_review = not (reviewers - _authors(v))     # 没有作者以外的人通过（只在开关允许时可能）
         publish(db, v)
     return v

@@ -208,6 +208,7 @@ class ItemOut(BaseModel):
     control_ids: list[str] = []
     knowledge_kind: str = ""
     slot: str = ""
+    grade: str = ""                     # 四期 B43：candidate 候选 / usable 可用 / recommended 推荐
     retired: bool
     title: str = ""
     current: VersionBrief | None = None
