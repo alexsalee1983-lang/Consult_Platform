@@ -50,7 +50,7 @@ from ..products import config
 from ..services import config_registry, gateway, guard, injection, jobs, runtime_config, usage
 from . import cards as cards_svc
 from . import assessment, configs, findings
-from . import deliverables
+from . import customizations, deliverables
 
 JOB_KIND = "agent_run.step"
 MAX_ATTEMPTS = 3
@@ -589,7 +589,8 @@ def _execute(db: Session, user: User, project: Project, run: AgentRun, step: Ste
     base = {s.seq: s.current_version for s in target.sections} if target else {}   # A31④：起草前的版本号
     confirmed = _resolved_cards(db, run)
     strict = STRICT_RULES if project.tier == "strict" else ""
-    message = "\n\n".join(x for x in (step.instruction, OUTPUT_RULES, strict, confirmed, inputs) if x)
+    custom = customizations.prompt_block(db, project, step.deliverable or None)   # 四期 A30
+    message = "\n\n".join(x for x in (step.instruction, OUTPUT_RULES, strict, confirmed, custom, inputs) if x)
     try:
         c = call.call(db, step.agent, message, actor=user.username, doc=doc, project=project, level=doc.level,
                       system=runtime.system_prompt(doc, card, kb_block)).completion

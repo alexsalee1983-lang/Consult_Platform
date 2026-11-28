@@ -2,8 +2,9 @@
 // 各页复用已有面板组件，只挪位置；条目上的“⌖ 全景”回全景并高亮对应节点（节点 id 与 GET .../panorama 一致）。
 // 调研助手全屏单开（现场用），交付件页挂在“输出”下。
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useParams } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "react-router";
 import { api, DELIV_STATUS } from "../api.js";
+import { useAuth } from "../auth.jsx";
 import Assessment from "../components/Assessment.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import { groupCards } from "../components/CardEvidence.jsx";
@@ -28,6 +29,18 @@ export function ProjectLayout() {
   const { pathname } = useLocation();
   const dcode = pathname.match(/\/deliverables\/([^/]+)/)?.[1];
   const inOutput = pathname.includes("/deliverables");
+  // 负责人 11-28：立项后第一件事是配人。项目经理进项目时若项目里只有他一人，各页顶部都提示（谁立的项都一样）
+  const { user } = useAuth();
+  const [alone, setAlone] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setAlone(false);
+    api.members(code).then((ms) => {
+      if (live) setAlone(ms.length === 1 && ms[0].username === user?.username && ms[0].project_role === "manager");
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [code, user?.username]);
+  const onSettings = pathname.endsWith("/settings");
   return (
     <>
       <nav className="tabs" aria-label="项目导航">
@@ -37,6 +50,11 @@ export function ProjectLayout() {
         ))}
         <Link to={`${base(code)}/survey`} style={{ marginLeft: "auto" }} title="现场用，全屏打开">调研助手 ⤢</Link>
       </nav>
+      {alone && !onSettings && (
+        <div className="note-amber" role="status" aria-label="待配项目成员">
+          这个项目还没有其他成员，<Link to={`${base(code)}/settings?new=1`}>先去设置里勾选项目成员</Link>，再开始启动包。
+        </div>
+      )}
       {dcode && <div className="sub">{code} / <Link to={`${base(code)}/output`}>输出</Link> / {decodeURIComponent(dcode)}</div>}
       <Outlet />
     </>
@@ -140,10 +158,16 @@ export function OutputPage({ code }) {
 
 export function SettingsPage({ code }) {
   const { p, error, load } = useProject(code);
+  const [params] = useSearchParams();
   if (!p) return <Loading error={error} />;
   return (
     <>
       {head(p, "设置")}
+      {params.get("new") === "1" && (
+        <div className="pnl pad" role="status" aria-label="立项后下一步">
+          立项完成。下一步：在下面勾选项目成员并添加，然后<Link to={base(p.code)}>回驾驶舱</Link>开始启动包。
+        </div>
+      )}
       <Members code={p.code} />
       <Retention p={p} onChange={load} />
     </>

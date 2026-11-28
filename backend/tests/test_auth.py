@@ -144,6 +144,9 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D4/revise"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/client-feedback"),
     ("GET", "/api/deliverables/batch-sign"),
+    ("GET", "/api/projects/BANK-A/customizations"),            # 四期 A30 项目定制项
+    ("POST", "/api/projects/BANK-A/customizations"),
+    ("POST", "/api/projects/BANK-A/customizations/1/withdraw"),
     ("POST", "/api/deliverables/batch-sign"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1/diff"),
     ("POST", "/api/projects/BANK-A/runs"),

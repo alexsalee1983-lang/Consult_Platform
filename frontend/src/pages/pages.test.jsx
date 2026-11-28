@@ -15,9 +15,10 @@ vi.mock("../auth.jsx", async (orig) => ({
 }));
 
 const { default: Login } = await import("./Login.jsx");
+const { Toc } = await import("./Deliverable.jsx");
 const { default: Projects } = await import("./Projects.jsx");
 const { default: Overview } = await import("./Overview.jsx");
-const { OutputPage, ProjectLayout } = await import("./ProjectPages.jsx");
+const { OutputPage, ProjectLayout, SettingsPage } = await import("./ProjectPages.jsx");
 const { default: Drawer } = await import("../components/Drawer.jsx");
 const { todos } = await import("../components/Panorama.jsx");
 const { default: Members } = await import("../components/Members.jsx");
@@ -312,4 +313,106 @@ test("项目成员：项目经理不用输入就能看到全部可加入的同�
   const btn = [...c.querySelectorAll("button")].find((b) => b.textContent.startsWith("添加选中的 2 人"));
   await act(async () => btn.click());
   expect(added).toEqual([["u2", "member"], ["u3", "member"]]);
+});
+
+test("立项后直接进成员设置：带 new=1 时设置页顶部提示下一步加成员，并给回驾驶舱的入口", async () => {
+  stub.project = async () => PROJECT;
+  stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
+  stub.lookupUsers = async () => [];
+  const c = await render(<Routes><Route path="/project/:code/settings" element={<SettingsPage code="BANK-A" />} /></Routes>,
+    "/project/BANK-A/settings?new=1");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  const tip = c.querySelector('[aria-label="立项后下一步"]');
+  expect(tip?.textContent).toContain("立项完成");
+  expect(tip.querySelector('a[href="/project/BANK-A"]')).toBeTruthy();
+});
+
+test("普通进入设置页不出立项提示", async () => {
+  stub.project = async () => PROJECT;
+  stub.members = async () => [];
+  const c = await render(<Routes><Route path="/project/:code/settings" element={<SettingsPage code="BANK-A" />} /></Routes>,
+    "/project/BANK-A/settings");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.querySelector('[aria-label="立项后下一步"]')).toBeNull();
+});
+
+const D1_FORM = { code: "D1", title: "启动包", writable: true, sections: [
+  { title: "项目概况", fixed: "", fields: [{ key: "goal", label: "项目目标", type: "textarea", required: true, max: 2000, default: "" }] }] };
+
+test("启动包两种成稿入口：大纲上方并排“从合同生成”“按表单成稿”，选了合同文件即交给表单去抽取", async () => {
+  const { StartChoices } = await import("../components/DeliverableForm.jsx");
+  const calls = [];
+  const el = await render(<StartChoices form={D1_FORM} onForm={() => calls.push("form")} onContract={(f) => calls.push(f.name)} />);
+  const box = el.querySelector('[aria-label="成稿方式"]');
+  expect(box.textContent).toContain("按合同生成");
+  const btn = [...box.querySelectorAll("button")].find((b) => b.textContent === "按表单成稿");
+  await act(async () => btn.click());
+  const input = box.querySelector('input[aria-label="合同文件"]');
+  Object.defineProperty(input, "files", { value: [new File(["合同"], "合同.docx")] });
+  await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(calls).toEqual(["form", "合同.docx"]);
+});
+
+test("启动包两种成稿入口：已有正文时不给按钮，说明原因（表单只用于首次成稿）", async () => {
+  const { StartChoices } = await import("../components/DeliverableForm.jsx");
+  const el = await render(<StartChoices form={{ ...D1_FORM, writable: false }} onForm={() => {}} onContract={() => {}} />);
+  const box = el.querySelector('[aria-label="成稿方式"]');
+  expect(box.querySelectorAll("button").length).toBe(0);
+  expect(box.textContent).toContain("已有正文");
+});
+
+test("按表单成稿：带着合同文件打开时，一打开就开始抽取并回填", async () => {
+  const { default: DeliverableForm } = await import("../components/DeliverableForm.jsx");
+  const sent = [];
+  stub.importContract = async (code, dcode, file) => { sent.push(file.name); return { job_id: 1, status: "queued" }; };
+  stub.contractImport = async () => ({ status: "done", error: "", values: { goal: "建立 BANK-A 安全运营体系" } });
+  const el = await render(<DeliverableForm code="BANK-A" dcode="D1" form={D1_FORM} initialFile={new File(["合同"], "合同.docx")}
+    onDone={() => {}} onCancel={() => {}} />);
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(sent).toEqual(["合同.docx"]);
+  expect(el.querySelector("textarea").value).toBe("建立 BANK-A 安全运营体系");
+});
+
+const LAYOUT = (path) => render(<Routes><Route path="/project/:code" element={<ProjectLayout />}>
+  <Route index element={<p>驾驶舱</p>} /><Route path="settings" element={<p>设置</p>} /></Route></Routes>, path);
+
+test("配人提示：项目经理进项目时项目里只有他一人，顶部提示去设置加成员（项目经理是别人立的项也一样）", async () => {
+  stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
+  const c = await LAYOUT("/project/BANK-A");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  const tip = c.querySelector('[aria-label="待配项目成员"]');
+  expect(tip?.textContent).toContain("还没有其他成员");
+  expect(tip.querySelector('a[href="/project/BANK-A/settings?new=1"]')).toBeTruthy();
+});
+
+test("配人提示：已有其他成员、不是项目经理、或已在设置页时都不出", async () => {
+  stub.members = async () => [{ username: "u1", project_role: "manager" }, { username: "u2", project_role: "member" }];
+  let c = await LAYOUT("/project/BANK-A");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.querySelector('[aria-label="待配项目成员"]')).toBeNull();
+  act(() => root.unmount()); el.remove();
+  stub.members = async () => [{ username: "u9", project_role: "manager" }];
+  c = await LAYOUT("/project/BANK-A");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.querySelector('[aria-label="待配项目成员"]')).toBeNull();
+  act(() => root.unmount()); el.remove();
+  stub.members = async () => [{ username: "u1", project_role: "manager" }];
+  c = await LAYOUT("/project/BANK-A/settings");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.querySelector('[aria-label="待配项目成员"]')).toBeNull();
+});
+
+test("写大纲那一行右边直接并排“按表单成稿”“按合同生成”，不用展开（负责人 11-28）", async () => {
+  const calls = [];
+  const d = { sections: [] };
+  const el = await render(<Toc d={d} seq={0} onPick={() => {}} editable onOutline={async () => {}}
+    form={D1_FORM} onForm={() => calls.push("form")} onContract={(f) => calls.push(f.name)} />);
+  const row = el.querySelector('[aria-label="目录"] .sb');
+  const labels = [...row.querySelectorAll("button, label")].map((b) => b.textContent.trim());
+  expect(labels).toEqual(["写大纲", "按表单成稿", "按合同生成"]);
+  await act(async () => [...row.querySelectorAll("button")].find((b) => b.textContent === "按表单成稿").click());
+  const input = row.querySelector('input[aria-label="合同文件"]');
+  Object.defineProperty(input, "files", { value: [new File(["合同"], "合同.docx")] });
+  await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(calls).toEqual(["form", "合同.docx"]);
 });
