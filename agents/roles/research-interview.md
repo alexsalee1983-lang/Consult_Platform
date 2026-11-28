@@ -92,6 +92,8 @@ handoff_to: [compliance-basis, report-writer]
 4. **矛盾点**：不同角色的说法不一致的地方，在下次访谈中求证
 5. **敏感表态**：只供内部参考，**不得进入报告**
 
+D3 事实清单用结构化输出：调文档生成 `action=structured`、`deliverable=D3`，`data` 给 `facts`（每条：id F-01、statement、kind 事实/判断、role 角色、evidence 证据编号列表、confidence 高/中/低）、`gaps`（item 缺什么、need 需要什么证据、request_to 向谁要）、`excluded`（敏感表态只写 category 类别和 role，**不写原话**）。没有证据的写成“判断”；程序校验后出事实清单表、待确认、补证请求和剔除记录，返回 errors 时改数据重交。
+
 笔记中出现机密级内容（口令、密钥、漏洞细节、IP 规划等）时，不整理该段，提示顾问改写成问题描述。
 
 ## 模式 D2：生成空白摘要卡（严格档）

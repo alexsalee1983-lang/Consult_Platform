@@ -55,15 +55,6 @@ button { font: inherit; cursor: pointer; }
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi-v { font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
 /* 驾驶舱行动条（设计稿 07 .act）：下一步加宽高亮，其余四张小卡 */
-.act { display: grid; grid-template-columns: 2.4fr 1fr 1fr 1fr 1.1fr; gap: 10px; }
-.act-card { display: flex; flex-direction: column; gap: 3px; padding: 12px 16px; min-width: 0; }
-.act-btn { text-align: left; cursor: pointer; font: inherit; color: inherit; transition: border-color .15s, background .15s; }
-.act-btn:hover { border-color: var(--ln2); background: var(--s2); }
-.act-v { font-size: 24px; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; }
-.act-s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.act-next { border-color: var(--amber); background: var(--amber-d); }
-.act-next-t { font-size: 15px; font-weight: 600; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-@media (max-width: 1100px) { .act { grid-template-columns: repeat(2, minmax(0, 1fr)); } .act-next { grid-column: 1 / -1; } }
 .lst { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .lst > li { padding: 9px 0; border-top: 1px solid var(--ln); }
 .bar { height: 4px; border-radius: 2px; background: var(--s3); overflow: hidden; }
@@ -240,32 +231,60 @@ select.sm { height: 28px; padding: 0 6px; border: 1px solid var(--ln2); border-r
 .tabs a { color: var(--tx3); padding: 9px 20px; font-size: 14px; border-bottom: 2px solid transparent; text-decoration: none; transition: color .15s; }
 .tabs a:hover { color: var(--tx); }
 .tabs a.on { color: var(--cyan); border-bottom-color: var(--cyan); font-weight: 700; }
-nav.tabs[aria-label="项目导航"] { position: sticky; top: 0; z-index: 5; background: var(--obs); margin-bottom: 4px; }
 .drawer { position: fixed; inset: 0 0 0 auto; width: min(440px, 100vw); height: 100vh; margin: 0; max-height: none; z-index: 20; border-radius: 0; color: var(--tx); overflow-y: auto; box-shadow: -12px 0 32px var(--obs); }
 .drawer-body { display: flex; flex-direction: column; gap: 10px; }
 .locate { color: var(--cyan); text-decoration: none; font-size: 12.5px; white-space: nowrap; }
-.flash rect { animation: flash 0.6s ease-in-out 4; stroke-width: 2; }
-@keyframes flash { 50% { stroke: var(--amber); fill: var(--amber-d); } }
 .full { padding: 14px; display: flex; flex-direction: column; gap: 14px; min-height: 100%; }
 
 /* 驾驶舱动效（负责人 2026-11-26：要有动感、更美观）：卡片依次浮现、悬停上浮、顶边强调色、状态点呼吸；系统要求减少动效时全部关掉 */
-.act-card { position: relative; overflow: hidden; border-top: 2px solid var(--accent, var(--ln2)); animation: rise .45s cubic-bezier(.2,.7,.2,1) both; transition: transform .18s, box-shadow .18s, border-color .18s, background .18s; }
-.act > :nth-child(2) { animation-delay: .06s; } .act > :nth-child(3) { animation-delay: .12s; }
-.act > :nth-child(4) { animation-delay: .18s; } .act > :nth-child(5) { animation-delay: .24s; }
-.act-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px -12px var(--accent, var(--ln2)); }
-.act-next { border-top-color: var(--amber); background: linear-gradient(135deg, var(--amber-d), var(--s1) 75%); }
-.act-next::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, var(--amber-d) 50%, transparent 70%); background-size: 250% 100%; animation: sheen 6s ease-in-out infinite; }
-.live { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); margin-right: 7px; vertical-align: 1px; animation: breathe 1.8s ease-in-out infinite; }
 .bar > i { transition: width .8s cubic-bezier(.2,.7,.2,1); }
-section[aria-label="项目全景"] { animation: rise .5s .2s cubic-bezier(.2,.7,.2,1) both; }
-.pn rect { transition: fill .15s, stroke-width .15s; }
-.pn:hover rect { fill: var(--s2); stroke-width: 2; }
-.pn-cur rect { stroke-width: 1.5; }
-.pn-blk circle, .pn-ai circle { animation: breathe 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes breathe { 50% { opacity: .35; transform: scale(1.35); } }
-@keyframes sheen { 0%, 60% { background-position: 150% 0; } 100% { background-position: -50% 0; } }
-@media (prefers-reduced-motion: reduce) { .act-card, .act-next::after, .live, .pn circle, section[aria-label="项目全景"] { animation: none !important; } .act-card:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ring, .metro .trk > i, .stn.cur .nd::after, .flash, .bar > i { animation: none !important; transition: none !important; } }
+
+/* 项目栏与全景三块（四期 A37，示意 11）：项目栏放交付链，全景只回答“在哪个关口、还差什么、卡在谁” */
+.layout.narrow { grid-template-columns: 64px minmax(0, 1fr); }
+.layout.narrow .side { padding: 16px 8px; align-items: center; }
+.layout.narrow .side .lbl, .layout.narrow .side .nav-group, .layout.narrow .side .logo-t, .layout.narrow .side .sys, .layout.narrow .side .who, .layout.narrow .side .nav .chip { display: none; }
+.layout.narrow .nav a { justify-content: center; padding: 8px; }
+.proj-layout { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 14px; align-items: start; }
+.rail { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px; position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow-y: auto; }
+.rail a { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; color: var(--tx2); text-decoration: none; font-size: 13.5px; }
+.rail a:hover { color: var(--tx); }
+.rail a.on { color: var(--tx); background: var(--s3); box-shadow: inset 2px 0 0 var(--amber); }
+.rail .n { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--amber); }
+.pcard { display: flex; gap: 10px; align-items: center; padding: 10px; margin-bottom: 8px; border-radius: 10px; background: var(--s2); border: 1px solid var(--ln); }
+.ring { --v: 0; flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--amber) calc(var(--v) * 1%), var(--s3) 0); }
+.ring > i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); font-style: normal; font-size: 11px; color: var(--tx); }
+.ring.lg { width: 74px; height: 74px; } .ring.lg > i { width: 60px; height: 60px; font-size: 15px; font-weight: 700; background: var(--s1); }
+.chain { position: relative; margin: 2px 0 2px 4px; }
+.chain::before { content: ""; position: absolute; left: 11px; top: 14px; bottom: 14px; width: 2px; background: var(--ln2); }
+.chain a { padding-left: 28px; position: relative; }
+.chain a::before { content: ""; position: absolute; left: 6px; top: 50%; margin-top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--s1); border: 2px solid var(--ln2); }
+.chain a.s-ok::before { background: var(--ok); border-color: var(--ok); }
+.chain a.s-cur::before { background: var(--amber); border-color: var(--amber); box-shadow: 0 0 0 4px var(--amber-d); }
+.sub2 { display: flex; flex-direction: column; margin: 0 0 4px 30px; border-left: 1px dashed var(--ln2); }
+.sub2 a { font-size: 12.5px; padding: 3px 8px; }
+.sub2 a > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sd { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ln2); }
+.sd-ok { background: var(--ok); } .sd-cur { background: var(--amber); }
+.hero { display: flex; align-items: center; gap: 16px; padding: 14px 18px; }
+.hero-t { font-size: 20px; font-weight: 700; line-height: 1.3; }
+.metro { position: relative; display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); padding-top: 4px; }
+.metro .trk { position: absolute; left: calc(50% / var(--n, 5)); right: calc(50% / var(--n, 5)); top: 20px; height: 4px; border-radius: 2px; background: var(--ln2); overflow: hidden; }
+.metro .trk > i { display: block; height: 100%; width: var(--done, 0%); background: var(--ok); transition: width 1.2s ease-out; }
+.stn { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; color: var(--tx2); text-align: center; }
+.stn .nd { position: relative; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--s3); border: 2px solid var(--ln2); color: var(--tx3); font-weight: 700; }
+.stn.ok .nd { background: var(--ok-d); border-color: var(--ok); color: var(--ok); }
+.stn.cur .nd { background: var(--amber-d); border-color: var(--amber); color: var(--amber); }
+.stn.cur .nd::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid var(--amber); animation: pulse 1.8s ease-out infinite; }
+.stn.cur b { color: var(--amber); }
+@keyframes pulse { from { transform: scale(.8); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
+.blk { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.bt { display: flex; flex-direction: column; gap: 6px; color: var(--tx); text-decoration: none; }
+.bt:hover { border-color: var(--ln2); background: var(--s2); }
+.bt .bar { height: 6px; }
+.lst > li.todo { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--ln); border-radius: 8px; background: var(--s2); }
+.flash { animation: flash 0.6s ease-in-out 4; }
+@keyframes flash { 50% { border-color: var(--amber); background: var(--amber-d); } }
 
 /* 项目成员勾选列表：最多显示约 8 行，多了在框内滚动 */
 .pick { max-height: 300px; overflow-y: auto; border: 1px solid var(--ln); border-radius: 8px; padding: 0 10px; }
