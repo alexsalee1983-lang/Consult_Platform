@@ -216,6 +216,28 @@ class KbPracticeDecision(KbBase):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class KbExpertProfile(KbBase):
+    """四期 B44④：专家档案——擅长的服务产品、行业，按专长派审核卡（迁移 k0023）。"""
+    __tablename__ = "kb_expert_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    products: Mapped[list] = mapped_column(JSON, default=list)       # meta.PRODUCTS 的键
+    industries: Mapped[list] = mapped_column(JSON, default=list)     # meta.INDUSTRIES（空 = 不限行业）
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbReviewAssignment(KbBase):
+    """四期 B44④：待审版本按专长派给的知识专家（迁移 k0023）。没有记录 = 没有匹配，发全体知识专家。"""
+    __tablename__ = "kb_review_assignments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version_id: Mapped[int] = mapped_column(ForeignKey("kb_versions.id", ondelete="CASCADE"), unique=True)
+    assignee: Mapped[str] = mapped_column(String(64), index=True)
+    score: Mapped[int] = mapped_column(Integer, default=1)          # 1 产品对上；2 产品和行业都对上
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class KbUpload(KbBase):
     __tablename__ = "kb_uploads"
 
