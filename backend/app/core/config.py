@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 120                # 等待模型回复（非流式整体 / 流式两段输出之间）的超时
     llm_max_retries: int = 2                      # 连接失败、超时、429、5xx 时重试次数（流式只在开始输出前重试）
     llm_retry_backoff_seconds: float = 1.0        # 指数退避基数：1s、2s、4s……
+    llm_max_concurrency: int = 0                  # 四期 A31⑪：同时在途的模型调用上限（0 = 不限），满了按 对话>交付链>知识后台 排队
     llm_max_continuations: int = 3                # 输出被截断（finish_reason=length）时最多续写几次，仍不完整按失败处理
     llm_health_ttl_seconds: int = 30              # 模型可用性检查结果缓存时间
     # 自动假名化：把项目卡中登记的客户名、人名、系统名替换成占位符再发给模型，回复里再换回来。

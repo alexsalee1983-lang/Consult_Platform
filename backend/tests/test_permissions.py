@@ -39,6 +39,7 @@ MATRIX = [
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
     # 指标看板（三期 F2）：只给项目负责人（负责人 200 在 test_indicators 里测）
     (("GET", "/api/indicators", None),                  (403, 403, 403, 403, 403)),
+    (("GET", "/api/indicators/drift", None),            (403, 403, 403, 403, 403)),
     # AI 质量事件台账（四期 F3）：台账只给项目负责人；登记挂 BANK-A 须是成员（非成员 404）；
     # 他人事件详情和处置 404（负责人、项目经理、登记人在 test_quality_incidents 里测）
     (("GET", "/api/quality-incidents", None),           (403, 403, 403, 403, 403)),
@@ -90,6 +91,9 @@ MATRIX = [
                                                         (403, 403, 403, 403, 403)),
     # 验收与保留期（M4 ①）：member 是 BANK-A 项目经理，验收日写在将来 → 422（不改 BANK-A）；非成员 404
     (("POST", "/api/projects/BANK-A/acceptance", {"accepted_on": "2999-01-01"}), (422, 404, 403, 403, 403)),
+    # 四期 A31 ⑦⑧：结项清单成员可看；终止要项目经理，空原因 → 422（不改 BANK-A）；非成员 404
+    (("GET", "/api/projects/BANK-A/closeout", None),    (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/terminate", {"reason": ""}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/acceptance", {"accepted_on": "2026-01-01"}), (404, 404, 403, 403, 403)),
     # 删除（M4 ②）：确认队列只给项目负责人（矩阵里没有这个角色，负责人的 200 在 test_deletion 里测）；
     # member 是 BANK-A 项目经理：收到日期写在将来 → 422（不在 BANK-A 留下申请）；非成员 404

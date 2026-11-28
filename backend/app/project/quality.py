@@ -257,6 +257,9 @@ def gate(db: Session, d: Deliverable) -> Gate:
     bad = sorted(ref for ref, st in stale.items() if st in (KB_GONE, KB_REPEALED))
     if bad:
         reasons.append(f"正文引用的知识库条目已下线或依据已废止：{'、'.join(bad[:10])}，改正后重新评审")
+    marked = [str(s.seq) for s in d.sections if s.stale_reason]
+    if marked:                                 # 四期 A31⑫：上游变更或修订冲突标“需更新”的章，改写后才放行
+        reasons.append(f"第 {'、'.join(marked)} 章因上游变更需更新，复核改写后重新评审")
     r = latest_done_review(db, d)
     if r is None:
         reasons.append("还没有完成的质量评审")

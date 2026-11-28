@@ -35,8 +35,9 @@ from ..project import deliverables as svc
 from ..project import export as export_svc
 from ..project import export_pptx
 from ..project import form_import
+from ..project import outward
 from ..project import forms as forms_svc
-from ..project import kb_impact
+from ..project import kb_impact, loops
 from ..products import config as product_config
 from ..services import quality_incidents
 
@@ -52,6 +53,7 @@ class SectionRow(BaseModel):
     sources: dict
     unresolved: list[str]
     knowledge_updates: list[dict] = []   # 引用的知识条目已更新 / 下线（二期 B4）
+    stale: str = ""                      # 上游变更后待复核的原因（四期 A31⑫），空 = 无
 
 
 class DeliverableDetail(BaseModel):
@@ -292,6 +294,13 @@ def section_diff(code: str, dcode: str, seq: int, a: int = Query(ge=1), b: int =
         _raise(e)
 
 
+@router.get("/{code}/deliverables/{dcode}/errata")
+def errata(code: str, dcode: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """四期 A31②：已签署件引用的条目下线后的勘误页（按当前知识状态生成，原签署版本不动）。"""
+    p, d = _load(db, code, dcode, user)
+    return loops.errata_page(db, p, d)
+
+
 @router.get("/{code}/deliverables/{dcode}/export")
 def export_deliverable(code: str, dcode: str, format: str = Query(default="docx", pattern="^(docx|pptx)$"),
                        db: Session = Depends(get_db), user: User = Depends(current_user)):
@@ -301,6 +310,12 @@ def export_deliverable(code: str, dcode: str, format: str = Query(default="docx"
         audit.record(db, actor=user.username, action="deliverable.export", result="blocked", project_code=p.code,
                      deliverable=d.code, reason="quality_incident_frozen", incident=frozen)
         raise HTTPException(409, f"{d.code} 因质量事件 #{frozen} 冻结导出，事件复盘关闭后恢复")
+    text = "\n".join([d.title] + [f"{s.title}\n{v.body if (v := svc.get_version(s)) else ''}" for s in d.sections])
+    hits = outward.check(text)
+    if hits:                                         # 四期 A31⑨：对外文本过资质边界与机密级硬规则
+        audit.record(db, actor=user.username, action="deliverable.export", result="blocked", project_code=p.code,
+                     deliverable=d.code, reason="outward_rule", categories=hits)
+        raise HTTPException(422, f"{d.code} 正文命中对外硬规则（{'、'.join(hits)}），改正后再导出")
     mod = export_pptx if format == "pptx" else export_svc
     try:
         r = mod.export_deliverable(db, user, p, d)

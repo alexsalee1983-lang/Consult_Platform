@@ -35,6 +35,7 @@ from ..models import (Confirmation, Deliverable, DeliverableSection, Project, Pr
 from ..models.kb import KbItem, KbUpload, KbVersion
 from ..models.survey import SelfEvalPack
 from ..services import jobs
+from .loops import REMIND_TEXT
 
 KINDS: dict[str, str] = {
     "confirmation": "确认卡",
@@ -205,8 +206,9 @@ def collect(db: Session, user: User) -> list[Task]:
                                                        Confirmation.project_id.in_(codes))):
             code = codes[c.project_id]
             unsure = not c.recommendation                   # Agent 没给推荐 = 存疑
-            tasks.append(Task(kind="confirmation", ref_id=c.id, title=c.title, project_code=code,
-                              link=f"/project/{code}", impact=1 + bool(c.deliverable_code),
+            tasks.append(Task(kind="confirmation", ref_id=c.id, title=c.title + REMIND_TEXT.get(c.remind_stage, ""),
+                              project_code=code, link=f"/project/{code}",
+                              impact=1 + bool(c.deliverable_code) + c.remind_stage,   # 四期 A31⑤：提醒、升级只提前排序
                               uncertainty=1.0 if unsure else 0.0, created_ts=_ts(c.created_at),
                               fields=[_field("recommendation", "推荐选项", c.recommendation),
                                       _field("deliverable_code", "关联交付件", c.deliverable_code)]))

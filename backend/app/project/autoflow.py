@@ -100,7 +100,8 @@ def scan_runs(db: Session, project: Project | None = None, now: datetime | None 
     quiet = timedelta(hours=get_settings().auto_run_quiet_hours)
     started: list[str] = []
     ran = select(AgentRun.project_id).distinct()
-    q = select(Project).where(Project.deleted_at.is_(None), Project.accepted_on.is_(None), Project.id.not_in(ran))
+    q = select(Project).where(Project.deleted_at.is_(None), Project.accepted_on.is_(None),
+                              Project.terminated_on.is_(None), Project.id.not_in(ran))
     if project is not None:
         q = q.where(Project.id == project.id)
     for p in db.scalars(q.order_by(Project.id)).all():
@@ -155,7 +156,8 @@ def scan_reviews(db: Session, project: Project | None = None, now: datetime | No
         return []
     now = now or utcnow()
     q = (select(Deliverable).join(Project, Project.id == Deliverable.project_id)
-         .where(Project.deleted_at.is_(None), Deliverable.status == "drafting").order_by(Deliverable.id))
+         .where(Project.deleted_at.is_(None), Project.terminated_on.is_(None), Deliverable.status == "drafting")
+         .order_by(Deliverable.id))
     if project is not None:
         q = q.where(Deliverable.project_id == project.id)
     made: list[str] = []

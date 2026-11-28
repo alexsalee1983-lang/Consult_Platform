@@ -67,11 +67,19 @@ def downgrade() -> None:
     op.drop_index("ix_kb_poison_incidents_submitter", table_name="kb_poison_incidents")
     op.drop_index("ix_kb_poison_incidents_status", table_name="kb_poison_incidents")
     op.drop_table("kb_poison_incidents")
+    conn = op.get_bind()
+    views: list[str] = []
+    if conn.dialect.name == "sqlite":   # SQLite 删列要重建 kb_items，先摘下引用它的视图（同 k0025），建完再挂回
+        views = [r[0] for r in conn.execute(sa.text(
+            "SELECT sql FROM sqlite_master WHERE type = 'view' AND sql LIKE '%kb_items%'"))]
+        op.execute("DROP VIEW IF EXISTS kb_v_item_facets")
     with op.batch_alter_table("kb_items") as batch:
         batch.drop_index("ix_kb_items_frozen_by")
         batch.drop_index("ix_kb_items_derived_from")
         batch.drop_column("frozen_by")
         batch.drop_column("derived_from")
+    for sql in views:
+        op.execute(sql)
     with op.batch_alter_table("kb_versions") as batch:
         batch.drop_index("ix_kb_versions_batch_key")
         batch.drop_column("single_source")
