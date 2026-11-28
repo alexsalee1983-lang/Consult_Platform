@@ -1,0 +1,67 @@
+# 四期 C23：SOC 运营体系设计 澄清题选项与工期对照（草稿，expert_review: pending，2026-11-28）
+# 选项取自同产品黄金样例（资料仓 Consult_Knowledge drafts/golden/soc，golden 为 golden_id），样例本身待专家认可；
+# 样例为虚拟客户，只借结构与常见取舍，不照抄数字。规则与通用题见 checks.yaml。
+product: SOC
+weeks: {typical: 12, min: 8, source: 公司标准写法初值（立项默认 12 周）；黄金样例暂无整项目工期，专家复核时补}
+deliverables_min: [D1, D2, D3, D4, D5, D6, D7, D8]   # K-05：合同交付件清单至少覆盖
+questions:
+- id: SOC-Q01
+  field: in_scope
+  ask: 本次运营体系覆盖到哪一层？
+  affects: [D4, D5]
+  gate: 启动
+  options:
+  - {text: 总部安全运营中心，分支机构只纳入告警上报与协同, recommended: true, reason: 样例目标模型按集中监测、分级协同设计, golden: [SOC-G02]}
+  - {text: 总部与各分支机构统一运营, golden: [SOC-G02]}
+  - {text: 仅总部本部}
+- id: SOC-Q02
+  field: goal
+  ask: 目标运营模式倾向哪一种？
+  affects: [D5, D7]
+  gate: 设计
+  options:
+  - {text: 自建核心团队加外包 7×24 值守, recommended: true, reason: 样例方案取舍中兼顾成本与夜间值守缺口, golden: [SOC-G03, SOC-G02]}
+  - {text: 全部自建, golden: [SOC-G03]}
+  - {text: 以托管服务为主，自留运营经理, golden: [SOC-G03]}
+- id: SOC-Q03
+  field: deliverables
+  ask: D6 制度文件包包含哪几份文件？
+  affects: [D6]
+  gate: 设计
+  options:
+  - {text: 运营管理办法、告警分级、事件响应、值班交接、岗位职责、考核要求 6 份, recommended: true, reason: 样例覆盖运营闭环的必备文件, golden: [SOC-G04, SOC-G05, SOC-G06, SOC-G07, SOC-G10, SOC-G11]}
+  - {text: 以上 6 份再加检测用例管理与威胁情报运营共 8 份, golden: [SOC-G08, SOC-G09]}
+  - {text: 只做运营管理办法与事件响应 2 份, golden: [SOC-G04, SOC-G06]}
+- id: SOC-Q04
+  field: client_requirements
+  ask: 事件升级与通报流程对接哪类外部要求？
+  affects: [D6]
+  gate: 设计
+  options:
+  - {text: 对接行业主管部门的事件报告时限, recommended: true, reason: 样例按银行与电力的监管报告时限分别写, golden: [SOC-G06]}
+  - {text: 只做内部升级，不涉及外部通报}
+- id: SOC-Q05
+  field: milestones
+  ask: D7 路线图按多长周期规划？
+  affects: [D7, D8]
+  gate: 设计
+  options:
+  - {text: 18 个月三阶段, recommended: true, reason: 样例先补监管时限与夜间值守，再提升检测覆盖，最后持续改进, golden: [SOC-G12]}
+  - {text: 12 个月两阶段}
+  - {text: 36 个月，按年度预算分期}
+- id: SOC-Q06
+  field: acceptance
+  ask: D5 指标体系与服务时限按什么口径验收？
+  affects: [D5, D6]
+  gate: 验收
+  options:
+  - {text: 每项指标写明口径、数据来源与目标值，客户确认指标清单即验收, recommended: true, reason: 样例考核要求逐项带口径与时限，可逐条对照, golden: [SOC-G11]}
+  - {text: 只给指标名称与方向，目标值由客户自定}
+- id: SOC-Q07
+  field: survey_scope
+  ask: 调研是否包含夜间与节假日值守的现场观察？
+  affects: [D2, D3]
+  gate: 调研
+  options:
+  - {text: 包含一次夜间值守观察并查阅交接班记录, recommended: true, reason: 样例事实清单区分已确认与口头陈述，值守情况需要现场佐证, golden: [SOC-G01, SOC-G07]}
+  - {text: 不做现场观察，只看排班表与交接记录}

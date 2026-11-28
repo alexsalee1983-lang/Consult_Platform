@@ -16,6 +16,7 @@ from .api import agent_md as agent_md_api   # 四期 F3②e
 from .api import stages as stages_api   # 四期 A27
 from .api import customizations as customizations_api   # 四期 A30
 from .api import consultant_aids   # 四期 A32
+from .api import contract_checks as contract_checks_api   # 四期 A40
 from .core import audit as core_audit
 from .core.auth import authenticate
 from .core.bootstrap import check_db_accounts, check_settings, encrypt_plaintext_rows, ensure_initial_users, ensure_test_memberships
@@ -112,3 +113,4 @@ app.include_router(survey.router)
 app.include_router(stages_api.router)
 app.include_router(customizations_api.router)
 app.include_router(consultant_aids.router)
+app.include_router(contract_checks_api.router)

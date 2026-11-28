@@ -210,6 +210,13 @@ MATRIX = [
     (("POST", "/api/projects/BANK-A/deliverables/D1/form/import", None), (422, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D1/form/import", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/deliverables/D1/form/import", None), (404, 404, 403, 403, 403)),
+    # 四期 A40 要点卡检查与澄清：成员可用（纪要无文件 422）；非成员 404
+    (("POST", "/api/projects/BANK-A/contract/check", {"card": {}}), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/contract/clarifications.docx", {"card": {}}), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/contract/answers", {"card": {}}), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/contract/minutes", None), (422, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/contract/minutes", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/contract/check", {"card": {}}), (404, 404, 403, 403, 403)),
     # 质量门禁与签署（M3 ⑤）：成员可看；发起评审在 test_quality 里测（这里发起会留下排队的评审）。
     # member 是 BANK-A 项目经理：D7 没有评审，提交签署门禁不过 409；不在待签署状态，退回 409
     (("GET", "/api/projects/BANK-A/deliverables/D7/reviews", None), (200, 404, 403, 403, 403)),

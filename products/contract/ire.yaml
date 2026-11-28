@@ -1,0 +1,56 @@
+# 四期 C23：事件后 E2E 评估与整改 澄清题选项与工期对照（草稿，expert_review: pending，2026-11-28）
+# 选项取自同产品黄金样例（资料仓 Consult_Knowledge drafts/golden/ire，golden 为 golden_id），样例本身待专家认可；
+# 样例为虚拟客户，只借结构与常见取舍，不照抄数字。规则与通用题见 checks.yaml。
+product: IRE
+weeks: {typical: 8, min: 6, source: 公司标准写法初值；样例立即整改按 2 周内、短期加固按季度，整项目工期专家复核时补}
+deliverables_min: [D1, D2, D3, D4, D5, D6, D7, D8]
+questions:
+- id: IRE-Q01
+  field: in_scope
+  ask: 本次复盘覆盖哪些事件？
+  affects: [D3, D4]
+  gate: 启动
+  options:
+  - {text: 只复盘触发本项目的一起事件, recommended: true, reason: 样例时间线与根因分析围绕单一事件展开，证据链最完整, golden: [IRE-G01, IRE-G02]}
+  - {text: 该事件加近 12 个月同类事件, golden: [IRE-G02]}
+- id: IRE-Q02
+  field: out_of_scope
+  ask: 是否包含取证分析与溯源？
+  affects: [D3, D4]
+  gate: 启动
+  options:
+  - {text: 不含，取证结论以客户或第三方已出的材料为输入, recommended: true, reason: 样例时间线引用已有记录，复盘聚焦管理与能力差距, golden: [IRE-G01]}
+  - {text: 含有限的日志复核，不出具取证结论}
+- id: IRE-Q03
+  field: deliverables
+  ask: D6 应急预案与处置剧本包含哪些场景？
+  affects: [D6]
+  gate: 设计
+  options:
+  - {text: 综合应急预案加本次事件同类场景剧本与一次桌面推演, recommended: true, reason: 样例预案、剧本、演练计划成套交付, golden: [IRE-G05, IRE-G06, IRE-G09]}
+  - {text: 综合应急预案加勒索、数据泄露、生产控制区异常三类剧本, golden: [IRE-G05, IRE-G06, IRE-G07, IRE-G08]}
+  - {text: 只修订综合应急预案, golden: [IRE-G05]}
+- id: IRE-Q04
+  field: goal
+  ask: 整改方案按哪几个时间层次给出？
+  affects: [D5, D7]
+  gate: 设计
+  options:
+  - {text: 立即整改（2 周内）、短期加固、中长期能力补强三层, recommended: true, reason: 样例按现有资源能做的先行，再补检测与响应能力, golden: [IRE-G03, IRE-G04, IRE-G10]}
+  - {text: 只给立即整改与短期加固, golden: [IRE-G03]}
+- id: IRE-Q05
+  field: client_requirements
+  ask: 高层汇报需要回答哪些管理层问题？
+  affects: [D8]
+  gate: 验收
+  options:
+  - {text: 事件概况、根本原因、需要管理层决策的事项, recommended: true, reason: 样例高层汇报三段式，决策事项单列, golden: [IRE-G11]}
+  - {text: 在上述基础上加整改投入量级, golden: [IRE-G11, IRE-G10]}
+- id: IRE-Q06
+  field: survey_scope
+  ask: 访谈是否覆盖事件当晚的值守与处置人员？
+  affects: [D2, D3]
+  gate: 调研
+  options:
+  - {text: 覆盖，逐人核对时间线节点, recommended: true, reason: 样例时间线每个节点注明来源，口述与记录交叉核对, golden: [IRE-G01]}
+  - {text: 只访谈部门负责人，节点以书面记录为准}

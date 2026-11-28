@@ -1,0 +1,56 @@
+# 四期 C23：数据安全管理体系建设 澄清题选项与工期对照（草稿，expert_review: pending，2026-11-28）
+# 选项取自同产品黄金样例（资料仓 Consult_Knowledge drafts/golden/dsm，golden 为 golden_id），样例本身待专家认可；
+# 样例为虚拟客户，只借结构与常见取舍，不照抄数字。规则与通用题见 checks.yaml。
+product: DSM
+weeks: {typical: 14, min: 10, source: 公司标准写法初值；黄金样例暂无整项目工期，专家复核时补}
+deliverables_min: [D1, D2, D3, D4, D5, D6, D7, D8]
+questions:
+- id: DSM-Q01
+  field: in_scope
+  ask: 数据资产梳理覆盖哪些业务？
+  affects: [D3, D4, D5]
+  gate: 启动
+  options:
+  - {text: 核心业务系统全部梳理，其余系统按清单登记, recommended: true, reason: 样例现状章节按核心系统逐项梳理、其余汇总, golden: [DSM-G01]}
+  - {text: 全部在用业务系统逐项梳理, golden: [DSM-G01]}
+  - {text: 只梳理 1～2 条重点业务线}
+- id: DSM-Q02
+  field: out_of_scope
+  ask: 是否包含数据资产的技术扫描或打标？
+  affects: [D3, D5]
+  gate: 启动
+  options:
+  - {text: 不含，资产清单以客户提供的系统与字段清单为准, recommended: true, reason: 平台不收业务数据样本，样例现状基于清单与访谈, golden: [DSM-G01]}
+  - {text: 含扫描工具选型建议，不实施}
+- id: DSM-Q03
+  field: deliverables
+  ask: 分类分级成果做到哪一级？
+  affects: [D5, D6]
+  gate: 设计
+  options:
+  - {text: 分类分级规则加重要数据识别方法，客户自行逐项定级, recommended: true, reason: 样例规则与识别方法分章，定级由客户按规则执行, golden: [DSM-G02, DSM-G03]}
+  - {text: 规则、识别方法，再加核心系统的示范定级清单, golden: [DSM-G02, DSM-G03, DSM-G05]}
+- id: DSM-Q04
+  field: client_requirements
+  ask: D6 制度文件包包含哪几份文件？
+  affects: [D6]
+  gate: 设计
+  options:
+  - {text: 管理办法、分类分级细则、事件处置流程 3 份, recommended: true, reason: 样例覆盖总纲、分类分级与事件处置三层, golden: [DSM-G04, DSM-G05, DSM-G06]}
+  - {text: 以上 3 份再加数据出境与合作方管理, golden: [DSM-G04]}
+- id: DSM-Q05
+  field: goal
+  ask: 本项目对标以哪类依据为主？
+  affects: [D4, D5]
+  gate: 启动
+  options:
+  - {text: 数据安全法配套规定加行业数据分类分级指引, recommended: true, reason: 样例分类分级规则按行业指引落地, golden: [DSM-G02]}
+  - {text: 只对标国家标准，不含行业指引}
+- id: DSM-Q06
+  field: acceptance
+  ask: 高层汇报需要回答哪些管理层问题？
+  affects: [D8]
+  gate: 验收
+  options:
+  - {text: 现状与主要风险、合规差距、需要管理层决策的事项, recommended: true, reason: 样例高层汇报三段式，决策事项单列, golden: [DSM-G07]}
+  - {text: 只汇报现状与整改计划}
