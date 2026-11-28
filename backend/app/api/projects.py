@@ -105,6 +105,8 @@ class ProjectIn(BaseModel):
     industry: str = Field(min_length=1, max_length=32, pattern=r"\S")   # 网页立项必填（命令行 create-project 仍可选）
     weeks: int = 12
     org_type: str = Field(default="", max_length=16)   # 组织类型，可空（configs.ORG_TYPES）
+    intake: bool = False          # 四期 A32 新立项三步（上传依据 → 核对要点卡 → 授权与成员）
+    early_start: bool = False     # 合同未签，先行启动（须部门负责人确认）
 
 
 @router.get("/catalog/products")
@@ -124,7 +126,7 @@ def create_project(body: ProjectIn, db: Session = Depends(get_db), user: User = 
     try:
         p = configs.create(db, actor=user.username, code=body.code, tier=body.tier, manager=manager,
                            product=body.product, modules=body.modules, industry=body.industry, weeks=body.weeks,
-                           org_type=body.org_type)
+                           org_type=body.org_type, intake=body.intake, early_start=body.early_start)
     except configs.CreateError as e:
         audit.record(db, actor=user.username, action="project.create", result="denied", status=e.status)
         raise HTTPException(e.status, str(e)) from None

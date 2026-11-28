@@ -149,6 +149,7 @@ class Settings(BaseSettings):
     kb_basis_min_rerank: float = 0.05
     # 交付流程自动推进（二期 C5，app/project/autoflow.py）：自动发起交付链、自动评审、门禁通过自动提交签署
     auto_flow: bool = True
+    early_start_escalate_days: int = 30     # 四期 A32：先行启动满这么多天合同仍未签，升级提醒部门负责人（项目负责人）
     auto_run_quiet_hours: float = 2       # 最近一条证据之后这么久没有新证据才自动发起交付链
     # 判断数据埋点（顾问改 Agent 稿的幅度、确认卡选择）：只记计数和类别；等法务意见，默认关（决策记录 2026-11-18）
     judgment_capture: bool = False

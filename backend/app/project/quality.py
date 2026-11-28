@@ -849,6 +849,11 @@ def sign(db: Session, user: User, project: Project, d: Deliverable, comment: str
     why = separation_conflict(d, user.username)
     if why:
         _refuse(db, user, project, d, action, "write_sign_separation", 403, why)
+    if d.code == "D8":
+        from . import intake
+        why = intake.contract_block(db, project)    # 四期 A32：先行启动合同未签不能出 D8 验收
+        if why:
+            _refuse(db, user, project, d, action, "contract_missing", 409, why)
     _lock_deliverable(db, d)
     if d.status != "review":
         _refuse(db, user, project, d, action, "not_submitted", 409,

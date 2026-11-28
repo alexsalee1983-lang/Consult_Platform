@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import false as sql_false
 from sqlalchemy.sql import true as sql_true
 
 from ..core.db import Base, utcnow as _now
@@ -32,6 +33,11 @@ class Project(Base):
     terminate_reason: Mapped[str] = mapped_column(String(200), server_default="")
     # 组织类型（迁移 0038，取值见 app/project/configs.ORG_TYPES，可空）：经验按组织类型分层用
     org_type: Mapped[str] = mapped_column(String(16), server_default="")
+    # 立项与合同要点卡（四期 A32，迁移 0061，规则见 app/project/intake.py）：intake = 走新立项流程（授权台账生效）
+    intake: Mapped[bool] = mapped_column(Boolean, server_default=sql_false())
+    early_start_on: Mapped[date | None] = mapped_column(Date, nullable=True)        # 先行启动（合同未签）的日期
+    early_start_approved_by: Mapped[str] = mapped_column(String(64), server_default="")
+    early_start_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     deliverables: Mapped[list["Deliverable"]] = relationship(
         back_populates="project", order_by="Deliverable.code", cascade="all, delete-orphan"

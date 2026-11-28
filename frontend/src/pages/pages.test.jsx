@@ -464,3 +464,49 @@ test("写大纲那一行右边直接并排“按表单成稿”“按合同生�
   await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
   expect(calls).toEqual(["form", "合同.docx"]);
 });
+
+// ---- 四期 A32：合同要点卡（输入页） ----
+const { default: Intake, defaultState } = await import("../components/Intake.jsx");
+const INTAKE_FIELDS = [{ key: "goal", name: "目标", drives: "D1" }, { key: "payments", name: "付款节点", drives: "进度" }];
+const INTAKE = {
+  intake: true, tier: "standard", is_manager: true, fields: INTAKE_FIELDS,
+  states: { verified: "已核对", unstated: "合同未写明", clarify: "待与客户澄清", extra: "合同外新增" },
+  basis_kinds: { contract: "合同", supplement: "补充协议", award: "中标通知书" },
+  card: { version: 1, status: "draft", provisional: true, basis_name: "中标通知书",
+    fields: { goal: { value: "建立安全运营体系", state: "", source: "中标通知书" }, payments: { value: "", state: "unstated", source: "" } } },
+  versions: [], ledger: [{ kind: "annex3", name: "附件三合同条款", required: true, current: null }], history: [],
+  strict_consent: null, gate1: { missing: ["合同要点卡未核对", "附件三合同条款未签"] },
+  data_refusal: "授权台账里附件三合同条款还没有登记签署，客户资料暂不能导入",
+  early_start: { days: 3, approved: false, contract_signed: false, overdue: false, escalate_days: 30 },
+};
+
+test("字段状态默认：有内容为已核对，无内容为合同未写明", () => {
+  expect(defaultState({ value: "x", state: "" })).toBe("verified");
+  expect(defaultState({ value: "", state: "" })).toBe("unstated");
+  expect(defaultState({ value: "x", state: "clarify" })).toBe("clarify");
+});
+
+test("合同要点卡：先行启动提示、关口 1 还差、核对完成时按状态提交", async () => {
+  const saved = [];
+  stub.intake = async () => INTAKE;
+  stub.saveContractCard = async (code, fields, checked) => { saved.push([code, fields, checked]); return {}; };
+  const c = await render(<Intake code="BANK-A" step={2} />);
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.textContent).toContain("先行启动第 3 天 · 合同未签 · 待部门负责人确认");
+  expect(c.textContent).toContain("关口 1 还差：合同要点卡未核对、附件三合同条款未签");
+  expect(c.textContent).toContain("客户资料暂不能导入");
+  expect(c.querySelector('[aria-label="目标状态"]').value).toBe("verified");
+  const btn = [...c.querySelectorAll("button")].find((b) => b.textContent === "核对完成");
+  await act(async () => { btn.click(); await new Promise((r) => setTimeout(r, 0)); });
+  expect(saved[0][0]).toBe("BANK-A");
+  expect(saved[0][1].goal).toEqual({ value: "建立安全运营体系", state: "verified" });
+  expect(saved[0][1].payments.state).toBe("unstated");
+  expect(saved[0][2]).toBe(true);
+});
+
+test("旧流程项目不显示合同要点卡", async () => {
+  stub.intake = async () => ({ ...INTAKE, intake: false });
+  const c = await render(<Intake code="BANK-A" />);
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.textContent).toBe("");
+});

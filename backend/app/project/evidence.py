@@ -73,6 +73,18 @@ def _refuse_strict(db: Session, user: User, project: Project, action: str) -> No
         raise EvidenceError(422, STRICT_REFUSAL)
 
 
+def _require_auth(db: Session, user: User, project: Project, action: str) -> None:
+    """四期 A32 授权不先行：附件一、附件三（严格档附件二）签署前不收客户资料（立项依据不经这里）。"""
+    from . import intake
+
+    why = intake.data_refusal(db, project)
+    if why:
+        audit.record(db, actor=user.username, action=action, result="blocked", project_code=project.code,
+                     reason="authorization_missing")
+        db.commit()
+        raise EvidenceError(422, why)
+
+
 def _guard(db: Session, user: User, project: Project, action: str, text: str, saved_note: str, **meta) -> None:
     result = guard.check(text)
     if result.blocked:
@@ -107,6 +119,7 @@ def upload_document(db: Session, user: User, project: Project, filename: str, da
                     content_type: str = "", title: str = "") -> UploadResult:
     action = "project.document"
     _refuse_strict(db, user, project, action)
+    _require_auth(db, user, project, action)
     filename = clean_filename(filename)
     try:
         doc = parse.parse(filename, data)
@@ -156,6 +169,7 @@ def add_note(db: Session, user: User, project: Project, kind: str, title: str, c
     if kind not in ("interview", "observation"):
         raise EvidenceError(422, "类别只能是 interview（访谈纪要）或 observation（现场观察）")
     _refuse_strict(db, user, project, action)
+    _require_auth(db, user, project, action)
     title, content, role = title.strip(), content.strip(), interviewee_role.strip()
     if not title or not content:
         raise EvidenceError(422, "标题和正文不能为空")
@@ -195,6 +209,8 @@ NOTE_FILE_KINDS = ("docx", "markdown", "text")
 def extract_note(db: Session, user: User, project: Project, filename: str, data: bytes) -> str:
     """纪要文件（.docx / .md / .txt，≤2MB）→ 正文，填进录入框由顾问核对后再提交；文件不保存，不分配编号。
     小文件、无 OCR，解析在毫秒级，所以在请求里做（大文件资料仍走后台解析）。审计只记格式和字数。"""
+    _refuse_strict(db, user, project, "project.note_extract")
+    _require_auth(db, user, project, "project.note_extract")
     return extract_text(db, user, project, filename, data, action="project.note_extract", label="纪要文件",
                         kinds=NOTE_FILE_KINDS, kinds_msg=" Word（.docx）、Markdown（.md）和纯文本（.txt）")
 

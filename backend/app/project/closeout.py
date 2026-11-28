@@ -36,8 +36,10 @@ def checklist(db: Session, p: Project) -> dict:
         select(DeliverableSection).where(DeliverableSection.deliverable_id.in_(code_of),
                                          DeliverableSection.stale_reason != "")
         .order_by(DeliverableSection.deliverable_id, DeliverableSection.seq))]
-    return {"unsigned": unsigned, "open_cards": cards, "stale_sections": stale,
-            "ready": not (unsigned or cards or stale),
+    from . import intake
+    contract = intake.contract_block(db, p)          # 四期 A32：先行启动合同未签不能结项
+    return {"unsigned": unsigned, "open_cards": cards, "stale_sections": stale, "contract": contract,
+            "ready": not (unsigned or cards or stale or contract),
             "terminated_on": p.terminated_on.isoformat() if p.terminated_on else None}
 
 

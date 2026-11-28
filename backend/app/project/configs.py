@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from sqlalchemy import select
@@ -112,7 +113,7 @@ def options() -> list[dict[str, Any]]:
 
 def create(db: Session, *, actor: str, code: str, tier: str, manager: User | None, product: str,
            modules: list[str] | tuple[str, ...] = (), industry: str = "", weeks: int = 12,
-           service: str = "", org_type: str = "") -> Project:
+           service: str = "", org_type: str = "", intake: bool = False, early_start: bool = False) -> Project:
     """立项。成功时已提交；失败抛 CreateError，不写库。"""
     code = code.strip().upper()
     if not PROJECT_CODE.match(code):
@@ -134,6 +135,10 @@ def create(db: Session, *, actor: str, code: str, tier: str, manager: User | Non
         raise CreateError(422, f"不能按这个产品立项：{e}") from e
     p = Project(code=code, service=(service.strip() or snap["product_name"])[:64], industry=industry.strip()[:32],
                 tier=tier, total_weeks=weeks, org_type=org_type)
+    if intake or early_start:                       # 四期 A32 新立项流程：授权台账生效，经验积累默认未同意
+        p.intake, p.flowback_allowed = True, False
+        if early_start:
+            p.early_start_on = date.today()
     p.deliverables = [Deliverable(code=d["code"], title=d["title"], status="not_started")
                       for d in snap["deliverables"]]
     db.add(p)
@@ -143,6 +148,7 @@ def create(db: Session, *, actor: str, code: str, tier: str, manager: User | Non
     db.commit()
     audit.record(db, actor=actor, action="project.create", result="allowed", project_code=code, tier=tier,
                  manager=manager.username, product=snap["product"], modules=[m["code"] for m in snap["modules"]],
-                 version=snap["product_version"], org_type=org_type or None,
+                 version=snap["product_version"], org_type=org_type or None, intake=p.intake or None,
+                 early_start=bool(p.early_start_on) or None,
                  industry_pack=(snap.get("industry") or {}).get("code"))
     return p

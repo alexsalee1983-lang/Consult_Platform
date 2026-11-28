@@ -17,6 +17,12 @@ from .conftest import TEST_PASSWORD, TEST_USER, login, totp_code
 PROTECTED = [
     ("GET", "/api/projects"),
     ("GET", "/api/portfolio"),
+    ("GET", "/api/projects/BANK-A/intake"),                       # 四期 A32 立项与合同要点卡
+    ("POST", "/api/projects/BANK-A/intake/basis"),
+    ("PUT", "/api/projects/BANK-A/intake/card"),
+    ("POST", "/api/projects/BANK-A/intake/authorizations"),
+    ("POST", "/api/projects/BANK-A/early-start/approve"),
+    ("GET", "/api/early-starts"),
     ("GET", "/api/indicators"),
     ("GET", "/api/indicators/drift"),
     ("GET", "/api/projects/BANK-A/automation"),
@@ -146,6 +152,7 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/sign"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/return"),
     ("POST", "/api/projects/BANK-A/deliverables/D3/signoff/merged"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/merged"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/revise"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revise"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/client-feedback"),
@@ -264,9 +271,10 @@ def test_every_api_route_is_protected_or_public(client):
         if path.startswith("/api") and path not in PUBLIC_PATHS:
             concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x") \
                 .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1") \
-                .replace("{rid}", "1").replace("{deletion_id}", "1").replace("{incident_id}", "1") \
+                .replace("{rid}", "1").replace("{deletion_id}", "1").replace("{incident_id}", "1").replace("{alarm_id}", "1") \
                 .replace("{consent_id}", "1").replace("{card}", "S-01") \
-                .replace("{version}", "abc").replace("{phase}", "分析")
+                .replace("{version}", "abc").replace("{phase}", "分析").replace("{qid}", "1").replace("{gap_id}", "1") \
+                .replace("{pack}", "P-01").replace("{answer_id}", "1").replace("{s}", "S-01")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 
