@@ -6,7 +6,7 @@ import { Loading, TopBar } from "../components/common.jsx";
 import AssistPanel from "../components/AssistPanel.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import DocBody from "../components/DocBody.jsx";
-import DeliverableForm from "../components/DeliverableForm.jsx";
+import DeliverableForm, { StartChoices } from "../components/DeliverableForm.jsx";
 import { BatchSign, ClientFeedback, ModeBar, RevisePanel } from "../components/DeliverableModes.jsx";
 import { modeOf, separationNote } from "../delivModes.js";
 import { noteAfterInsert, spliceText } from "../editor/assist.js";
@@ -515,6 +515,7 @@ export default function Deliverable({ code, dcode }) {
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
+  const [contractFile, setContractFile] = useState(null);
   const [form, setForm] = useState(null);        // A14②：D1、D2 表单定义，没有表单为 null
   const [formOpen, setFormOpen] = useState(false);
 
@@ -537,7 +538,7 @@ export default function Deliverable({ code, dcode }) {
   }, [code, dcode]);
 
   useEffect(() => {
-    setD(null); setSo(null); setRv(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false);
+    setD(null); setSo(null); setRv(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false); setContractFile(null);
     loadForm();
     api.project(code).then(setP).catch(setError);
     api.members(code).then(setMembers).catch(() => setMembers([]));
@@ -602,6 +603,8 @@ export default function Deliverable({ code, dcode }) {
       {strict && <div className="note-amber">严格档项目：这里只写占位符版本（【客户】【系统A】【人员1】），来源标 [S-xx]，不写真名、IP、产品名和原话，平台写入时检查。导出的 Word 带回现场，用现场工具按对照表回填成正式稿。</div>}
       <div className="kb3">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+          {editable && !formOpen && <StartChoices form={form} onForm={() => { setContractFile(null); setFormOpen(true); }}
+            onContract={(f) => { setContractFile(f); setFormOpen(true); }} />}
           <Toc d={d} seq={cur} onPick={setSeq} editable={editable}
             onOutline={async (titles) => { await api.putOutline(code, dcode, titles); await load(); }} />
           <section className="pnl pad" aria-label="来源构成">
@@ -611,10 +614,11 @@ export default function Deliverable({ code, dcode }) {
           <Quality code={code} dcode={dcode} so={so} canReview={editable && d.sections.length > 0} isManager={isManager} onChanged={load} />
         </div>
         <div style={{ minWidth: 0 }}>
-          {formOpen && form ? <DeliverableForm code={code} dcode={dcode} form={form} onCancel={() => setFormOpen(false)}
-            onDone={async () => { setFormOpen(false); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
+          {formOpen && form ? <DeliverableForm code={code} dcode={dcode} form={form} initialFile={contractFile}
+            onCancel={() => { setFormOpen(false); setContractFile(null); }}
+            onDone={async () => { setFormOpen(false); setContractFile(null); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
             : cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
-            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以点右上角“按表单成稿”，或先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
+            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以用左侧的“从合同生成”或“按表单成稿”，或先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
           <section className="pnl pad" aria-label="待你确认">

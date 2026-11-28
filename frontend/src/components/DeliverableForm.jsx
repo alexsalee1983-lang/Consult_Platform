@@ -43,7 +43,37 @@ function TableField({ f, value, onChange }) {
   );
 }
 
-export default function DeliverableForm({ code, dcode, form, onDone, onCancel }) {
+// 负责人 11-28：两种成稿方式在大纲上方并排给出，不藏在右上角和面板里；已有正文时说明为什么没有入口
+export function StartChoices({ form, onForm, onContract }) {
+  if (!form) return null;
+  if (!form.writable) {
+    return (
+      <section className="pnl pad sub" aria-label="成稿方式">
+        这份{form.title}已有正文：{form.code === "D1" ? "从合同生成和" : ""}按表单成稿只用于首次成稿，之后请在编辑器里修改各章。
+      </section>
+    );
+  }
+  return (
+    <section className="pnl pad" aria-label="成稿方式">
+      <span className="cap">成稿方式</span>
+      <div className="row" style={{ marginTop: 8 }}>
+        {form.code === "D1" && (
+          <label className="btnp">
+            从合同生成
+            <input type="file" hidden accept=".docx,.pdf,.md,.txt" aria-label="合同文件"
+              onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onContract(f); }} />
+          </label>
+        )}
+        <button className="btn" onClick={onForm}>按表单成稿</button>
+      </div>
+      <div className="sub" style={{ marginTop: 6 }}>
+        {form.code === "D1" ? "从合同生成：上传合同，Agent 抽取要点回填表单，核对后成稿；" : ""}按表单成稿：直接填表，平台按模板成稿。也可以在下面自己写大纲。
+      </div>
+    </section>
+  );
+}
+
+export default function DeliverableForm({ code, dcode, form, onDone, onCancel, initialFile = null }) {
   const [values, setValues] = useState(() => emptyValues(form));
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,10 +86,15 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel })
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
-  async function importContract(e) {
+  function importContract(e) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (file) runImport(file);
+  }
+
+  useEffect(() => { if (initialFile) runImport(initialFile); }, [initialFile]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function runImport(file) {
     setImp({ busy: true, msg: "合同已上传，正在抽取要点…", err: "" });
     try {
       await api.importContract(code, dcode, file);

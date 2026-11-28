@@ -2,7 +2,7 @@
 // 各页复用已有面板组件，只挪位置；条目上的“⌖ 全景”回全景并高亮对应节点（节点 id 与 GET .../panorama 一致）。
 // 调研助手全屏单开（现场用），交付件页挂在“输出”下。
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useParams } from "react-router";
+import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "react-router";
 import { api, DELIV_STATUS } from "../api.js";
 import Assessment from "../components/Assessment.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
@@ -127,10 +127,16 @@ export function OutputPage({ code }) {
 
 export function SettingsPage({ code }) {
   const { p, error, load } = useProject(code);
+  const [params] = useSearchParams();
   if (!p) return <Loading error={error} />;
   return (
     <>
       {head(p, "设置")}
+      {params.get("new") === "1" && (
+        <div className="pnl pad" role="status" aria-label="立项后下一步">
+          立项完成。下一步：在下面勾选项目成员并添加，然后<Link to={base(p.code)}>回驾驶舱</Link>开始启动包。
+        </div>
+      )}
       <Members code={p.code} />
       <Retention p={p} onChange={load} />
     </>
