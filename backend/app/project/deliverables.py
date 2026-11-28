@@ -242,6 +242,7 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
                        model=model, model_family=family)
     s.versions.append(v)
     s.current_version, s.updated_at = v.version, utcnow()
+    s.stale_reason, s.stale_at = "", None          # 四期 A31⑫：上游变更后重写即算复核过
     _touch(d, user)
     try:
         db.flush()
@@ -281,7 +282,8 @@ def outline(d: Deliverable) -> list[dict]:
         rows.append({"seq": s.seq, "title": s.title, "current_version": s.current_version,
                      "chars": v.char_count if v else 0, "updated_at": s.updated_at,
                      "sources": (v.sources or {}).get("counts", {}) if v else {},
-                     "unresolved": (v.sources or {}).get("unresolved", []) if v else []})
+                     "unresolved": (v.sources or {}).get("unresolved", []) if v else [],
+                     "stale": s.stale_reason or ""})
     return rows
 
 

@@ -151,7 +151,8 @@ def _context(db: Session, user: User, q: dict) -> tuple[str, int]:
 def _ask(db: Session, user: User, message: str, system: str) -> tuple[str, str, str]:
     """返回 (答案, 状态, 模型)。"""
     try:
-        out = gateway.complete(message, tier="standard", project_code="", level=LEVEL, system=system)
+        with gateway.lane("kb"):
+            out = gateway.complete(message, tier="standard", project_code="", level=LEVEL, system=system)
     except gateway.BlockedError:
         return "", "blocked", gateway.model_for(LEVEL)
     except gateway.GatewayError as e:

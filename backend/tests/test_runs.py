@@ -381,6 +381,7 @@ def test_long_evidence_is_condensed_not_dropped(proj, model):
     assert facts["refs"]["evidence"] == {"total": 6, "included": 6, "condensed": True}
     condense = [r for r in model.requests if runs.CONDENSE_MARK in r["messages"][-1]["content"]]
     assert len(condense) >= 2
+    assert all("<<<资料开始>>>" in r["messages"][-1]["content"] for r in condense)   # 四期 A31①：提炼也当数据
     prompt = model.prompt("交付链第 3 步")
     assert "夜间无人值守 [O-01]" in prompt and "按编号索取" not in prompt
 

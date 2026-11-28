@@ -18,6 +18,7 @@ PROTECTED = [
     ("GET", "/api/projects"),
     ("GET", "/api/portfolio"),
     ("GET", "/api/indicators"),
+    ("GET", "/api/indicators/drift"),
     ("GET", "/api/projects/BANK-A/automation"),
     ("GET", "/api/quality-incidents"),
     ("POST", "/api/quality-incidents"),
@@ -101,6 +102,7 @@ PROTECTED = [
     ("DELETE", "/api/projects/BANK-A/survey/selfeval/S-01/import"),
     ("GET", "/api/projects/BANK-A/survey/agenda"),
     ("GET", "/api/projects/BANK-A/deliverables/D4"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/errata"),       # 四期 A31②
     ("GET", "/api/projects/BANK-A/knowledge-updates"),
     ("GET", "/api/projects/BANK-A/assessment"),
     ("GET", "/api/projects/BANK-A/confirmations"),
@@ -109,6 +111,10 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D1/form"),
     ("POST", "/api/projects/BANK-A/deliverables/D1/form/import"),   # 四期 A28②
     ("GET", "/api/projects/BANK-A/deliverables/D1/form/import"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/form"),      # 路由覆盖检查按 {dcode}=D4 具体化
+    ("POST", "/api/projects/BANK-A/deliverables/D4/form"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/form/import"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/form/import"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
     ("GET", "/api/revision-features/summary"),   # 四期 F4②
     ("GET", "/api/extraction/questions"),   # 四期 F4③
@@ -152,6 +158,8 @@ PROTECTED = [
     ("PUT", "/api/projects/BANK-A/members/x"),
     ("DELETE", "/api/projects/BANK-A/members/x"),
     ("POST", "/api/projects/BANK-A/acceptance"),
+    ("GET", "/api/projects/BANK-A/closeout"),
+    ("POST", "/api/projects/BANK-A/terminate"),
     ("GET", "/api/deletions"),
     ("GET", "/api/deletions/1"),
     ("POST", "/api/deletions/1/confirm"),
