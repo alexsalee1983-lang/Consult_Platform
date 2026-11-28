@@ -383,6 +383,13 @@ export const api = {
   signMerged: (code, dcode) => request(`${dpath(code, dcode)}/signoff/merged`, { method: "POST" }),
   reviseState: (code, dcode) => request(`${dpath(code, dcode)}/revise`),
   revise: (code, dcode) => request(`${dpath(code, dcode)}/revise`, { method: "POST" }),
+  // 四期 A35 改稿：审阅清单、改动意图、不满意刷新（reason 四选一，seq 为 null 指整件）、一键回退
+  reviewList: (code, dcode) => request(`${dpath(code, dcode)}/review-list`),
+  editIntent: (code, dcode, seq) => request(`${dpath(code, dcode)}/sections/${seq}/intent`, { method: "POST" }),
+  refreshDeliverable: (code, dcode, reason, seq = null) =>
+    request(`${dpath(code, dcode)}/refresh`, { method: "POST", body: JSON.stringify({ reason, seq }) }),
+  rollbackSection: (code, dcode, seq, version) =>
+    request(`${dpath(code, dcode)}/sections/${seq}/rollback`, { method: "POST", body: JSON.stringify({ version }) }),
   clientFeedback: (code, dcode, items) =>   // items: [{section: 章号或 null, text}]
     request(`${dpath(code, dcode)}/client-feedback`, { method: "POST", body: JSON.stringify({ items }) }),
   batchCandidates: () => request("/api/deliverables/batch-sign"),

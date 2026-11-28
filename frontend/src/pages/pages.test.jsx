@@ -464,3 +464,35 @@ test("写大纲那一行右边直接并排“按表单成稿”“按合同生�
   await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
   expect(calls).toEqual(["form", "合同.docx"]);
 });
+
+// ---- 四期 A35 改稿：审阅清单、不满意刷新先问原因 ----
+const RL = {
+  round: 2, refresh: { status: "", error: "" }, refresh_max: 2,
+  reasons: [{ reason: "事实不对", action: "fact", hint: "去改事实" }, { reason: "口径不对", action: "customization", hint: "写成定制项" },
+    { reason: "结构不对", action: "outputs", hint: "调组件清单" }, { reason: "写得不好", action: "redraft", hint: "重新起草" }],
+  sections: [{ seq: 1, title: "现状概述", version: 2, human_final: false, changed: true, stale: "", refresh_rounds: 1 },
+    { seq: 2, title: "主要差距", version: 1, human_final: true, changed: false, stale: "", refresh_rounds: 0 }],
+  items: [{ seq: 2, kind: "门禁提醒", hint: "Q-001 阻断：对客结论无证据", rank: 0, changed: false },
+    { seq: 1, kind: "无来源句子", hint: "1 句没有来源标注", rank: 2, changed: true }],
+};
+
+test("交付件页 A35：审阅清单按风险列出、标人工定稿；不满意刷新先问原因", async () => {
+  const sent = [];
+  stubDeliverable({ ...DELIV, status: "drafting", sections: [
+    { seq: 1, title: "现状概述", current_version: 2, unresolved: [], knowledge_updates: [] },
+    { seq: 2, title: "主要差距", current_version: 1, unresolved: [], knowledge_updates: [] }] }, { ...SO, status: "drafting", sign_block: "" });
+  stub.reviewList = async () => RL;
+  stub.section = async () => ({ seq: 1, title: "现状概述", current_version: 2, version: 2, body: "正文 [O-01]", sources: {}, note: "", author: "u1", agent_code: "report-writer", created_at: null, versions: [] });
+  stub.refreshDeliverable = async (code, dcode, reason, seq) => { sent.push([reason, seq]); return { reason, action: "customization", hint: "写成定制项", job_id: null, seqs: [], skipped: [], handoff: [] }; };
+  const c = await render(<Deliverable code="BANK-A" dcode="D4" />);
+  const list = c.querySelector('[aria-label="审阅清单"]');
+  expect(list.textContent).toContain("第 1 章有改动");
+  expect(list.textContent).toContain("人工定稿（刷新时跳过）：第 2 章");
+  expect(list.querySelectorAll("li")[0].textContent).toContain("门禁提醒");
+  const panel = c.querySelector('[aria-label="不满意刷新"]');
+  expect(panel.textContent).toContain("回退到上一版");
+  await act(async () => { [...panel.querySelectorAll("button")].find((b) => b.textContent === "不满意，刷新").click(); });
+  await act(async () => { [...panel.querySelectorAll("button")].find((b) => b.textContent === "口径不对").click(); });
+  expect(sent).toEqual([["口径不对", 1]]);
+  expect(panel.textContent).toContain("写成定制项");
+});
