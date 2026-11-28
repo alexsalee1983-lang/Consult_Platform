@@ -59,9 +59,16 @@ class Section:
     template: str = ""
     fixed: str = ""
     fixed_by_tier: dict[str, str] = field(default_factory=dict)
+    fixed_title: str = ""     # 固定段的小节标题（负责人 11-28 成稿格式统一）；空则不加小节标题
+    tier_title: str = ""      # 按档位固定段的小节标题
+    fixed_first: bool = False  # 固定段放在本章开头（第 9 章先写平台承诺，双方另行约定放最后）
 
     def fixed_for(self, tier: str) -> str:
-        return "\n\n".join(x for x in (self.fixed, self.fixed_by_tier.get(tier, "")) if x)
+        parts = []
+        for title, text in ((self.fixed_title, self.fixed), (self.tier_title, self.fixed_by_tier.get(tier, ""))):
+            if text:
+                parts.append(f"### {title}\n\n{text}" if title else text)
+        return "\n\n".join(parts)
 
 
 @dataclass(frozen=True)
@@ -103,7 +110,9 @@ def _parse(data: dict, code: str) -> Form:
         if not isinstance(by_tier, dict) or set(by_tier) - set(TIERS):
             raise ValueError(f"forms/{code}.yaml 章节 {s.get('title')!r} 的 fixed_by_tier 只能按 {TIERS} 分档")
         sections.append(Section(str(s.get("title") or "").strip(), tuple(fields), template, str(s.get("fixed") or "").strip(),
-                                {k: str(v or "").strip() for k, v in by_tier.items()}))
+                                {k: str(v or "").strip() for k, v in by_tier.items()},
+                                str(s.get("fixed_title") or "").strip(), str(s.get("tier_title") or "").strip(),
+                                bool(s.get("fixed_first"))))
     if not sections or any(not s.title for s in sections):
         raise ValueError(f"forms/{code}.yaml 至少要有一章，且每章要有标题")
     return Form(code, str(data.get("title") or code), tuple(sections))
@@ -228,25 +237,40 @@ def _table(f: Field, v: str) -> str:
     return "\n".join([_row(f.columns), "| " + " | ".join("---" for _ in f.columns) + " |", *map(_row, rows)])
 
 
+_SUBHEAD = re.compile(r"^### +(.+)$", re.M)
+
+
+def _number(text: str, chapter: int) -> str:
+    """模板里的“### 小节标题”按成稿后实际留下的小节连续编号，写成“# 章.节 标题”（导出 Word 为二级标题）。"""
+    n = 0
+
+    def one(m: re.Match) -> str:
+        nonlocal n
+        n += 1
+        return f"# {chapter}.{n} {m.group(1).strip()}"
+    return _SUBHEAD.sub(one, text)
+
+
 def _render_section(s: Section, vals: dict[str, str], tier: str) -> str:
     paras = re.split(r"\n\s*\n", s.template.strip())
     keep = []
     for para in paras:                                 # 这一段引用的字段都没填：整段去掉
         refs = _REF.findall(para)
         keep.append(not refs or any(vals.get(k) for k in refs))
-    for i in range(len(paras) - 2, -1, -1):            # 不引用字段的小标题段跟着下一段去留
+    for i in range(len(paras) - 2, -1, -1):            # 不引用字段的小标题段、引导句跟着下一段去留
         if not _REF.findall(paras[i]) and not keep[i + 1]:
             keep[i] = False
     parts = [_REF.sub(lambda m: vals.get(m.group(1), ""), p).strip() for p, k in zip(paras, keep) if k]
     if s.fixed_for(tier):
-        parts.append(s.fixed_for(tier))
+        parts = [s.fixed_for(tier), *parts] if s.fixed_first else [*parts, s.fixed_for(tier)]
     return "\n\n".join(p for p in parts if p)
 
 
 def render(form: Form, values: dict, tier: str = "standard") -> list[tuple[str, str]]:
     """返回 [(章节标题, 正文)]；只出大纲不写正文的章节正文为空串。"""
     vals = _clean(form, values)
-    return [(s.title, _render_section(s, vals, tier) if s.fields or s.fixed_for(tier) else "") for s in form.sections]
+    return [(s.title, _number(_render_section(s, vals, tier), i) if s.fields or s.fixed_for(tier) else "")
+            for i, s in enumerate(form.sections, 1)]
 
 
 def submit(db: Session, user: User, project: Project, d: Deliverable, form: Form, values: dict) -> Deliverable:
