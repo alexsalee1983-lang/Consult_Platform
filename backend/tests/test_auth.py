@@ -265,10 +265,11 @@ def test_every_api_route_is_protected_or_public(client):
         path = getattr(route, "path", "")
         if path.startswith("/api") and path not in PUBLIC_PATHS:
             concrete = path.replace("{code}", "BANK-A").replace("{cid}", "1").replace("{username}", "x") \
-                .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1").replace("{qid}", "1") \
-                .replace("{rid}", "1").replace("{deletion_id}", "1").replace("{incident_id}", "1") \
+                .replace("{agent}", "x").replace("{tool}", "y").replace("{job_id}", "1").replace("{upload_id}", "1").replace("{doc_id}", "x").replace("{version_id}", "1").replace("{evidence}", "I-01").replace("{dcode}", "D4").replace("{seq}", "1") \
+                .replace("{rid}", "1").replace("{deletion_id}", "1").replace("{incident_id}", "1").replace("{alarm_id}", "1") \
                 .replace("{consent_id}", "1").replace("{card}", "S-01") \
-                .replace("{version}", "abc").replace("{phase}", "分析")
+                .replace("{version}", "abc").replace("{phase}", "分析").replace("{qid}", "1").replace("{gap_id}", "1") \
+                .replace("{pack}", "P-01").replace("{answer_id}", "1").replace("{s}", "S-01")
             assert concrete in listed, f"{path} 没有列入 PROTECTED，请补测试"
 
 
