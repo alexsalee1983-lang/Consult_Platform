@@ -42,8 +42,9 @@ async function request(path, options = {}) {
 // Agent 对话：发一条消息，流式返回 Server-Sent Events（event: delta / tool / done / error）。
 // onDelta(text) 每收到一段调用一次；onTool({tool, name}) 在 Agent 调用工具时调用（二期 A7）；
 // 返回 done 事件的数据。拦截（422）、无权限等在开始输出前以 ApiError 抛出。
-export function sendMessage(conversationId, message, onDelta, onTool) {
-  return streamPost(`/api/conversations/${conversationId}/messages`, { message }, onDelta, onTool);
+// page：驾驶舱抽屉的当前页（四期 A41），只拼进本轮发给模型的内容，不存
+export function sendMessage(conversationId, message, onDelta, onTool, page) {
+  return streamPost(`/api/conversations/${conversationId}/messages`, page ? { message, page } : { message }, onDelta, onTool);
 }
 
 // 写稿助手（三期 A15）：侧栏问 / 改，流式返回；signal 为 AbortController.signal，停止即断开连接

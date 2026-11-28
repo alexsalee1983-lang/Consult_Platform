@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Navigate, Outlet, Route, Routes, useParams, useSearchParams } from "react-router";
+import { Navigate, Outlet, Route, Routes, useLocation, useParams, useSearchParams } from "react-router";
 import { api } from "./api.js";
 import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireLead, RequireSysAdmin } from "./auth.jsx";
 import { Loading } from "./components/common.jsx";
 import Sidebar from "./components/Sidebar.jsx";
+import AdvisorDrawer from "./components/AdvisorDrawer.jsx";
 import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
 import Deletions from "./pages/Deletions.jsx";
@@ -25,15 +26,17 @@ import Login from "./pages/Login.jsx";
 import Overview from "./pages/Overview.jsx";
 import Password from "./pages/Password.jsx";
 import Projects from "./pages/Projects.jsx";
-import { AnalysisPage, InputPage, OutputPage, ProjectLayout, SettingsPage, SurveyFull } from "./pages/ProjectPages.jsx";
+import { AnalysisPage, InputPage, OutputPage, ProjectLayout, RequirementsPage, SettingsPage, SurveyFull } from "./pages/ProjectPages.jsx";
 import Models from "./pages/Models.jsx";
 import RuntimeConfig from "./pages/RuntimeConfig.jsx";
 import Users from "./pages/Users.jsx";
 
+// 进项目后全局导航收成窄栏（只留图标），第二栏给项目栏（四期 A37，8.1）
 function Shell() {
+  const { pathname } = useLocation();
   return (
     <RequireAuth>
-      <div className="layout">
+      <div className={pathname.startsWith("/project/") ? "layout narrow" : "layout"}>
         <Sidebar />
         <main className="content"><Outlet /></main>
       </div>
@@ -59,7 +62,7 @@ function withCode(Page) {
     return <Page code={code} />;
   };
 }
-const Input = withCode(InputPage), Analysis = withCode(AnalysisPage), Output = withCode(OutputPage),
+const Input = withCode(InputPage), Requirements = withCode(RequirementsPage), Analysis = withCode(AnalysisPage), Output = withCode(OutputPage),
   Settings = withCode(SettingsPage), SurveyPage = withCode(SurveyFull);
 
 function DeliverablePage() {
@@ -83,6 +86,12 @@ function DeliverableHome() {
   return <Navigate to={`/project/${encodeURIComponent(code)}/deliverables/${target}`} replace />;
 }
 
+// 四期 A41：顾问对话抽屉挂在驾驶舱外层，各页共用，切页不换会话
+function WithAdvisor() {
+  const { code } = useParams();
+  return <><ProjectLayout /><AdvisorDrawer code={code} /></>;
+}
+
 function ChatPage() {
   const { code } = useParams();
   return <Chat code={code} />;
@@ -99,9 +108,10 @@ export default function App() {
           <Route path="/workbench" element={<Navigate to="/my-tasks" replace />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/projects" element={<Projects />} />
-          <Route path="/project/:code" element={<ProjectLayout />}>
+          <Route path="/project/:code" element={<WithAdvisor />}>
             <Route index element={<OverviewPage />} />
             <Route path="input" element={<Input />} />
+            <Route path="requirements" element={<Requirements />} />
             <Route path="analysis" element={<Analysis />} />
             <Route path="output" element={<Output />} />
             <Route path="settings" element={<Settings />} />

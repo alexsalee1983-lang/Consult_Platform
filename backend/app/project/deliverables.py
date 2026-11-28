@@ -360,6 +360,8 @@ def write_structured(db: Session, user: User, project: Project, d: Deliverable, 
     大纲须为空或以固定章节开头（不覆盖人写的其他章）。"""
     from . import structured as st                 # 延迟导入免循环
 
+    if d.code.upper() == "D4":                     # 四期 A36：发现表以真源为准
+        data = st.with_findings(db, project, data)
     try:
         r = st.check(d.code, data)
     except st.StructuredError as e:
