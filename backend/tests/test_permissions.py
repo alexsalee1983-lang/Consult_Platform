@@ -39,6 +39,7 @@ MATRIX = [
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
     # 指标看板（三期 F2）：只给项目负责人（负责人 200 在 test_indicators 里测）
     (("GET", "/api/indicators", None),                  (403, 403, 403, 403, 403)),
+    (("GET", "/api/indicators/drift", None),            (403, 403, 403, 403, 403)),
     # AI 质量事件台账（四期 F3）：台账只给项目负责人；登记挂 BANK-A 须是成员（非成员 404）；
     # 他人事件详情和处置 404（负责人、项目经理、登记人在 test_quality_incidents 里测）
     (("GET", "/api/quality-incidents", None),           (403, 403, 403, 403, 403)),

@@ -225,6 +225,9 @@ export const api = {
   withdrawCard: (code, card) =>
     request(`/api/projects/${encodeURIComponent(code)}/summary-cards/${encodeURIComponent(card)}/withdraw`, { method: "POST" }),
   // 项目资料删除（M4 ②）：项目经理发起提前删除、标记客户不同意回流；项目负责人确认
+  closeout: (code) => request(`/api/projects/${encodeURIComponent(code)}/closeout`),
+  terminateProject: (code, reason) =>
+    request(`/api/projects/${encodeURIComponent(code)}/terminate`, { method: "POST", body: JSON.stringify({ reason }) }),
   projectDeletions: (code) => request(`/api/projects/${encodeURIComponent(code)}/deletions`),
   requestEarlyDeletion: (code, request_ref, received_on) =>
     request(`/api/projects/${encodeURIComponent(code)}/deletions`,
