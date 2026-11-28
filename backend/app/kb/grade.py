@@ -22,6 +22,7 @@ from ..core import audit
 from ..core.db import utcnow
 from ..models import KbItem, KbVersion, KnowledgeFeedback
 from . import feedback, recheck
+from .gap_pool import _aware
 from . import review as rv
 
 GRADES: dict[str, str] = {"candidate": "候选", "usable": "可用", "recommended": "推荐"}
@@ -114,9 +115,9 @@ def _flags(db: Session) -> dict[str, list[tuple[str, object]]]:
 
 def _since_cutoff(v: KbVersion, flags: list[tuple[str, object]]) -> tuple[int, int]:
     """“过时 / 不对”只数现行版本发布、上次复查之后的（与 feedback.mark_flagged 同口径），复查过的不重复降级。"""
-    times = [t for t in (recheck._aware(v.published_at), recheck._aware(v.recheck_at)) if t is not None]
+    times = [t for t in (_aware(v.published_at), _aware(v.recheck_at)) if t is not None]
     cutoff = max(times) if times else None
-    keep = [r for r, at in flags if cutoff is None or recheck._aware(at) >= cutoff]
+    keep = [r for r, at in flags if cutoff is None or _aware(at) >= cutoff]
     return keep.count("outdated"), keep.count("wrong")
 
 
