@@ -57,6 +57,44 @@ h1{font-size:19px;margin:0}h2{font-size:15px;margin:0 0 8px}h3{font-size:13.5px;
 .legend{font-size:11.5px;color:var(--tx3);margin-top:10px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--s3);border:1px solid var(--ln2);padding:8px 16px;border-radius:8px;display:none;z-index:9}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* 组件切换 */
+.comp{display:flex;gap:8px;padding:10px 20px 0;background:var(--obs)}
+.cp{display:flex;align-items:center;gap:8px;border:1px solid var(--ln);background:var(--s1);border-radius:10px 10px 0 0;padding:7px 14px;cursor:pointer;border-bottom:0}
+.cp .ic{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:800;color:var(--obs)}
+.cp.on{background:var(--s2);border-color:var(--amber);color:var(--tx)}
+.cp small{color:var(--tx3);font-size:11px}
+.cbar{border-top:1px solid var(--ln);margin:0 20px}
+/* PPT */
+.pwrap{display:grid;grid-template-columns:170px 1fr 360px;gap:14px;padding:12px 20px 60px}
+.strip{display:flex;flex-direction:column;gap:8px;max-height:760px;overflow:auto;padding-right:4px}
+.th{position:relative;border:2px solid var(--ln);border-radius:6px;background:var(--s2);aspect-ratio:16/9;padding:6px 7px;cursor:pointer;font-size:9.5px;line-height:1.3;color:var(--tx2);overflow:hidden}
+.th b{display:block;font-size:10px;color:var(--tx);margin-bottom:3px}
+.th .ln{height:3px;background:var(--ln2);border-radius:2px;margin:3px 0}
+.th .no{position:absolute;left:-1px;top:-1px;background:var(--s3);font-size:9.5px;padding:0 5px;border-radius:0 0 5px 0;color:var(--tx3)}
+.th .st{position:absolute;right:4px;top:4px;width:7px;height:7px;border-radius:50%}
+.th.on{border-color:var(--amber)}
+.th:hover{border-color:var(--cyan)}
+.stage{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:14px}
+.slide{aspect-ratio:16/9;background:linear-gradient(180deg,#121924,#0e141c);border:1px solid var(--ln2);border-radius:6px;padding:28px 36px;position:relative;cursor:default}
+.el{border:1.5px dashed transparent;border-radius:4px;padding:2px 6px;margin:-2px -6px;cursor:pointer;position:relative}
+.el:hover{border-color:var(--ln2)}
+.el.pick{border:1.5px solid var(--cyan);background:var(--cyan-d)}
+.el.pick:after{content:attr(data-name);position:absolute;left:-1px;top:-18px;background:var(--cyan);color:var(--obs);font-size:10.5px;padding:0 6px;border-radius:4px 4px 0 0;line-height:17px}
+.st-title{font-size:24px;font-weight:800;margin-bottom:14px;display:inline-block}
+.bul{font-size:15px;margin:8px 0;display:block}
+.bul:before{content:"■ ";color:var(--amber);font-size:11px}
+.chart{display:flex;gap:18px;align-items:flex-end;height:120px;padding:8px 10px 0;margin-top:6px}
+.chart .c{width:46px;border-radius:4px 4px 0 0;position:relative}
+.chart .c span{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--tx3);white-space:nowrap}
+.chart .c i{white-space:nowrap;position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:11px;font-style:normal;color:var(--tx)}
+.foot{position:absolute;left:36px;bottom:12px;font-size:11px;color:var(--tx3)}
+.tool{display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.lay{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.lay .opt{aspect-ratio:16/10;margin:0;font-size:11.5px;display:flex;flex-direction:column;justify-content:space-between}
+.mini{display:flex;gap:3px;align-items:flex-end;height:28px}.mini i{flex:1;background:var(--ln2);border-radius:2px}
+.xls{width:100%;border-collapse:collapse;font-size:12.5px}.xls th{color:var(--tx3);text-align:left;border-bottom:1px solid var(--ln2);padding:6px 8px}.xls td{border-bottom:1px solid var(--ln);padding:6px 8px}
+.xls tr.pick td{background:var(--cyan-d)}.xls tbody tr{cursor:pointer}.xls tbody tr:hover td{background:var(--s2)}
 </style></head><body>
 
 <div class="top">
@@ -67,6 +105,13 @@ h1{font-size:19px;margin:0}h2{font-size:15px;margin:0 0 8px}h3{font-size:13.5px;
   <a class="btn" id="refreshBtn">不满意，刷新</a>
 </div>
 
+<div class="comp" id="comp">
+  <div class="cp on" data-c="w"><span class="ic" style="background:var(--cyan)">W</span><div>差距分析报告<br><small>Word · 正文 4 章</small></div></div>
+  <div class="cp" data-c="p"><span class="ic" style="background:var(--amber)">P</span><div>阶段汇报<br><small>PPT · 8 页 · 2 页需更新</small></div></div>
+  <div class="cp" data-c="x"><span class="ic" style="background:var(--ok)">X</span><div>发现表<br><small>Excel · 14 条</small></div></div>
+  <div class="mut" style="align-self:center;margin-left:8px;font-size:12px">D4 输出包 = 这三个组件，同一份结构化数据生成；先点组件，再在组件里选要改的位置</div>
+</div><div class="cbar"></div>
+<div id="vWord">
 <div class="ways" id="ways">
   <div class="way on" data-w="0"><b><span class="no">1</span>先看审阅清单</b><small>平台告诉你看哪里</small></div>
   <div class="way" data-w="1"><b><span class="no">2</span>直接改字</b><small>小改 · 平台判断改的是什么</small></div>
@@ -147,6 +192,35 @@ h1{font-size:19px;margin:0}h2{font-size:15px;margin:0 0 8px}h3{font-size:13.5px;
       </div>
     </div>
   </div>
+</div>
+</div>
+<div id="vPpt" style="display:none">
+<div class="hint"><span>改 PPT：① 左边缩略图点哪一页 → ② 在页面上点要改的元素（标题、要点、图表），或点空白处选整页 → ③ 右边按选中对象给改法。也可以下载到 PowerPoint 改完传回。</span><span class="sp"></span><a class="btn2" id="rtBtn">下载改完传回 ▸</a></div>
+<div class="pwrap">
+  <div class="strip" id="strip"></div>
+  <div class="stage">
+    <div class="tool"><span class="t2" id="slno">第 6 页 / 8</span><span class="sp" style="flex:1"></span><span class="chip c-am" id="slst">需更新</span><a class="btn2" data-t="演讲备注：每页自动生成讲稿要点，可改">演讲备注</a><a class="btn2" data-t="全屏预览">预览</a></div>
+    <div class="slide" id="slide"></div>
+    <div class="legend">悬停出现虚线框 = 可选中的元素；青框 = 当前选中；点页面空白处 = 选中整页。橙点 = 需更新（上游变了）· 绿点 = 人工定稿</div>
+  </div>
+  <div class="card" style="min-height:520px">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">改稿助手</h3><span class="mut" id="pkName">未选中</span></div>
+    <div id="pp"></div>
+  </div>
+</div>
+</div>
+<div id="vXls" style="display:none">
+<div class="hint"><span>改 Excel：点一行选中这条发现，右边给改法；改结论或优先级会同步 Word 报告和 PPT 对应位置。</span></div>
+<div class="pwrap" style="grid-template-columns:1fr 360px">
+  <div class="card"><table class="xls" id="xls"><thead><tr><th>编号</th><th>领域</th><th>发现</th><th>依据</th><th>优先级</th><th>出现在</th></tr></thead><tbody>
+  <tr data-r="1"><td>G-01</td><td>组织人员</td><td>未设专职分析岗位</td><td>K-0412</td><td><span class="chip c-cr">高</span></td><td class="mut">Word 3.1 · PPT 5</td></tr>
+  <tr data-r="2"><td>G-02</td><td>值守</td><td>夜间无人值守</td><td>K-0412</td><td><span class="chip c-cr">高</span></td><td class="mut">Word 3.1 · PPT 3、5</td></tr>
+  <tr data-r="3"><td>G-03</td><td>告警响应</td><td>告警分散在 4 个平台，无统一工单</td><td>K-0418</td><td><span class="chip c-am">中</span></td><td class="mut">Word 3.2 · PPT 6</td></tr>
+  <tr data-r="4"><td>G-04</td><td>告警响应</td><td>响应时长无记录，无法度量</td><td>K-0412</td><td><span class="chip c-am">中</span></td><td class="mut">Word 3.2 · PPT 6、7</td></tr>
+  <tr data-r="5"><td>G-05</td><td>度量</td><td>无运营指标体系</td><td>K-0521</td><td><span class="chip">低</span></td><td class="mut">Word 3.3 · PPT 7</td></tr>
+  </tbody></table></div>
+  <div class="card"><h3>改稿助手</h3><div id="xp" class="mut">点左边一行</div></div>
+</div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -238,7 +312,75 @@ function g5(){jump('p31');
  $('team').classList.add('hit');
  $('pk').onclick=()=>{$('team').outerHTML='<span id="team" class="chg">6 人</span>';toast('已采用，仍保持人工定稿')};
  $('pi').onclick=()=>toast('保持原文；平台记一条“正文与事实不一致”，签署前门禁会再提醒一次')}
+
+/* ===== 组件切换 ===== */
+document.querySelectorAll('.cp').forEach(c=>c.onclick=()=>{document.querySelectorAll('.cp').forEach(x=>x.classList.toggle('on',x===c));$('vWord').style.display=c.dataset.c==='w'?'':'none';$('vPpt').style.display=c.dataset.c==='p'?'':'none';$('vXls').style.display=c.dataset.c==='x'?'':'none'});
+/* ===== PPT ===== */
+const S=[
+ {t:'BANK-A 安全运营体系差距分析',k:'封面',st:''},
+ {t:'目录',k:'目录',st:''},
+ {t:'总体结论',k:'结论',st:'am'},
+ {t:'差距热力图',k:'热力图',st:''},
+ {t:'运营组织与人员',k:'要点',st:'ok'},
+ {t:'告警与响应',k:'要点+图表',st:'am'},
+ {t:'整改优先级',k:'矩阵',st:''},
+ {t:'下一步',k:'要点',st:''}];
+let cur=5;
+function strip(){$('strip').innerHTML=S.map((x,i)=>'<div class="th'+(i===cur?' on':'')+'" data-i="'+i+'"><span class="no">'+(i+1)+'</span>'+(x.st?'<span class="st" style="background:var(--'+(x.st==='am'?'amber':'ok')+')"></span>':'')+'<b style="margin-top:8px">'+x.t+'</b><div class="ln" style="width:80%"></div><div class="ln" style="width:65%"></div><div class="ln" style="width:72%"></div></div>').join('');
+ document.querySelectorAll('.th').forEach(e=>e.onclick=()=>{cur=+e.dataset.i;strip();slide()})}
+function slide(){const x=S[cur];$('slno').textContent='第 '+(cur+1)+' 页 / 8';$('slst').style.display=x.st?'':'none';$('slst').className='chip '+(x.st==='am'?'c-am':'c-ok');$('slst').textContent=x.st==='am'?'需更新':'人工定稿';
+ if(cur===5){$('slide').innerHTML='<div class="el st-title" data-k="title" data-name="标题">告警与响应：响应时效无法证明</div>'+
+  '<span class="el bul" data-k="b1" data-name="要点 1">告警分散在 4 个平台，无统一工单</span>'+
+  '<span class="el bul" data-k="b2" data-name="要点 2">平均响应约 2 小时</span>'+
+  '<span class="el bul" data-k="b3" data-name="要点 3">夜间告警只推送到值班手机</span>'+
+  '<div class="el" data-k="chart" data-name="图表" style="display:inline-block;margin-top:8px"><div class="chart"><div class="c" style="height:100px;background:var(--crim)"><i>120 分</i><span>BANK-A</span></div><div class="c" style="height:28px;background:var(--cyan)"><i>30 分</i><span>同业</span></div></div></div>'+
+  '<div class="el foot" data-k="foot" data-name="来源脚注">来源：F-031、F-058；同业数据 K-0733</div>';}
+ else{$('slide').innerHTML='<div class="el st-title" data-k="title" data-name="标题">'+x.t+'</div><span class="el bul" data-k="b1" data-name="要点 1">（示意：本页 '+x.k+'）</span><div class="mut" style="margin-top:20px">演示只画了第 6 页，其他页结构相同</div>';}
+ document.querySelectorAll('#slide .el').forEach(e=>e.onclick=ev=>{ev.stopPropagation();pick(e)});
+ $('slide').onclick=()=>pickSlide();pickSlide()}
+function clr(){document.querySelectorAll('#slide .el').forEach(e=>e.classList.remove('pick'));$('slide').style.outline=''}
+function pickSlide(){clr();$('slide').style.outline='2px solid var(--cyan)';$('pkName').textContent='第 '+(cur+1)+' 页（整页）';
+ $('pp').innerHTML=(S[cur].st==='am'?'<div class="blk"><span class="chip c-am">需更新</span> 事实 F-058 已更正为“响应时长无记录”，本页要点 2 和图表还在用旧数据。<div class="row" style="margin-top:6px"><a class="btn" id="upd">刷新本页</a></div></div>':'')+
+ '<div class="blk"><h3>整页改法</h3><div class="row"><a class="btn2" id="relay">重做这一页</a><a class="btn2" data-t="按要点拆成两页，各自重排">拆成两页</a><a class="btn2" data-t="和第 5 页合并">与上一页合并</a><a class="btn2" data-t="左边缩略图拖动即可调顺序">调顺序</a><a class="btn2" data-t="删除本页（Word 报告不受影响）">删除</a></div></div>'+
+ '<div class="blk"><h3>对这一页说一句</h3><div class="row"><input style="flex:1;background:var(--s2);border:1px solid var(--ln2);border-radius:7px;color:var(--tx);padding:5px 8px;font:inherit" value="这页给行领导看，压成一句结论加一张图"><a class="btn" id="say">改</a></div></div><div id="pp2"></div>';
+ bindT();if($('upd'))$('upd').onclick=upd;$('relay').onclick=relay;$('say').onclick=say}
+function upd(){const b=document.querySelector('[data-k=b2]');b.innerHTML='响应时长无记录，无法度量';b.classList.add('chg');const c=document.querySelector('[data-k=chart]');c.innerHTML='<div class="blk" style="width:300px;margin-top:8px"><b>响应时长</b><div style="font-size:22px;color:var(--crim);font-weight:800">无记录</div><div class="mut">同业城商行约 30 分钟</div></div>';c.classList.add('chg');S[cur].st='';strip();$('slst').style.display='none';toast('本页已刷新：要点 2 与图表改用新事实；其他页不动')}
+function relay(){$('pp2').innerHTML='<div class="blk"><h3>选一个版式（内容不变）</h3><div class="lay">'+
+ '<a class="opt" data-l="1"><b>结论 + 大数字</b><div class="mini"><i style="height:100%;background:var(--crim)"></i></div></a>'+
+ '<a class="opt" data-l="2"><b>左要点 右图表</b><div class="mini"><i style="height:40%"></i><i style="height:40%"></i><i style="height:100%;background:var(--cyan)"></i></div></a>'+
+ '<a class="opt" data-l="3"><b>三栏对比</b><div class="mini"><i style="height:70%"></i><i style="height:70%"></i><i style="height:70%"></i></div></a></div></div>';
+ document.querySelectorAll('#pp2 .opt').forEach(o=>o.onclick=()=>{if(o.dataset.l==='1'){$('slide').innerHTML='<div class="el st-title" data-k="title" data-name="标题">告警与响应：响应时效无法证明</div><div style="display:flex;gap:30px;align-items:center;margin-top:20px"><div><div style="font-size:54px;font-weight:800;color:var(--crim)">无记录</div><div class="t2">BANK-A 告警响应时长</div></div><div style="font-size:30px;color:var(--tx3)">vs</div><div><div style="font-size:54px;font-weight:800;color:var(--cyan)">30 分钟</div><div class="t2">同业城商行</div></div></div><div class="foot">来源：F-058；K-0733</div>'}else toast('换成该版式（示意只画了第一个）');S[cur].st='ok';strip();$('slst').style.display='';$('slst').className='chip c-ok';$('slst').textContent='人工定稿';toast('已换版式；只影响 PPT 本页，Word 报告不变；本页标人工定稿')})}
+function say(){$('pp2').innerHTML='<div class="blk"><span class="chip">版式 / 详略</span> 平台判断：只改 PPT 本页，不影响 Word 报告和其他页。<div class="row" style="margin-top:6px"><a class="btn" id="sayok">按“结论 + 大数字”重排</a></div></div>';$('sayok').onclick=()=>{relay();document.querySelector('#pp2 .opt').click()}}
+function pick(e){clr();e.classList.add('pick');const k=e.dataset.k;$('pkName').textContent='第 '+(cur+1)+' 页 · '+e.dataset.name;let h='';
+ if(k==='title'||k.startsWith('b')){h='<div class="blk"><span class="mut">已选中：</span>“'+e.textContent+'”<div class="mut" style="margin-top:4px">双击可直接改字；改完平台照样判断是事实、口径还是措辞</div></div>'+
+  '<a class="opt" data-v="响应时效无法证明，夜间无人值守"><b>更有冲击力</b>响应时效无法证明，夜间无人值守</a>'+
+  '<a class="opt" data-v="告警处置缺少时效度量，不满足持续监测要求"><b>监管视角</b>告警处置缺少时效度量，不满足持续监测要求</a>'+
+  '<a class="opt" data-v="响应无记录"><b>更精简</b>响应无记录</a>'+
+  '<div class="mut" style="font-size:11.5px">只改 PPT 上的措辞 → 只改这一页；改的是事实或口径 → 和 Word 一样问你要不要同步全项目</div>';}
+ else if(k==='chart'){h='<div class="blk"><span class="mut">已选中：</span>图表 · 数据来自事实 F-058 与公司知识 K-0733</div>'+
+  '<div class="blk"><h3>换图表样式</h3><div class="row"><a class="btn2" data-t="换成柱状对比（当前）">柱状对比</a><a class="btn2" data-t="换成大数字">大数字</a><a class="btn2" data-t="换成仪表盘">仪表盘</a></div></div>'+
+  '<div class="blk"><h3>数据不对？</h3><div class="t2">图表数据不在 PPT 里改，去源头改：</div><div class="row" style="margin-top:6px"><a class="btn2" data-t="打开事实 F-058：改完 Word 3.2、PPT 6、7 一起标需更新">打开事实 F-058</a></div></div>';}
+ else{h='<div class="blk">来源脚注由平台按引用自动生成，不手改；要换来源请在正文里“补来源”。</div>'}
+ $('pp').innerHTML=h;bindT();
+ document.querySelectorAll('#pp .opt').forEach(o=>o.onclick=()=>{e.textContent=o.dataset.v;e.classList.add('chg');toast('已替换；本页标人工定稿，以后刷新跳过这一处')})}
+$('rtBtn').onclick=()=>{clr();$('pkName').textContent='下载改完传回';$('pp').innerHTML=
+ '<div class="blk"><h3>① 下载</h3>导出 .pptx（未签署带草稿水印）；每页、每个元素带隐藏编号，传回时能对上。<div class="row" style="margin-top:6px"><a class="btn2" data-t="下载 D4 阶段汇报 v2.pptx">下载 PPT</a></div></div>'+
+ '<div class="blk"><h3>② 在 PowerPoint 里随便改</h3>改字、换版式、删页、调顺序都行。</div>'+
+ '<div class="blk"><h3>③ 传回，平台逐页比对</h3><div class="row" style="margin-bottom:6px"><a class="btn" id="upl">上传改过的 PPT</a></div><div id="cmp"></div></div>';bindT();
+ $('upl').onclick=()=>{$('cmp').innerHTML=
+ '<div class="lv"><span class="chip">措辞</span><div>第 3 页标题改短 <span class="mut">→ 只改 PPT</span></div></div>'+
+ '<div class="lv"><span class="chip">版式</span><div>第 6 页换成大数字版式 <span class="mut">→ 只改 PPT，标人工定稿</span></div></div>'+
+ '<div class="lv"><span class="chip c-cr">事实</span><div>第 5 页“5 人”改成“6 人” <span class="mut">→ 问你：回写事实库并同步 Word 3.1？</span></div></div>'+
+ '<div class="lv"><span class="chip c-vi">口径</span><div>第 7 页“SOC”改成“安全运营中心” <span class="mut">→ 已是定制项，无需再确认</span></div></div>'+
+ '<div class="lv"><span class="chip c-am">结构</span><div>删了第 8 页“下一步” <span class="mut">→ 输出包组件变化，须项目经理确认</span></div></div>'+
+ '<div class="row" style="margin-top:6px"><a class="btn" data-t="措辞、版式、口径直接生效；事实和结构各出一张确认卡">全部确认</a><a class="btn2" data-t="逐条接受或退回">逐条看</a></div>';bindT()}};
+/* ===== Excel ===== */
+document.querySelectorAll('#xls tbody tr').forEach(r=>r.onclick=()=>{document.querySelectorAll('#xls tr').forEach(x=>x.classList.toggle('pick',x===r));const c=r.children;
+ $('xp').innerHTML='<div class="blk"><span class="mut">已选中：</span>'+c[0].textContent+' '+c[2].textContent+'</div>'+
+ '<div class="blk"><h3>改优先级</h3><div class="row"><a class="btn2" data-t="改为高：Word 对应段落、PPT 第 7 页优先级矩阵同步，标需更新">高</a><a class="btn2" data-t="改为中">中</a><a class="btn2" data-t="改为低">低</a></div><div class="mut" style="margin-top:4px">要写一句理由，进决定记录</div></div>'+
+ '<div class="blk"><h3>改发现本身</h3><div class="t2">发现 = 事实 + 依据。改发现会同步：'+c[5].textContent+'</div><div class="row" style="margin-top:6px"><a class="btn2" data-t="打开发现编辑：改结论或换依据">编辑这条发现</a><a class="btn2" data-t="合并到另一条发现">合并</a><a class="btn2" data-t="驳回：说明理由，进改稿特征表">驳回</a></div></div>';bindT()});
+strip();slide();
 bindT();setW(0);
-const h=location.hash.slice(1);if(h){const [w,a]=h.split('-');setW(+w);if(a)go();if(a==='full'){const c=['a0','f1','','cok','rgo','pk'][+w];if(c&&$(c))$(c).click();if(+w===2||+w===4){const o=document.querySelector('#o'+w+' .opt');if(o)o.click()}}}
+const h=location.hash.slice(1);if(['ppt','pptx','pptel','xls'].includes(h)){document.querySelector('.cp[data-c='+(h==='xls'?'x':'p')+']').click();if(h==='pptx'){$('rtBtn').click();$('upl').click()}if(h==='pptel')document.querySelector('[data-k=b2]').click();if(h==='xls')document.querySelector('#xls tbody tr').click()}else if(h){const [w,a]=h.split('-');setW(+w);if(a)go();if(a==='full'){const c=['a0','f1','','cok','rgo','pk'][+w];if(c&&$(c))$(c).click();if(+w===2||+w===4){const o=document.querySelector('#o'+w+' .opt');if(o)o.click()}}}
 </script>
 </body></html>
