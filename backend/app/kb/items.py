@@ -185,6 +185,25 @@ def create_draft(db: Session, item: KbItem, c: VersionContent, created_by: str) 
     return v
 
 
+def create_expert_revision(db: Session, v: KbVersion, body: str, reviser: str) -> KbVersion:
+    """四期 B44②：专家在线改完待审版本 v 即认可——改动另建一版（专家版本），v 改为已替代、原文留作历史。
+    新版本沿用 v 的作者、来源与去标识状态（内容出自原稿，专家是修订人和认可人，修订人写进 change_note），
+    状态直接为待审；不提交，由调用方记专家的内容审核并发布。"""
+    c = VersionContent(title=v.title, body=body, source_type=v.source_type, source_detail=v.source_detail,
+                       summary=v.summary, applicability=v.applicability,
+                       change_note=f"专家修订（修订并认可：{reviser}，改自第 {v.version} 版）",
+                       ref_document=v.ref_document, ref_version=v.ref_version, ref_status=v.ref_status,
+                       ref_code=v.ref_code, ref_replaced_by=v.ref_replaced_by, ref_replaces=v.ref_replaces,
+                       ref_amends=v.ref_amends, effective_date=v.effective_date, repeal_date=v.repeal_date,
+                       review_date=v.review_date)
+    v.status = "superseded"
+    nv = _new_version(db, v.item, c, v.created_by)
+    nv.status, nv.submitted_by, nv.submitted_at = "in_review", v.submitted_by, v.submitted_at
+    nv.deid_status, nv.deid_report_id, nv.upload_id = v.deid_status, v.deid_report_id, v.upload_id
+    db.flush()
+    return nv
+
+
 def replace_mapping_rows(db: Session, v: KbVersion) -> None:
     """草稿正文改了以后重新解析映射行（只用于草稿；已提交、已发布的版本不再改）。格式不对抛 MetaError。"""
     if v.item.doc_type != "MAP":

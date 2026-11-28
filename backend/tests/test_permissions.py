@@ -65,6 +65,16 @@ MATRIX = [
                                                         (403, 403, 403, 403, 403)),
     (("POST", "/api/expert-bench/deid-preview", {"texts": {"how": "示范"}}),
                                                         (403, 403, 403, 403, 403)),
+    # 四期 B44：对照审核、修改后认可、分组成批认可、专家档案，同样只给知识专家（200 在 test_kb_expert_ux 里测）
+    (("GET", "/api/expert-bench/compare/999999", None), (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/cards/999999/revise", {"body": "## 做法\n\n示范"}),
+                                                        (403, 403, 403, 403, 403)),
+    (("GET", "/api/expert-bench/groups", None),         (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/batch-approve", {"version_ids": [999999]}),
+                                                        (403, 403, 403, 403, 403)),
+    (("GET", "/api/expert-bench/profile", None),        (403, 403, 403, 403, 403)),
+    (("PUT", "/api/expert-bench/profile", {"products": ["SOC"], "industries": []}),
+                                                        (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),

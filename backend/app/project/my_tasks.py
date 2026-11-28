@@ -233,11 +233,16 @@ def collect(db: Session, user: User) -> list[Task]:
     if roles & rv.KNOWLEDGE_ROLES:
         usage = _live_usage(db)
         opts = (selectinload(KbVersion.item), selectinload(KbVersion.reviews))
+        from ..kb.expert_ux import assignee_map    # 四期 B44④：按专长派给别人的内容审核卡不进本人待办
+
+        assigned = assignee_map(db) if KNOWLEDGE_EXPERT in roles else {}
         for v in db.scalars(select(KbVersion).where(KbVersion.status == "in_review").options(*opts)):
             done = {r.review_role for r in v.reviews if r.decision == "approve"}
             mine = me in rv._authors(v) and not rv.self_review_allowed(v)
             for role, need in rv.ROLE_OF.items():
                 if role in rv.required_roles(v) and need in roles and role not in done:
+                    if role == "content" and assigned.get(v.id, me) != me:
+                        continue
                     other = "知识专家" if need == KNOWLEDGE_EXPERT else "知识管理员"
                     tasks.append(_kb_task(REVIEW_KIND[role], v, usage,
                                           f"你是作者，需另一位{other}处理" if mine else "", v.submitted_at))
