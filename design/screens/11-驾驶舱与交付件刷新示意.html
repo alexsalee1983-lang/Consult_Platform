@@ -130,7 +130,7 @@ textarea.inp{min-height:54px;resize:vertical}
 
   <h2 style="margin-top:16px">主链与关口（上游变，下游标“需更新”）</h2>
   <div class="tl">
-    <div class="card"><h3>关口 1 · 启动</h3><div class="t2">合同要点卡 → 立项设置 + D1 + 定制项</div><div class="mut">出：D1 已签、客户确认范围</div></div>
+    <div class="card"><h3>关口 1 · 启动</h3><div class="t2">合同要点卡 → 立项设置 + D1 + 定制项</div><div class="mut">进：要点卡已核对、授权已签</div><div class="mut">出：D1 已签、客户确认范围</div></div>
     <div class="card"><h3>关口 2 · 调研</h3><div class="t2">D1 范围 + 评估项 + D2 角色 + 客户资料 → 调研包 → 自评 → 现场 → 答案池 → D3</div><div class="mut">出：D3 已签</div></div>
     <div class="card"><h3>关口 3 · 分析</h3><div class="t2">事实 + 依据 → 发现表 → D4 → 客户意见 → v1.1</div><div class="mut">出：D4 已签、意见处理完</div></div>
     <div class="card"><h3>关口 4 · 设计</h3><div class="t2">发现 + 取舍卡 + 客户约束 → D5 / D6 / D7</div><div class="mut">出：D5～D7 已签、客户审阅完</div></div>
@@ -159,7 +159,7 @@ textarea.inp{min-height:54px;resize:vertical}
   <div class="note">全景只回答两件事：<b>现在在哪个关口</b>、<b>缺什么输入、卡在谁手里</b>。每个阶段同一结构：输入到齐 → 平台处理 → 人确认 → 产出 → 客户确认 → 过关口。</div>
   <div class="tl">
     <div class="stg done"><div class="hd"><span>1 启动</span><span class="chip c-ok">已过关口</span></div>
-      <div class="step"><i class="dot d-ok"></i>输入：合同要点卡已核对</div><div class="step"><i class="dot d-ok"></i>产出：D1 输出包</div><div class="step"><i class="dot d-ok"></i>客户：范围已确认</div></div>
+      <div class="step"><i class="dot d-ok"></i>输入：合同要点卡已核对、授权已签</div><div class="step"><i class="dot d-ok"></i>产出：D1 输出包</div><div class="step"><i class="dot d-ok"></i>客户：范围已确认</div></div>
     <div class="stg cur"><div class="hd"><span>2 调研</span><span class="chip c-am">进行中</span></div>
       <div class="step"><i class="dot d-ok"></i>输入：D2 已签，6 份调研包已发布</div>
       <div class="step"><i class="dot d-cr"></i>客户：自评包 4/6 交回 · <b style="color:var(--crim)">运维组逾期 2 天</b></div>
@@ -189,7 +189,7 @@ textarea.inp{min-height:54px;resize:vertical}
 <div class="page" id="p-in">
   <div class="crumb">BANK-A / 输入</div><h1>输入 · 按来源</h1>
   <div class="sub">所有输入物都在这里，按来源分组；每份输入标出“驱动什么”。交付件页里不再放输入表单。</div>
-  <div class="tabs" data-g="in"><a class="on" data-tb="in-ct">合同要点卡</a><a data-tb="in-cu">客户</a><a data-tb="in-sv">现场 · 调研包与答卷</a><a data-tb="in-cs">顾问 / 项目经理输入卡</a><a data-tb="in-op">选填材料</a></div>
+  <div class="tabs" data-g="in"><a class="on" data-tb="in-ct">合同要点卡</a><a data-tb="in-cu">客户</a><a data-tb="in-sv">回收 · 自评与现场答卷</a><a data-tb="in-cs">顾问 / 项目经理输入卡</a><a data-tb="in-op">选填材料</a></div>
 
   <div class="tp on" id="in-ct">
     <div class="note">立项时上传合同 → Agent 抽要点 → 项目经理核对保存。合同原文抽取后删除，要点卡全程保留。严格档不上传合同，手填此卡。</div>
@@ -201,7 +201,8 @@ textarea.inp{min-height:54px;resize:vertical}
     <tr><td>周期与里程碑</td><td>2027-01-05 至 2027-03-31；4 个付款节点</td><td><span class="chip c-ok">已核对</span></td><td>关口日期、进度预测</td></tr>
     <tr><td>数据处理档位</td><td>标准档（附件一）· 保留期 180 天 · 参与经验积累</td><td><span class="chip c-ok">已核对</span></td><td>立项设置、删除计划、复盘入口</td></tr>
     <tr><td>客户书面要求</td><td>统一称“安全运营中心”；D5 增加《外包管理》一章</td><td><span class="chip c-am">2 条已转定制项</span></td><td>定制项</td></tr>
-    <tr><td>双方角色</td><td>甲方对接人 1、受访部门 5 个；乙方项目经理、顾问 2</td><td><span class="chip c-ok">已核对</span></td><td>成员、D2 受访角色</td></tr></table>
+    <tr><td>双方角色</td><td>甲方对接人 1、受访部门 5 个；乙方项目经理、顾问 2</td><td><span class="chip c-ok">已核对</span></td><td>成员、D2 受访角色</td></tr>
+    <tr><td>授权与同意</td><td>附件三 ✓ 11-02；附件一（标准档）✓ 11-02；经验积累：同意</td><td><span class="chip c-ok">已核对</span></td><td>关口 1 进入条件、结项沉淀许可</td></tr></table>
   </div>
 
   <div class="tp" id="in-cu">
@@ -217,12 +218,12 @@ textarea.inp{min-height:54px;resize:vertical}
   </div>
 
   <div class="tp" id="in-sv">
-    <table><tr><th>受访角色</th><th>调研包</th><th>资料预填</th><th>客户自评</th><th>现场</th><th>答卷回传</th></tr>
+    <table><tr><th>受访角色</th><th>题数</th><th>资料预填</th><th>客户自评</th><th>现场</th><th>答卷回传</th></tr>
     <tr><td>安全管理组</td><td><span class="chip c-ok">已发布</span> 42 题</td><td>15</td><td><span class="chip c-ok">已交回</span></td><td><span class="chip c-ok">已访谈</span></td><td><span class="chip c-ok">已入池</span></td></tr>
     <tr><td>安全运维组</td><td><span class="chip c-ok">已发布</span> 38 题</td><td>11</td><td><span class="chip c-cr">逾期 2 天</span></td><td>下周二</td><td>—</td></tr>
     <tr><td>网络组</td><td><span class="chip c-ok">已发布</span> 30 题</td><td>9</td><td><span class="chip c-ok">已交回</span></td><td><span class="chip c-ok">已访谈</span></td><td><span class="chip c-ok">已入池</span></td></tr>
     <tr><td>应用开发</td><td><span class="chip c-ok">已发布</span> 26 题</td><td>6</td><td><span class="chip c-am">未到截止</span></td><td>下周三</td><td>—</td></tr></table>
-    <div class="row" style="margin-top:10px"><a class="btn2" data-go="srv">调研包怎么生成 ▸</a><a class="btn2" data-t="打开调研助手（全屏，现场用）">调研助手</a></div>
+    <div class="row" style="margin-top:10px"><a class="btn2" data-go="srv">调研包在输出页 D2 ▸</a><a class="btn2" data-t="打开调研助手（全屏，现场用）">调研助手</a></div>
   </div>
 
   <div class="tp" id="in-cs">
@@ -275,7 +276,7 @@ textarea.inp{min-height:54px;resize:vertical}
   <div class="sub">组件清单取自产品配置（按黄金样例定默认），定制项可增减（增删须项目经理确认）。图例：<span class="cmp d">数据表</span> <span class="cmp w">文稿</span> <span class="cmp p">汇报</span> <span class="cmp x">客户用表单</span></div>
   <div class="g4">
     <div class="card"><div class="sb"><h3>D1 启动包</h3><span class="chip c-ok">已签</span></div><div class="mut">程序模板</div><div class="pk"><span class="cmp w">范围确认单</span><span class="cmp d">计划与里程碑</span><span class="cmp p">启动会 PPT</span><span class="cmp d">定制项清单</span><span class="cmp x">资料需求初单</span><span class="cmp d">前提与风险</span></div><div class="row" style="margin-top:8px"><a class="btn2 sm" data-go="d1">打开</a></div></div>
-    <div class="card"><div class="sb"><h3>D2 调研包</h3><span class="chip c-ok">已签</span></div><div class="mut">程序模板 + 选题预填</div><div class="pk"><span class="cmp w">每角色访谈提纲 ×6</span><span class="cmp x">资料清单</span><span class="cmp x">客户自评包</span><span class="cmp w">现场议程</span><span class="cmp d">访谈排期</span></div></div>
+    <div class="card"><div class="sb"><h3>D2 调研包</h3><span class="chip c-ok">已签</span></div><div class="mut">程序模板 + 选题预填</div><div class="pk"><span class="cmp w">每角色访谈提纲 ×6</span><span class="cmp x">资料清单</span><span class="cmp x">客户自评包</span><span class="cmp w">现场议程</span><span class="cmp d">访谈排期</span></div><div class="row" style="margin-top:8px"><a class="btn2" data-go="srv">怎么生成 ▸</a></div></div>
     <div class="card"><div class="sb"><h3>D3 事实清单</h3><span class="chip c-am">待答案池入齐</span></div><div class="mut">程序为主 + 模型抽取</div><div class="pk"><span class="cmp d">事实清单表</span><span class="cmp x">补证请求</span><span class="cmp d">敏感表态剔除记录</span><span class="cmp w">D3 文稿</span></div></div>
     <div class="card"><div class="sb"><h3>D4 差距分析</h3><span class="chip">未开始</span></div><div class="mut">规则打分 + 模型分析</div><div class="pk"><span class="cmp d">发现表</span><span class="cmp d">成熟度初判</span><span class="cmp d">差距热力图</span><span class="cmp w">D4 报告</span><span class="cmp p">分析汇报 PPT</span></div><div class="row" style="margin-top:8px"><a class="btn2 sm" data-go="d4">看审稿示意</a></div></div>
     <div class="card"><div class="sb"><h3>D5 设计方案</h3><span class="chip">未开始</span></div><div class="mut">模型出结构化方案 + 程序校验</div><div class="pk"><span class="cmp d">目标运营模型</span><span class="cmp d">人员测算（带算式）</span><span class="cmp d">流程清单</span><span class="cmp d">告警分级表</span><span class="cmp d">指标体系</span><span class="cmp w">D5 报告</span><span class="cmp w" style="outline:1px dashed var(--amber)">+ 外包管理（定制）</span></div></div>
@@ -361,8 +362,8 @@ textarea.inp{min-height:54px;resize:vertical}
 
 <!-- ============ 调研包 ============ -->
 <div class="page" id="p-srv">
-  <div class="crumb">BANK-A / 输入 / 现场 · 调研包怎么生成</div><h1>调研包怎么生成</h1>
-  <div class="sub">在“输入”页由平台生成（D2 程序模板 + 选题预填）；调研助手只用于现场。</div>
+  <div class="crumb">BANK-A / 输出 / D2 调研包 · 怎么生成</div><h1>调研包怎么生成</h1>
+  <div class="sub">在“输出”页 D2 由平台生成（程序模板 + 选题预填）；输入页只放回收物（资料、自评答卷、现场答卷）；调研助手只用于现场，不出题。</div>
   <div class="g2">
     <div class="card"><h2>输入</h2><table><tr><th>输入</th><th>来源</th><th>用途</th></tr>
       <tr><td>范围、不包含项、评估基线</td><td>合同要点卡 / D1</td><td>决定评估域</td></tr>
