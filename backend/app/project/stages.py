@@ -176,7 +176,8 @@ def plan_writeback(db: Session, p: Project, actor: str) -> bool:
         return False
     bodies = [v.body for s in d.sections if (v := dsvc.get_version(s)) is not None]
     rows = next((r for b in bodies if (r := milestone_rows(b))), [])
-    m = re.search(r"项目周期\*\*：(.+)", "\n".join(bodies))
+    # 旧稿“**项目周期**：……”，新稿（11-28 格式统一）“# 1.2 项目周期”小节下一段
+    m = re.search(r"项目周期(?:\*\*：|[ \t]*\n\s*\n)(.+)", "\n".join(bodies))
     weeks = weeks_of(m.group(1)) if m else None
     nxt = pick_milestone(rows, p.phase)[:128] if rows else p.next_milestone
     total = weeks or p.total_weeks
