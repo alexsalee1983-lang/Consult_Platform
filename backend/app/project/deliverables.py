@@ -203,7 +203,8 @@ def set_outline(db: Session, user: User, project: Project, d: Deliverable, title
 
 
 def write_section(db: Session, user: User, project: Project, d: Deliverable, seq: int, body: str, *,
-                  note: str = "", agent_code: str = "", base_version: int | None = None) -> WriteResult:
+                  note: str = "", agent_code: str = "", base_version: int | None = None,
+                  structured: dict | None = None) -> WriteResult:
     action = "deliverable.write"
     _check_writable(db, user, project, d, action)
     s = require_section(d, seq)
@@ -225,6 +226,8 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
     if current is not None and current.body_sha == sha:
         raise DeliverableError(409, f"第 {seq} 章内容与当前版本 v{s.current_version} 相同，没有新建版本")
     sources = parse_sources(db, project, body)
+    if structured is not None:                     # 四期 A34：结构化真源随本版本存（见 app/project/structured.py）
+        sources = {**sources, "structured": structured}
     gone = evidence_svc.withdrawn_codes(db, project)
     local = sorted({x["code"] for x in sources["evidence"]} & set(gone))
     if local:                                      # 仅现场使用（M4 ③）、已删除的证据不能引用
@@ -345,4 +348,42 @@ def generate_for_agent(db: Session, user: User, project: Project, agent_code: st
                           agent_code=agent_code, base_version=base)
         return {"deliverable": d.code, "section": seq, "version": r.version.version, "revision": d.revision,
                 "sources": r.version.sources["counts"], "unresolved": r.version.sources["unresolved"]}
-    raise DeliverableError(422, "action 只能是 read、outline 或 write")
+    if action == "structured":
+        return write_structured(db, user, project, d, args.get("data"), note=str(args.get("note", "")),
+                                agent_code=agent_code)
+    raise DeliverableError(422, "action 只能是 read、outline、write 或 structured")
+
+
+def write_structured(db: Session, user: User, project: Project, d: Deliverable, data: object, *,
+                     note: str = "", agent_code: str = "") -> dict:
+    """四期 A34：结构化数据 → 校验 → 渲染成固定章节 → 逐章写入（内容没变的章跳过）。
+    大纲须为空或以固定章节开头（不覆盖人写的其他章）。"""
+    from . import structured as st                 # 延迟导入免循环
+
+    try:
+        r = st.check(d.code, data)
+    except st.StructuredError as e:
+        raise DeliverableError(e.status, e.detail) from e
+    if r.errors:
+        raise DeliverableError(422, f"{d.code} 结构化数据校验未通过：" + "；".join(r.errors[:10]))
+    secs = st.render(d.code, r.model)
+    titles = [t for t, _ in secs]
+    have = [s.title for s in d.sections]
+    if have[:len(titles)] != titles:
+        if any(s.current_version for s in d.sections):
+            raise DeliverableError(409, f"{d.code} 已有非结构化章节，不能直接改成结构化输出，请先由顾问确认大纲")
+        d = set_outline(db, user, project, d, titles, agent_code=agent_code)
+    payload: dict | None = r.model.model_dump(mode="json")
+    written: list[int] = []
+    unresolved: list[str] = []
+    for seq, (_, body) in enumerate(secs, 1):
+        cur = get_version(require_section(d, seq))
+        if cur is not None and cur.body_sha == hashlib.sha256(body.strip().encode("utf-8")).hexdigest():
+            continue
+        w = write_section(db, user, project, d, seq, body, note=note or "结构化输出", agent_code=agent_code,
+                          structured=payload)
+        payload = None                             # 整份真源只存在本次写的第一章版本上
+        written.append(seq)
+        unresolved += w.version.sources["unresolved"]
+    return {"deliverable": d.code, "revision": d.revision, "written": written, "errors": [],
+            "warnings": r.warnings, "unresolved": sorted(set(unresolved))}
