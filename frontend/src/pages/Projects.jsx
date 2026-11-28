@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { api, KIND_CLS, RETENTION, TIER } from "../api.js";
 import { hasRole, useAuth } from "../auth.jsx";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
@@ -42,7 +42,8 @@ function ProjectCard({ p }) {
 
 export default function Projects() {
   const { user } = useAuth();
-  const [creating, setCreating] = useState(false);
+  const [params] = useSearchParams();   // 项目栏“＋ 新建项目”带 ?new=1 进来直接打开立项（A37）
+  const [creating, setCreating] = useState(params.get("new") === "1" && hasRole(user, "project_lead"));
   const [projects, setProjects] = useState(null);
   const [confs, setConfs] = useState([]);
   const [error, setError] = useState(null);
