@@ -107,11 +107,14 @@ def call(db: Session, code: str, message: str, *, actor: str, doc: registry.Agen
     sys_prompt = system if system is not None else system_for(doc, extra)
     tier, pcode = (project.tier, project.code) if project is not None else ("standard", "")
     exclude = frozenset(exclude_families)
+    from . import roster
+    lane = "kb" if dict((c, z) for c, _, z in roster.NINE).get(roster.canonical(code)) in (roster.KNOWLEDGE, roster.COLLECTOR) else "delivery"
 
     def once(msg: str) -> gateway.Completion:
         try:
-            c = gateway.complete(msg, tier=tier, project_code=pcode, level=lv, system=sys_prompt, role=role,
-                                 exclude_families=exclude)
+            with gateway.lane(lane):           # 四期 A31⑪：知识侧 Agent 排在对话、交付链之后
+                c = gateway.complete(msg, tier=tier, project_code=pcode, level=lv, system=sys_prompt, role=role,
+                                     exclude_families=exclude)
         except gateway.GatewayError as e:
             usage.record(db, username=actor, project_code=pcode, level=lv, model=gateway.model_for(lv),
                          status="error", stream=False, attempts=e.attempts, agent_code=code)

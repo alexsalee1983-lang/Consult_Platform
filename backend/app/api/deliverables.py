@@ -35,6 +35,7 @@ from ..project import deliverables as svc
 from ..project import export as export_svc
 from ..project import export_pptx
 from ..project import form_import
+from ..project import outward
 from ..project import forms as forms_svc
 from ..project import kb_impact, loops
 from ..products import config as product_config
@@ -309,6 +310,12 @@ def export_deliverable(code: str, dcode: str, format: str = Query(default="docx"
         audit.record(db, actor=user.username, action="deliverable.export", result="blocked", project_code=p.code,
                      deliverable=d.code, reason="quality_incident_frozen", incident=frozen)
         raise HTTPException(409, f"{d.code} 因质量事件 #{frozen} 冻结导出，事件复盘关闭后恢复")
+    text = "\n".join([d.title] + [f"{s.title}\n{v.body if (v := svc.get_version(s)) else ''}" for s in d.sections])
+    hits = outward.check(text)
+    if hits:                                         # 四期 A31⑨：对外文本过资质边界与机密级硬规则
+        audit.record(db, actor=user.username, action="deliverable.export", result="blocked", project_code=p.code,
+                     deliverable=d.code, reason="outward_rule", categories=hits)
+        raise HTTPException(422, f"{d.code} 正文命中对外硬规则（{'、'.join(hits)}），改正后再导出")
     mod = export_pptx if format == "pptx" else export_svc
     try:
         r = mod.export_deliverable(db, user, p, d)

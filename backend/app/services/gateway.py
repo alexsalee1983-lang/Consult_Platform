@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
+from contextlib import contextmanager
 from contextvars import ContextVar
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
@@ -286,6 +288,75 @@ def _elapsed_ms(p: _Prepared) -> int:
 
 # 三期 G2：本上下文（请求 / 后台任务线程）最近一次生成调用用的 (模型, 家族)。Agent 随后写章节时记进章节版本；
 # 评审、仲裁调用不改写。
+# 四期 A31⑪：网关优先级 对话 > 交付链 > 知识后台。LLM_MAX_CONCURRENCY 限定同时在途的模型调用数（0 = 不限），
+# 并发位满时空出的位先给优先级高的等待者；同级先到先得。对话走 stream()，其余按调用方所在区（agents/call.py 设 lane）。
+LANES = {"chat": 0, "delivery": 1, "kb": 2}
+_lane: ContextVar[str] = ContextVar("gateway_lane", default="delivery")
+
+
+class PriorityGate:
+    def __init__(self, limit: int) -> None:
+        self.limit, self.busy, self._seq = limit, 0, 0
+        self._waiting: list[tuple[int, int]] = []
+        self._cv = threading.Condition()
+
+    def acquire(self, lane: str) -> None:
+        with self._cv:
+            if self.limit <= 0:
+                return
+            self._seq += 1
+            me = (LANES.get(lane, 1), self._seq)
+            self._waiting.append(me)
+            while self.busy >= self.limit or min(self._waiting) != me:
+                self._cv.wait()
+            self._waiting.remove(me)
+            self.busy += 1
+            self._cv.notify_all()
+
+    def release(self) -> None:
+        with self._cv:
+            if self.limit <= 0:
+                return
+            self.busy -= 1
+            self._cv.notify_all()
+
+
+_gate: PriorityGate | None = None
+_gate_lock = threading.Lock()
+
+
+def _the_gate() -> PriorityGate:
+    global _gate
+    limit = get_settings().llm_max_concurrency
+    with _gate_lock:
+        if _gate is None or _gate.limit != limit:
+            _gate = PriorityGate(limit)
+        return _gate
+
+
+def current_lane() -> str:
+    return _lane.get()
+
+
+@contextmanager
+def lane(name: str) -> Iterator[None]:
+    token = _lane.set(name)
+    try:
+        yield
+    finally:
+        _lane.reset(token)
+
+
+@contextmanager
+def _slot(name: str) -> Iterator[None]:
+    g = _the_gate()
+    g.acquire(name)
+    try:
+        yield
+    finally:
+        g.release()
+
+
 _generation: ContextVar[tuple[str, str]] = ContextVar("gateway_generation", default=("", ""))
 
 
@@ -319,7 +390,7 @@ def complete(message: str, *, tier: str, project_code: str, level: str = "standa
     entry: model_catalog.ModelEntry | None = None
     fallbacks = 0
     payload = p.payload
-    with _client() as client:
+    with _slot(current_lane()), _client() as client:
         for rounds in range(get_settings().llm_max_continuations + 1):
             if rounds == 0:      # 首轮按模型目录选型，失败换备选（G2）；续写沿用选中的模型
                 resp, n, entry, fallbacks = _send_planned(client, p, plan, stream=False)
@@ -396,7 +467,7 @@ def stream(message: str, *, tier: str, project_code: str, level: str = "standard
             parts.append(out)
             yield out
 
-    with _client() as client:
+    with _slot("chat"), _client() as client:
         while True:
             if first:                            # 只在开始输出前换备选模型；之后各轮沿用同一个模型
                 resp, attempts, entry, fallbacks = _send_planned(client, p, plan, stream=True)

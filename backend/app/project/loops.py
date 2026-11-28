@@ -11,6 +11,8 @@
 其他规则：
 - 确认卡提醒（⑤）：3 个工作日未处理标“已提醒”，7 天未处理标“已升级项目经理”，只提高待办排序，不代为决定。
 - 成员移出（⑥）：本人发起的未处理卡、未回收的自评包、进行中的交付链移交给项目经理。
+- 上游变更（⑫）：通用挂钩 on_upstream_change，上游（定制项生效 / 撤回等）变更时把已写正文的下游章标“需更新”，
+  门禁拦签署，改写后清空；定制项（A30）在生效和生效后撤回时调用。
 审计只记编号、类别、计数和长度，不记标题、理由和正文原文。
 """
 from __future__ import annotations
@@ -293,3 +295,22 @@ def transfer_member_tasks(db: Session, actor: User, project: Project, removed: s
         audit.record(db, actor=actor.username, action="project.member_handover", result="allowed",
                      project_code=project.code, target=removed, to=to, **counts)
     return counts
+
+
+def on_upstream_change(db: Session, project: Project, reason: str,
+                       targets: list[tuple[str | None, int | None]]) -> int:
+    """上游变更 → 下游重审（⑫）。targets 为 (交付件编号, 章序号)，编号为 None 指全项目、章为 None 指整件；
+    只标已写正文且未标过的章，返回新标的章数。不提交，由调用方提交。"""
+    marked = 0
+    for d in project.deliverables:
+        for s in d.sections:
+            if s.current_version <= 0 or s.stale_reason:
+                continue
+            if any((dc is None or dc == d.code) and (seq is None or seq == s.seq) for dc, seq in targets):
+                s.stale_reason, s.stale_at = reason[:64], utcnow()
+                marked += 1
+    if marked:
+        audit.record(db, actor="platform", action="deliverable.upstream_stale", result="allowed",
+                     project_code=project.code,
+                     reason=reason[:64], sections=marked)
+    return marked
