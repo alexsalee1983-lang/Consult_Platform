@@ -72,21 +72,21 @@ def corroborate(version_id: int, db: Session = Depends(get_db), user: User = Dep
     return {"version_id": v.id, "single_source": v.single_source}
 
 
-@router.get("/{inc_id}")
-def detail(inc_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
-    return _call(svc.detail, db, user, inc_id)
+@router.get("/{incident_id}")
+def detail(incident_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    return _call(svc.detail, db, user, incident_id)
 
 
-@router.post("/{inc_id}/propose")
-def propose(inc_id: int, body: ProposeIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
-    return svc.out(db, _call(svc.propose, db, user, inc_id, body.decision, body.doc_ids, body.note))
+@router.post("/{incident_id}/propose")
+def propose(incident_id: int, body: ProposeIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    return svc.out(db, _call(svc.propose, db, user, incident_id, body.decision, body.doc_ids, body.note))
 
 
-@router.post("/{inc_id}/decide")
-def decide(inc_id: int, body: DecideIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
-    return svc.out(db, _call(svc.decide, db, user, inc_id, body.approve, body.note))
+@router.post("/{incident_id}/decide")
+def decide(incident_id: int, body: DecideIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    return svc.out(db, _call(svc.decide, db, user, incident_id, body.approve, body.note))
 
 
-@router.post("/{inc_id}/notice")
-def notice(inc_id: int, body: NoticeIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
-    return svc.out(db, _call(svc.notice_action, db, user, inc_id, body.action))
+@router.post("/{incident_id}/notice")
+def notice(incident_id: int, body: NoticeIn, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    return svc.out(db, _call(svc.notice_action, db, user, incident_id, body.action))
