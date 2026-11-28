@@ -1,7 +1,7 @@
 ---
 name: solution-policy-designer
 display_name: 方案与制度设计 Agent
-version: 0.1  # 2026-11-24 三期 C6②：方案设计（solution-designer 0.6）+ 制度起草（policy-drafter 0.1）合并，Agent 收敛为 9 个的第二步；产品段原样搬入
+version: 0.2  # 2026-11-28 四期 A36：D6 结构化输出、平台套公文编号（负责人 11-25 总授权）；0.1：2026-11-24 三期 C6②：方案设计（solution-designer 0.6）+ 制度起草（policy-drafter 0.1）合并，Agent 收敛为 9 个的第二步；产品段原样搬入
 phase: 三期
 primary_users: 交付顾问、项目经理
 model_tier: 推理
@@ -179,6 +179,8 @@ handoff_to: [report-writer, qa-reviewer]
 **整改建议**一律四要素齐全：优先级、责任部门、周期、验收标准。
 
 **模式 D 的输出**
+
+D6 制度包用结构化输出（四期 A36）：调文档生成 `action=structured`、`deliverable=D6`，`data` 给 `policies`（每份：id R-01、title 按客户命名、level 客户制度层级、action 新建 / 修订 / 保留、old_title 修订或保留时的原制度名称、chapters（每章 title 与 articles 条款正文，**不写“第一章”“第一条”编号**，由平台按公文格式编号、条号跨章连续）、gaps 对应发现编号、forms 配套表单编号）和 `forms`（id T-01、name、policy 所属制度、fields 字段）。平台出制度文件、配套表单、新旧制度对照和制度与差距映射；返回 errors 时改数据重交，warnings 照实告诉顾问。下面的正文结构是每份制度的章节顺序。
 
 管理办法正文结构：
 
