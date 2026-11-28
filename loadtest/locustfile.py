@@ -59,6 +59,7 @@ class Consultant(HttpUser):
         with _lock:
             acc = next(_accounts)
         self.username = acc["username"]
+        self.manager = acc is _DATA["users"][0]   # 第一个压测账号是项目经理（cli loadtest-accounts）
         self.csrf = ""
         self.conv = 0
         self.n = 0
@@ -143,6 +144,8 @@ class Consultant(HttpUser):
 
     @task(1)
     def start_run(self) -> None:
+        if not self.manager:   # 四期 A29：发起交付链只给项目经理，项目成员只读（403）
+            return
         with self.client.post(f"/api/projects/{PROJECT}/runs", name="runs.start", headers=self._h(),
                               catch_response=True) as r:
             if r.status_code in (202, 409):   # 409：已有未结束的运行，属于正常业务结果

@@ -1,4 +1,4 @@
-"""指标看板 v1（三期 F2①）：GET /api/indicators?days=30，只给项目负责人（其他角色 403）。
+"""指标看板 v1（三期 F2①）：GET /api/indicators?days=30，只给咨询业务负责人（其他角色 403）。
 四期 F5：GET /api/projects/{code}/automation?days=7 自动化账本，项目成员可看。
 
 只返回数字和口径，不返回项目代号、标题和正文；口径见 app/services/indicators.py。
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api", tags=["indicators"], dependencies=[Depends(req
 def get_indicators(days: int = Query(30, ge=1, le=366), db: Session = Depends(get_db),
                    user: User = Depends(current_user)) -> dict:
     if PROJECT_LEAD not in roles_of(db, user.id):
-        raise HTTPException(403, "指标看板只给项目负责人")
+        raise HTTPException(403, "指标看板只给咨询业务负责人")
     end = datetime.now(timezone.utc)
     start = end - timedelta(days=days)
     return {"days": days, **indicators.compute(db, start, end), "v4": indicators_v4.summary(db, start, end),  # 四期 F2③

@@ -19,7 +19,7 @@ function stepState(run, key) {
 const fmt = (t) => (t ? t.replace("T", " ").slice(5, 16) : "");
 
 // 交付链运行：发起、进度、取消；运行中每 3 秒刷新，状态变化时通知驾驶舱刷新（确认卡、交付件）
-export default function RunPanel({ code, strict, onChange }) {
+export default function RunPanel({ code, strict, onChange, canManage = true }) {
   const [run, setRun] = useState(undefined);   // undefined 加载中，null 没有运行
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -89,7 +89,7 @@ export default function RunPanel({ code, strict, onChange }) {
           {run && <div className="sub">发起：{run.created_by} · {fmt(run.created_at)}{run.finished_at && ` · 结束 ${fmt(run.finished_at)}`}</div>}
           {error && <div className="err sub">{error.message}</div>}
           <div className="row" style={{ justifyContent: "flex-end" }}>
-            {active ? (
+            {!canManage ? <span className="sub">只读：重跑、暂停只由项目经理操作</span> : active ? (
               <button className="btn sm" disabled={busy} onClick={() => window.confirm("取消本次运行？已写入的章节保留。")
                 && act(() => api.cancelRun(code, run.id))}>取消运行</button>
             ) : (

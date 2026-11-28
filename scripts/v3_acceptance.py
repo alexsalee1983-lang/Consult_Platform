@@ -202,7 +202,7 @@ def live_chain(api: Api) -> tuple[bool | None, str]:
 def live_indicators(api: Api) -> tuple[bool | None, str]:
     code, body = api.call("GET", "/api/indicators?days=30")
     if code == 403:
-        return None, "测试账号不是项目负责人（接口 403 符合权限设计），实机出数需项目负责人账号"
+        return None, "测试账号不是咨询业务负责人（接口 403 符合权限设计），实机出数需咨询业务负责人账号"
     if code != 200 or not isinstance(body, dict):
         return False, f"指标接口 {code}"
     items = body.get("items") or body.get("metrics") or []

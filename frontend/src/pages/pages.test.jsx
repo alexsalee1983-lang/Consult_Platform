@@ -55,23 +55,24 @@ test("我的项目：列出虚拟项目，链接到项目驾驶舱", async () =>
   expect(c.textContent).toContain("没有待确认事项");
 });
 
-// 全景数据：确认卡 card:7 卡住 D3 → 第 4 步 → D4（影响 3）；card:8 只连 D4（影响 1）；D1 待签署（影响 0）
+// 全景数据（A29：没有 AI·平台 泳道，连线交付件 → 交付件）：确认卡 card:7 卡住 D3 → D4 → 签署 D4（影响 3）；
+// card:8 只连 D4 → 签署 D4（影响 2）；D1 待签署（影响 0）；D0 已签署，点开是只读面板；D4 AI 在写
 const PANO = {
   project: "BANK-A", product: "soc", product_name: "SOC 建设", current: "c1", my_lanes: ["consultant"],
   columns: [{ id: "c0", name: "启动", status: "done" }, { id: "c1", name: "调研", status: "cur" }, { id: "c2", name: "分析", status: "next" }],
-  lanes: [{ id: "client", name: "客户" }, { id: "consultant", name: "顾问" }, { id: "manager", name: "项目经理" }, { id: "ai", name: "AI·平台" }],
+  auto_done: 2, can_manage_runs: false,
+  lanes: [{ id: "client", name: "客户" }, { id: "consultant", name: "顾问" }, { id: "manager", name: "项目经理" }],
   nodes: [
-    { id: "step:s1", col: "c0", lane: "ai", type: "step", status: "ok", title: "第 1 步 启动", subtitle: "", target: "drawer:run" },
-    { id: "step:s2", col: "c1", lane: "ai", type: "step", status: "ok", title: "第 2 步 调研", subtitle: "", target: "drawer:run" },
+    { id: "deliv:D0", col: "c0", lane: "consultant", type: "deliverable", status: "ok", title: "D0 项目启动", subtitle: "已签署", target: "drawer:deliv:D0" },
     { id: "deliv:D1", col: "c1", lane: "consultant", type: "deliverable", status: "cur", title: "D1 现状差距分析", subtitle: "待签署", target: "/project/BANK-A/deliverables/D1" },
     { id: "sign:D1", col: "c1", lane: "manager", type: "signoff", status: "cur", title: "签署 D1", subtitle: "", target: "/project/BANK-A/deliverables/D1" },
-    { id: "card:8", col: "c1", lane: "consultant", type: "card", status: "blk", title: "证据缺口 · 机房", subtitle: "", target: "drawer:card:8" },
-    { id: "card:7", col: "c1", lane: "consultant", type: "card", status: "blk", title: "组织与人员矛盾", subtitle: "", target: "drawer:card:7" },
+    { id: "card:8", col: "c1", lane: "consultant", type: "card", status: "blk", title: "证据缺口 · 机房", subtitle: "补资料 · 影响 1 项", target: "drawer:card:8" },
+    { id: "card:7", col: "c1", lane: "consultant", type: "card", status: "blk", title: "组织与人员矛盾", subtitle: "确认卡 · 影响 2 项", target: "drawer:card:7" },
     { id: "deliv:D3", col: "c2", lane: "consultant", type: "deliverable", status: "todo", title: "D3 事实清单", subtitle: "", target: "/project/BANK-A/deliverables/D3" },
-    { id: "step:s4", col: "c2", lane: "ai", type: "step", status: "todo", title: "第 4 步 差距", subtitle: "", target: "drawer:run" },
-    { id: "deliv:D4", col: "c2", lane: "consultant", type: "deliverable", status: "todo", title: "D4 差距分析", subtitle: "", target: "/project/BANK-A/deliverables/D4" },
+    { id: "deliv:D4", col: "c2", lane: "consultant", type: "deliverable", status: "ai", title: "D4 差距分析", subtitle: "处理中", eta: "2026-11-27T08:30:00+00:00", late: false, target: "/project/BANK-A/deliverables/D4" },
+    { id: "sign:D4", col: "c2", lane: "manager", type: "signoff", status: "todo", title: "签署 D4", subtitle: "", target: "/project/BANK-A/deliverables/D4" },
   ],
-  edges: [{ from: "card:7", to: "deliv:D3" }, { from: "deliv:D3", to: "step:s4" }, { from: "step:s4", to: "deliv:D4" },
+  edges: [{ from: "card:7", to: "deliv:D3" }, { from: "deliv:D3", to: "deliv:D4" }, { from: "deliv:D4", to: "sign:D4" },
     { from: "card:8", to: "deliv:D4" }, { from: "deliv:D1", to: "sign:D1" }],
 };
 
@@ -84,7 +85,7 @@ function stubOverview() {
 }
 
 test("待办按影响排序：卡住下游越多越靠前，同影响确认卡在签署前", () => {
-  expect(todos(PANO).map((t) => [t.id, t.impact])).toEqual([["card:7", 3], ["card:8", 1], ["sign:D1", 0]]);
+  expect(todos(PANO).map((t) => [t.id, t.impact])).toEqual([["card:7", 3], ["card:8", 2], ["sign:D1", 0]]);
 });
 
 test("全景三块：顶部一行（进度环、第 N 周 · 阶段、还差几件、按期）→ 关口进度线 → 过关口还差 + 待我处理；泳道图与行动条已取消", async () => {

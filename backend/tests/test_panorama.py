@@ -1,8 +1,8 @@
 """四期 A25①：项目全景按产品配置生成（docs/驾驶舱改版方案.md 第三节、第八节第 1 项）。
 
 五个产品各立一个虚拟项目，断言：列 = 产品配置里交付件的阶段（按出现顺序，IRE、DSM 有“落地辅导”），
-行 = 客户 / 顾问 / 项目经理 / AI·平台 四条泳道；节点从配置生成（每份交付件、每个交付链步骤都有节点），
-状态随交付件状态、确认卡变化；非成员 404、无业务角色 403。
+行 = 客户 / 顾问 / 项目经理 三条泳道（四期 A29：去掉 AI·平台 泳道和步骤节点，连线改为交付件 → 交付件）；
+节点从配置生成（每份交付件都有节点），状态随交付件状态、确认卡、交付链运行变化；非成员 404、无业务角色 403。
 """
 from __future__ import annotations
 
@@ -14,14 +14,14 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.core.permissions import CONSULTANT
 from app.main import app
-from app.models import Confirmation, Deliverable, Project, User
+from app.models import AgentRun, AgentRunStep, Confirmation, Deliverable, Project, User
 from app.products import config
 from app.project import configs
 
 from .conftest import create_user, logged_in_client
 
 CASES = [("SOC", "BANK"), ("ISO", "GRID"), ("DSM", "BANK"), ("NSG", "MFG"), ("IRE", "MFG")]
-LANES = ["client", "consultant", "manager", "ai"]
+LANES = ["client", "consultant", "manager"]
 
 
 def _stages(product: str) -> list[str]:
@@ -80,23 +80,27 @@ def test_columns_and_nodes_come_from_config(setup, product, _prefix):
     prod = config.product(product)
     for d in prod.deliverables:
         assert f"deliv:{d.code}" in ids and f"sign:{d.code}" in ids
-    for s in prod.chain:
-        assert f"step:{s.key}" in ids
+    assert not any(i.startswith("step:") for i in ids)                     # A29：没有步骤节点
     for n in data["nodes"]:
         assert n["lane"] in LANES and n["col"] in cols
         assert n["status"] in {"ok", "ai", "cur", "blk", "todo"}
         assert n["target"].startswith(("drawer:", "/project/"))
+        assert "回放" not in str(n)
     # 交付件节点落在配置声明的阶段
     by_id = {n["id"]: n for n in data["nodes"]}
     col_name = {col["id"]: col["name"] for col in data["columns"]}
     for d in prod.deliverables:
         assert col_name[by_id[f"deliv:{d.code}"]["col"]] == d.stage
-    # 交付链：步骤 → 产出交付件；交付件 → 签署
+    # 连线：交付件 → 下游交付件（按交付链的输入，经 run:步骤 的间接引用也解析到交付件）；交付件 → 签署
     edges = {(e["from"], e["to"]) for e in data["edges"]}
     for s in prod.chain:
         if s.output:
-            assert (f"step:{s.key}", f"deliv:{s.output}") in edges
+            for i in s.inputs:
+                if i in {d.code for d in prod.deliverables} and i != s.output:
+                    assert (f"deliv:{i}", f"deliv:{s.output}") in edges
     assert all(e["from"] in ids and e["to"] in ids for e in data["edges"])
+    assert not any(e["from"].startswith("step:") or e["to"].startswith("step:") for e in data["edges"])
+    assert "auto_done" in data and "agent" not in [lane["id"] for lane in data["lanes"]]
 
 
 def test_node_status_follows_deliverable_status(setup):
@@ -164,3 +168,93 @@ def test_non_member_404_and_no_role_403(setup):
     finally:
         outsider.close()
         nobody.close()
+
+
+def _node(data: dict, nid: str) -> dict:
+    return next(n for n in data["nodes"] if n["id"] == nid)
+
+
+def _run(code: str, status: str, step_index: int, minutes_ago: int = 0) -> int:
+    from datetime import timedelta
+
+    from app.core.db import utcnow
+
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        for r in db.scalars(select(AgentRun).where(AgentRun.project_id == p.id)):
+            r.status = "done"
+        at = utcnow() - timedelta(minutes=minutes_ago)
+        run = AgentRun(project_id=p.id, status=status, step_index=step_index, waiting_cards=[], card_ids=[],
+                       created_by="t", created_at=at, updated_at=at)
+        db.add(run)
+        db.commit()
+        return run.id
+
+
+def test_ai_working_marks_deliverable_with_eta_and_delay(setup):
+    """A29：AI 在写 → 交付件节点灰字“处理中”带预计完成时间；超过预计 2 倍显示“延迟”。"""
+    c, codes = setup
+    code = codes["SOC"]
+    chain = config.product("SOC").chain
+    k = next(i for i, s in enumerate(chain) if s.output)
+    out = chain[k].output
+    _run(code, "running", k)
+    n = _node(_get(c, code), f"deliv:{out}")
+    assert n["status"] == "ai" and n["subtitle"].startswith("处理中") and n["eta"] and n["late"] is False
+    _run(code, "running", k, minutes_ago=24 * 60)
+    n = _node(_get(c, code), f"deliv:{out}")
+    assert n["status"] == "ai" and n["late"] is True and "延迟" in n["subtitle"]
+    _run(code, "done", len(chain))
+
+
+def test_evidence_card_shows_as_bu_zi_liao_with_impact(setup):
+    """AI 停下等补证 → 顾问泳道“补资料”卡，写明影响几项。"""
+    c, codes = setup
+    code = codes["ISO"]
+    with SessionLocal() as db:
+        p = db.scalar(select(Project).where(Project.code == code))
+        card = Confirmation(project_id=p.id, kind="证据不足", title="全景测试：没有资料", agent="测试",
+                            deliverable_code="D3")
+        db.add(card)
+        db.commit()
+        cid = card.id
+    n = _node(_get(c, code), f"card:{cid}")
+    assert n["lane"] == "consultant" and n["status"] == "blk" and n["subtitle"].startswith("补资料")
+    assert "影响" in n["subtitle"]
+    with SessionLocal() as db:
+        db.get(Confirmation, cid).status = "resolved"
+        db.commit()
+
+
+def test_signed_deliverable_opens_read_only_panel(setup):
+    c, codes = setup
+    code = codes["DSM"]
+    _set_status(code, "D1", "signed")
+    data = _get(c, code)
+    assert _node(data, "deliv:D1")["target"] == "drawer:deliv:D1"
+    assert _node(data, "sign:D1")["target"] == "drawer:deliv:D1"
+
+
+def test_agent_lane_only_on_request(setup):
+    """打开“查看 Agent 运行情况”（?runs=1）才多出“Agent 运行”一行，只给步骤状态。"""
+    c, codes = setup
+    code = codes["NSG"]
+    r = c.get(f"/api/projects/{code}/panorama?runs=1")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["lanes"][-1] == {"id": "agent", "name": "Agent 运行"}
+    steps = [n for n in data["nodes"] if n["lane"] == "agent"]
+    assert len(steps) == len(config.product("NSG").chain)
+    assert all(n["type"] == "step" and n["target"] == "drawer:run" for n in steps)
+    assert data["can_manage_runs"] is True                          # 项目经理可重跑、暂停
+
+
+def test_auto_done_counts_steps_finished_this_week(setup):
+    c, codes = setup
+    code = codes["IRE"]
+    rid = _run(code, "done", 1)
+    with SessionLocal() as db:
+        from app.core.db import utcnow
+        db.add(AgentRunStep(run_id=rid, step="facts", agent_code="x", status="done", finished_at=utcnow()))
+        db.commit()
+    assert _get(c, code)["auto_done"] >= 1

@@ -79,7 +79,7 @@ def test_early_deletion_flow(monkeypatch):
         assert c.post(url, json=body).status_code == 409                                   # 已有未完成的申请
         assert [x["id"] for x in m.get(url).json()] == [d["id"]]                           # 成员能看到
 
-        # 确认队列只给项目负责人
+        # 确认队列只给咨询业务负责人
         assert c.get("/api/deletions").status_code == 403
         assert ld.get("/api/deletions").status_code == 200
         assert d["id"] in [x["id"] for x in ld.get("/api/deletions").json()]

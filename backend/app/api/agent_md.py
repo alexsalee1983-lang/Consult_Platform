@@ -1,6 +1,6 @@
 """Agent md 版本库与撤销回滚接口（四期 F3②e）。规则在 app/services/agent_md.py。
 
-- GET  /api/agent-md/{代号}/versions：版本历史、当前版本、回滚指针（项目负责人、系统管理员）；
+- GET  /api/agent-md/{代号}/versions：版本历史、当前版本、回滚指针（咨询业务负责人、系统管理员）；
 - GET  /api/agent-md/{代号}/versions/{版本}：该版本的公共规范与角色 md 原文（同上；md 不含客户信息）；
 - POST /api/agent-md/{代号}/unpin：撤销回滚，恢复仓库当前版本（同上；理由只记长度）。
 回滚本身经质量事件遏制“回滚 Agent 版本”（POST /api/quality-incidents/{id}/events）。

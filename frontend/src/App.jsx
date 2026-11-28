@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useParams, useSearchParams } from "react-router";
 import { api } from "./api.js";
 import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireLead, RequireSysAdmin } from "./auth.jsx";
+import { AgentBar, AgentViewProvider } from "./components/AgentActivity.jsx";
 import { Loading } from "./components/common.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import AdvisorDrawer from "./components/AdvisorDrawer.jsx";
@@ -36,10 +37,12 @@ function Shell() {
   const { pathname } = useLocation();
   return (
     <RequireAuth>
-      <div className={pathname.startsWith("/project/") ? "layout narrow" : "layout"}>
-        <Sidebar />
-        <main className="content"><Outlet /></main>
-      </div>
+      <AgentViewProvider>
+        <div className={pathname.startsWith("/project/") ? "layout narrow" : "layout"}>
+          <Sidebar />
+          <main className="content"><AgentBar /><Outlet /></main>
+        </div>
+      </AgentViewProvider>
     </RequireAuth>
   );
 }

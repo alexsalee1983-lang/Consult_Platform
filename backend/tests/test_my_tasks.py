@@ -190,10 +190,9 @@ def test_knowledge_tasks_use_agent_flag_and_mark_uncertain_fields():
     with logged_in_client(app, expert) as c:
         tasks = [t for t in c.get("/api/my-tasks").json()["tasks"] if tag in t["title"] and t["kind"] == "sample"]
     by = {t["ref_id"]: t for t in tasks}
-    flag, plain, mine = by[ids["flag"]], by[ids["plain"]], by[ids["mine"]]
+    flag, plain, mine = by[ids["flag"]], by[ids["plain"]], by.get(ids["mine"])
     assert flag["uncertainty"] == 1.0 and plain["uncertainty"] == 0.0 and flag["score"] > plain["score"]
     f = {x["name"]: x["uncertain"] for x in flag["fields"]}
     assert f["ref_document"] is True and f["ref_version"] is True           # Agent 标存疑、空着的都标黄
     assert {x["name"]: x["uncertain"] for x in plain["fields"]}["ref_document"] is False
-    assert "另一位知识专家" in mine["blocked"] and mine["returnable"] is False
-    assert [t["ref_id"] for t in tasks][-1] == ids["mine"]                    # 被拦的排最后
+    assert mine is None                                                       # A29：别人的卡隐藏，不灰显

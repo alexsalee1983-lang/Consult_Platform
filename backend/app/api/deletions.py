@@ -1,6 +1,6 @@
 """项目资料删除（M4 ②）：规则见 app/project/deletion.py。
 
-项目负责人（project_lead 角色，不必是项目成员）：
+咨询业务负责人（project_lead 角色，不必是项目成员）：
 GET  /api/deletions?status=open|done|cancelled|all   删除确认队列（只有代号、档位、日期和计数）
 GET  /api/deletions/{id}                             申请详情；待确认时附将删除的计数，完成后附删除记录
 POST /api/deletions/{id}/confirm                     确认删除：必须选经验回流情况（已回流填投料编号）

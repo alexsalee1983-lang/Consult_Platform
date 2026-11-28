@@ -33,13 +33,12 @@ test("点选只看该类，再点取消", () => {
   assert.equal(toggleFilter("deid", "kb_content"), "kb_content");
   const s = splitTasks(tasks, "deid");
   assert.equal(s.today.length + s.later.length, 0);
-  assert.equal(s.blocked.length, 1);
 });
 
-test("不筛选时分三段：今天、超出额度、须由别人处理", () => {
+test("A29：分两段（今天、超出额度）；别人的卡隐藏，不灰显", () => {
   const s = splitTasks(tasks, "");
   assert.deepEqual(s.today.map((t) => t.ref_id), [1, 4]);
   assert.deepEqual(s.later.map((t) => t.ref_id), [2]);
-  assert.deepEqual(s.blocked.map((t) => t.ref_id), [3]);
+  assert.equal(s.blocked, undefined);
 });
 

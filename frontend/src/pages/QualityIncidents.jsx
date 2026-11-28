@@ -7,7 +7,7 @@ import {
   dueText, eventPayload, nextStep, rollbackVersions, statusLabel, validateEvent, versionLabel,
 } from "../qualityIncidents.js";
 
-// AI 质量事件台账与处置（四期 F3②）：只给项目负责人。描述与处置说明只记长度和摘要哈希，页面不回显原文。
+// AI 质量事件台账与处置（四期 F3②）：只给咨询业务负责人。描述与处置说明只记长度和摘要哈希，页面不回显原文。
 const STATUS_FILTER = [["", "全部"], ["open", "未关闭"], ["closed", "已关闭"]];
 
 function fmt(t) {
@@ -219,7 +219,7 @@ export default function QualityIncidents() {
   useEffect(() => { setData(null); load(); }, [load]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <TopBar cap="项目负责人" title="AI 质量事件" />
+      <TopBar cap="咨询业务负责人" title="AI 质量事件" />
       <div className="sub">按八步处置：登记 → 分级 → 遏制 → 影响评估 → 纠正 → 根因 → 预防 → 复盘关闭。P1 4 小时内遏制，P2 1 个工作日。处置记录只追加。</div>
       <Summary s={data?.summary} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
