@@ -43,7 +43,31 @@ function TableField({ f, value, onChange }) {
   );
 }
 
-export default function DeliverableForm({ code, dcode, form, onDone, onCancel }) {
+// 负责人 11-28：两种成稿方式放在“写大纲”同一行，一眼可见、不用展开；已有正文时说明为什么没有入口
+export function StartChoices({ form, onForm, onContract }) {
+  if (!form) return null;
+  if (!form.writable) {
+    return (
+      <span className="sub" aria-label="成稿方式">
+        已有正文：{form.code === "D1" ? "按合同生成和" : ""}按表单成稿只用于首次成稿，之后在编辑器里改
+      </span>
+    );
+  }
+  return (
+    <span className="row" aria-label="成稿方式">
+      <button className="btn sm" onClick={onForm} title="直接填表，平台按模板成稿">按表单成稿</button>
+      {form.code === "D1" && (
+        <label className="btn sm" title="上传合同，Agent 抽取要点回填表单，核对后成稿">
+          按合同生成
+          <input type="file" hidden accept=".docx,.pdf,.md,.txt" aria-label="合同文件"
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onContract(f); }} />
+        </label>
+      )}
+    </span>
+  );
+}
+
+export default function DeliverableForm({ code, dcode, form, onDone, onCancel, initialFile = null }) {
   const [values, setValues] = useState(() => emptyValues(form));
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,10 +80,15 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel })
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
-  async function importContract(e) {
+  function importContract(e) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (file) runImport(file);
+  }
+
+  useEffect(() => { if (initialFile) runImport(initialFile); }, [initialFile]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function runImport(file) {
     setImp({ busy: true, msg: "合同已上传，正在抽取要点…", err: "" });
     try {
       await api.importContract(code, dcode, file);
@@ -105,7 +134,7 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel })
       {form.code === "D1" && (
         <div className="sb" style={{ marginBottom: 8 }}>
           <label className="btn sm" aria-disabled={imp.busy}>
-            {imp.busy ? "抽取中…" : "从合同导入"}
+            {imp.busy ? "抽取中…" : "按合同生成（重新导入）"}
             <input type="file" hidden disabled={imp.busy || busy} onChange={importContract} accept=".docx,.pdf,.md,.txt" aria-label="合同文件" />
           </label>
           <span className="sub">{imp.err ? <span className="err">{imp.err}</span> : imp.msg || "上传合同，Agent 抽取目标、周期、范围、角色等回填表单；严格档项目不收合同原文"}</span>

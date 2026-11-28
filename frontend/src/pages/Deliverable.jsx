@@ -8,7 +8,7 @@ import KbSidebar from "../components/KbSidebar.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Customizations from "../components/Customizations.jsx";
 import DocBody from "../components/DocBody.jsx";
-import DeliverableForm from "../components/DeliverableForm.jsx";
+import DeliverableForm, { StartChoices } from "../components/DeliverableForm.jsx";
 import { BatchSign, ClientFeedback, ModeBar, RevisePanel } from "../components/DeliverableModes.jsx";
 import { modeOf, separationNote } from "../delivModes.js";
 import { noteAfterInsert, spliceText } from "../editor/assist.js";
@@ -57,7 +57,7 @@ function SourceBar({ counts }) {
   );
 }
 
-function Toc({ d, seq, onPick, editable, onOutline }) {
+export function Toc({ d, seq, onPick, editable, onOutline, form = null, onForm, onContract }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
@@ -80,7 +80,12 @@ function Toc({ d, seq, onPick, editable, onOutline }) {
   return (
     <section className="pnl pad" aria-label="目录">
       <div className="sb"><span className="cap">目录</span>
-        {editable && !editing && <button className="btn sm" onClick={() => { setText(d.sections.map((s) => s.title).join("\n")); setEditing(true); }}>{d.sections.length ? "改大纲" : "写大纲"}</button>}
+        {editable && !editing && (
+          <span className="row">
+            <button className="btn sm" onClick={() => { setText(d.sections.map((s) => s.title).join("\n")); setEditing(true); }}>{d.sections.length ? "改大纲" : "写大纲"}</button>
+            <StartChoices form={form} onForm={onForm} onContract={onContract} />
+          </span>
+        )}
       </div>
       {editing ? (
         <>
@@ -520,6 +525,7 @@ export default function Deliverable({ code, dcode }) {
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
+  const [contractFile, setContractFile] = useState(null);
   const [form, setForm] = useState(null);        // A14②：D1、D2 表单定义，没有表单为 null
   const [formOpen, setFormOpen] = useState(false);
   const [wr, setWr] = useState(null);            // A32①：Word 回传结果
@@ -544,7 +550,7 @@ export default function Deliverable({ code, dcode }) {
   }, [code, dcode]);
 
   useEffect(() => {
-    setD(null); setSo(null); setRv(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false);
+    setD(null); setSo(null); setRv(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false); setContractFile(null);
     loadForm();
     api.project(code).then(setP).catch(setError);
     api.members(code).then(setMembers).catch(() => setMembers([]));
@@ -609,7 +615,6 @@ export default function Deliverable({ code, dcode }) {
         <select className="sm" aria-label="切换交付件" value={d.code} onChange={(e) => navigate(`/project/${encodeURIComponent(code)}/deliverables/${e.target.value}`)}>
           {p.deliverables.map((x) => <option key={x.code} value={x.code}>{x.code} {x.title}</option>)}
         </select>
-        {editable && form?.writable && !formOpen && <button className="btnp" onClick={() => setFormOpen(true)}>按表单成稿</button>}
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportWord)}>{exporting ? "导出中…" : "导出 Word"}</button>
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportPpt)}>导出 PPT</button>
         {editable && !strict && d.sections.length > 0 && (
@@ -648,6 +653,8 @@ export default function Deliverable({ code, dcode }) {
       <div className="kb3">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
           <Toc d={d} seq={cur} onPick={setSeq} editable={editable}
+            form={formOpen ? null : form} onForm={() => { setContractFile(null); setFormOpen(true); }}
+            onContract={(f) => { setContractFile(f); setFormOpen(true); }}
             onOutline={async (titles) => { await api.putOutline(code, dcode, titles); await load(); }} />
           <section className="pnl pad" aria-label="来源构成">
             <span className="cap">全文来源构成</span>
@@ -656,10 +663,11 @@ export default function Deliverable({ code, dcode }) {
           <Quality code={code} dcode={dcode} so={so} canReview={editable && d.sections.length > 0} isManager={isManager} onChanged={load} />
         </div>
         <div style={{ minWidth: 0 }}>
-          {formOpen && form ? <DeliverableForm code={code} dcode={dcode} form={form} onCancel={() => setFormOpen(false)}
-            onDone={async () => { setFormOpen(false); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
+          {formOpen && form ? <DeliverableForm code={code} dcode={dcode} form={form} initialFile={contractFile}
+            onCancel={() => { setFormOpen(false); setContractFile(null); }}
+            onDone={async () => { setFormOpen(false); setContractFile(null); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
             : cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
-            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以点右上角“按表单成稿”，或先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
+            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以点左侧“写大纲”旁边的“按表单成稿”或“按合同生成”，或自己写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
           <section className="pnl pad" aria-label="待你确认">
