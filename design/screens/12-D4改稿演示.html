@@ -1,0 +1,244 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><title>D4 差距分析 · 改稿演示（虚拟数据）</title>
+<style>
+:root{--obs:#0a0d12;--s1:#10151c;--s2:#161d27;--s3:#1d2633;--ln:#232d3b;--ln2:#2e3a4b;--tx:#e6ebf2;--tx2:#a3aebe;--tx3:#6b7789;--amber:#f5a524;--amber-d:rgba(245,165,36,.12);--crim:#f0454f;--crim-d:rgba(240,69,79,.13);--cyan:#22d3ee;--cyan-d:rgba(34,211,238,.10);--ok:#3dd68c;--ok-d:rgba(61,214,140,.12);--vio:#b49cff;--vio-d:rgba(180,156,255,.12)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--obs);color:var(--tx);font:13px/1.6 "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;min-width:1440px}
+a{color:inherit;text-decoration:none;cursor:pointer}
+.top{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--ln);background:var(--s1)}
+.crumb{color:var(--tx3);font-size:12px}
+h1{font-size:19px;margin:0}h2{font-size:15px;margin:0 0 8px}h3{font-size:13.5px;margin:0 0 6px}
+.chip{font-size:12px;border-radius:10px;padding:1px 9px;border:1px solid var(--ln2);color:var(--tx2);white-space:nowrap;display:inline-block}
+.c-ok{border-color:var(--ok);color:var(--ok)}.c-am{border-color:var(--amber);color:var(--amber)}.c-cy{border-color:var(--cyan);color:var(--cyan)}.c-cr{border-color:var(--crim);color:var(--crim)}.c-vi{border-color:var(--vio);color:var(--vio)}
+.btn{background:var(--amber);color:var(--obs);border-radius:7px;padding:4px 12px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-block;font-size:12.5px}
+.btn2{border:1px solid var(--ln2);border-radius:7px;padding:3px 11px;color:var(--tx2);cursor:pointer;white-space:nowrap;display:inline-block;font-size:12.5px}
+.btn2:hover{border-color:var(--cyan);color:var(--cyan)}
+.mut{color:var(--tx3)}.t2{color:var(--tx2)}
+.sp{flex:1}
+/* 方式条 */
+.ways{display:flex;gap:8px;padding:10px 20px;border-bottom:1px solid var(--ln);background:var(--obs);position:sticky;top:0;z-index:5}
+.way{flex:1;border:1px solid var(--ln);background:var(--s1);border-radius:10px;padding:7px 10px;cursor:pointer}
+.way b{display:block;font-size:13px}.way small{color:var(--tx3);font-size:11.5px}
+.way .no{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--s3);font-size:11px;margin-right:5px;color:var(--tx2)}
+.way.on{border-color:var(--amber);background:var(--amber-d)}.way.on .no{background:var(--amber);color:var(--obs)}
+.hint{margin:10px 20px 0;border-left:3px solid var(--amber);background:var(--amber-d);padding:8px 12px;border-radius:0 8px 8px 0;color:var(--tx);display:flex;align-items:center;gap:12px}
+.hint .sp{flex:1}
+/* 三栏 */
+.wrap{display:grid;grid-template-columns:250px 1fr 360px;gap:14px;padding:12px 20px 60px}
+.card{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:12px 14px}
+.rv{padding:7px 9px;border-radius:6px;border:1px solid var(--ln);margin-bottom:6px;cursor:pointer;background:var(--s2);font-size:12.5px}
+.rv:hover{border-color:var(--cyan)}.rv.done{opacity:.45}
+.doc{background:var(--s1);border:1px solid var(--ln);border-radius:10px;padding:18px 26px;line-height:1.95;font-size:13.5px}
+.doc h2{margin-top:14px}.doc h3{margin-top:12px;font-size:14px}
+.para{padding:6px 10px;border-radius:6px;margin:4px -10px;border:1px solid transparent;position:relative}
+.lock{border-color:var(--ok);background:var(--ok-d)}
+.lock:before{content:"人工定稿";position:absolute;right:8px;top:-9px;font-size:10.5px;background:var(--ok);color:var(--obs);border-radius:6px;padding:0 6px;line-height:16px}
+.hit{outline:1.5px solid var(--crim);border-radius:3px;background:var(--crim-d)}
+.chg{border-bottom:2px solid var(--amber);background:var(--amber-d)}
+.del{text-decoration:line-through;color:var(--crim)}
+.ins{color:var(--ok);border-bottom:1px dashed var(--ok)}
+.sel{background:rgba(34,211,238,.25);border-radius:3px}
+.newsec{border-left:3px solid var(--amber);padding-left:10px;margin-left:-13px;animation:fadein .6s}
+.ref{font-size:10.5px;vertical-align:super;margin:0 1px;padding:0 3px;border-radius:4px}
+.r-f{color:var(--ok)}.r-k{color:var(--cyan)}.r-m{color:var(--vio)}
+.flash{animation:fl 1.2s 2}
+@keyframes fl{50%{background:rgba(245,165,36,.35)}}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.pane{display:none}.pane.on{display:block;animation:fadein .35s}
+.blk{background:var(--s2);border:1px solid var(--ln);border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.opt{display:block;border:1px solid var(--ln);border-radius:7px;padding:7px 9px;margin-bottom:6px;cursor:pointer;background:var(--s2)}
+.opt:hover{border-color:var(--amber)}.opt b{color:var(--amber);font-size:12px;margin-right:4px}
+.msg{border-radius:10px;padding:8px 11px;margin-bottom:8px;max-width:92%}
+.me{background:var(--s3);margin-left:auto}.ag{background:var(--s2);border:1px solid var(--ln)}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.lv{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px dashed var(--ln)}.lv:last-child{border:0}
+.seg{display:flex;border:1px solid var(--ln2);border-radius:7px;overflow:hidden}.seg a{padding:4px 12px;color:var(--tx2)}.seg a.on{background:var(--amber);color:var(--obs);font-weight:700}
+.ver{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+.ver .opt{font-size:12.5px;margin:0}
+.legend{font-size:11.5px;color:var(--tx3);margin-top:10px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--s3);border:1px solid var(--ln2);padding:8px 16px;border-radius:8px;display:none;z-index:9}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style></head><body>
+
+<div class="top">
+  <div><div class="crumb">BANK-A / 输出 / D4 差距分析</div><h1>D4 差距分析报告</h1></div>
+  <span class="chip c-am" id="vtag">第 2 版 · 评审与修订</span><span class="chip">草稿 · 待顾问审核</span><span class="chip c-cy">标准档</span>
+  <span class="sp"></span>
+  <a class="btn2" data-t="只看本轮变化的段落">本次变化摘要</a><a class="btn2" data-t="导入客户 Word 批注，自动拆条对章节">导入客户批注</a><a class="btn2" data-t="导出 Word（未签署带草稿水印）">导出</a>
+  <a class="btn" id="refreshBtn">不满意，刷新</a>
+</div>
+
+<div class="ways" id="ways">
+  <div class="way on" data-w="0"><b><span class="no">1</span>先看审阅清单</b><small>平台告诉你看哪里</small></div>
+  <div class="way" data-w="1"><b><span class="no">2</span>直接改字</b><small>小改 · 平台判断改的是什么</small></div>
+  <div class="way" data-w="2"><b><span class="no">3</span>选中一段提要求</b><small>中改 · 2～3 种改法一键换</small></div>
+  <div class="way" data-w="3"><b><span class="no">4</span>对话改整章</b><small>大改 · 拆条归类后确认</small></div>
+  <div class="way" data-w="4"><b><span class="no">5</span>不满意，刷新</b><small>按原因重做 · 出新版本</small></div>
+  <div class="way" data-w="5"><b><span class="no">6</span>人工定稿保护</b><small>你改过的不被覆盖</small></div>
+</div>
+<div class="hint"><span id="hintTx"></span><span class="sp"></span><a class="btn" id="goBtn">演示这一步 ▶</a><a class="btn2" id="resetBtn">重置</a></div>
+
+<div class="wrap">
+  <!-- 审阅清单 -->
+  <div>
+    <div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">审阅清单 · 按风险排序</h3><span class="chip c-am" id="rvn">5</span></div>
+      <div style="margin-top:8px">
+      <div class="rv" data-j="s32a"><span class="chip c-cr">无来源</span> 3.2 “行业平均响应时长 30 分钟”</div>
+      <div class="rv" data-j="s31b"><span class="chip c-am">低置信</span> 3.1 夜间值守结论只依据口述</div>
+      <div class="rv" data-j="s2soc"><span class="chip c-vi">定制项</span> 第 2 章仍写“SOC”</div>
+      <div class="rv" data-j="h33"><span class="chip c-cy">偏离样例</span> 3.3 比黄金样例少“度量现状”</div>
+      <div class="rv" data-j="s33"><span class="chip">门禁</span> 3.3 建议缺“验收标准”</div>
+      </div>
+      <div class="mut" style="font-size:11.5px;margin-top:6px">点一条跳到正文位置；第二轮起只列本轮变化。</div>
+    </div>
+    <div class="card" style="margin-top:10px"><h3>版本</h3>
+      <div id="vnew"></div>
+      <div class="lv"><span class="chip c-am" id="vcur">第 2 版</span><span class="t2" id="vcurt">当前</span></div>
+      <div class="lv"><span class="chip">第 1 版</span><span class="mut">Agent 初稿 · 11-26</span></div>
+    </div>
+  </div>
+
+  <!-- 正文 -->
+  <div class="doc" id="doc">
+    <h2>2 现状概述</h2>
+    <div class="para">BANK-A 已建立 <span id="s2soc">SOC</span> 雏形，安全监测由安全管理组兼管，告警来源包括防火墙、终端与邮件网关 <span class="ref r-f">F-012</span>。</div>
+    <h2>3 差距分析</h2>
+    <h3>3.1 运营组织与人员</h3>
+    <div class="para lock" id="p31">BANK-A 现有安全团队 <span id="team">5 人</span> <span class="ref r-f">F-052</span>，承担监测、处置与制度维护，未设专职分析岗位。对照监管关于持续监测能力的要求 <span class="ref r-k">K-0412</span>，人员配置不足以支撑全天候运营。<span id="s31b">夜间时段基本依赖值班手机通知</span>，告警响应时效难以保证 <span class="ref r-m">推断</span>。</div>
+    <h3>3.2 告警与响应</h3>
+    <div class="para" id="p32">告警分散在 4 个平台 <span class="ref r-f">F-031</span>，无统一工单，<span id="s32f">平均响应约 2 小时</span> <span class="ref r-f">F-058</span>。<span id="s32a">行业平均响应时长 30 分钟</span>，差距明显。</div>
+    <h3 id="h33">3.3 度量与改进</h3>
+    <div class="para" id="p33"><span id="s33">建议建立运营指标体系，定期复盘告警处置情况。</span></div>
+    <div id="ins"></div>
+    <div class="legend">绿框 = 人工定稿（刷新时跳过） · 红框 = 审阅清单命中 · 橙线 = 本轮变化 · 删除线 / 绿字 = 修订痕迹 · 上标：<span class="r-f">绿 客户证据</span> <span class="r-k">青 公司知识</span> <span class="r-m">紫 模型推断</span></div>
+  </div>
+
+  <!-- 右侧面板 -->
+  <div>
+    <div class="card" style="min-height:520px">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">改稿助手</h3><span class="mut" id="ptitle">审阅清单</span></div>
+
+      <div class="pane on" id="pn0">
+        <div class="blk">打开交付件先看左边的审阅清单：平台把<b>没来源、低置信、不符定制项、偏离黄金样例、门禁提醒</b>排好序。不用通读全文。</div>
+        <div class="blk mut">点“演示这一步”：跳到第一条，正文对应位置闪烁。</div>
+        <div id="o0"></div>
+      </div>
+
+      <div class="pane" id="pn1">
+        <div class="blk">在正文里直接改字。改完平台判断你改的是<b>事实 / 口径 / 措辞</b>，三种处理不同：</div>
+        <div class="row" style="margin-bottom:8px"><a class="btn2" id="e1">① 改事实</a><a class="btn2" id="e2">② 改口径</a><a class="btn2" id="e3">③ 改措辞</a></div>
+        <div id="o1"></div>
+      </div>
+
+      <div class="pane" id="pn2">
+        <div class="blk">选中正文一段，用一句话提要求，或直接点推荐改法。</div>
+        <div id="o2"></div>
+      </div>
+
+      <div class="pane" id="pn3">
+        <div id="o3"></div>
+        <div class="row" style="margin-top:8px"><input id="cin" style="flex:1;background:var(--s2);border:1px solid var(--ln2);border-radius:7px;color:var(--tx);padding:6px 8px;font:inherit" value="第 3 章加一节对照去年监管检查意见，口径偏监管视角"><a class="btn" id="csend">发送</a></div>
+      </div>
+
+      <div class="pane" id="pn4"><div id="o4"></div></div>
+
+      <div class="pane" id="pn5">
+        <div class="blk">3.1 绿框是你改过的段落，标“人工定稿”。上游再变时<b>不覆盖</b>，只提示并给建议改法，由你决定。</div>
+        <div id="o5"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const HINT=[
+ '第 1 种 · 先看审阅清单：打开交付件不用从头读，平台按风险排好要看的地方，点一条跳过去。',
+ '第 2 种 · 直接改字（小改）：在正文里改，平台判断是事实、口径还是措辞，分别处理。点右侧三个按钮分别看。',
+ '第 3 种 · 选中一段提要求（中改）：选中“夜间时段基本依赖值班手机通知”，右侧给 3 种改法，点一个就替换。',
+ '第 4 种 · 对话改整章（大改）：在右侧说一句整章要求，平台拆成几条并归类，结构类要项目经理确认，确认后只重写受影响部分。',
+ '第 5 种 · 不满意，刷新：先选范围、说哪里不对，平台按原因决定从哪刷新；结果出新版本，可对比、可退回。',
+ '第 6 种 · 人工定稿保护：模拟上游事实变化（团队从 5 人变 6 人），看平台怎么处理你改过的段落。'];
+const PT=['审阅清单','直接改字','选中改写','对话','不满意刷新','人工定稿'];
+let W=0;const init=$('doc').innerHTML;
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',3000)}
+function bindT(){document.querySelectorAll('[data-t]').forEach(e=>e.onclick=()=>toast(e.dataset.t))}
+function setW(w){W=w;document.querySelectorAll('.way').forEach(e=>e.classList.toggle('on',+e.dataset.w===w));document.querySelectorAll('.pane').forEach((e,i)=>e.classList.toggle('on',i===w));$('hintTx').textContent=HINT[w];$('ptitle').textContent=PT[w]}
+function jump(id){const e=$(id);if(!e)return;document.querySelectorAll('.hit').forEach(x=>x.classList.remove('hit'));e.classList.add('hit');e.scrollIntoView({block:'center',behavior:'smooth'});e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash')}
+function reset(){$('doc').innerHTML=init;['o0','o1','o2','o3','o4','o5','vnew'].forEach(i=>$(i).innerHTML='');$('vcurt').textContent='当前';$('vtag').textContent='第 2 版 · 评审与修订';document.querySelectorAll('.rv').forEach(r=>r.classList.remove('done'));$('rvn').textContent='5'}
+function doneRv(j){const r=document.querySelector('.rv[data-j="'+j+'"]');if(r&&!r.classList.contains('done')){r.classList.add('done');$('rvn').textContent=document.querySelectorAll('.rv:not(.done)').length}}
+document.querySelectorAll('.rv').forEach(r=>r.onclick=()=>jump(r.dataset.j));
+document.querySelectorAll('.way').forEach(e=>e.onclick=()=>setW(+e.dataset.w));
+$('refreshBtn').onclick=()=>{setW(4);go()};
+$('resetBtn').onclick=reset;
+$('goBtn').onclick=go;
+function go(){[g0,g1,g2,g3,g4,g5][W]()}
+/* 1 审阅清单 */
+function g0(){jump('s32a');$('o0').innerHTML='<div class="blk"><span class="chip c-cr">无来源</span> “行业平均响应时长 30 分钟”没有出处。<div class="row" style="margin-top:6px"><a class="btn" id="a0">补来源</a><a class="btn2" id="b0">删掉这句</a></div></div>';
+ $('a0').onclick=()=>{$('s32a').outerHTML='<span id="s32a" class="chg">同业城商行平均响应时长约 30 分钟</span> <span class="ref r-k">K-0733</span>';doneRv('s32a');$('o0').innerHTML+='<div class="blk"><span class="chip c-ok">已补</span> 找到公司知识 K-0733（同业运营指标），措辞改为“同业城商行”。</div>'};
+ $('b0').onclick=()=>{$('s32a').outerHTML='<span class="del">行业平均响应时长 30 分钟，差距明显。</span>';doneRv('s32a')}}
+/* 2 直接改字 */
+function g1(){$('e1').click()}
+$('e1').onclick=()=>{jump('s32f');$('s32f').innerHTML='<span class="del">平均响应约 2 小时</span><span class="ins">响应时长无记录，无法度量</span>';
+ $('o1').innerHTML='<div class="blk"><div class="mut">你把“平均响应约 2 小时”改成“响应时长无记录，无法度量”</div><div style="margin:6px 0"><span class="chip c-cr">事实纠正</span> 事实 F-058 从“约 2 小时”更正为“无记录”。</div><div class="t2">引用它的地方：D4 3.2、D4 热力图、D8 摘要</div><div class="row" style="margin-top:8px"><a class="btn" id="f1">回写事实库并同步</a><a class="btn2" id="f2">只改这里</a></div></div>';
+ $('f1').onclick=()=>{$('o1').innerHTML+='<div class="blk"><span class="chip c-ok">已回写</span> F-058 已更正；<span class="chip c-am">D4 热力图 需更新</span> <span class="chip c-am">D8 摘要 需更新</span><div class="mut" style="margin-top:4px">需更新的部分一键刷新，人工定稿段落只提示不覆盖。</div></div>'};
+ $('f2').onclick=()=>toast('只改这一处；事实库不变，平台记一条“正文与事实不一致”提醒')};
+$('e2').onclick=()=>{jump('s2soc');$('s2soc').innerHTML='<span class="del">SOC</span><span class="ins">安全运营中心</span>';
+ $('o1').innerHTML='<div class="blk"><div class="mut">你把“SOC”改成“安全运营中心”</div><div style="margin:6px 0"><span class="chip c-vi">口径</span> 全项目都这样改？</div><div class="t2">本项目共 23 处：D1 2、D4 9、D5 8、D8 4</div><div class="row" style="margin-top:8px"><a class="btn" id="k1">全项目都改（转定制项）</a><a class="btn2" id="k2">只改这里</a></div></div>';
+ $('k1').onclick=()=>{doneRv('s2soc');$('o1').innerHTML+='<div class="blk"><span class="chip c-ok">已转定制项</span> “统一称安全运营中心”；以后起草和刷新都按这条，质量门禁逐条核对。</div>'};
+ $('k2').onclick=()=>toast('只改这一处')};
+$('e3').onclick=()=>{jump('s33');$('s33').innerHTML='<span class="del">建议建立运营指标体系，定期复盘告警处置情况。</span><span class="ins">建议建立运营指标体系，按月复盘告警处置情况。</span>';
+ $('o1').innerHTML='<div class="blk"><div class="mut">你把“定期”改成“按月”</div><div style="margin:6px 0"><span class="chip">措辞</span> 只改这一处，不扩散。</div><div class="t2">该段标为“人工定稿”，以后刷新跳过。</div></div>';$('p33').classList.add('lock')};
+/* 3 选中改写 */
+function g2(){jump('s31b');const e=$('s31b');e.classList.remove('hit');e.classList.add('sel');
+ $('o2').innerHTML='<div class="blk"><span class="mut">已选中：</span>“夜间时段基本依赖值班手机通知”</div>'+
+ '<a class="opt" data-v="夜间（22:00～8:00）无人值守，告警仅推送至值班手机，未设升级时限 <span class=&quot;ref r-f&quot;>F-047</span>"><b>更具体</b>夜间（22:00～8:00）无人值守，告警仅推送至值班手机，未设升级时限 F-047</a>'+
+ '<a class="opt" data-v="夜间缺少持续监测安排，与监管提出的持续监测能力要求存在差距 <span class=&quot;ref r-k&quot;>K-0412</span>"><b>监管视角</b>夜间缺少持续监测安排，与监管提出的持续监测能力要求存在差距 K-0412</a>'+
+ '<a class="opt" data-v="夜间无人值守"><b>更精简</b>夜间无人值守</a>'+
+ '<div class="row" style="margin-top:6px"><input style="flex:1;background:var(--s2);border:1px solid var(--ln2);border-radius:7px;color:var(--tx);padding:5px 8px;font:inherit" placeholder="或者用一句话说怎么改，例如：补上值班表来源"><a class="btn2" data-t="按你的要求出 2～3 种改法">改</a></div>'+
+ '<div class="row" style="margin-top:8px"><a class="btn2" data-t="在资料和知识库里找依据，一键挂上来源">补来源</a><a class="btn2" data-t="检查称呼、视角是否符合定制项">口径检查</a></div>';
+ bindT();
+ document.querySelectorAll('#o2 .opt').forEach(o=>o.onclick=()=>{$('s31b').outerHTML='<span id="s31b" class="chg">'+o.dataset.v+'</span>';doneRv('s31b');toast('已替换；这段本来是人工定稿，替换由你本人发起，仍保持人工定稿')})}
+/* 4 对话改整章 */
+function g3(){$('csend').click()}
+$('csend').onclick=()=>{const t=$('cin').value;
+ $('o3').innerHTML='<div class="msg me">'+t+'</div><div class="msg ag">我拆成两条：'+
+ '<div class="lv"><span class="chip c-am">结构</span><div>第 3 章新增“3.4 监管检查意见对照”<div class="mut">结构变化，须项目经理确认 · 需要去年监管检查意见（已在资料 E-021）</div></div></div>'+
+ '<div class="lv"><span class="chip c-vi">口径</span><div>全文偏监管视角<div class="mut">你确认即生效 · 影响 D4 4 处、D8 1 处</div></div></div>'+
+ '<div class="row" style="margin-top:6px"><a class="btn" id="cok">确认（结构项转项目经理）</a><a class="btn2" data-t="改归类或删掉某一条">调整</a></div></div>';bindT();
+ $('cok').onclick=()=>{$('ins').innerHTML='<div class="newsec"><h3>3.4 监管检查意见对照 <span class="chip c-am">新增 · 待项目经理确认</span></h3><div class="para">去年监管检查指出“未建立持续监测机制” <span class="ref r-f">E-021</span>，与本报告 3.1、3.2 结论一致；整改需覆盖夜间值守与响应时效度量。</div></div>';
+  $('p32').classList.add('chg');$('ins').scrollIntoView({block:'center',behavior:'smooth'});
+  $('o3').innerHTML+='<div class="msg ag"><span class="chip c-ok">已完成</span> 只重写受影响部分：新增 3.4，改 3.2 等 4 处；已过门禁。<div class="row" style="margin-top:6px"><a class="btn2" data-t="左右对比：改前 / 改后，只高亮变化">看前后对比</a><a class="btn2" data-t="退回到改前版本">撤销</a></div><div class="mut" style="margin-top:4px">3.1 是人工定稿，未动，只给了建议改法。</div></div>';bindT()}};
+/* 5 不满意刷新 */
+function g4(){
+ $('o4').innerHTML='<div class="blk"><h3>① 范围</h3><div class="seg" id="sc"><a>这一段</a><a class="on">这一章</a><a>整件</a></div><div class="mut" style="margin-top:4px">当前：3.2 告警与响应</div></div>'+
+ '<div class="blk"><h3>② 哪里不对（一句话）</h3><input id="why" style="width:100%;background:var(--s2);border:1px solid var(--ln2);border-radius:7px;color:var(--tx);padding:6px 8px;font:inherit" value="写得太空，像教科书，不像我们的报告"></div>'+
+ '<div class="row"><a class="btn" id="rgo">让平台判断原因</a></div><div id="r2"></div>';
+ document.querySelectorAll('#sc a').forEach(a=>a.onclick=()=>document.querySelectorAll('#sc a').forEach(x=>x.classList.toggle('on',x===a)));
+ $('rgo').onclick=()=>{$('r2').innerHTML='<div class="blk" style="margin-top:8px"><h3>③ 平台判断：写得不好</h3>'+
+  '<div class="lv"><span class="chip">输入错或缺</span><span class="mut">去源头改事实或补资料</span></div>'+
+  '<div class="lv"><span class="chip">口径不对</span><span class="mut">转定制项或修订指令</span></div>'+
+  '<div class="lv"><span class="chip c-am">写得不好 ✓</span><span>重写这一章，给 3 个版本对比</span></div>'+
+  '<div class="lv"><span class="chip">整件方向不对</span><span class="mut">先答 2～3 个取舍问题再重写</span></div>'+
+  '<div class="mut" style="margin-top:4px">可贴一份“照这个写”的样例；没有就用黄金样例。人工定稿段落跳过。自动修订最多 2 轮。</div></div>'+
+  '<div class="blk"><h3>④ 选一个版本</h3><div class="ver">'+
+  '<a class="opt" data-v="A">A · 按“现状—依据—差距—影响”四段写，每段带证据</a>'+
+  '<a class="opt" data-v="B">B · 先给结论一句，再列 3 条差距要点</a>'+
+  '<a class="opt" data-v="C">C · 仿黄金样例 G-SOC-03 的写法</a></div></div>';
+  document.querySelectorAll('#r2 .opt').forEach(o=>o.onclick=()=>{
+   $('p32').innerHTML='<span class="chg"><b>现状：</b>告警分散在 4 个平台 <span class="ref r-f">F-031</span>，无统一工单，响应时长无记录 <span class="ref r-f">F-058</span>。<b>依据：</b>监管要求具备持续监测与及时处置能力 <span class="ref r-k">K-0412</span>。<b>差距：</b>无法证明响应时效。<b>影响：</b>重大事件可能延误处置，且无法向监管举证。</span>';
+   $('p32').scrollIntoView({block:'center',behavior:'smooth'});
+   $('vcur').textContent='第 2 版';$('vnew').innerHTML='<div class="lv"><span class="chip c-am">第 3 版</span><span class="t2">刷新 3.2（版本 '+o.dataset.v+'）· 当前</span></div>';$('vcurt').textContent='上一版 · 可退回';$('vtag').textContent='第 3 版 · 评审与修订';
+   $('r2').innerHTML+='<div class="blk"><span class="chip c-ok">已出第 3 版</span> 只改了 3.2；3.1 人工定稿跳过。<div class="row" style="margin-top:6px"><a class="btn2" data-t="第 2 版与第 3 版左右对比，只高亮变化">版本对比</a><a class="btn2" data-t="退回第 2 版">退回</a></div></div>';bindT()})}}
+/* 6 人工定稿保护 */
+function g5(){jump('p31');
+ $('o5').innerHTML='<div class="blk"><span class="chip c-cy">上游变化</span> 事实 F-052 更新：安全团队 5 人 → <b>6 人</b>（客户补充资料 E-030）</div>'+
+ '<div class="blk"><div style="margin-bottom:6px">3.1 是人工定稿，<b>没有自动改</b>。建议改法：</div><div class="t2">BANK-A 现有安全团队 <span class="del">5 人</span><span class="ins">6 人</span> F-052，……</div>'+
+ '<div class="row" style="margin-top:8px"><a class="btn" id="pk">采用建议</a><a class="btn2" id="pi">保持原文</a><a class="btn2" data-t="解锁后这一段参与下次刷新">解锁这一段</a></div></div>';bindT();
+ $('team').classList.add('hit');
+ $('pk').onclick=()=>{$('team').outerHTML='<span id="team" class="chg">6 人</span>';toast('已采用，仍保持人工定稿')};
+ $('pi').onclick=()=>toast('保持原文；平台记一条“正文与事实不一致”，签署前门禁会再提醒一次')}
+bindT();setW(0);
+const h=location.hash.slice(1);if(h){const [w,a]=h.split('-');setW(+w);if(a)go();if(a==='full'){const c=['a0','f1','','cok','rgo','pk'][+w];if(c&&$(c))$(c).click();if(+w===2||+w===4){const o=document.querySelector('#o'+w+' .opt');if(o)o.click()}}}
+</script>
+</body></html>
