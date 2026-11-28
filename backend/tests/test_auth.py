@@ -144,6 +144,7 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/sign"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/return"),
     ("POST", "/api/projects/BANK-A/deliverables/D3/signoff/merged"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/signoff/merged"),   # 路由覆盖检查按 {dcode}=D4 展开
     ("GET", "/api/projects/BANK-A/deliverables/D4/revise"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revise"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/client-feedback"),
