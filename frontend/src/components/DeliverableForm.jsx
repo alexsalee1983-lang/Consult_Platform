@@ -126,7 +126,7 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel, i
   }
 
   return (
-    <section className="pnl pad" aria-label="按表单成稿">
+    <section className="pnl pad dform" aria-label="按表单成稿">
       <div className="sb">
         <span className="cap">按表单成稿 · {form.code} {form.title}</span>
         <button className="btn sm" onClick={onCancel} disabled={busy}>收起</button>
@@ -151,8 +151,8 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel, i
               const put = (nv) => setValues((x) => ({ ...x, [f.key]: nv }));
               if (f.type === "table") {
                 return (
-                  <div key={f.key} className="field" style={{ marginTop: 8 }}>
-                    <span>{f.label}{f.required ? " *" : ""}</span>
+                  <div key={f.key} className="field">
+                    <span className="fl">{f.label}{f.required ? " *" : ""}</span>
                     <TableField key={`${f.key}-${gen}`} f={f} value={v} onChange={put} />
                     <span className="sub">{f.hint}{err ? <span className="err"> · {err}</span> : null}</span>
                     <Example text={f.example} />
@@ -162,8 +162,8 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel, i
               const set = (e) => put(e.target.value);
               const count = f.type === "list" ? `${listCount(v)}/${MAX_LIST_ITEMS} 项` : `${v.trim().length}/${f.max} 字`;
               return (
-                <label key={f.key} className="field" style={{ display: "block", marginTop: 8 }}>
-                  <span>{f.label}{f.required ? " *" : ""}</span>
+                <label key={f.key} className="field">
+                  <span className="fl">{f.label}{f.required ? " *" : ""}</span>
                   {f.type === "text"
                     ? <input value={v} onChange={set} placeholder={f.example || f.hint || ""} aria-invalid={!!err} />
                     : <textarea rows={f.type === "list" ? 4 : 3} value={v} onChange={set} placeholder={f.example || f.hint || (f.type === "list" ? "每行一项" : "")} aria-invalid={!!err} />}
@@ -178,9 +178,9 @@ export default function DeliverableForm({ code, dcode, form, onDone, onCancel, i
         // A28①：没有必填项的章节已按产品配置和公司标准写法预填，默认收起；有未通过检查的字段时展开
         const needs = s.fields.some((f) => f.required || (touched && errors[f.key]));
         return needs || !s.fields.length
-          ? <fieldset key={s.title} className="pnl pad" style={{ marginTop: 10 }}><legend className="cap">{s.title}</legend>{body}</fieldset>
+          ? <fieldset key={s.title} className="pnl pad dsec"><legend className="cap">{s.title}</legend>{body}</fieldset>
           : (
-            <details key={s.title} className="pnl pad" style={{ marginTop: 10 }}>
+            <details key={s.title} className="pnl pad dsec">
               <summary><span className="cap">{s.title}</span> <span className="sub">已预填 · 可展开修改</span></summary>
               {body}
             </details>
