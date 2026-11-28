@@ -33,6 +33,7 @@ sections:
   - {key: in_scope, label: 本次范围（每行一项）, type: list, required: true, example: "安全运营现状评估\n运营组织与流程设计\n运营制度文件编写\n实施路线图"}
   - {key: out_of_scope, label: 不包含项（每行一项）, type: list, required: true, example: "等级保护测评\n安全设备采购与部署\n渗透测试"}
   - {key: assumptions, label: 前提与依赖（每行一项）, type: list, example: "客户在启动后 1 周内提供资料清单所列资料\n关键岗位人员可按排期参加访谈"}
+  - {key: client_requirements, label: 客户对交付件的要求（每行一项）, type: list, hint: 客户书面提出的格式、口径、章节要求，平台逐条转成项目定制项；增删章节须项目经理确认, example: "D4 统一称“安全运营中心”，不用“SOC”\nD5 增加《外包管理》一章"}
   template: |
     ### 服务范围
 
@@ -51,6 +52,12 @@ sections:
     本项目按计划实施的前提如下：
 
     {assumptions}
+
+    ### 客户对交付件的要求
+
+    客户对交付件提出的要求如下：
+
+    {client_requirements}
   fixed_title: 服务性质说明
   fixed: 本项目提供差距分析、符合性初判与整改建议，不出具等级保护测评结论、商用密码应用安全性评估结论或认证结论。
 - title: 工作方法与方法论
