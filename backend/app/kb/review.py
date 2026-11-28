@@ -36,7 +36,7 @@ from ..core.db import KB_BIND, utcnow
 from ..core.permissions import KNOWLEDGE_ADMIN, KNOWLEDGE_EXPERT, roles_of
 from ..models import KbChunk, KbDeidReport, KbItem, KbReview, KbUpload, KbVersion, User
 from ..services import guard, storage
-from . import labels, meta, multilang, parse
+from . import labels, meta, multilang, parse, poison, refs
 from .items import ItemMeta, VersionContent, create_draft, create_item, replace_mapping_rows
 
 ROLE_OF = {"content": KNOWLEDGE_EXPERT, "compliance": KNOWLEDGE_ADMIN}
@@ -116,6 +116,12 @@ def _source_fields(db: Session, c: VersionContent, upload_id: int | None, ai_bas
     return {"deid_status": "not_needed"}
 
 
+def _check_derived(db: Session, doc_id: str) -> None:
+    """派生条目（解读、做法）挂的依据条目必须存在（四期 B42 第⑥层：清除依据时一起清）。"""
+    if doc_id and doc_id not in refs.resolve(db, [doc_id]):
+        raise ReviewError(422, f"派生自的条目 {doc_id} 不存在")
+
+
 def _apply(v: KbVersion, fields: dict) -> None:
     for k, val in fields.items():
         setattr(v, k, val)
@@ -131,13 +137,15 @@ def new_item(db: Session, user: User, m: ItemMeta, c: VersionContent, upload_id:
     try:
         m.check()
         multilang.check_link(db, m.translation_of, m.language)     # 四期 B28①：译文必须挂原文
+        _check_derived(db, m.derived_from)
         v = create_item(db, m, c, created_by=user.username)
     except meta.MetaError as e:
         raise ReviewError(422, str(e)) from e
     _apply(v, fields)
+    v.batch_key = poison.batch_key(user.username, upload_id)
     db.commit()
     audit.record(db, actor=user.username, action="kb.draft", result="allowed", doc_id=v.item.doc_id,
-                 version=v.version, upload_id=upload_id)
+                 version=v.version, upload_id=upload_id, batch=v.batch_key)
     return v
 
 
@@ -164,8 +172,10 @@ def new_version(db: Session, user: User, item: KbItem, c: VersionContent, upload
     except meta.MetaError as e:
         raise ReviewError(422, str(e)) from e
     _apply(v, fields)
+    v.batch_key = poison.batch_key(user.username, upload_id)
     db.commit()
-    audit.record(db, actor=user.username, action="kb.draft", result="allowed", doc_id=item.doc_id, version=v.version)
+    audit.record(db, actor=user.username, action="kb.draft", result="allowed", doc_id=item.doc_id, version=v.version,
+                 batch=v.batch_key)
     return v
 
 
@@ -219,10 +229,16 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
                          version=v.version, reason="citation_pending", pending=len(todo))
             raise ReviewError(422, f"引用待核 {len(todo)} 处：{'、'.join(todo[:5])}{' 等' if len(todo) > 5 else ''}。"
                                    "库里没有对应的依据原文或条款目录：先把原文切条入库（kb-source-split），或改正引用")
+    try:                                    # 四期 B42：冻结批次拒收、指令退回并冻结、事实与提交人记录打标
+        poison.screen(db, v, user.username)
+    except poison.PoisonError as e:
+        audit.record(db, actor=user.username, action="kb.submit", result="blocked", doc_id=v.item.doc_id,
+                     version=v.version, reason="poison")
+        raise ReviewError(e.status, str(e)) from e
     v.status, v.submitted_by, v.submitted_at = "in_review", user.username, utcnow()
     db.commit()
     audit.record(db, actor=user.username, action="kb.submit", result="allowed", doc_id=v.item.doc_id,
-                 version=v.version)
+                 version=v.version, flags=v.poison_flags or [], single_source=v.single_source)
     from . import agent_review              # 公开资料的解读、映射等交知识审核 Agent（二期 B11），后台执行；
     job = None
     if get_settings().kb_agent_auto_publish or level3(v):   # 第三级只出意见（B12），不受自动发布开关影响
@@ -238,7 +254,7 @@ def submit(db: Session, user: User, v: KbVersion) -> KbVersion:
 def self_review_allowed(v: KbVersion) -> bool:
     """公开资料单人发布：开关打开、来源为公开资料且无需去标识时，作者本人可以审核。"""
     return (get_settings().kb_single_reviewer_public and v.item.knowledge_kind not in meta.EXPERT_ONLY_KINDS and v.source_type == "public"
-            and v.deid_status == "not_needed")
+            and v.deid_status == "not_needed" and not poison.requires_expert(v))
 
 
 def _authors(v: KbVersion) -> set[str]:
@@ -250,6 +266,9 @@ def review(db: Session, user: User, v: KbVersion, role: str, decision: str, comm
         audit.record(db, actor=user.username, action="kb.review", result="blocked", doc_id=v.item.doc_id,
                      version=v.version, reason=reason)
         raise ReviewError(status, message)
+
+    if v.item.frozen_by:
+        deny(409, "frozen", f"条目已被投毒事件 #{v.item.frozen_by} 冻结，处置完成前不能审核")
 
     if role not in ROLE_OF or decision not in meta.REVIEW_DECISIONS:
         raise ReviewError(422, "role 只能是 content / compliance，decision 只能是 approve / reject")
@@ -322,6 +341,10 @@ def _check_multilang(db: Session, v: KbVersion, actor: str, action: str) -> None
 
 def publish(db: Session, v: KbVersion) -> None:
     item = v.item
+    if item.frozen_by:                              # 四期 B42：冻结中的条目守住所有发布入口
+        audit.record(db, actor="platform", action="kb.publish", result="blocked", doc_id=item.doc_id,
+                     version=v.version, reason="frozen")
+        raise ReviewError(409, f"条目已被投毒事件 #{item.frozen_by} 冻结，处置完成前不能发布")
     _check_multilang(db, v, "platform", "kb.publish")
     if item.knowledge_kind in meta.EXPERT_ONLY_KINDS and not expert_confirmed(v):   # 三期 B35：守住所有发布入口
         audit.record(db, actor="platform", action="kb.publish", result="blocked", doc_id=item.doc_id,

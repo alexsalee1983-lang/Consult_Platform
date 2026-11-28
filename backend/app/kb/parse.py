@@ -1,6 +1,8 @@
 """投料解析：把 Word / PDF / Markdown / 网页 / 文本解析成“章节 + 正文”，再切成检索用的片段。
 
 - 只在本地解析，不联网；不执行文件中的宏、不加载外部引用。
+- 入口清洗（四期 B42 投毒防护第②层）：只取可见正文——Word 的隐藏文字（w:vanish）、修订删除、批注、文档属性不取；
+  Markdown 的 HTML 注释、网页的注释和隐藏元素（hidden、display:none 等）去掉；零宽、方向控制等不可见格式字符去掉。去掉的段数记在 ParsedDoc.hidden，只记个数。
 - 文件类型以内容判断（文件头），扩展名只作参考：.docx 必须是 zip、PDF 必须以 %PDF 开头、文本必须能按 UTF-8 解码。
 - 网页（.html/.htm）用标准库 html.parser 去标签取正文，丢弃脚本、样式、导航、页头页脚；h1～h6 作章节标题。
 - 扫描件（PDF 每页几乎没有文字）判为不支持：OCR 一期不做（决策记录 2026-11-08），提示提供文字版。
@@ -40,6 +42,7 @@ class ParsedDoc:
     kind: str               # docx / pdf / markdown / text
     sections: list[Section] = field(default_factory=list)
     pages: int = 0
+    hidden: int = 0         # 入口清洗去掉的隐藏文字段数、不可见字符个数（B42）
 
     @property
     def chars(self) -> int:
@@ -74,12 +77,58 @@ def parse(filename: str, data: bytes) -> ParsedDoc:
         raise ParseError(f"文件超过 {MAX_BYTES // 1024 // 1024}MB")
     kind = detect_kind(filename, data)
     doc = {"docx": _docx, "pdf": _pdf, "markdown": _markdown, "html": _html, "text": _text}[kind](data)
+    _clean(doc)
     doc.sections = [s for s in doc.sections if s.text.strip()]
     if not doc.sections:
         raise ParseError("没有解析出文字内容")
     if doc.chars > MAX_CHARS:
         raise ParseError(f"正文超过 {MAX_CHARS // 10000} 万字，请拆分后上传")
     return doc
+
+
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
+
+
+def _clean(doc: ParsedDoc) -> None:
+    """去掉不可见格式字符（Unicode Cf）和 Markdown 的 HTML 注释，计入 doc.hidden。"""
+    from ..services.guard import invisible_count, strip_invisible
+
+    for s in doc.sections:
+        for part in ("heading", "text"):
+            t = getattr(s, part)
+            n = invisible_count(t)
+            if doc.kind in ("markdown", "text"):
+                t, k = _HTML_COMMENT.subn("", t)
+                n += k
+            if n:
+                doc.hidden += n
+                setattr(s, part, strip_invisible(t))
+
+
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def _hidden_run(r) -> bool:
+    rpr = r.find(_W + "rPr")
+    v = rpr.find(_W + "vanish") if rpr is not None else None
+    return v is not None and v.get(_W + "val") not in ("0", "false", "off")
+
+
+def _visible(el, counter: list[int]) -> str:
+    """段落或单元格里可见的文字：跳过隐藏文字的 run；修订删除的文字在 w:delText 里，本来就不取。"""
+    out: list[str] = []
+    for r in el.iter(_W + "r"):
+        if _hidden_run(r):
+            counter[0] += 1
+            continue
+        for t in r:
+            if t.tag == _W + "t":
+                out.append(t.text or "")
+            elif t.tag == _W + "tab":
+                out.append("\t")
+            elif t.tag in (_W + "br", _W + "cr"):
+                out.append("\n")
+    return "".join(out)
 
 
 # ---- 各格式 ----
@@ -111,6 +160,9 @@ _HTML_SKIP = {"script", "style", "noscript", "template", "head", "nav", "header"
               "form", "select", "button", "iframe", "svg", "object"}
 _HTML_BLOCK = {"p", "div", "br", "li", "ul", "ol", "tr", "table", "section", "article", "main", "dd", "dt",
                "dl", "blockquote", "pre", "hr", "caption", "figure", "figcaption"}
+_HTML_VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+_HTML_HIDDEN_STYLE = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?![.\d])|"
+                                r"opacity\s*:\s*0(?![.\d])", re.I)
 _HTML_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_-]+)""", re.I)
 
 
@@ -123,6 +175,18 @@ class _HtmlText(HTMLParser):
         self.skip = 0
         self.level = 0
         self.buf: list[str] = []
+        self.hidden = 0             # B42 入口清洗：去掉的隐藏元素和注释个数
+        self.hide_tag = ""
+        self.hide_depth = 0
+
+    @staticmethod
+    def _is_hidden(attrs) -> bool:
+        a = {k.lower(): (v or "") for k, v in attrs}
+        return ("hidden" in a or a.get("aria-hidden", "").lower() == "true"
+                or bool(_HTML_HIDDEN_STYLE.search(a.get("style", ""))))
+
+    def handle_comment(self, data: str) -> None:
+        self.hidden += 1
 
     def _end_line(self) -> None:
         # 只合并 ASCII 空白，保留法条里常见的全角空格
@@ -132,6 +196,13 @@ class _HtmlText(HTMLParser):
         self.buf.clear()
 
     def handle_starttag(self, tag: str, attrs) -> None:
+        if self.hide_tag:
+            self.hide_depth += tag == self.hide_tag
+            return
+        if tag not in _HTML_VOID and self._is_hidden(attrs):    # 隐藏元素整体不取（B42 第②层）
+            self.hide_tag, self.hide_depth = tag, 1
+            self.hidden += 1
+            return
         if tag in _HTML_SKIP:
             self.skip += 1
         elif self.skip:
@@ -145,10 +216,16 @@ class _HtmlText(HTMLParser):
             self.buf.append(" | ")
 
     def handle_startendtag(self, tag: str, attrs) -> None:
-        if not self.skip and tag in _HTML_BLOCK:
+        if not self.skip and not self.hide_tag and tag in _HTML_BLOCK:
             self._end_line()
 
     def handle_endtag(self, tag: str) -> None:
+        if self.hide_tag:
+            if tag == self.hide_tag:
+                self.hide_depth -= 1
+                if not self.hide_depth:
+                    self.hide_tag = ""
+            return
         if tag in _HTML_SKIP:
             self.skip = max(0, self.skip - 1)
         elif self.skip:
@@ -160,7 +237,7 @@ class _HtmlText(HTMLParser):
             self._end_line()
 
     def handle_data(self, data: str) -> None:
-        if not self.skip:
+        if not self.skip and not self.hide_tag:
             self.buf.append(data)
 
 
@@ -175,7 +252,9 @@ def _html(data: bytes) -> ParsedDoc:
     p.feed(text if text is not None else _decode_text(data))
     p.close()
     p._end_line()
-    return ParsedDoc("html", _by_headings(p.lines))
+    doc = ParsedDoc("html", _by_headings(p.lines))
+    doc.hidden = p.hidden
+    return doc
 
 
 def _by_headings(lines) -> list[Section]:
@@ -217,24 +296,29 @@ def _docx(data: bytes) -> ParsedDoc:
     except Exception as e:  # noqa: BLE001
         raise ParseError("Word 文件无法打开（可能已损坏或加密）") from e
 
+    hidden = [0]
+
     def lines():
-        for block in _docx_blocks(d):
+        for block in _docx_blocks(d, hidden):
             if isinstance(block, str):
                 yield 0, block
                 continue
+            text = _visible(block._p, hidden)
             style = (block.style.name or "") if block.style is not None else ""
             m = re.match(r"(?:Heading|标题)\s*(\d)", style)
             if m:
-                yield int(m.group(1)), block.text
+                yield int(m.group(1)), text
             elif style == "Title":
-                yield 1, block.text
+                yield 1, text
             else:
-                yield 0, block.text
+                yield 0, text
 
-    return ParsedDoc("docx", _by_headings(lines()))
+    doc = ParsedDoc("docx", _by_headings(lines()))
+    doc.hidden = hidden[0]
+    return doc
 
 
-def _docx_blocks(d):
+def _docx_blocks(d, hidden: list[int]):
     """按文档顺序给出段落和表格（表格转成“单元格 | 单元格”的行文字）。"""
     from docx.table import Table
     from docx.text.paragraph import Paragraph
@@ -248,7 +332,7 @@ def _docx_blocks(d):
             for row in Table(child, d).rows:
                 cells = []
                 for c in row.cells:
-                    t = c.text.strip().replace("\n", " ")
+                    t = " ".join(_visible(p, hidden) for p in c._tc.iter(_W + "p")).strip().replace("\n", " ")
                     if not cells or cells[-1] != t:     # 合并单元格会重复出现
                         cells.append(t)
                 rows.append(" | ".join(cells))

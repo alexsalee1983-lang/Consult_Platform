@@ -13,6 +13,7 @@ from .api import revision_features as revision_features_api   # 四期 F4②
 from .api import extraction as extraction_api   # 四期 F4③
 from .api import agent_md as agent_md_api   # 四期 F3②e
 from .api import stages as stages_api   # 四期 A27
+from .api import kb_poison as kb_poison_api   # 四期 B42
 from .api import customizations as customizations_api   # 四期 A30
 from .api import consultant_aids   # 四期 A32
 from .core import audit as core_audit
@@ -99,6 +100,7 @@ app.include_router(directory.router)
 app.include_router(kb.router)
 app.include_router(kb_items.router)
 app.include_router(kb_batches.router)
+app.include_router(kb_poison_api.router)   # 四期 B42 投毒处置
 app.include_router(readiness.router)
 app.include_router(kb_feedback.router)
 app.include_router(quality_incidents.router)

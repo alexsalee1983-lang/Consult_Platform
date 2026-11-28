@@ -88,7 +88,8 @@ class Outcome:
 
 
 def eligible(v: KbVersion) -> bool:
-    return (v.item.doc_type in TYPES and v.source_type == "public" and v.deid_status == "not_needed")
+    return (v.item.doc_type in TYPES and v.source_type == "public" and v.deid_status == "not_needed"
+            and not v.poison_flags and not v.item.frozen_by)      # 四期 B42 第③层：有防护标记的不交 Agent 自动发布
 
 
 def advisory(v: KbVersion) -> bool:

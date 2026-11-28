@@ -39,6 +39,7 @@ class ItemMeta:
     jurisdiction: str = "CN"
     translation_of: str = ""
     translation_notice: str = ""
+    derived_from: str = ""         # 四期 B42 第⑥层：解读、做法等派生条目挂依据条目编号，清除时一起清
 
     def check(self) -> None:
         meta.check_classification(self.layer, self.domain, self.product, self.doc_type)
@@ -126,6 +127,8 @@ def _generator(db: Session, item: KbItem, c: VersionContent) -> dict:
 
 
 def _new_version(db: Session, item: KbItem, c: VersionContent, created_by: str) -> KbVersion:
+    if not created_by.strip():          # 四期 B42 第①层：实名可追责，没有匿名入口
+        raise meta.MetaError("知识条目必须记提交人（没有匿名入口）")
     c.check(item.layer)
     rows = mapping.parse_rows(c.body) if item.doc_type == "MAP" else []   # 映射矩阵：正文表格必须能解析（B3）
     n = (db.scalar(select(func.max(KbVersion.version)).where(KbVersion.item_id == item.id)) or 0) + 1
@@ -160,6 +163,7 @@ def create_item(db: Session, m: ItemMeta, c: VersionContent, created_by: str, re
                       visible_roles=list(m.visible_roles), owner=m.owner, tags=list(m.tags), control_ids=list(m.control_ids),
                       knowledge_kind=kind, slot=m.slot, language=m.language, jurisdiction=m.jurisdiction,
                       translation_of=m.translation_of, translation_notice=m.translation_notice,
+                      derived_from=m.derived_from,
                       created_by=created_by)
         db.add(item)
         try:

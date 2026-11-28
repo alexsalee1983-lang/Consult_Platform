@@ -49,6 +49,7 @@ KINDS: dict[str, str] = {
     "practice": "公司做法确认",
     "source_confirm": "来源确认",
     "selfeval": "客户自评",
+    "poison": "疑似投毒处置",                           # 四期 B42：知识管理员核实、咨询业务负责人批准
     "kb_alarm": "入库报警",                             # 四期 B41⑥：采集回传入库数为 0 或正文率低（app/kb/gap_loop.py）
 }
 UNAVAILABLE = {"practice", "source_confirm"}           # 接口未合并（#283、#297），先留空位
@@ -258,6 +259,11 @@ def collect(db: Session, user: User) -> list[Task]:
                 tasks.append(_kb_task("recheck", v, usage,
                                       "你是作者，需另一位知识专家复查" if me in rv._authors(v) else "",
                                       v.recheck_at or v.published_at))
+    from ..kb import poison                             # 四期 B42：投毒处置卡，影响最高，置顶
+
+    for p in poison.tasks(db, user):
+        tasks.append(Task(kind="poison", ref_id=p["ref_id"], title=p["title"], link="/kb/poison", impact=5.0,
+                          blocked=p["blocked"], created_ts=_ts(poison._aware(p["created_at"]))))
     if KNOWLEDGE_ADMIN in roles:
         for u in db.scalars(select(KbUpload).where(KbUpload.status == "deid_pending")):
             tasks.append(Task(kind="deid", ref_id=u.id, title=f"上传 #{u.id}", link="/kb/intake", impact=1.0,

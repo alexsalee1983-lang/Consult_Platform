@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ..core import audit
 from ..core.config import get_settings
 from ..models import KbItem, KbVersion, User
-from . import labels, meta, multilang
+from . import labels, meta, multilang, poison
 from . import review as rv
 from .files import Entry, EntryError, parse_entry
 
@@ -103,13 +103,15 @@ def import_dir(db: Session, user: User, path: Path, submit: bool = False, ai_bas
                    and not any(part.startswith(("_", ".")) for part in p.relative_to(path).parts))
     results: list[ImportResult] = []
     seen: dict[str, str] = {}
+    key = poison.import_batch_key(str(path.resolve()))      # 四期 B42 第①层：同一次导入记同一批次，可一键清除
     for f in files:
         try:
             e = parse_entry(f.read_text(encoding="utf-8"))
             if e.key in seen:
                 raise EntryError(f"key 与 {seen[e.key]} 重复")
             seen[e.key] = f.name
-            r = import_entry(db, user, e, submit, ai_baseline)
+            with poison.batch(key):
+                r = import_entry(db, user, e, submit, ai_baseline)
         except (EntryError, rv.ReviewError) as ex:
             db.rollback()
             r = ImportResult(file="", action="error", message=str(ex))
