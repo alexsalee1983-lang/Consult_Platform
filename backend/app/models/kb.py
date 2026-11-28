@@ -46,6 +46,9 @@ class KbItem(KbBase):
     # 后两类必须由作者以外的知识专家人工确认才能发布。slot：C10 章节槽位键，选填
     knowledge_kind: Mapped[str] = mapped_column(String(16), default="", server_default="", index=True)
     slot: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # 条目分级（四期 B43，知识区迁移 k0025，app/kb/grade.py）：candidate 候选 / usable 可用 / recommended 推荐；
+    # 新条目从候选起，靠实际使用逐级升、被反复驳回或报“有误”的降级；未经专家认可的 AI 基线最多到候选
+    grade: Mapped[str] = mapped_column(String(16), default="candidate", server_default="candidate", index=True)
     # 多语言与海外法规（四期 B28①，知识区迁移 k0021，app/kb/multilang.py）：language 原文语种、jurisdiction 辖区；
     # 译文条目 translation_of 挂原文条目编号，translation_notice 必须是“非官方译本”，引用与导出回溯到原文条款
     language: Mapped[str] = mapped_column(String(16), default="zh", server_default="zh")
@@ -211,6 +214,28 @@ class KbPracticeDecision(KbBase):
     elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)            # 卡片打开到拍板（前端计时，封顶 1 小时）
     change_ratio: Mapped[float] = mapped_column(Float, default=0.0)        # 修改幅度 0～1（1 - 相似度），采纳、驳回为 0
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbExpertProfile(KbBase):
+    """四期 B44④：专家档案——擅长的服务产品、行业，按专长派审核卡（迁移 k0023）。"""
+    __tablename__ = "kb_expert_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    products: Mapped[list] = mapped_column(JSON, default=list)       # meta.PRODUCTS 的键
+    industries: Mapped[list] = mapped_column(JSON, default=list)     # meta.INDUSTRIES（空 = 不限行业）
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbReviewAssignment(KbBase):
+    """四期 B44④：待审版本按专长派给的知识专家（迁移 k0023）。没有记录 = 没有匹配，发全体知识专家。"""
+    __tablename__ = "kb_review_assignments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version_id: Mapped[int] = mapped_column(ForeignKey("kb_versions.id", ondelete="CASCADE"), unique=True)
+    assignee: Mapped[str] = mapped_column(String(64), index=True)
+    score: Mapped[int] = mapped_column(Integer, default=1)          # 1 产品对上；2 产品和行业都对上
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class KbUpload(KbBase):
@@ -400,8 +425,16 @@ class KbGap(KbBase):
     due: Mapped[date | None] = mapped_column(Date, nullable=True)
     authority: Mapped[int] = mapped_column(Integer, default=3)
     status: Mapped[str] = mapped_column(String(12), default="open", index=True)
-    plan: Mapped[str] = mapped_column(String(12), default="")  # direct / confirm / deferred / waiting / confirmed / manual / uploaded
+    plan: Mapped[str] = mapped_column(String(12), default="")  # direct / confirm / deferred / waiting / confirmed / manual / uploaded / unavailable
     manual_reason: Mapped[str] = mapped_column(String(16), default="")          # 需人工下载的原因类别（k0022）
+    # 四期 B41（k0026）：缺什么、取正文网址与来路、失败次数、来源推荐次数
+    need: Mapped[str] = mapped_column(String(8), default="")                    # 法规 / 标准 / 样例 / 条目
+    source_url: Mapped[str] = mapped_column(String(500), default="")            # 要取的正文网址（缺口键是编号时下发包用它）
+    source_via: Mapped[str] = mapped_column(String(8), default="")              # agent 来源推荐 / listing 栏目页解析
+    attempts: Mapped[int] = mapped_column(Integer, default=0)                   # 获取失败次数，满 3 次标暂无可用来源
+    unavailable_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rec_total: Mapped[int] = mapped_column(Integer, default=0)                  # 来源推荐次数（含被程序校验丢弃的）
+    rec_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     score: Mapped[float] = mapped_column(Float, default=0.0)
     planned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     close_reason: Mapped[str] = mapped_column(String(16), default="")
@@ -409,3 +442,24 @@ class KbGap(KbBase):
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbAlarm(KbBase):
+    """入库报警卡（四期 B41，知识区迁移 k0026）：一批采集回传导入后入库数为 0 或正文率低于门槛，推给知识管理员。
+
+    同一类未处理的报警合成一张（count 加一）；只存批次哈希前缀和计数，不存文件名、网址和正文。
+    下一批正常入库时平台自动关闭（resolved_by=platform），知识管理员也可手动标已处理。规则只在 app/kb/gap_loop.py。
+    """
+
+    __tablename__ = "kb_alarms"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))                               # zero_intake / low_body
+    status: Mapped[str] = mapped_column(String(12), default="open", index=True)  # open / resolved
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    batches: Mapped[list] = mapped_column(JSON, default=list)                   # 批次哈希前缀（最多 20 个）
+    counts: Mapped[dict] = mapped_column(JSON, default=dict)                    # 最近一批：files / body / listing / stored
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    resolved_by: Mapped[str] = mapped_column(String(64), default="")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

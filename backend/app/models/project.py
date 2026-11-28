@@ -28,6 +28,8 @@ class Project(Base):
     # 删除（M4 ②，迁移 0025，规则见 app/project/deletion.py）
     flowback_allowed: Mapped[bool] = mapped_column(Boolean, server_default=sql_true())   # 客户不同意回流时为 False
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    terminated_on: Mapped[date | None] = mapped_column(Date, nullable=True)   # 四期 A31 ⑦：项目终止日，保留期从这天起算
+    terminate_reason: Mapped[str] = mapped_column(String(200), server_default="")
     # 组织类型（迁移 0038，取值见 app/project/configs.ORG_TYPES，可空）：经验按组织类型分层用
     org_type: Mapped[str] = mapped_column(String(16), server_default="")
 
@@ -86,6 +88,10 @@ class Confirmation(Base):
     choice: Mapped[str] = mapped_column(String(8), default="")       # 顾问选的选项 key；自己写意见时为空
     resolved_by: Mapped[str] = mapped_column(String(64), default="")
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 四期 A31（主链 0060）：平台卡关联的对象（evidence:D-03 / run:12 / deliverable:D4 / section:D4:3），
+    # 提醒阶段 0 / 1 三个工作日未处理已提醒 / 2 七天未处理已升级项目经理（app/project/loops.py）
+    subject: Mapped[str] = mapped_column(String(64), server_default="")
+    remind_stage: Mapped[int] = mapped_column(Integer, server_default="0")
 
     project: Mapped[Project] = relationship(back_populates="confirmations")
 

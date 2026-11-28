@@ -13,7 +13,7 @@ from ..core.db import get_db
 from ..core.config import get_settings
 from ..core.permissions import PROJECT_LEAD, project_for_member, require_business, roles_of
 from ..models import User
-from ..services import automation_ledger, indicators, indicators_v4, quality_incidents
+from ..services import automation_ledger, indicators, indicators_drift, indicators_v4, quality_incidents
 
 router = APIRouter(prefix="/api", tags=["indicators"], dependencies=[Depends(require_business)])
 
@@ -29,6 +29,16 @@ def get_indicators(days: int = Query(30, ge=1, le=366), db: Session = Depends(ge
             "quality_incidents": quality_incidents.summary(db, end),   # 四期 F3：质量事件只出计数
             "automation": {**automation_ledger.acceptance(db, start, end),     # 四期 F5：三条验收与自适应抽检
                            "spot": automation_ledger.adaptive_spot_rate(db, _base_rate())}}
+
+
+@router.get("/indicators/drift")
+def get_drift(weeks: int = Query(8, ge=1, le=52), db: Session = Depends(get_db),
+              user: User = Depends(current_user)) -> dict:
+    """四期 A31 ⑩：判断数据埋点关闭时的按周漂移指标（确认卡推荐率、评审阻断数、改稿幅度分桶），无正文。"""
+    if PROJECT_LEAD not in roles_of(db, user.id):
+        raise HTTPException(403, "指标看板只给项目负责人")
+    end = datetime.now(timezone.utc)
+    return {"weeks_n": weeks, **indicators_drift.weekly(db, end - timedelta(days=7 * weeks), end)}
 
 
 def _base_rate() -> float:

@@ -259,7 +259,10 @@ def sample_check(db: Session, user: User, v: KbVersion, decision: str, comment: 
         raise rv.ReviewError(422, "decision 只能是 pass / fail")
     if KNOWLEDGE_EXPERT not in roles_of(db, user.id):
         deny(403, "role_mismatch", "抽检须由知识专家进行")
-    sample = v.auto_review in (PLATFORM, AGENT) and v.sample_state not in ("passed", "failed")
+    from . import compliance_auto               # 四期 B43：合规关自动通过、被抽中的人审版本也在这里抽检
+
+    sample = ((v.auto_review in (PLATFORM, AGENT) or compliance_auto.auto_passed(v))
+              and v.sample_state not in ("passed", "failed"))
     recheck = v.recheck_state == "pending"           # 使用反馈待复查（B13）：人审版本也可以，不计入抽检不通过率
     shadow = v.status == candidate.STATUS and not v.item.retired          # 候选（三期 B24①）
     current = v.item.current_version_id == v.id and not v.item.retired and v.status == "published"

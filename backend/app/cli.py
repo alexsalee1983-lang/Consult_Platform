@@ -378,6 +378,18 @@ def kb_candidate_promote(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_grade_scan(args: argparse.Namespace) -> int:
+    """条目分级（四期 B43，worker 每天自动执行）：按使用信号把条目在候选、可用、推荐之间升降，候选仍有负面信号的标待复查。"""
+    from .kb import grade
+    with SessionLocal() as db:
+        r = grade.scan(db, actor="cli", dry_run=args.dry_run)
+    head = "（只列出，未改动）" if args.dry_run else ""
+    for key, label in (("up", "升级"), ("down", "降级"), ("capped", "按封顶压回"), ("recheck", "标待复查")):
+        items = getattr(r, key)
+        print(f"{label}{head} {len(items)} 条" + ("：" + "、".join(items[:50]) if items else ""))
+    return 0
+
+
 def kb_agent_review_rerun(args: argparse.Namespace) -> int:
     """积压重跑（四期试用缺陷，负责人 2026-11-25 同意）：待审版本里，规则预判上线前知识审核 Agent 判
     “不重复、不冲突”没过的，各排一次 kb.agent_review（rerun）。--dry-run 只按规则预判类别打印计数，不排队。
@@ -898,7 +910,7 @@ def kb_source_seed(args: argparse.Namespace) -> int:
                     src = sr.create(db, user, name=row.get("name") or "", url=url, license=row.get("license") or "",
                                     authority_kind=(row.get("authority_kind") or "").strip(),
                                     publisher=row.get("publisher") or "", note=row.get("note") or "")
-                    if args.to == "trial":
+                    if args.to == "trial" and src.status == "candidate":    # 官方域名的已自动转正式（四期 B43）
                         sr.transition(db, user, src.code, "trial", "批量登记（资料仓已批准来源清单）")
                 except sr.SourceError as e:
                     db.rollback()
@@ -1000,26 +1012,43 @@ def kb_acquire_import(args: argparse.Namespace) -> int:
         print("回传批次核对未通过，整批不入库：" + "；".join(report.problems[:20]), file=sys.stderr)
         return 2
     print(f"回传批次核对通过：{report.count} 个文件，关闭缺口 {closed} 个"
-          + (f"，{report.manual} 个取不到的转需人工下载" if report.manual else ""))
+          + (f"，{report.manual} 个取不到的转需人工下载" if report.manual else "")
+          + (f"，{report.unavailable} 个失败满 3 次标暂无可用来源" if report.unavailable else "")
+          + (f"；栏目页 {len(report.listing)} 个（不入库），解析出正文网址 {report.next_round} 个进下一轮下发包"
+             if report.listing else ""))
+
+    def intake(stored: int | None) -> None:                # 四期 B41⑥：入库数为 0 或正文率低 → 报警卡
+        from .kb import gap_loop
+
+        with SessionLocal() as db:
+            if gap_loop.check_intake(db, batch, report, stored, actor="cli") is not None:
+                print("本批入库异常（入库数为 0 或正文率低于门槛），已推入库报警卡给知识管理员", file=sys.stderr)
+
     if args.auto_manifest:
         import tempfile
 
         with SessionLocal() as db:
-            text, unmatched = gap_pool.publish_manifest(db, batch)
+            text, unmatched = gap_pool.publish_manifest(db, batch, skip=set(report.listing))
         if unmatched:
             print(f"{len(unmatched)} 个文件找不到正式来源，未入库（先在来源登记表登记后重导）：" + "、".join(unmatched[:20]))
         if len(text.splitlines()) <= 1:
+            intake(0)
             return 0
         with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8") as fh:
             fh.write(text)
         args.manifest = fh.name
     if not args.manifest:
+        intake(None)
         return 0
     if not args.as_user:
         print("带 --manifest 入库时必须指定 --as", file=sys.stderr)
         return 1
-    return kb_source_publish(argparse.Namespace(manifest=args.manifest, dir=str(batch), as_user=args.as_user,
-                                                report=args.report))
+    counts: dict[str, int] = {}
+    rc = kb_source_publish(argparse.Namespace(manifest=args.manifest, dir=str(batch), as_user=args.as_user,
+                                              report=args.report, counts=counts))
+    if rc == 0:
+        intake(counts["stored"] if "stored" in counts else None)
+    return rc
 
 
 def kb_gap_manual(args: argparse.Namespace) -> int:
@@ -1067,6 +1096,8 @@ def kb_source_publish(args: argparse.Namespace) -> int:
                        {"docs": len(r.docs), "published": sum(d.published for d in r.docs),
                         "manual": sum(d.manual for d in r.docs), "rejected": sum(d.rejected for d in r.docs),
                         "sampled": len(r.sampled), "suspended": bool(r.suspended)}, args.dir)
+    if isinstance(getattr(args, "counts", None), dict):         # 采集回传导入（B41⑥）要入库数
+        args.counts["stored"] = sum(d.published + d.manual + d.unchanged for d in r.docs)  # 无变化的已在库里
     print(f"合计：自动发布 {sum(d.published for d in r.docs)}，转人工 {sum(d.manual for d in r.docs)}；"
           f"抽检 {len(r.sampled)} 条（知识审批页“抽检”）")
     if args.report:
@@ -1484,6 +1515,9 @@ def main(argv: list[str] | None = None) -> int:
                          help="候选影子期晋级：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，抽检不通过的退回人工（worker 每天自动执行）")
     kcp.add_argument("--dry-run", action="store_true", help="只列出会晋级、退回的候选，不改动")
     kcp.set_defaults(func=kb_candidate_promote)
+    kgs = sub.add_parser("kb-grade-scan", help="条目分级（四期 B43）：按引用、采纳率和三键反馈在候选、可用、推荐之间升降（worker 每天自动执行）")
+    kgs.add_argument("--dry-run", action="store_true", help="只列出会升降的条目，不改动")
+    kgs.set_defaults(func=kb_grade_scan)
     ae = sub.add_parser("agent-eval", help="Agent 评测（二期 C4）：红线用例、黄金样例要点、埋雷，全部通过时退出码 0")
     ae.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
     ae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份调用（记用量）")

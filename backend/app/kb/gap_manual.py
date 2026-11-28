@@ -94,6 +94,7 @@ def _back_to_manual(db: Session, gap_id: int, why: str, actor: str) -> None:
     if row is not None and row.status == "open":
         row.plan, row.updated_at = gap_pool.MANUAL, utcnow()
         db.commit()
+        gap_pool.note_failure(db, row, actor=actor)     # 四期 B41：失败满 3 次标暂无可用来源
     audit.record(db, actor=actor, action="kb.gap.manual_import", result="blocked", gap_id=gap_id, problem=why)
 
 

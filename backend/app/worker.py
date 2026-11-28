@@ -113,6 +113,20 @@ def _scan_selfeval() -> None:
         log.warning("客户自评包提醒扫描出错：%s", type(e).__name__)
 
 
+def _scan_loops() -> None:
+    """四期 A31：确认卡 3 个工作日提醒、7 天升级项目经理；签署件引用条目下线发勘误卡（可重复执行）。"""
+    from .project import loops
+
+    try:
+        with SessionLocal() as db:
+            reminded = loops.scan_reminders(db)
+            errata = loops.scan_errata(db)
+        if reminded or errata:
+            log.info("确认卡提醒与升级 %d 张，勘误卡 %d 张", reminded, errata)
+    except Exception as e:  # noqa: BLE001
+        log.warning("交付侧闭环扫描出错：%s", type(e).__name__)
+
+
 def _scan_reconfirm() -> None:
     """平台规则（人工环节复查 K7）：复审到期的公开知识条目排知识审核 Agent 复查（可重复执行，本周期查过的不再排）。"""
     try:
@@ -183,6 +197,20 @@ def _daily() -> None:
     except Exception as e:  # noqa: BLE001
         log.warning("每日运维任务出错：%s", type(e).__name__)
     _reg_lifecycle()
+    _grade_scan()
+
+
+def _grade_scan() -> None:
+    """四期 B43：条目分级（候选 → 可用 → 推荐）按使用信号升降，只读库内计数、不调模型。"""
+    from .kb import grade
+
+    try:
+        with SessionLocal() as db:
+            r = grade.scan(db)
+        if any(r.counts().values()):
+            log.info("条目分级：%s", r.counts())
+    except Exception as e:  # noqa: BLE001
+        log.warning("条目分级任务出错：%s", type(e).__name__)
 
 
 def _reg_lifecycle() -> None:
@@ -242,6 +270,7 @@ def main() -> None:
             _sync_runtime_config()
             _scan_due()
             _scan_selfeval()
+            _scan_loops()
             _scan_reconfirm()
             _auto_flow()
             _verify_audit()

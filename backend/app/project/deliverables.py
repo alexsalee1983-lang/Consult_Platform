@@ -242,6 +242,7 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
                        model=model, model_family=family)
     s.versions.append(v)
     s.current_version, s.updated_at = v.version, utcnow()
+    s.stale_reason, s.stale_at = "", None          # 四期 A31⑫：上游变更后重写即算复核过
     _touch(d, user)
     try:
         db.flush()
@@ -249,6 +250,8 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
         db.rollback()
         raise DeliverableError(409, f"第 {seq} 章正在被同时修改，请刷新后重试") from e
     judgment.capture_edit(db, project, d, seq, current, v)
+    from . import customizations                   # 四期 A30：编辑器一次性定制项随本章新版本用掉（延迟导入免循环）
+    customizations.consume_one_time(db, project, d, seq)
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, section=seq, version=v.version, length=len(body), body_sha=sha[:16],
                  sources=sources["counts"], unresolved=len(sources["unresolved"]), agent=agent_code or None)
@@ -279,7 +282,8 @@ def outline(d: Deliverable) -> list[dict]:
         rows.append({"seq": s.seq, "title": s.title, "current_version": s.current_version,
                      "chars": v.char_count if v else 0, "updated_at": s.updated_at,
                      "sources": (v.sources or {}).get("counts", {}) if v else {},
-                     "unresolved": (v.sources or {}).get("unresolved", []) if v else []})
+                     "unresolved": (v.sources or {}).get("unresolved", []) if v else [],
+                     "stale": s.stale_reason or ""})
     return rows
 
 

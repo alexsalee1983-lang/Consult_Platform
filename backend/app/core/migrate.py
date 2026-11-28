@@ -35,7 +35,7 @@ from .db import kb_engine as default_kb_engine
 
 BASELINE = "0001_m0_baseline"
 KB_BASELINE = "k0001_kb_baseline"
-KB_TABLES = ("kb_gaps", "kb_practice_decisions", "kb_source_events", "kb_sources", "kb_control_mappings", "kb_control_checkpoints", "kb_controls", "kb_frameworks", "kb_item_labels", "kb_item_aliases", "kb_mappings", "kb_reviews", "kb_chunks", "kb_versions", "kb_deid_reports", "kb_uploads", "kb_items")  # 可按此顺序删
+KB_TABLES = ("kb_alarms", "kb_review_assignments", "kb_expert_profiles", "kb_gaps", "kb_practice_decisions", "kb_source_events", "kb_sources", "kb_control_mappings", "kb_control_checkpoints", "kb_controls", "kb_frameworks", "kb_item_labels", "kb_item_aliases", "kb_mappings", "kb_reviews", "kb_chunks", "kb_versions", "kb_deid_reports", "kb_uploads", "kb_items")  # 可按此顺序删
 _ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
 _LOCK_ID = 774_201_001  # 迁移专用的 advisory lock 编号，与审计链的锁区分
 log = logging.getLogger(__name__)

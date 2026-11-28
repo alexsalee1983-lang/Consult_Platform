@@ -47,6 +47,7 @@ MATRIX = [
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
     # 指标看板（三期 F2）：只给咨询业务负责人（负责人 200 在 test_indicators 里测）
     (("GET", "/api/indicators", None),                  (403, 403, 403, 403, 403)),
+    (("GET", "/api/indicators/drift", None),            (403, 403, 403, 403, 403)),
     # AI 质量事件台账（四期 F3）：台账只给咨询业务负责人；登记挂 BANK-A 须是成员（非成员 404）；
     # 他人事件详情和处置 404（负责人、项目经理、登记人在 test_quality_incidents 里测）
     (("GET", "/api/quality-incidents", None),           (403, 403, 403, 403, 403)),
@@ -73,6 +74,16 @@ MATRIX = [
                                                         (403, 403, 403, 403, 403)),
     (("POST", "/api/expert-bench/deid-preview", {"texts": {"how": "示范"}}),
                                                         (403, 403, 403, 403, 403)),
+    # 四期 B44：对照审核、修改后认可、分组成批认可、专家档案，同样只给知识专家（200 在 test_kb_expert_ux 里测）
+    (("GET", "/api/expert-bench/compare/999999", None), (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/cards/999999/revise", {"body": "## 做法\n\n示范"}),
+                                                        (403, 403, 403, 403, 403)),
+    (("GET", "/api/expert-bench/groups", None),         (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/batch-approve", {"version_ids": [999999]}),
+                                                        (403, 403, 403, 403, 403)),
+    (("GET", "/api/expert-bench/profile", None),        (403, 403, 403, 403, 403)),
+    (("PUT", "/api/expert-bench/profile", {"products": ["SOC"], "industries": []}),
+                                                        (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要咨询业务负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
@@ -80,6 +91,9 @@ MATRIX = [
                                                         (403, 403, 403, 403, 403)),
     # 验收与保留期（M4 ①）：member 是 BANK-A 项目经理，验收日写在将来 → 422（不改 BANK-A）；非成员 404
     (("POST", "/api/projects/BANK-A/acceptance", {"accepted_on": "2999-01-01"}), (422, 404, 403, 403, 403)),
+    # 四期 A31 ⑦⑧：结项清单成员可看；终止要项目经理，空原因 → 422（不改 BANK-A）；非成员 404
+    (("GET", "/api/projects/BANK-A/closeout", None),    (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/terminate", {"reason": ""}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/acceptance", {"accepted_on": "2026-01-01"}), (404, 404, 403, 403, 403)),
     # 删除（M4 ②）：确认队列只给咨询业务负责人（矩阵里没有这个角色，负责人的 200 在 test_deletion 里测）；
     # member 是 BANK-A 项目经理：收到日期写在将来 → 422（不在 BANK-A 留下申请）；非成员 404
@@ -165,6 +179,13 @@ MATRIX = [
     (("PUT", "/api/projects/BANK-A/deliverables/D7/sections/1", SECTION), (201, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
+    # 四期 A32 顾问便利性：Word 回传（成员无文件 422）、知识侧栏、确认卡证据并排；非成员 404
+    (("POST", "/api/projects/BANK-A/deliverables/D7/word-return", None), (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D2/word-return", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/kb-suggest", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/deliverables/D2/sections/1/kb-suggest", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/confirmations/evidence", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/confirmations/evidence", None), (404, 404, 403, 403, 403)),
     # 三期 A15 写稿助手：项目成员可用（演示模式流式返回），非成员 404
     (("POST", "/api/projects/BANK-A/deliverables/D7/sections/1/assist", {"prompt": "这一章怎么写？"}), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export", None), (200, 404, 403, 403, 403)),
@@ -206,6 +227,11 @@ MATRIX = [
     (("POST", "/api/projects/GRID-B/deliverables/D2/client-feedback", {"items": [{"text": "意见"}]}),
      (404, 404, 403, 403, 403)),
     (("GET", "/api/deliverables/batch-sign", None), (200, 200, 403, 403, 403)),
+    # 项目定制项（四期 A30）：成员可看可提，非成员和别的项目的定制项 404；结构类审批只给项目经理，在 test_customizations 里测
+    (("GET", "/api/projects/BANK-A/customizations", None), (200, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/customizations", {"source": "chat", "text": "D4 表格加编号列"}),
+     (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/customizations/999999/withdraw", None), (404, 404, 403, 403, 403)),
     (("POST", "/api/deliverables/batch-sign", {"items": [{"project": "GRID-B"}]}), (200, 200, 403, 403, 403)),
     # 驳回评审 Agent 的阻断（M3 ⑧）：评审不存在 404；非成员 404；驳回规则在 test_quality 里测
     (("POST", "/api/projects/BANK-A/deliverables/D7/reviews/999999/waivers", {"issue": 0, "reason": "理由"}),
@@ -255,6 +281,8 @@ MATRIX = [
     (("POST", "/api/kb/sources/confirm-queue/decide", {"gap_ids": [999999], "decision": "reject"}),
      (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/sources/manual-queue", None),     (403, 403, 403, 403, 403)),   # 需人工下载（四期 B25），同上
+    (("GET", "/api/kb/sources/alarms", None),           (403, 403, 403, 403, 403)),   # 入库报警卡（四期 B41），同上
+    (("POST", "/api/kb/sources/alarms/999999/resolve", None), (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/readiness", None),                (403, 403, 403, 403, 403)),   # F2②：知识专家、知识管理员、咨询业务负责人

@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: int = 120                # 等待模型回复（非流式整体 / 流式两段输出之间）的超时
     llm_max_retries: int = 2                      # 连接失败、超时、429、5xx 时重试次数（流式只在开始输出前重试）
     llm_retry_backoff_seconds: float = 1.0        # 指数退避基数：1s、2s、4s……
+    llm_max_concurrency: int = 0                  # 四期 A31⑪：同时在途的模型调用上限（0 = 不限），满了按 对话>交付链>知识后台 排队
     llm_max_continuations: int = 3                # 输出被截断（finish_reason=length）时最多续写几次，仍不完整按失败处理
     llm_health_ttl_seconds: int = 30              # 模型可用性检查结果缓存时间
     # 自动假名化：把项目卡中登记的客户名、人名、系统名替换成占位符再发给模型，回复里再换回来。
@@ -103,6 +104,14 @@ class Settings(BaseSettings):
     kb_sample_rate_agent: float = 0.2
     # 候选影子期（三期 B24①）：B10、B11 自动发布通过的版本先落 candidate，只供评测和影子检索，交付侧检索仍用旧的已发布版本；
     # 满 KB_CANDIDATE_DAYS 天且抽检没有判不通过的，每日计划任务自动晋级为 published。关掉回到自动发布直接 published。
+    # 四期 B43 收录标准与判定（app/kb/intake_criteria.py）：知识审核 Agent 按 6 条收录标准给四种判定之一。
+    # 关（默认）：判定只记录，非“收录”的一律不自动发布、转人工；开：评测达标后由负责人打开，“不收 / 合并为印证 / 退回补充”
+    # 由平台直接退回，不再等人，Agent 漏答收录标准或类型问题的也不算“收录”。
+    kb_intake_verdict_live: bool = False
+    # 四期 B43 公开资料合规关自动为主（app/kb/compliance_auto.py，负责人 2026-11-27“1可以”）：程序规则 + 知识审核 Agent
+    # 判合规，通过的平台记合规审核通过并按比例抽检；去标识没过、来源不在白名单、疑似投毒、抽检差错超门槛等例外才留给知识管理员。
+    kb_compliance_auto: bool = True
+    kb_sample_rate_compliance: float = 0.1
     kb_candidate_shadow: bool = True
     kb_candidate_days: int = 7
     # 有无知识库对比评测（二期 B1 补充）：kb-eval --compare 用知识库的准确率达标线；开启门禁时最近一次对比评测
@@ -118,6 +127,11 @@ class Settings(BaseSettings):
     kb_readiness_targets: str = ""
     # 官方来源白名单之外再认哪些网站（逗号分隔的域名，例如 tc260.org.cn）；内置 gov.cn、nist.gov
     kb_source_hosts: str = ""
+    # 四期 B41 缺口闭环：一批回传导入后正文率（正文页 ÷ 非栏目页文件）低于此值或入库数为 0 推入库报警卡给知识管理员
+    kb_body_rate_min: float = 0.5
+    # 来源推荐 Agent 命中率（推荐的网址最终采到 ÷ 已有结果的推荐）低于此值、且样本不少于下一项时自动停用（近 90 天）
+    kb_recommend_min_hit: float = 0.3
+    kb_recommend_min_samples: int = 10
 
     # 重排服务（/rerank，交叉编码模型，决策记录 2026-11-11），同样只经网关调用。留空表示不启用：检索只用 RRF 排序，
     # 依据查询退回上面的余弦相似度门槛。docker compose 默认指向 rerank 服务（tools/rerank）。

@@ -18,6 +18,7 @@ PROTECTED = [
     ("GET", "/api/projects"),
     ("GET", "/api/portfolio"),
     ("GET", "/api/indicators"),
+    ("GET", "/api/indicators/drift"),
     ("GET", "/api/projects/BANK-A/automation"),
     ("GET", "/api/quality-incidents"),
     ("POST", "/api/quality-incidents"),
@@ -34,6 +35,12 @@ PROTECTED = [
     ("POST", "/api/expert-bench/fill"),
     ("POST", "/api/expert-bench/cards/1/answer"),
     ("POST", "/api/expert-bench/deid-preview"),
+    ("GET", "/api/expert-bench/compare/1"),
+    ("POST", "/api/expert-bench/cards/1/revise"),
+    ("GET", "/api/expert-bench/groups"),
+    ("POST", "/api/expert-bench/batch-approve"),
+    ("GET", "/api/expert-bench/profile"),
+    ("PUT", "/api/expert-bench/profile"),
     ("GET", "/api/projects/BANK-A"),
     ("GET", "/api/projects/BANK-A/panorama"),
     ("GET", "/api/agent-activity/knowledge"),
@@ -98,6 +105,7 @@ PROTECTED = [
     ("DELETE", "/api/projects/BANK-A/survey/selfeval/S-01/import"),
     ("GET", "/api/projects/BANK-A/survey/agenda"),
     ("GET", "/api/projects/BANK-A/deliverables/D4"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/errata"),       # 四期 A31②
     ("GET", "/api/projects/BANK-A/knowledge-updates"),
     ("GET", "/api/projects/BANK-A/assessment"),
     ("GET", "/api/projects/BANK-A/confirmations"),
@@ -106,6 +114,10 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D1/form"),
     ("POST", "/api/projects/BANK-A/deliverables/D1/form/import"),   # 四期 A28②
     ("GET", "/api/projects/BANK-A/deliverables/D1/form/import"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/form"),      # 路由覆盖检查按 {dcode}=D4 具体化
+    ("POST", "/api/projects/BANK-A/deliverables/D4/form"),
+    ("POST", "/api/projects/BANK-A/deliverables/D4/form/import"),
+    ("GET", "/api/projects/BANK-A/deliverables/D4/form/import"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/revision-candidates"),   # 三期 F4
     ("GET", "/api/revision-features/summary"),   # 四期 F4②
     ("GET", "/api/extraction/questions"),   # 四期 F4③
@@ -115,6 +127,9 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/sections/1/assist"),   # 三期 A15 写稿助手
+    ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1/kb-suggest"),   # 四期 A32 知识侧栏
+    ("POST", "/api/projects/BANK-A/deliverables/D4/word-return"),   # 四期 A32 Word 回传
+    ("GET", "/api/projects/BANK-A/confirmations/evidence"),   # 四期 A32 确认卡证据并排
     ("GET", "/api/projects/BANK-A/deliverables/D4/export"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/export?format=pptx"),
     ("GET", "/api/projects/BANK-A/stages"),
@@ -133,6 +148,9 @@ PROTECTED = [
     ("POST", "/api/projects/BANK-A/deliverables/D4/revise"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/client-feedback"),
     ("GET", "/api/deliverables/batch-sign"),
+    ("GET", "/api/projects/BANK-A/customizations"),            # 四期 A30 项目定制项
+    ("POST", "/api/projects/BANK-A/customizations"),
+    ("POST", "/api/projects/BANK-A/customizations/1/withdraw"),
     ("POST", "/api/deliverables/batch-sign"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1/diff"),
     ("POST", "/api/projects/BANK-A/runs"),
@@ -143,6 +161,8 @@ PROTECTED = [
     ("PUT", "/api/projects/BANK-A/members/x"),
     ("DELETE", "/api/projects/BANK-A/members/x"),
     ("POST", "/api/projects/BANK-A/acceptance"),
+    ("GET", "/api/projects/BANK-A/closeout"),
+    ("POST", "/api/projects/BANK-A/terminate"),
     ("GET", "/api/deletions"),
     ("GET", "/api/deletions/1"),
     ("POST", "/api/deletions/1/confirm"),
@@ -174,6 +194,8 @@ PROTECTED = [
     ("POST", "/api/kb/sources/confirm-queue/decide"),
     ("GET", "/api/kb/sources/manual-queue"),
     ("POST", "/api/kb/sources/manual-queue/1/upload"),
+    ("GET", "/api/kb/sources/alarms"),
+    ("POST", "/api/kb/sources/alarms/1/resolve"),
     ("GET", "/api/kb/intake"),
     ("GET", "/api/kb/intake/1"),
     ("GET", "/api/kb/intake/1/deid"),

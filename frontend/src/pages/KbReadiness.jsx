@@ -103,8 +103,8 @@ export default function KbReadiness() {
                     <td>
                       <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                         {c.slots.map((s) => (
-                          <span key={s.key} className={`mono ${STATE[s.state][1]} legend`} title={`${STATE[s.state][0]}${s.reason === "feedback" ? "（顾问标过时 / 不对）" : ""}${s.doc_type ? ` · ${typeName(s.doc_type)}` : ""}`}>
-                            {s.key}{s.state !== "ready" ? ` · ${STATE[s.state][0]}` : ""}{s.reason === "feedback" ? "（反馈）" : ""}
+                          <span key={s.key} className={`mono ${STATE[s.state][1]} legend`} title={`${STATE[s.state][0]}${s.reason === "feedback" ? "（顾问标过时 / 不对）" : ""}${s.reason === "unavailable" ? "（暂无可用来源，每月自动再试）" : ""}${s.doc_type ? ` · ${typeName(s.doc_type)}` : ""}`}>
+                            {s.key}{s.state !== "ready" ? ` · ${STATE[s.state][0]}` : ""}{s.reason === "feedback" ? "（反馈）" : ""}{s.reason === "unavailable" ? "（暂无可用来源）" : ""}
                           </span>
                         ))}
                       </span>

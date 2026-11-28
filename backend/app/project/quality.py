@@ -66,7 +66,7 @@ from ..models import (AgentRun, AgentRunStep, Deliverable, KbVersion, Project, P
                       ReviewWaiver, SignOff, User)
 from ..products import config
 from ..services import gateway, guard, jobs, model_catalog
-from . import cards, configs, contradictions, deliverables, review_issues
+from . import cards, configs, contradictions, customizations, deliverables, review_issues
 from . import evidence as evidence_svc
 
 AGENT = "qa-reviewer"
@@ -257,6 +257,9 @@ def gate(db: Session, d: Deliverable) -> Gate:
     bad = sorted(ref for ref, st in stale.items() if st in (KB_GONE, KB_REPEALED))
     if bad:
         reasons.append(f"正文引用的知识库条目已下线或依据已废止：{'、'.join(bad[:10])}，改正后重新评审")
+    marked = [str(s.seq) for s in d.sections if s.stale_reason]
+    if marked:                                 # 四期 A31⑫：上游变更或修订冲突标“需更新”的章，改写后才放行
+        reasons.append(f"第 {'、'.join(marked)} 章因上游变更需更新，复核改写后重新评审")
     r = latest_done_review(db, d)
     if r is None:
         reasons.append("还没有完成的质量评审")
@@ -271,6 +274,9 @@ def gate(db: Session, d: Deliverable) -> Gate:
         if b.unlisted:
             reasons.append(f"评审 Agent 统计的阻断比问题清单多 {b.unlisted} 项，无法逐条驳回，请重新评审")
         waived = b.waived
+        custom = customizations.gate_reason(db, d.project, d, r.created_at)   # 四期 A30：定制项变更须重新评审
+        if custom:
+            reasons.append(custom)
     return Gate(ok=not reasons, reasons=reasons, review=r, waived=waived)
 
 
@@ -657,6 +663,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
                              "请系统管理员运行 catalog-check 修好配置后重新评审", "rule"))
     else:
         issues += gate_issues(d, r.versions, gates)
+    issues += customizations.review_issues(db, project, d, r.versions)   # 四期 A30：定制项逐条核对
     report, counts, downgraded, capped, incremental = "", {s: 0 for s in SEVERITIES}, 0, 0, {}
     meta: dict = {}
     hetero: dict = {}
@@ -675,6 +682,7 @@ def _execute(db: Session, user: User, project: Project, d: Deliverable, r: Quali
         text = _text_for_review(d, r.versions, plan[0] if plan else None)
         kb_block, _ = knowledge.retrieve(db, user, AGENT, project, f"{d.title} 质量评审 依据 {text[:200]}")
         message = f"{INSTRUCTIONS}{review_issues.profile_block(profile)}\n\n# 交付件 {d.code} {d.title}（修订 v{r.revision}）\n\n{text}"
+        message += customizations.checklist_block(db, project, d.code)   # 四期 A30
         if plan:
             message += review_issues.recheck_block(plan[1])
         try:

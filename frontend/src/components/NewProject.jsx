@@ -37,7 +37,8 @@ export default function NewProject({ onClose }) {
       const p = await api.createProject({ ...f, code: f.code.trim().toUpperCase(), weeks: Number(f.weeks),
         manager: f.manager.trim() || user?.username });
       onClose?.();
-      if (!f.manager.trim() || f.manager.trim() === user?.username) nav(`/project/${encodeURIComponent(p.code)}`);
+      // 立项后第一件事是配人（负责人 11-28）：本人任项目经理时直接进设置页的成员面板
+      if (!f.manager.trim() || f.manager.trim() === user?.username) nav(`/project/${encodeURIComponent(p.code)}/settings?new=1`);
     } catch (e) {
       setError(e.message);
     } finally {

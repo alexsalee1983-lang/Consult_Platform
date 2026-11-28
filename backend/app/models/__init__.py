@@ -5,13 +5,14 @@
 from .agent import Agent, AgentMdPin, AgentMdVersion, AgentToolGrant, Tool
 from .audit import AuditLog
 from .consent import ProjectConsent, SummaryCard
+from .customization import Customization
 from .conversation import Conversation, Message
 from .deliverable import DeliverableSection, SectionVersion
 from .evidence import Evidence, ProjectDocument
 from .finding import Finding
 from .job import Job
 from .judgment import JudgmentEvent
-from .kb import KbChunk, KbControl, KbControlCheckpoint, KbControlMapping, KbDeidReport, KbFramework, KbGap, KbItem, KbItemAlias, KbItemLabel, KbMapping, KbPracticeDecision, KbReview, KbSource, KbSourceEvent, KbUpload, KbVersion
+from .kb import KbAlarm, KbChunk, KbControl, KbControlCheckpoint, KbControlMapping, KbDeidReport, KbExpertProfile, KbFramework, KbGap, KbItem, KbItemAlias, KbItemLabel, KbMapping, KbPracticeDecision, KbReview, KbReviewAssignment, KbSource, KbSourceEvent, KbUpload, KbVersion
 from .knowledge_feedback import KnowledgeFeedback
 from .quality_incident import QualityIncident, QualityIncidentEvent
 from .project import Confirmation, Deliverable, Project, ProjectConfig, ProjectDeletion
@@ -26,4 +27,4 @@ from .tasks import TaskReturn
 from .usage import LlmUsage
 from .user import User
 
-__all__ = ["Agent", "AgentMdPin", "AgentMdVersion", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Deliverable", "DeliverableSection", "Evidence", "ExtractionQuestion", "Finding", "Job", "JudgmentEvent", "KbChunk", "KbControl", "KbControlCheckpoint", "KbControlMapping", "KbDeidReport", "KbFramework", "KbGap", "KbItem", "KbItemAlias", "KbItemLabel", "KbMapping", "KbPracticeDecision", "KbReview", "KbSource", "KbSourceEvent", "KbUpload", "KbVersion", "KnowledgeFeedback", "LlmUsage", "Message", "Project", "ProjectConfig", "ProjectConsent", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityIncident", "QualityIncidentEvent", "QualityReview", "ReviewIssue", "ReviewWaiver", "RevisionFeature", "Role", "RuntimeConfigItem", "RuntimeConfigVersion", "SectionVersion", "SelfEvalPack", "SignOff", "SummaryCard", "SurveyAnswer", "SurveyPack", "SurveyQuestion", "TaskReturn", "Tool", "User", "UserRole"]
+__all__ = ["Agent", "AgentMdPin", "AgentMdVersion", "AgentRun", "AgentRunStep", "AgentToolGrant", "AuditLog", "Confirmation", "Conversation", "Customization", "Deliverable", "DeliverableSection", "Evidence", "ExtractionQuestion", "Finding", "Job", "JudgmentEvent", "KbAlarm", "KbChunk", "KbControl", "KbControlCheckpoint", "KbControlMapping", "KbDeidReport", "KbExpertProfile", "KbFramework", "KbGap", "KbItem", "KbItemAlias", "KbItemLabel", "KbMapping", "KbPracticeDecision", "KbReview", "KbReviewAssignment", "KbSource", "KbSourceEvent", "KbUpload", "KbVersion", "KnowledgeFeedback", "LlmUsage", "Message", "Project", "ProjectConfig", "ProjectConsent", "ProjectDeletion", "ProjectDocument", "ProjectMember", "QualityIncident", "QualityIncidentEvent", "QualityReview", "ReviewIssue", "ReviewWaiver", "RevisionFeature", "Role", "RuntimeConfigItem", "RuntimeConfigVersion", "SectionVersion", "SelfEvalPack", "SignOff", "SummaryCard", "SurveyAnswer", "SurveyPack", "SurveyQuestion", "TaskReturn", "Tool", "User", "UserRole"]

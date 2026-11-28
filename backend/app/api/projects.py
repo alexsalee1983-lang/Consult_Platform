@@ -30,8 +30,9 @@ from ..core.permissions import (
     roles_of,
 )
 from ..models import Confirmation, Project, ProjectMember, User
-from ..project import configs
+from ..project import closeout, configs, loops
 from ..project import confirmations as conf_svc
+from ..project import customizations as cust_svc
 from ..project import retention
 from ..project import runs as run_svc
 from ..project import revise as revise_svc
@@ -147,6 +148,28 @@ def set_acceptance(code: str, body: AcceptanceIn, db: Session = Depends(get_db),
     return _out(db, p)
 
 
+class TerminateIn(BaseModel):
+    reason: str = Field(default="", max_length=200)   # 空原因在服务里判 422，非成员先得 404
+
+
+@router.get("/projects/{code}/closeout")
+def get_closeout(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """四期 A31 ⑧结项清单：未签交付件、未关的卡、待复查的章；成员可看。"""
+    return closeout.checklist(db, project_for_member(db, code, user))
+
+
+@router.post("/projects/{code}/terminate", response_model=ProjectOut)
+def terminate_project(code: str, body: TerminateIn, db: Session = Depends(get_db),
+                      user: User = Depends(current_user)):
+    """四期 A31 ⑦项目终止：项目经理操作；停自动推进、关待办、保留期从终止日起算。"""
+    p = project_for_member(db, code, user, selectinload(Project.confirmations))
+    try:
+        closeout.terminate(db, user, p, body.reason)
+    except closeout.CloseoutError as e:
+        raise HTTPException(e.status, e.detail) from None
+    return _out(db, p)
+
+
 @router.get("/confirmations", response_model=list[ConfirmationOut])
 def list_confirmations(db: Session = Depends(get_db), user: User = Depends(current_user)):
     rows = db.scalars(select(Confirmation).join(ProjectMember, ProjectMember.project_id == Confirmation.project_id)
@@ -172,11 +195,14 @@ def resolve(cid: int, body: ResolveIn, db: Session = Depends(get_db), user: User
     if c is None or membership(db, c.project_id, user.id) is None:
         raise HTTPException(404, "待确认事项不存在")
     try:
+        cust_svc.check_can_resolve(db, user, c)   # 四期 A30：结构类定制项审批卡只给项目经理
         c = conf_svc.resolve(db, user, c, body.choice, body.resolution)
-    except conf_svc.ConfirmationError as e:
+    except (conf_svc.ConfirmationError, cust_svc.CustomizationError) as e:
         raise HTTPException(e.status, e.detail) from e
+    cust_svc.on_card_resolved(db, user, c)   # 四期 A30：定制项确认卡、审批卡处理后改定制项状态
     run_svc.on_card_resolved(db, c)   # 交付链在等这张卡时，卡都处理完就继续
     revise_svc.on_card_resolved(db, user, c)   # 四期 A26：客户意见都处理完、有采纳的，自动生成修订稿
+    loops.on_card_resolved(db, user, c)        # 四期 A31：系统卡选重新运行、修订冲突选手工合并
     return _conf_out(c)
 
 
@@ -255,4 +281,5 @@ def delete_member(code: str, username: str, db: Session = Depends(get_db), user:
     db.commit()
     audit.record(db, actor=user.username, action="project.member_remove", result="allowed", project_code=p.code,
                  target=username)
+    loops.transfer_member_tasks(db, user, p, username)   # 四期 A31⑥：待办卡、自评包、进行中的交付链转给项目经理
     return _members(db, p)

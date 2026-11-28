@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { api, TIER } from "../api.js";
 import { Loading, PhaseBar, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
+import Closeout from "../components/Closeout.jsx";
 import Drawer from "../components/Drawer.jsx";
 import Panorama, { todos } from "../components/Panorama.jsx";
 import RunPanel from "../components/RunPanel.jsx";
@@ -93,6 +94,7 @@ export default function Overview({ code, focus }) {
         </Card>
       </section>
       <Panorama code={p.code} data={pano} focus={focus} onOpen={setDrawer} />
+      <Closeout p={p} onChange={load} />
       <section className="pnl pad" aria-label="阶段">
         <div className="sb"><h2 className="h2">交付阶段</h2><span className="sub">下一个里程碑：{p.next_milestone}</span></div>
         <PhaseBar phase={p.phase} />

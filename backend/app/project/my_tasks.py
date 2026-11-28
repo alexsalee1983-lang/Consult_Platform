@@ -41,6 +41,7 @@ from ..models import (Confirmation, Deliverable, DeliverableSection, Project, Pr
 from ..models.kb import KbItem, KbUpload, KbVersion
 from ..models.survey import SelfEvalPack
 from ..services import jobs
+from .loops import REMIND_TEXT
 
 KINDS: dict[str, str] = {
     "confirmation": "确认卡",
@@ -55,6 +56,7 @@ KINDS: dict[str, str] = {
     "source_confirm": "来源确认",
     "selfeval": "客户自评",
     "run_delay": "交付链延迟",
+    "kb_alarm": "入库报警",                             # 四期 B41⑥：采集回传入库数为 0 或正文率低（app/kb/gap_loop.py）
 }
 # 统一卡片格式：推荐处理按钮文字、预计分钟数、情况栏缺省说明（按类别）
 ACTION = {"confirmation": "去确认", "deliverable_review": "去签署", "kb_content": "去审核", "kb_compliance": "去审核",
@@ -241,8 +243,9 @@ def collect(db: Session, user: User) -> list[Task]:
                                                        Confirmation.project_id.in_(codes))):
             code = codes[c.project_id]
             unsure = not c.recommendation                   # Agent 没给推荐 = 存疑
-            tasks.append(Task(kind="confirmation", ref_id=c.id, title=c.title, project_code=code,
-                              link=f"/project/{code}", impact=1 + bool(c.deliverable_code),
+            tasks.append(Task(kind="confirmation", ref_id=c.id, title=c.title + REMIND_TEXT.get(c.remind_stage, ""),
+                              project_code=code, link=f"/project/{code}",
+                              impact=1 + bool(c.deliverable_code) + c.remind_stage,   # 四期 A31⑤：提醒、升级只提前排序
                               uncertainty=1.0 if unsure else 0.0, created_ts=_ts(c.created_at),
                               situation=f"{c.kind}：{c.reason}"[:80] if c.reason else c.kind,
                               impact_text=c.impact[:80],
@@ -271,11 +274,16 @@ def collect(db: Session, user: User) -> list[Task]:
     if roles & rv.KNOWLEDGE_ROLES:
         usage = _live_usage(db)
         opts = (selectinload(KbVersion.item), selectinload(KbVersion.reviews))
+        from ..kb.expert_ux import assignee_map    # 四期 B44④：按专长派给别人的内容审核卡不进本人待办
+
+        assigned = assignee_map(db) if KNOWLEDGE_EXPERT in roles else {}
         for v in db.scalars(select(KbVersion).where(KbVersion.status == "in_review").options(*opts)):
             done = {r.review_role for r in v.reviews if r.decision == "approve"}
             mine = me in rv._authors(v) and not rv.self_review_allowed(v)
             for role, need in rv.ROLE_OF.items():
                 if role in rv.required_roles(v) and need in roles and role not in done:
+                    if role == "content" and assigned.get(v.id, me) != me:
+                        continue
                     other = "知识专家" if need == KNOWLEDGE_EXPERT else "知识管理员"
                     tasks.append(_kb_task(REVIEW_KIND[role], v, usage,
                                           f"你是作者，需另一位{other}处理" if mine else "", v.submitted_at))
@@ -295,6 +303,11 @@ def collect(db: Session, user: User) -> list[Task]:
             tasks.append(Task(kind="deid", ref_id=u.id, title=f"上传 #{u.id}", link="/kb/intake", impact=1.0,
                               created_ts=_ts(u.created_at),
                               blocked="你是上传者，需另一位知识管理员确认" if u.uploaded_by == me else ""))
+        from ..models import KbAlarm
+
+        for a in db.scalars(select(KbAlarm).where(KbAlarm.status == "open")):
+            tasks.append(Task(kind="kb_alarm", ref_id=a.id, title=f"入库报警 #{a.id}（{a.count} 批）",
+                              link="/kb/sources", impact=1.0, created_ts=_ts(a.created_at)))
     if PROJECT_LEAD in roles:
         for d in db.scalars(select(ProjectDeletion).where(ProjectDeletion.status == "pending")
                             .options(selectinload(ProjectDeletion.project))):
