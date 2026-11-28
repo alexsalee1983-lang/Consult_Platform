@@ -217,20 +217,20 @@ textarea.inp{min-height:54px;resize:vertical}
 
 <!-- ============ 待负责人定 ============ -->
 <div class="page" id="p-todo">
-  <h1>待负责人定（4 项）</h1>
-  <div class="sub">示意按“建议”画出；不同意的地方指出来，改完再同步驾驶舱改版方案和总体规划。</div>
+  <h1>待负责人定（2 项）</h1>
+  <div class="sub">11-28 已定第 1、3 项并刷新规划（交付链输入输出方案 v1.0、总体规划、工作项 A32～A42、C22、C23）；剩下 2 项。</div>
   <table><tr><th style="width:36px">#</th><th>事项</th><th>建议</th><th>示意在哪看</th></tr>
-  <tr><td>1</td><td>合同要点卡前移到立项，作为项目基础数据全程保留；合同原文抽取后删除；严格档手填</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="in">输入 · 合同要点卡</a></td></tr>
   <tr><td>2</td><td>售前材料（建议书、需求沟通纪要）作为选填输入</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="in">输入 · 选填材料</a></td></tr>
-  <tr><td>3</td><td>驾驶舱按六页重排：全景、输入、需求、分析、输出、设置（影响 11-25 改版方案、A29～A31 界面）</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="pan">全景</a>、<a style="color:var(--cyan)" data-go="req">需求</a>、<a style="color:var(--cyan)" data-go="an">分析</a></td></tr>
   <tr><td>4</td><td>结项复盘作为结项前置条件；可一键“本项目无可沉淀”写理由，计入跳过率</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="retro">结项复盘</a></td></tr>
   </table>
   <h2 style="margin-top:16px">已定（11-28）</h2>
   <div class="card2">D1、D2 走程序模板 · 人参与改稿，改稿助手提效 · 输出包组件清单在产品配置定默认、定制项可增减、增删须项目经理确认 · 复盘放进驾驶舱</div>
   <table style="margin-top:8px"><tr><th>已定（11-28 后续两轮“同意”）</th><th>示意在哪看</th></tr>
+  <tr><td>合同要点卡前移到立项，严格档手填；合同未签可先行启动（部门负责人确认，30 天升级提醒）</td><td><a style="color:var(--cyan)" data-go="new">新建项目</a></td></tr>
+  <tr><td>驾驶舱改为项目左栏交付链 + 全景三块（11-25 方案第二、三节作废）</td><td><a style="color:var(--cyan)" data-go="pan">全景</a></td></tr>
   <tr><td>授权台账；关口 1 进入条件加“附件已签”</td><td><a style="color:var(--cyan)" data-go="in">输入 · 合同要点卡</a></td></tr>
   <tr><td>D2 调研包只放输出页；输入页只放回收物</td><td><a style="color:var(--cyan)" data-go="out">输出</a>、<a style="color:var(--cyan)" data-go="srv">调研包怎么生成</a></td></tr>
-  <tr><td>要点卡字段状态、体检、需求澄清清单；合同外需求走变更单</td><td><a style="color:var(--cyan)" data-go="in">输入 · 合同要点卡</a>、<a style="color:var(--cyan)" data-go="req">需求 · 变更单</a></td></tr>
+  <tr><td>要点卡字段状态、规则检查只显示例外、需求澄清清单；合同外需求走变更单</td><td><a style="color:var(--cyan)" data-go="in">输入 · 合同要点卡</a>、<a style="color:var(--cyan)" data-go="req">需求 · 变更单</a></td></tr>
   <tr><td>新增“需求”页；分析页放事实、发现、证据缺口、待定矛盾；“证据”与“依据”分开叫</td><td><a style="color:var(--cyan)" data-go="req">需求</a>、<a style="color:var(--cyan)" data-go="an">分析</a></td></tr>
   <tr><td>全景节点标“卡在谁手里”，加“只看我的”</td><td><a style="color:var(--cyan)" data-go="pan">全景</a></td></tr>
   <tr><td>顾问入口收敛：对话改右侧抽屉（右下角“对话”），“待我处理”汇总待办</td><td>任一页右下角</td></tr>
@@ -289,7 +289,7 @@ textarea.inp{min-height:54px;resize:vertical}
     <div class="bt"><div class="sb"><b>D3 事实清单签署</b><span class="chip">等前两项</span></div>
       <div class="bar"><i style="--w:0%"></i></div><div class="sb"><span class="mut">未开始</span><span class="who"><span class="av" style="background:var(--vio)">签</span>D3 签署人</span></div></div>
   </div>
-  <div class="sb" style="margin:18px 0 8px"><h2 style="margin:0">待我处理</h2><span class="mut">项目经理 · 只列要人做的事</span></div>
+  <div class="sb" style="margin:18px 0 8px"><h2 style="margin:0">待我处理</h2><span><a class="chip c-am" data-t="全部待办">全部</a> <a class="chip" data-t="只看分给我的">只看我的</a> <span class="mut">项目经理 · 只列要人做的事</span></span></div>
   <div class="todo"><span class="chip c-cr k">催办</span><div class="x">运维组自评包逾期 2 天，已自动提醒 2 次 <span class="mut">· 建议电话联系对接人</span></div><a class="btn sm" data-t="打开联系人与提醒记录">处理</a></div>
   <div class="todo"><span class="chip c-am k">澄清</span><div class="x">合同有 3 处没写清，澄清清单已出好 <span class="mut">· 带去周四沟通会</span></div><a class="btn2 sm" data-go="in">看清单</a></div>
   <div class="todo"><span class="chip c-am k">确认卡</span><div class="x">“夜间值班”两个来源矛盾：资料写 7×24，安全组口述 5×8 <span class="mut">· 已放进下周二议程</span></div><a class="btn2 sm" data-t="打开确认卡">看</a></div>
