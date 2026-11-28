@@ -3,7 +3,8 @@
 POST /api/projects/{code}/conversations          以某个 Agent 新建对话
 GET  /api/projects/{code}/conversations          我在这个项目里的对话
 GET  /api/conversations/{id}                     对话和消息
-POST /api/conversations/{id}/messages            发一条消息，SSE 流式返回（event: delta / done / error）
+POST /api/conversations/{id}/messages            发一条消息，SSE 流式返回（event: delta / done / error）；
+                                                 可带 page（驾驶舱抽屉的当前页，四期 A41），只拼进本轮发给模型的内容，不存
 POST /api/conversations/{id}/handoff             按某条回复里的交接信息转交专业 Agent（二期 C2，app/agents/handoff.py）
 
 被机密级拦截的消息不存，只记审计（不含原文）；通过拦截的提问和 Agent 回复存入项目区。
@@ -40,6 +41,8 @@ class ConversationIn(BaseModel):
 
 class MessageIn(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
+    # 四期 A41：驾驶舱右侧抽屉在哪页打开就带哪页（如“输出 / D4 差距分析”）；只许单行短标签，不许括号和换行
+    page: str | None = Field(None, max_length=40, pattern=r"^[\w /·～-]+$")
 
 
 class MessageOut(BaseModel):
@@ -187,7 +190,8 @@ def send(cid: int, body: MessageIn, db: Session = Depends(get_db), user: User = 
         kb_block, refs = knowledge.retrieve(db, user, agent_code, project, body.message)
         system, tool_args = runtime.system_prompt(doc, card, kb_block), {}
     extra = {"conversation_id": conv_id, "prompt_version": version, "kb_refs": len(refs)}
-    gen = gateway.stream(body.message, tier=project.tier, project_code=project.code, level=doc.level,
+    model_input = f"（顾问在驾驶舱提问，当前页：{body.page}）\n{body.message}" if body.page else body.message
+    gen = gateway.stream(model_input, tier=project.tier, project_code=project.code, level=doc.level,
                          system=system, history=runtime.history(list(c.messages)), **tool_args)
     try:
         first = next(gen)  # 拦截（422）和开始输出前的失败（502）以普通 HTTP 错误返回，被拦截的内容不存
