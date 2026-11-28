@@ -125,6 +125,7 @@ def test_failed_runs_share_one_stuck_card_and_retry_requeues(pm, model):  # noqa
     assert c.post(f"/api/confirmations/{card.id}/resolve", json={"choice": "A"}).status_code == 200
     assert _run(c, code, first)["status"] == "queued"                    # 同一项目同时只重跑一个
     assert _run(c, code, second)["status"] == "failed"
+    _work()          # 把重新排队的任务跑完，不留给后面的用例（SQLite 全量共用一个库）
 
 
 # ---- ④ 修订冲突 ----
@@ -140,7 +141,7 @@ def test_chain_keeps_human_edit_and_sends_conflict_card(pm, model, monkeypatch):
     orig = runs._write_deliverable
 
     def edit_then_write(db, user, project, step, sections, base=None):   # 模型起草 D4 期间顾问改了第 1 章
-        if step.deliverable == "D4":
+        if step.deliverable == "D4" and project.code == code:     # 只改本用例的项目
             d = deliverables.get_deliverable(db, project, "D4")
             deliverables.write_section(db, user, project, d, 1, "顾问手改 [推断]。")
             db.commit()
