@@ -2,7 +2,7 @@
 
 - 只在本地解析，不联网；不执行文件中的宏、不加载外部引用。
 - 入口清洗（四期 B42 投毒防护第②层）：只取可见正文——Word 的隐藏文字（w:vanish）、修订删除、批注、文档属性不取；
-  Markdown 的 HTML 注释去掉；零宽、方向控制等不可见格式字符去掉。去掉的段数记在 ParsedDoc.hidden，只记个数。
+  Markdown 的 HTML 注释、网页的注释和隐藏元素（hidden、display:none 等）去掉；零宽、方向控制等不可见格式字符去掉。去掉的段数记在 ParsedDoc.hidden，只记个数。
 - 文件类型以内容判断（文件头），扩展名只作参考：.docx 必须是 zip、PDF 必须以 %PDF 开头、文本必须能按 UTF-8 解码。
 - 网页（.html/.htm）用标准库 html.parser 去标签取正文，丢弃脚本、样式、导航、页头页脚；h1～h6 作章节标题。
 - 扫描件（PDF 每页几乎没有文字）判为不支持：OCR 一期不做（决策记录 2026-11-08），提示提供文字版。
@@ -160,6 +160,9 @@ _HTML_SKIP = {"script", "style", "noscript", "template", "head", "nav", "header"
               "form", "select", "button", "iframe", "svg", "object"}
 _HTML_BLOCK = {"p", "div", "br", "li", "ul", "ol", "tr", "table", "section", "article", "main", "dd", "dt",
                "dl", "blockquote", "pre", "hr", "caption", "figure", "figcaption"}
+_HTML_VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+_HTML_HIDDEN_STYLE = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?![.\d])|"
+                                r"opacity\s*:\s*0(?![.\d])", re.I)
 _HTML_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?\s*([A-Za-z0-9_-]+)""", re.I)
 
 
@@ -172,6 +175,18 @@ class _HtmlText(HTMLParser):
         self.skip = 0
         self.level = 0
         self.buf: list[str] = []
+        self.hidden = 0             # B42 入口清洗：去掉的隐藏元素和注释个数
+        self.hide_tag = ""
+        self.hide_depth = 0
+
+    @staticmethod
+    def _is_hidden(attrs) -> bool:
+        a = {k.lower(): (v or "") for k, v in attrs}
+        return ("hidden" in a or a.get("aria-hidden", "").lower() == "true"
+                or bool(_HTML_HIDDEN_STYLE.search(a.get("style", ""))))
+
+    def handle_comment(self, data: str) -> None:
+        self.hidden += 1
 
     def _end_line(self) -> None:
         # 只合并 ASCII 空白，保留法条里常见的全角空格
@@ -181,6 +196,13 @@ class _HtmlText(HTMLParser):
         self.buf.clear()
 
     def handle_starttag(self, tag: str, attrs) -> None:
+        if self.hide_tag:
+            self.hide_depth += tag == self.hide_tag
+            return
+        if tag not in _HTML_VOID and self._is_hidden(attrs):    # 隐藏元素整体不取（B42 第②层）
+            self.hide_tag, self.hide_depth = tag, 1
+            self.hidden += 1
+            return
         if tag in _HTML_SKIP:
             self.skip += 1
         elif self.skip:
@@ -194,10 +216,16 @@ class _HtmlText(HTMLParser):
             self.buf.append(" | ")
 
     def handle_startendtag(self, tag: str, attrs) -> None:
-        if not self.skip and tag in _HTML_BLOCK:
+        if not self.skip and not self.hide_tag and tag in _HTML_BLOCK:
             self._end_line()
 
     def handle_endtag(self, tag: str) -> None:
+        if self.hide_tag:
+            if tag == self.hide_tag:
+                self.hide_depth -= 1
+                if not self.hide_depth:
+                    self.hide_tag = ""
+            return
         if tag in _HTML_SKIP:
             self.skip = max(0, self.skip - 1)
         elif self.skip:
@@ -209,7 +237,7 @@ class _HtmlText(HTMLParser):
             self._end_line()
 
     def handle_data(self, data: str) -> None:
-        if not self.skip:
+        if not self.skip and not self.hide_tag:
             self.buf.append(data)
 
 
@@ -224,7 +252,9 @@ def _html(data: bytes) -> ParsedDoc:
     p.feed(text if text is not None else _decode_text(data))
     p.close()
     p._end_line()
-    return ParsedDoc("html", _by_headings(p.lines))
+    doc = ParsedDoc("html", _by_headings(p.lines))
+    doc.hidden = p.hidden
+    return doc
 
 
 def _by_headings(lines) -> list[Section]:
