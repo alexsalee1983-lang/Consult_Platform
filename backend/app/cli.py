@@ -378,6 +378,18 @@ def kb_candidate_promote(args: argparse.Namespace) -> int:
     return 0
 
 
+def kb_grade_scan(args: argparse.Namespace) -> int:
+    """条目分级（四期 B43，worker 每天自动执行）：按使用信号把条目在候选、可用、推荐之间升降，候选仍有负面信号的标待复查。"""
+    from .kb import grade
+    with SessionLocal() as db:
+        r = grade.scan(db, actor="cli", dry_run=args.dry_run)
+    head = "（只列出，未改动）" if args.dry_run else ""
+    for key, label in (("up", "升级"), ("down", "降级"), ("capped", "按封顶压回"), ("recheck", "标待复查")):
+        items = getattr(r, key)
+        print(f"{label}{head} {len(items)} 条" + ("：" + "、".join(items[:50]) if items else ""))
+    return 0
+
+
 def kb_agent_review_rerun(args: argparse.Namespace) -> int:
     """积压重跑（四期试用缺陷，负责人 2026-11-25 同意）：待审版本里，规则预判上线前知识审核 Agent 判
     “不重复、不冲突”没过的，各排一次 kb.agent_review（rerun）。--dry-run 只按规则预判类别打印计数，不排队。
@@ -898,7 +910,7 @@ def kb_source_seed(args: argparse.Namespace) -> int:
                     src = sr.create(db, user, name=row.get("name") or "", url=url, license=row.get("license") or "",
                                     authority_kind=(row.get("authority_kind") or "").strip(),
                                     publisher=row.get("publisher") or "", note=row.get("note") or "")
-                    if args.to == "trial":
+                    if args.to == "trial" and src.status == "candidate":    # 官方域名的已自动转正式（四期 B43）
                         sr.transition(db, user, src.code, "trial", "批量登记（资料仓已批准来源清单）")
                 except sr.SourceError as e:
                     db.rollback()
@@ -1484,6 +1496,9 @@ def main(argv: list[str] | None = None) -> int:
                          help="候选影子期晋级：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，抽检不通过的退回人工（worker 每天自动执行）")
     kcp.add_argument("--dry-run", action="store_true", help="只列出会晋级、退回的候选，不改动")
     kcp.set_defaults(func=kb_candidate_promote)
+    kgs = sub.add_parser("kb-grade-scan", help="条目分级（四期 B43）：按引用、采纳率和三键反馈在候选、可用、推荐之间升降（worker 每天自动执行）")
+    kgs.add_argument("--dry-run", action="store_true", help="只列出会升降的条目，不改动")
+    kgs.set_defaults(func=kb_grade_scan)
     ae = sub.add_parser("agent-eval", help="Agent 评测（二期 C4）：红线用例、黄金样例要点、埋雷，全部通过时退出码 0")
     ae.add_argument("path", help="评测集 YAML 文件或目录（knowledge/eval/agents）")
     ae.add_argument("--as", dest="as_user", required=True, help="以哪个用户的身份调用（记用量）")

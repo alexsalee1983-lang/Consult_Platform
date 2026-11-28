@@ -103,6 +103,14 @@ class Settings(BaseSettings):
     kb_sample_rate_agent: float = 0.2
     # 候选影子期（三期 B24①）：B10、B11 自动发布通过的版本先落 candidate，只供评测和影子检索，交付侧检索仍用旧的已发布版本；
     # 满 KB_CANDIDATE_DAYS 天且抽检没有判不通过的，每日计划任务自动晋级为 published。关掉回到自动发布直接 published。
+    # 四期 B43 收录标准与判定（app/kb/intake_criteria.py）：知识审核 Agent 按 6 条收录标准给四种判定之一。
+    # 关（默认）：判定只记录，非“收录”的一律不自动发布、转人工；开：评测达标后由负责人打开，“不收 / 合并为印证 / 退回补充”
+    # 由平台直接退回，不再等人，Agent 漏答收录标准或类型问题的也不算“收录”。
+    kb_intake_verdict_live: bool = False
+    # 四期 B43 公开资料合规关自动为主（app/kb/compliance_auto.py，负责人 2026-11-27“1可以”）：程序规则 + 知识审核 Agent
+    # 判合规，通过的平台记合规审核通过并按比例抽检；去标识没过、来源不在白名单、疑似投毒、抽检差错超门槛等例外才留给知识管理员。
+    kb_compliance_auto: bool = True
+    kb_sample_rate_compliance: float = 0.1
     kb_candidate_shadow: bool = True
     kb_candidate_days: int = 7
     # 有无知识库对比评测（二期 B1 补充）：kb-eval --compare 用知识库的准确率达标线；开启门禁时最近一次对比评测

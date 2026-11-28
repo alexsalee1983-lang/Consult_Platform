@@ -46,6 +46,9 @@ class KbItem(KbBase):
     # 后两类必须由作者以外的知识专家人工确认才能发布。slot：C10 章节槽位键，选填
     knowledge_kind: Mapped[str] = mapped_column(String(16), default="", server_default="", index=True)
     slot: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # 条目分级（四期 B43，知识区迁移 k0025，app/kb/grade.py）：candidate 候选 / usable 可用 / recommended 推荐；
+    # 新条目从候选起，靠实际使用逐级升、被反复驳回或报“有误”的降级；未经专家认可的 AI 基线最多到候选
+    grade: Mapped[str] = mapped_column(String(16), default="candidate", server_default="candidate", index=True)
     # 多语言与海外法规（四期 B28①，知识区迁移 k0021，app/kb/multilang.py）：language 原文语种、jurisdiction 辖区；
     # 译文条目 translation_of 挂原文条目编号，translation_notice 必须是“非官方译本”，引用与导出回溯到原文条款
     language: Mapped[str] = mapped_column(String(16), default="zh", server_default="zh")
