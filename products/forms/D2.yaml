@@ -9,15 +9,15 @@ sections:
   - {key: schedule, label: 时间安排, type: textarea, required: true, example: "第 2 周访谈管理层和安全运营团队，第 3 周访谈运维与开发团队，第 4 周补充访谈并核对资料。"}
   - {key: method, label: 调研方式, type: textarea, hint: 例如 访谈、资料审阅、现场观察, example: "关键岗位访谈为主，辅以制度与记录文档审阅、现场只读查看。"}
   template: |
-    **调研对象**
+    ### 调研对象
 
     {departments}
 
-    **时间安排**
+    ### 时间安排
 
     {schedule}
 
-    **调研方式**
+    ### 调研方式
 
     {method}
 - title: 资料清单
@@ -25,9 +25,16 @@ sections:
   - {key: documents, label: 请客户提供的资料（每行一项）, type: list, required: true, example: "安全管理制度汇编\n安全运营值班记录（近 3 个月）\n组织架构与岗位职责说明"}
   - {key: deadline, label: 提供期限, type: text, example: "2027-01-15 前"}
   template: |
+    ### 资料清单
+
+    请贵方提供以下资料：
+
     {documents}
 
-    **提供期限**：{deadline}
+    ### 提供期限
+
+    {deadline}
+  fixed_title: 资料要求
   fixed: 资料中不得包含口令、密钥、可利用的漏洞细节、完整网络拓扑与 IP 规划、业务数据和个人信息样本；如需说明，请提供去标识后的摘要。
 - title: 访谈对象与日程
   fields:

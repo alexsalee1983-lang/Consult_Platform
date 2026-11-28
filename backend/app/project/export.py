@@ -2,7 +2,8 @@
 
 导出 = 模板 + 各章当前版本正文。规则：
 
-1. 模板从配置位置读取（EXPORT_TEMPLATE，决策记录 2026-11-10）：不配置时用内置默认模板（python-docx 自带的空白文档）；
+1. 模板从配置位置读取（EXPORT_TEMPLATE，决策记录 2026-11-10）：不配置时用内置默认模板（python-docx 空白文档，按正式公文排版：
+   A4、封面单独一页、标题黑体黑色、正文宋体小四 1.5 倍行距，负责人 2026-11-28）；
    配置了但文件不存在、打不开或缺页面设置时拒绝导出（503），不悄悄退回默认模板，避免用错模板交给客户。
    模板里可以写占位符，导出时替换（正文段落、表格、页眉页脚都查）：
    {{项目代号}} {{服务}} {{行业}} {{交付件编号}} {{交付件名称}} {{修订}} {{导出日期}} {{状态}}；
@@ -11,7 +12,8 @@
 3. 来源标注（[D-12] [I-02-05] [O-05] [L4-…]）在正文中保留原样，同一章里每个标注第一次出现处加 Word 脚注：
    证据写编号、类别和标题（访谈写受访者角色），知识库条目写编号、层级和名称；核对不上的写“未核对到”。
    [推断] 不加脚注。
-4. 正文按常用 Markdown 写法排版：# 标题、- / * 列表、1. 编号列表、> 引用、| 表格 |、**加粗**；其余按普通段落。
+4. 表格（内置和配置模板都适用）：表头灰底加粗并跨页重复，行不跨页拆开，列宽按内容分配，五号字。
+   正文按常用 Markdown 写法排版：# 标题、- / * 列表、1. 编号列表、> 引用、| 表格 |、**加粗**；其余按普通段落。
 5. 严格档项目导出的是占位符版本（M4 ④b，写入时已查占位符）；没有大纲的交付件不能导出（409）。
 
 审计只记项目、交付件编号、修订号、各章版本号、文件大小和摘要哈希、模板类别（内置 / 配置）、是否草稿和导出编号，
@@ -32,12 +34,13 @@ from zoneinfo import ZoneInfo
 
 from docx import Document
 from docx.document import Document as DocxDocument
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.opc.constants import CONTENT_TYPE as CT, RELATIONSHIP_TYPE as RT
 from docx.opc.packuri import PackURI
 from docx.opc.part import Part
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls, qn
-from docx.shared import Pt
+from docx.shared import Cm, Pt, RGBColor
 from docx.text.paragraph import Paragraph
 from lxml import etree
 from sqlalchemy import select
@@ -91,6 +94,10 @@ def _load_template() -> tuple[DocxDocument, str]:
     if not path:
         doc = Document()
         _default_fonts(doc)
+        sec = doc.sections[0]                                 # A4，上下 2.54、左右 3.17 厘米（Word 默认中文版式）
+        sec.page_width, sec.page_height = Cm(21), Cm(29.7)
+        sec.top_margin = sec.bottom_margin = Cm(2.54)
+        sec.left_margin = sec.right_margin = Cm(3.17)
         return doc, "builtin"
     p = Path(path)
     if not p.is_file():
@@ -104,19 +111,51 @@ def _load_template() -> tuple[DocxDocument, str]:
     return doc, "configured"
 
 
+# 内置模板按正式公文排版（负责人 11-28）：样式名 → (中文字体, 西文字体, 字号, 加粗, 段前, 段后)
+_BUILTIN_STYLES = {
+    "Normal": ("宋体", "Times New Roman", 12, False, 0, 6),
+    "Title": ("黑体", "Arial", 22, True, 0, 12),
+    "Heading 1": ("黑体", "Arial", 16, True, 18, 8),
+    "Heading 2": ("黑体", "Arial", 14, True, 12, 6),
+    "Heading 3": ("黑体", "Arial", 12, True, 8, 4),
+    "List Bullet": ("宋体", "Times New Roman", 12, False, 0, 2),
+    "List Number": ("宋体", "Times New Roman", 12, False, 0, 2),
+}
+
+
 def _default_fonts(doc: DocxDocument) -> None:
-    """内置模板：正文宋体五号、标题黑体，中文不落到西文字体。"""
-    for name, font in (("Normal", "宋体"), ("Heading 1", "黑体"), ("Heading 2", "黑体"), ("Heading 3", "黑体")):
+    """内置模板：正文宋体小四、西文 Times New Roman、1.5 倍行距；标题黑体黑色（不用 Word 默认的蓝色和下划线）。"""
+    for name, (cn, en, size, bold, before, after) in _BUILTIN_STYLES.items():
         try:
             style = doc.styles[name]
         except KeyError:
             continue
-        rpr = style.element.get_or_add_rPr()
-        fonts = rpr.find(qn("w:rFonts"))
-        if fonts is None:
-            fonts = etree.SubElement(rpr, qn("w:rFonts"))
-        fonts.set(qn("w:eastAsia"), font)
-    doc.styles["Normal"].font.size = Pt(10.5)
+        style.font.name = en
+        style.font.size = Pt(size)
+        style.font.bold = bold
+        style.font.italic = False
+        style.font.color.rgb = RGBColor(0, 0, 0)
+        style.element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:eastAsia"), cn)
+        fmt = style.paragraph_format
+        fmt.space_before, fmt.space_after = Pt(before), Pt(after)
+        fmt.line_spacing = 1.5 if name == "Normal" else 1.3 if name.startswith("List") else 1.15
+        ppr = style.element.get_or_add_pPr()
+        for bdr in ppr.findall(qn("w:pBdr")):                  # Title 默认带蓝色下划线
+            ppr.remove(bdr)
+    doc.styles["Title"].paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+
+def _cover(doc: DocxDocument, title: str, lines: list[str]) -> None:
+    """内置模板封面：标题居中，项目信息逐行居中，之后分页。"""
+    for _ in range(6):
+        doc.add_paragraph()
+    doc.add_paragraph(title, style="Title")
+    doc.add_paragraph()
+    for i, line in enumerate(lines):
+        p = doc.add_paragraph(line)
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if i == len(lines) - 1:
+            p.add_run().add_break(WD_BREAK.PAGE)
 
 
 def _replace_in_paragraph(p: Paragraph, values: dict[str, str]) -> None:
@@ -257,7 +296,13 @@ class _Writer:
         for i, r in enumerate(cells):
             for j in range(width):
                 cell_p = t.cell(i, j).paragraphs[0]
+                cell_p.paragraph_format.space_after = Pt(0)
+                cell_p.paragraph_format.line_spacing = 1.15
                 self._inline(cell_p, r[j] if j < len(r) else "", bold=(i == 0))
+                for run in cell_p.runs:                       # 表格用五号字
+                    run.font.size = Pt(10.5)
+        sec = self.doc.sections[-1]
+        _format_table(t, cells, width, (sec.page_width - sec.left_margin - sec.right_margin) / 360000)
         if self.anchor is not None:                           # add_table 总是加在末尾：挪到锚点前
             self.anchor._p.addprevious(t._tbl)
 
@@ -288,6 +333,23 @@ class _Writer:
             else:
                 self._inline(self._para(), s)
             i += 1
+
+
+def _format_table(t, cells: list[list[str]], width: int, total: float) -> None:
+    """表头加灰底并跨页重复、行不跨页拆开；列宽按各列最长内容分配（每列至少 12%），总宽为版心宽 total（厘米）。"""
+    longest = [max(min(len(r[j]) if j < len(r) else 0, 30) for r in cells) + 2 for j in range(width)]
+    share = [max(n / sum(longest), 0.12) for n in longest]
+    share = [x / sum(share) for x in share]
+    t.autofit = False
+    for i, row in enumerate(t.rows):
+        trpr = row._tr.get_or_add_trPr()
+        etree.SubElement(trpr, qn("w:cantSplit"))
+        if i == 0:
+            etree.SubElement(trpr, qn("w:tblHeader"))
+        for j, cell in enumerate(row.cells):
+            cell.width = Cm(total * share[j])
+            if i == 0:
+                cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:val="clear" w:color="auto" w:fill="D9D9D9"/>'))
 
 
 # ---- 来源脚注文字 ----
@@ -388,9 +450,9 @@ def export_deliverable(db: Session, user: User, project: Project, d: Deliverable
     labels = _source_labels(db, project, d)
     w = _Writer(doc, anchor, notes, labels)
     if anchor is None and template_kind == "builtin":
-        doc.add_heading(f"{d.code} {_xml_safe(d.title)}", level=0)
-        doc.add_paragraph(f"项目：{project.code}　服务：{project.service}　修订：v{d.revision}　"
-                          f"状态：{STATUS_NAMES.get(d.status, d.status)}　导出日期：{now:%Y-%m-%d}")
+        _cover(doc, f"{d.code} {_xml_safe(d.title)}",
+               [f"项目：{project.code}", f"服务：{_xml_safe(project.service)}",
+                f"修订：v{d.revision}　状态：{STATUS_NAMES.get(d.status, d.status)}", f"导出日期：{now:%Y-%m-%d}"])
     versions = {}
     for s in d.sections:
         w.noted = set()
