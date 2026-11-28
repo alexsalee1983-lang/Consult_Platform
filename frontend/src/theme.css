@@ -272,3 +272,12 @@ section[aria-label="项目全景"] { animation: rise .5s .2s cubic-bezier(.2,.7,
 
 /* A28①：表单填写示例（多行示例按行显示） */
 .form-ex { white-space: pre-line; color: var(--tx3); margin-top: 2px; }
+
+/* 四期 A32②：确认卡证据并排（两处原文片段左右对照，窄屏上下排） */
+.ev-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.ev-cell { border: 1px solid var(--ln2); border-radius: 6px; padding: 7px 10px; background: var(--s2); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.ev-cell blockquote { margin: 0; padding-left: 8px; border-left: 2px solid var(--cyan); color: var(--tx); white-space: pre-wrap; }
+.card-group { border-color: var(--cyan); }
+/* 四期 A32③：编辑器知识侧栏 */
+.kb-side { display: flex; flex-direction: column; gap: 8px; }
+.kb-side .kb-hit { border: 1px solid var(--ln2); border-radius: 6px; padding: 7px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }

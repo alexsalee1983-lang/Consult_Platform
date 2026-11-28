@@ -6,6 +6,7 @@ import { Link, NavLink, Outlet, useLocation, useParams } from "react-router";
 import { api, DELIV_STATUS } from "../api.js";
 import Assessment from "../components/Assessment.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
+import { groupCards } from "../components/CardEvidence.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Evidence from "../components/Evidence.jsx";
 import Members from "../components/Members.jsx";
@@ -75,19 +76,31 @@ export function InputPage({ code }) {
 
 export function AnalysisPage({ code }) {
   const { p, error, load } = useProject(code);
+  // 四期 A32②：证据原文并排与同源合卡（只管展示，处理仍逐张）
+  const [ev, setEv] = useState({ groups: [], evidence: {} });
+  const loadEv = useCallback(() => { api.cardEvidence(code).then(setEv).catch(() => setEv({ groups: [], evidence: {} })); }, [code]);
+  useEffect(loadEv, [loadEv]);
+  const done = async () => { await load(); loadEv(); };
   if (!p) return <Loading error={error} />;
+  const card = (c) => (
+    <Fragment key={c.id}>
+      <li style={{ textAlign: "right" }}><LocateLink code={p.code} node={`card:${c.id}`} /></li>
+      <ConfirmCard c={c} evidence={ev.evidence[String(c.id)]} onDone={done} />
+    </Fragment>
+  );
   return (
     <>
       {head(p, "分析")}
       <section className="pnl pad" aria-label="待你确认">
         <div className="sb"><h2 className="h2">待你确认 · 检查点</h2><span className="mono" style={{ color: "var(--amber)" }}>{p.confirmations.length}</span></div>
         <ul className="lst">
-          {p.confirmations.map((c) => (
-            <Fragment key={c.id}>
-              <li style={{ textAlign: "right" }}><LocateLink code={p.code} node={`card:${c.id}`} /></li>
-              <ConfirmCard c={c} onDone={load} />
-            </Fragment>
-          ))}
+          {groupCards(p.confirmations, ev.groups).map((g) => (g.cards.length > 1 ? (
+            <li key={`g-${g.cards[0].id}`} className="card card-group pnl pad" aria-label={`同源确认卡：${g.source}`}>
+              <div className="sb"><span>同一份资料 <span className="mono" style={{ color: "var(--cyan)" }}>{g.source}</span> {g.title}</span>
+                <span className="sub">{g.cards.length} 张，逐张处理</span></div>
+              <ul className="lst">{g.cards.map(card)}</ul>
+            </li>
+          ) : card(g.cards[0])))}
           {p.confirmations.length === 0 && <li className="sub">没有待确认事项</li>}
         </ul>
       </section>
