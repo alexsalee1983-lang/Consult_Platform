@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0026_kb_gap_loop"
-down_revision: str | None = "k0023_kb_expert_assign"
+down_revision: str | None = "k0025_kb_item_grade"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

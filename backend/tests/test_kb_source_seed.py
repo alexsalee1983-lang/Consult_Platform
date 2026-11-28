@@ -9,8 +9,8 @@ from app.models import AuditLog, KbSource, KbSourceEvent
 from .conftest import create_user
 
 HEAD = "name,url,publisher,license,authority_kind,note\n"
-ROWS = ("种子来源甲：法规库,https://seed-a.example.gov.cn/,测试机关甲,法律不受著作权保护，可内部引用并注明出处,法律,\n"
-        "种子来源乙：标准公开,https://seed-b.example.gov.cn/std/,测试机关乙,公开发布，可内部引用并注明出处,国家标准,备注\n")
+ROWS = ("种子来源甲：法规库,https://seed-a.example.org/,测试机关甲,法律不受著作权保护，可内部引用并注明出处,法律,\n"
+        "种子来源乙：标准公开,https://seed-b.example.org/std/,测试机关乙,公开发布，可内部引用并注明出处,国家标准,备注\n")
 
 
 def _csv(tmp_path, body: str) -> str:
@@ -28,7 +28,7 @@ def test_seed_registers_trial_and_is_idempotent(tmp_path, capsys):
     expert = create_user((KNOWLEDGE_EXPERT,))[0]
     path = _csv(tmp_path, ROWS)
     assert cli_main(["kb-source-seed", path, "--as", expert, "--to", "trial"]) == 0
-    a, b = _src("https://seed-a.example.gov.cn/"), _src("https://seed-b.example.gov.cn/std/")
+    a, b = _src("https://seed-a.example.org/"), _src("https://seed-b.example.org/std/")
     assert a and b and a.status == b.status == "trial"
     assert a.authority_level == 1 and b.authority_level == 2 and a.created_by == expert
     with SessionLocal() as db:
@@ -46,9 +46,9 @@ def test_seed_registers_trial_and_is_idempotent(tmp_path, capsys):
 
 def test_seed_default_candidate_and_never_active(tmp_path, capsys):
     expert = create_user((KNOWLEDGE_EXPERT,))[0]
-    path = _csv(tmp_path, "种子来源丙,https://seed-c.example.gov.cn/,机关丙,公开发布，可内部引用,白皮书,\n")
+    path = _csv(tmp_path, "种子来源丙,https://seed-c.example.org/,机关丙,公开发布，可内部引用,白皮书,\n")
     assert cli_main(["kb-source-seed", path, "--as", expert]) == 0
-    assert _src("https://seed-c.example.gov.cn/").status == "candidate"
+    assert _src("https://seed-c.example.org/").status == "candidate"
     try:
         cli_main(["kb-source-seed", path, "--as", expert, "--to", "active"])
         raise AssertionError("--to active 应被 argparse 拒绝")
@@ -58,18 +58,18 @@ def test_seed_default_candidate_and_never_active(tmp_path, capsys):
 
 def test_seed_bad_row_reported_others_kept(tmp_path, capsys):
     expert = create_user((KNOWLEDGE_EXPERT,))[0]
-    body = ("坏行：缺许可,https://seed-d.example.gov.cn/,机关丁,,法律,\n"
-            "种子来源戊,https://seed-e.example.gov.cn/,机关戊,公开发布，可内部引用,行业标准,\n")
+    body = ("坏行：缺许可,https://seed-d.example.org/,机关丁,,法律,\n"
+            "种子来源戊,https://seed-e.example.org/,机关戊,公开发布，可内部引用,行业标准,\n")
     assert cli_main(["kb-source-seed", _csv(tmp_path, body), "--as", expert, "--to", "trial"]) == 3
     err = capsys.readouterr().err
     assert "第 2 行" in err and "许可必填" in err
-    assert _src("https://seed-d.example.gov.cn/") is None
-    assert _src("https://seed-e.example.gov.cn/").status == "trial"
+    assert _src("https://seed-d.example.org/") is None
+    assert _src("https://seed-e.example.org/").status == "trial"
 
 
 def test_seed_requires_knowledge_staff(tmp_path):
     consultant = create_user((CONSULTANT,))[0]
-    path = _csv(tmp_path, "种子来源己,https://seed-f.example.gov.cn/,机关己,公开发布，可内部引用,法律,\n")
+    path = _csv(tmp_path, "种子来源己,https://seed-f.example.org/,机关己,公开发布，可内部引用,法律,\n")
     assert cli_main(["kb-source-seed", path, "--as", consultant]) == 1
     assert cli_main(["kb-source-seed", path, "--as", "no-such-user"]) == 1
-    assert _src("https://seed-f.example.gov.cn/") is None
+    assert _src("https://seed-f.example.org/") is None

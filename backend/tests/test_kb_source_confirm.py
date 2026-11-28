@@ -18,7 +18,7 @@ from app.models import AuditLog, KbGap, KbSource
 from .conftest import create_user, logged_in_client
 
 TODAY = date(2026, 12, 7)
-HOST = "https://sc.example.gov.cn"
+HOST = "https://sc.example.org"
 SRC = {"name": "测试来源：监管通报栏目", "url": f"{HOST}/notice/", "publisher": "测试监管机构",
        "license": "公开发布，可内部引用并注明出处", "authority_kind": "监管通报"}
 
@@ -61,8 +61,8 @@ def test_queue_lists_confirm_lane_grouped_by_host(people):
     r = people["expert"].get("/api/kb/sources/confirm-queue")
     assert r.status_code == 200, r.text
     groups = {g["group"]: g for g in r.json()}
-    assert set(groups) == {"sc.example.gov.cn", "编号"}
-    assert [i["id"] for i in groups["sc.example.gov.cn"]["items"]] == [ids[f"{HOST}/notice/2026-1"],
+    assert set(groups) == {"sc.example.org", "编号"}
+    assert [i["id"] for i in groups["sc.example.org"]["items"]] == [ids[f"{HOST}/notice/2026-1"],
                                                                        ids[f"{HOST}/notice/2026-2"]]
     assert groups["编号"]["items"][0]["gap_key"] == "GB/T 22239"
     assert people["consultant"].get("/api/kb/sources/confirm-queue").status_code == 403
@@ -113,7 +113,7 @@ def test_approve_by_source_registers_candidate_and_waits_for_whitelist(people):
 def test_approve_source_must_cover_urls(people):
     ids = _seed()
     body = {"gap_ids": [ids[f"{HOST}/notice/2026-1"]], "decision": "approve",
-            "source": {**SRC, "url": "https://other.example.gov.cn/"}}
+            "source": {**SRC, "url": "https://other.example.org/"}}
     assert people["admin"].post("/api/kb/sources/confirm-queue/decide", json=body).status_code == 422
     # 不带来源也可以确认（之后再登记来源）
     body = {"gap_ids": [ids["GB/T 22239"]], "decision": "approve"}

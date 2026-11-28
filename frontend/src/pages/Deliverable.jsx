@@ -4,9 +4,11 @@ import { api, CONCLUSION_CLS, DELIV_STATUS, SEVERITY_CLS, TIER } from "../api.js
 import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import AssistPanel from "../components/AssistPanel.jsx";
+import KbSidebar from "../components/KbSidebar.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
+import Customizations from "../components/Customizations.jsx";
 import DocBody from "../components/DocBody.jsx";
-import DeliverableForm from "../components/DeliverableForm.jsx";
+import DeliverableForm, { StartChoices } from "../components/DeliverableForm.jsx";
 import { BatchSign, ClientFeedback, ModeBar, RevisePanel } from "../components/DeliverableModes.jsx";
 import { modeOf, separationNote } from "../delivModes.js";
 import { noteAfterInsert, spliceText } from "../editor/assist.js";
@@ -55,7 +57,7 @@ function SourceBar({ counts }) {
   );
 }
 
-function Toc({ d, seq, onPick, editable, onOutline }) {
+export function Toc({ d, seq, onPick, editable, onOutline, form = null, onForm, onContract }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
@@ -78,7 +80,12 @@ function Toc({ d, seq, onPick, editable, onOutline }) {
   return (
     <section className="pnl pad" aria-label="目录">
       <div className="sb"><span className="cap">目录</span>
-        {editable && !editing && <button className="btn sm" onClick={() => { setText(d.sections.map((s) => s.title).join("\n")); setEditing(true); }}>{d.sections.length ? "改大纲" : "写大纲"}</button>}
+        {editable && !editing && (
+          <span className="row">
+            <button className="btn sm" onClick={() => { setText(d.sections.map((s) => s.title).join("\n")); setEditing(true); }}>{d.sections.length ? "改大纲" : "写大纲"}</button>
+            <StartChoices form={form} onForm={onForm} onContract={onContract} />
+          </span>
+        )}
       </div>
       {editing ? (
         <>
@@ -274,8 +281,11 @@ function Section({ code, dcode, seq, editable, onSaved, signed, sections = [] })
               <button className="btn" disabled={busy} onClick={() => setEdit(null)}>取消</button>
             </div>
           </div>
-          <AssistPanel code={code} dcode={dcode} seq={seq} getContext={() => bodyRef.current}
-            getRange={selectionRange} onInsert={insertReply} onReplace={replaceReply} request={askReq} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+            <AssistPanel code={code} dcode={dcode} seq={seq} getContext={() => bodyRef.current}
+              getRange={selectionRange} onInsert={insertReply} onReplace={replaceReply} request={askReq} />
+            <KbSidebar code={code} dcode={dcode} seq={seq} onInsert={insertReply} />
+          </div>
           </div>
         ) : s.version ? (
           <DocBody body={s.body} unresolved={unresolved} />
@@ -515,8 +525,11 @@ export default function Deliverable({ code, dcode }) {
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
+  const [contractFile, setContractFile] = useState(null);
   const [form, setForm] = useState(null);        // A14②：D1、D2 表单定义，没有表单为 null
   const [formOpen, setFormOpen] = useState(false);
+  const [wr, setWr] = useState(null);            // A32①：Word 回传结果
+  const wrInput = useRef(null);
 
   const loadForm = useCallback(() => {
     api.deliverableForm(code, dcode).then(setForm).catch(() => setForm(null));
@@ -537,7 +550,7 @@ export default function Deliverable({ code, dcode }) {
   }, [code, dcode]);
 
   useEffect(() => {
-    setD(null); setSo(null); setRv(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false);
+    setD(null); setSo(null); setRv(null); setSeq(1); setNotice(""); setForm(null); setFormOpen(false); setContractFile(null);
     loadForm();
     api.project(code).then(setP).catch(setError);
     api.members(code).then(setMembers).catch(() => setMembers([]));
@@ -565,6 +578,25 @@ export default function Deliverable({ code, dcode }) {
     }
   }
 
+  // 四期 A32①：回传改好的 Word（只收本平台导出的，按导出编号核对）；改过的章新建版本、留修订痕迹并重新评审
+  async function returnWord(file) {
+    if (!file) return;
+    setExporting(true);
+    setNotice("");
+    setWr(null);
+    try {
+      const r = await api.wordReturn(code, dcode, file);
+      setWr(r);
+      setNotice(`已回传（导出编号 ${r.export_id}）：${r.changed.length} 章有改动，已各建新版本`);
+      await load();
+    } catch (e) {
+      setNotice(`回传失败：${e.message}`);
+    } finally {
+      setExporting(false);
+      if (wrInput.current) wrInput.current.value = "";
+    }
+  }
+
   if (!p || !d || !so) return <Loading error={error} />;
   const tier = TIER[p.tier] || TIER.standard;
   const strict = p.tier === "strict";
@@ -583,12 +615,30 @@ export default function Deliverable({ code, dcode }) {
         <select className="sm" aria-label="切换交付件" value={d.code} onChange={(e) => navigate(`/project/${encodeURIComponent(code)}/deliverables/${e.target.value}`)}>
           {p.deliverables.map((x) => <option key={x.code} value={x.code}>{x.code} {x.title}</option>)}
         </select>
-        {editable && form?.writable && !formOpen && <button className="btnp" onClick={() => setFormOpen(true)}>按表单成稿</button>}
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportWord)}>{exporting ? "导出中…" : "导出 Word"}</button>
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportPpt)}>导出 PPT</button>
+        {editable && !strict && d.sections.length > 0 && (
+          <>
+            <button className="btn" disabled={exporting} title="上传在 Word 里改好的本平台导出文件" onClick={() => wrInput.current?.click()}>回传 Word</button>
+            <input ref={wrInput} type="file" hidden accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              aria-label="回传 Word 文件" onChange={(e) => returnWord(e.target.files?.[0])} />
+          </>
+        )}
       </TopBar>
       <ModeBar mode={mode} />
-      {notice && <div className={notice.startsWith("导出失败") ? "err" : "sub"} role="status">{notice}</div>}
+      {notice && <div className={/^(导出|回传)失败/.test(notice) ? "err" : "sub"} role="status">{notice}</div>}
+      {wr && (
+        <section className="pnl pad" aria-label="Word 回传修订痕迹">
+          <div className="sb"><span className="cap">Word 回传 · 修订痕迹</span><button className="btn sm" onClick={() => setWr(null)}>收起</button></div>
+          <div className="sub">{wr.review ? "改动的章节已重新发起质量评审。" : wr.review_note}{wr.missing.length ? ` Word 里没找到第 ${wr.missing.join("、")} 章，未改动。` : ""}</div>
+          {wr.changed.map((x) => (
+            <div key={x.seq} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="mono sub">第 {x.seq} 章 {x.title}：v{x.from_version} → v{x.version}</div>
+              <Diff lines={x.diff} />
+            </div>
+          ))}
+        </section>
+      )}
       {error && <div className="err">{error.message}</div>}
       {d.totals.knowledge_updates > 0 && (
         <div className="note-amber" role="status">
@@ -603,6 +653,8 @@ export default function Deliverable({ code, dcode }) {
       <div className="kb3">
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
           <Toc d={d} seq={cur} onPick={setSeq} editable={editable}
+            form={formOpen ? null : form} onForm={() => { setContractFile(null); setFormOpen(true); }}
+            onContract={(f) => { setContractFile(f); setFormOpen(true); }}
             onOutline={async (titles) => { await api.putOutline(code, dcode, titles); await load(); }} />
           <section className="pnl pad" aria-label="来源构成">
             <span className="cap">全文来源构成</span>
@@ -611,10 +663,11 @@ export default function Deliverable({ code, dcode }) {
           <Quality code={code} dcode={dcode} so={so} canReview={editable && d.sections.length > 0} isManager={isManager} onChanged={load} />
         </div>
         <div style={{ minWidth: 0 }}>
-          {formOpen && form ? <DeliverableForm code={code} dcode={dcode} form={form} onCancel={() => setFormOpen(false)}
-            onDone={async () => { setFormOpen(false); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
+          {formOpen && form ? <DeliverableForm code={code} dcode={dcode} form={form} initialFile={contractFile}
+            onCancel={() => { setFormOpen(false); setContractFile(null); }}
+            onDone={async () => { setFormOpen(false); setContractFile(null); setNotice("已按表单成稿，各章第 1 版已生成"); await load(); loadForm(); }} />
             : cur ? <Section key={`${dcode}-${cur}`} code={code} dcode={dcode} seq={cur} editable={editable} signed={signed} onSaved={load} sections={d.sections} />
-            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以点右上角“按表单成稿”，或先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
+            : <div className="pnl pad sub">这份交付件还没有大纲。{editable ? (form?.writable ? "可以点左侧“写大纲”旁边的“按表单成稿”或“按合同生成”，或自己写大纲，或在驾驶舱发起交付链让 Agent 起草。" : "先在左侧写大纲，或在驾驶舱发起交付链让 Agent 起草。") : ""}</div>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
           <section className="pnl pad" aria-label="待你确认">
@@ -624,6 +677,7 @@ export default function Deliverable({ code, dcode }) {
               {cards.length === 0 && <li className="sub">本交付件没有待确认事项。<Link to={`/project/${encodeURIComponent(code)}`}>回驾驶舱</Link></li>}
             </ul>
           </section>
+          <Customizations code={code} dcode={dcode} seq={cur} editable={editable && !signed} onChanged={load} />
           {mode === 1 && <RevisePanel code={code} dcode={dcode} rv={rv} editable={editable} onChanged={load} />}
           <SignFlow code={code} dcode={dcode} d={d} so={so} isManager={isManager} onChanged={load} />
           {mode === 3 && !so.merged && <ClientFeedback code={code} dcode={dcode} sections={d.sections} onChanged={load} />}

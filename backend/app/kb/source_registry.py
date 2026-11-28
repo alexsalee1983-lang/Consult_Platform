@@ -5,6 +5,10 @@
 - 转正式只限知识管理员，且不能是登记人本人（页面批准）；降级、停用必须写理由。
 - 采集机只抓试用、正式的来源（export_for_collector）；正式来源属已批准来源，入库审核把关（三期计划第八节）。
 - 文字字段过机密级检测；审计只记编号、状态和理由长度，不记理由原文。
+- 自动转正式（四期 B43，负责人 2026-11-27“3项都可以”）：网址在官方域名白名单（sources.official_hosts）内、
+  权威类别为法律法规与监管文件或标准（等级 1、2）、许可与类别规则核对通过的候选、试用来源，登记、修改或转试用时
+  由平台直接转正式（approved_by=platform:source-rules，事件写明理由）；白名单外或参考资料类照旧由另一位知识管理员批准。
+  自动转正式的来源改到白名单外的网址时退回试用。
 """
 from __future__ import annotations
 
@@ -29,6 +33,9 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     "retired": frozenset({"candidate"}),
 }
 NEEDS_REASON = frozenset({"demoted", "retired"})
+AUTO_ACTOR = "platform:source-rules"
+AUTO_LEVELS = (1, 2)
+AUTO_REASON = "官方域名白名单内，规则核对通过，自动转正式"
 COLLECT_STATUSES = ("trial", "active")
 # B27：类别固定七类，从高到低；等级为最小版三级
 AUTHORITY_LEVELS: dict[str, int] = {"法律": 1, "行政法规": 1, "监管通报": 1, "国家标准": 2, "行业标准": 2,
@@ -106,7 +113,34 @@ def create(db: Session, user: User, *, name: str, url: str, license: str, author
     db.commit()
     audit.record(db, actor=user.username, action="kb.source.create", result="allowed", code=src.code,
                  level=src.authority_level)
+    auto_activate(db, src)
     return src
+
+
+def auto_eligible(src: KbSource) -> bool:
+    from . import sources
+
+    return (src.status in ("candidate", "trial") and src.authority_level in AUTO_LEVELS
+            and bool((src.license or "").strip()) and sources.is_official(src.url))
+
+
+def _move(db: Session, src: KbSource, to: str, reason: str) -> None:
+    before = src.status
+    src.status, src.updated_at = to, utcnow()
+    if to == "active":
+        src.approved_by, src.approved_at = AUTO_ACTOR, utcnow()
+    db.add(KbSourceEvent(source_id=src.id, from_status=before, to_status=to, reason=reason, actor=AUTO_ACTOR))
+    db.commit()
+    audit.record(db, actor=AUTO_ACTOR, action="kb.source.status", result="allowed", code=src.code,
+                 from_status=before, to_status=to, reason_len=len(reason), auto=True)
+
+
+def auto_activate(db: Session, src: KbSource) -> bool:
+    """白名单内官方域名、规则核对通过的来源自动转正式；返回是否转了。"""
+    if not auto_eligible(src):
+        return False
+    _move(db, src, "active", AUTO_REASON)
+    return True
 
 
 def update(db: Session, user: User, code: str, changes: dict) -> KbSource:
@@ -126,6 +160,13 @@ def update(db: Session, user: User, code: str, changes: dict) -> KbSource:
     db.commit()
     audit.record(db, actor=user.username, action="kb.source.update", result="allowed", code=src.code,
                  fields=sorted(changed))
+    from . import sources
+
+    if src.status == "active" and src.approved_by == AUTO_ACTOR and not (
+            sources.is_official(src.url) and src.authority_level in AUTO_LEVELS):
+        _move(db, src, "trial", "自动转正式的来源改到白名单外或类别不再符合，退回试用")
+    else:
+        auto_activate(db, src)
     return src
 
 
@@ -154,6 +195,8 @@ def transition(db: Session, user: User, code: str, to: str, reason: str = "") ->
     db.commit()
     audit.record(db, actor=user.username, action="kb.source.status", result="allowed", code=src.code,
                  from_status=before, to_status=to, reason_len=len(reason))
+    if to == "trial":
+        auto_activate(db, src)
     return src
 
 

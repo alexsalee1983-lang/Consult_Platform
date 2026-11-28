@@ -249,6 +249,8 @@ def write_section(db: Session, user: User, project: Project, d: Deliverable, seq
         db.rollback()
         raise DeliverableError(409, f"第 {seq} 章正在被同时修改，请刷新后重试") from e
     judgment.capture_edit(db, project, d, seq, current, v)
+    from . import customizations                   # 四期 A30：编辑器一次性定制项随本章新版本用掉（延迟导入免循环）
+    customizations.consume_one_time(db, project, d, seq)
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  deliverable=d.code, section=seq, version=v.version, length=len(body), body_sha=sha[:16],
                  sources=sources["counts"], unresolved=len(sources["unresolved"]), agent=agent_code or None)

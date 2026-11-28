@@ -6,6 +6,7 @@ import zipfile
 
 import pytest
 from docx import Document
+from docx.oxml.ns import qn
 from sqlalchemy import select
 
 from app.core.config import get_settings
@@ -168,3 +169,32 @@ def test_no_outline_and_outsider(proj):
     user = create_user(("consultant",), {other: "member"})
     with logged_in_client(app, user) as c2:
         assert c2.get(f"{_base(code)}/export").status_code == 404           # 非成员 404
+
+
+def test_builtin_formal_layout(proj):
+    """负责人 11-28：内置模板按正式公文排版——封面单独一页，标题黑体黑色（不用 Word 默认蓝色），
+    正文宋体小四、西文 Times New Roman，表格表头加底纹并跨页重复、列宽按内容分配。"""
+    from docx.shared import Pt, RGBColor
+    code, c, _ = proj
+    c.put(f"{_base(code)}/outline", json={"titles": ["范围确认"]})
+    body = ("# 1.1 服务范围\n\n本项目服务范围包括：\n\n- 现状评估\n\n"
+            "| 阶段 | 时间 | 产出 |\n|---|---|---|\n| 设计 | 第 8–12 周 | 设计方案、制度文件包、实施路线图 |")
+    assert c.put(f"{_base(code)}/sections/1", json={"body": body}).status_code == 201
+    doc, _ = _docx(c.get(f"{_base(code)}/export"))
+    normal = doc.styles["Normal"]
+    assert normal.font.size == Pt(12) and normal.font.name == "Times New Roman"
+    assert normal.element.rPr.rFonts.get(qn("w:eastAsia")) == "宋体"
+    for name in ("Title", "Heading 1", "Heading 2"):
+        st = doc.styles[name]
+        assert st.font.color.rgb == RGBColor(0, 0, 0), name
+        assert st.element.rPr.rFonts.get(qn("w:eastAsia")) == "黑体", name
+    (title,) = [p for p in doc.paragraphs if p.style.name == "Title"]
+    assert title.text                                                          # 封面标题
+    assert doc.styles["Title"].paragraph_format.alignment == 1                 # 居中
+    head = [p.text for p in doc.paragraphs].index("1　范围确认")
+    assert any(r._r.xpath("./w:br[@w:type='page']") for p in doc.paragraphs[:head] for r in p.runs)   # 封面后分页
+    t = doc.tables[0]
+    assert t.rows[0]._tr.xpath("./w:trPr/w:tblHeader")
+    assert t.cell(0, 0)._tc.xpath("./w:tcPr/w:shd/@w:fill") == ["D9D9D9"]
+    widths = [t.cell(0, j).width for j in range(3)]
+    assert widths[2] > widths[0]                                               # 列宽按内容，不再三等分

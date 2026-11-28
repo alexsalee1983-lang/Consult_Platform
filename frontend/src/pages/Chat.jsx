@@ -71,9 +71,23 @@ export default function Chat({ code }) {
   const [toolNote, setToolNote] = useState(""); // Agent 正在调用的工具（二期 A7）
   const [error, setError] = useState("");
   const [external, setExternal] = useState(false);   // 当前接的是外部测试模型
+  const [custNote, setCustNote] = useState({});      // 四期 A30：消息序号 → 转定制项的结果
   // 只滚动对话区内部，不滚动整页；用户往上翻看时不把他拽回底部
   const scrollerRef = useRef(null);
   const stickRef = useRef(true);
+
+  // 四期 A30：顾问对话入口，平台按行和分号拆条，每条发一张定制项确认卡；越过红线、资质边界或碰到必备章节的标“不可接受”
+  async function toCustomization(i, content) {
+    try {
+      const r = await api.createCustomization(code, { source: "chat", text: content });
+      const bad = r.items.filter((x) => x.status === "unacceptable");
+      const msg = `已拆成 ${r.items.length} 条定制项，${r.items.length - bad.length} 张确认卡待处理` +
+        (bad.length ? `；${bad.length} 条不可接受：${bad.map((x) => x.reason).join("；")}` : "");
+      setCustNote((n) => ({ ...n, [i]: msg }));
+    } catch (e) {
+      setCustNote((n) => ({ ...n, [i]: `没有转成定制项：${e.detail?.summary || e.message}` }));
+    }
+  }
 
   const loadConvs = useCallback(() => api.conversations(code).then(setConvs).catch(() => setConvs([])), [code]);
 
@@ -251,7 +265,13 @@ export default function Chat({ code }) {
               </div>
             )}
             {messages.map((m, i) => {
-              if (m.role === "user") return <div key={i} className="msg-user">{m.content}</div>;
+              if (m.role === "user") return (
+                <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                  <div className="msg-user">{m.content}</div>
+                  {custNote[i] ? <div className="sub" role="status">{custNote[i]}</div>
+                    : <button className="btn sm" title="把这条消息里的客户要求逐条拆成定制项确认卡" onClick={() => toCustomization(i, m.content)}>转为定制项</button>}
+                </div>
+              );
               if (m.role === "blocked") return <Blocked key={i} detail={m.detail} />;
               if (m.role === "error") return <div key={i} className="err">请求失败：{m.content}</div>;
               return (

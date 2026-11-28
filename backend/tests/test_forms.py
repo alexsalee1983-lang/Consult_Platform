@@ -72,13 +72,19 @@ def test_get_form_and_submit_d1(proj):
     assert "- 现状评估\n- 运营体系设计" in body and "- 等保测评" in body
     assert "前提与依赖" not in body                                    # 没填的段落整段去掉
     assert body.endswith("不出具等级保护测评结论、商用密码应用安全性评估结论或认证结论。")
+    # 负责人 11-28：成稿格式统一——小节编号连续（没填的小节不占号）、列表和表格前有引导句、不用加粗伪标题
+    assert body.startswith("# 2.1 服务范围\n\n本项目服务范围包括：\n\n- 现状评估")
+    assert "# 2.2 不包含事项\n\n以下事项不在本项目范围内：" in body and "# 2.3 服务性质说明\n\n本项目提供差距分析" in body
+    for seq in range(1, 11):
+        assert "**" not in c.get(f"{_base(code, 'D1')}/sections/{seq}").json()["body"], seq
     s1 = c.get(f"{_base(code, 'D1')}/sections/1").json()
     assert "2027-01-05 至 2027-03-31" in s1["body"] and "{" not in s1["body"]
     assert s1["versions"][0]["note"] == forms.NOTE
     s6 = c.get(f"{_base(code, 'D1')}/sections/6").json()["body"]
-    assert "**问题升级路径**\n\n- 项目经理\n- 双方项目负责人" in s6
+    assert "# 6.2 问题升级路径\n\n项目问题按以下顺序逐级升级：\n\n- 项目经理\n- 双方项目负责人" in s6
     s9 = c.get(f"{_base(code, 'D1')}/sections/9").json()["body"]       # 顾问没填另行约定，固定段仍写入
-    assert s9.startswith("无论哪一档") and "保留 6 个月" in s9 and "严格档" not in s9
+    assert s9.startswith("# 9.1 数据保护承诺\n\n无论哪一档") and "保留 6 个月" in s9 and "严格档" not in s9
+    assert "# 9.2 资料保留与删除\n\n本项目按标准档处理" in s9
     s10 = c.get(f"{_base(code, 'D1')}/sections/10").json()["body"]
     assert "会后行动" not in s10                                       # 没填的会后行动整段去掉
 
@@ -99,6 +105,10 @@ def test_d2_agent_section_only_in_outline(proj):
     secs = r.json()["sections"]
     assert secs[-1]["title"] == "访谈提纲" and secs[-1]["current_version"] == 0   # 留给调研访谈 Agent
     assert all(s["current_version"] == 1 for s in secs[:-1])
+    s1 = c.get(f"{_base(code, 'D2')}/sections/1").json()["body"]
+    assert s1.startswith("# 1.1 调研对象\n\n") and "# 1.2 时间安排" in s1 and "**" not in s1
+    s2 = c.get(f"{_base(code, 'D2')}/sections/2").json()["body"]
+    assert s2.startswith("# 2.1 资料清单\n\n请贵方提供以下资料：\n\n- 组织架构图") and "# 2.2 资料要求" in s2
 
 
 def test_validation(proj):
@@ -111,7 +121,7 @@ def test_validation(proj):
     assert r.status_code == 422
     r = c.post(f"{_base(code, 'D1')}/form", json={"values": {**D1_VALUES, "goal": "{in_scope}"}})
     assert r.status_code == 201                                       # 用户填的花括号原样写入，不再展开
-    assert c.get(f"{_base(code, 'D1')}/sections/1").json()["body"].startswith("**项目目标**\n\n{in_scope}")
+    assert c.get(f"{_base(code, 'D1')}/sections/1").json()["body"].startswith("# 1.1 项目目标\n\n{in_scope}")
 
 
 def test_guard_blocks_whole_form(proj):
@@ -197,7 +207,7 @@ def test_d1_a28_simplified_prefill_and_tables(proj):
     r = c.post(f"{_base(code, 'D1')}/form", json={"values": values})
     assert r.status_code == 201, r.text
     s4 = c.get(f"{_base(code, 'D1')}/sections/4").json()["body"]
-    assert s4.startswith("| 阶段 | 时间 | 产出 |\n| --- | --- | --- |\n| 启动 | 第 1 周 | 启动包 |")
+    assert s4.startswith("项目阶段划分与里程碑安排如下表所示。\n\n| 阶段 | 时间 | 产出 |\n| --- | --- | --- |\n| 启动 | 第 1 周 | 启动包 |")
     s8 = c.get(f"{_base(code, 'D1')}/sections/8").json()["body"]
     assert "| 风险 | 应对 |" in s8
 
@@ -260,3 +270,14 @@ def test_milestone_follows_phase():
     assert stages.pick_milestone(rows, 5) == ""
     assert stages.weeks_of("2027-01-05 至 2027-03-31") == 12 and stages.weeks_of("共 8 周") == 8
     assert stages.weeks_of("合同约定") is None
+
+
+def test_d1_formal_order():
+    """负责人 11-28：第 1 章先背景后目标、周期；第 9 章先写平台承诺，双方另行约定放最后。"""
+    f = forms.load_form("D1")
+    vals = {fl.key: fl.example for fl in f.fields()}
+    body = dict(forms.render(f, vals))
+    assert body["项目概况"].startswith("# 1.1 项目背景\n\n") and "# 1.2 项目目标" in body["项目概况"]
+    s9 = body["客户数据保护安排"]
+    assert s9.startswith("# 9.1 数据保护承诺\n\n") and "# 9.2 资料保留与删除" in s9
+    assert "# 9.3 本项目特别约定\n\n运营值班记录" in s9
