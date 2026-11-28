@@ -9,8 +9,8 @@
   项目经理更正保留期后不再到期的，待确认的到期申请自动撤销（retention.accept 调用 cancel_if_not_due）。
 - 提前删除：客户书面要求，由本项目的项目经理发起（写文号、收到日期，文号先过机密级检测、不写客户名称），
   应完成日期 = 收到日期起第 EARLY_WORKING_DAYS 个工作日（周一至周五，不扣法定节假日，节前请留余量）。
-  项目负责人可以撤销提前删除申请（客户撤回时，写理由）；到期申请不能撤销，只能由项目经理按约定更正保留期。
-- 确认：持“项目负责人”角色（project_lead）的人确认，不必是项目成员；不能是发起人。确认时必须选经验回流情况：
+  咨询业务负责人可以撤销提前删除申请（客户撤回时，写理由）；到期申请不能撤销，只能由项目经理按约定更正保留期。
+- 确认：持“咨询业务负责人”角色（project_lead）的人确认，不必是项目成员；不能是发起人。确认时必须选经验回流情况：
   done 已回流（填投料编号，即知识区上传编号）/ none 无可回流内容 / client_refused 客户不同意回流；
   项目标了“客户不同意回流”的只能选 client_refused。回流不阻塞删除。
 - 执行：确认后排队后台任务 project.delete（可重复执行）：删对象存储项目区“项目代号/”下的全部文件，
@@ -175,13 +175,13 @@ def cancel_if_not_due(db: Session, actor: str, p: Project) -> None:
                      deletion_id=d.id, reason="retention_corrected")
 
 
-# ---- 项目负责人：确认、撤销 ----
+# ---- 咨询业务负责人：确认、撤销 ----
 
 def get_for_lead(db: Session, user: User, deletion_id: int, action: str) -> ProjectDeletion:
     if not _is_lead(db, user):
         audit.record(db, actor=user.username, action=action, result="denied", reason="not_project_lead",
                      deletion_id=deletion_id)
-        raise DeletionError(403, "只有项目负责人能确认或撤销删除")
+        raise DeletionError(403, "只有咨询业务负责人能确认或撤销删除")
     d = db.get(ProjectDeletion, deletion_id)
     if d is None:
         raise DeletionError(404, "删除申请不存在")
@@ -216,7 +216,7 @@ def confirm(db: Session, user: User, deletion_id: int, flowback: str, flowback_r
         db.commit()
         audit.record(db, actor=user.username, action=action, result="denied", project_code=p.code,
                      deletion_id=d.id, reason="same_person")
-        raise DeletionError(403, "发起人不能确认自己发起的删除，请由另一位项目负责人确认")
+        raise DeletionError(403, "发起人不能确认自己发起的删除，请由另一位咨询业务负责人确认")
     d.status, d.confirmed_by, d.confirmed_at = CONFIRMED, user.username, utcnow()
     d.flowback, d.flowback_refs = flowback, refs
     db.commit()
@@ -357,7 +357,7 @@ def set_flowback_allowed(db: Session, user: User, p: Project, allowed: bool) -> 
 
 def list_for_lead(db: Session, user: User, status: str = "open") -> list[ProjectDeletion]:
     if not _is_lead(db, user):
-        raise DeletionError(403, "只有项目负责人能查看删除确认队列")
+        raise DeletionError(403, "只有咨询业务负责人能查看删除确认队列")
     stmt = select(ProjectDeletion).order_by(ProjectDeletion.due_by, ProjectDeletion.id)
     if status == "open":
         stmt = stmt.where(ProjectDeletion.status.in_(OPEN))
@@ -372,7 +372,7 @@ def list_for_project(db: Session, p: Project) -> list[ProjectDeletion]:
 
 
 def pending_counts(db: Session, p: Project) -> dict:
-    """确认前给项目负责人看的计数（不含任何内容）。"""
+    """确认前给咨询业务负责人看的计数（不含任何内容）。"""
     pid = p.id
     dels = select(Deliverable.id).where(Deliverable.project_id == pid)
 

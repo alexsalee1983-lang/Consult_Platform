@@ -38,6 +38,11 @@ class TaskOut(BaseModel):
     folded: bool
     returnable: bool
     fields: list[FieldOut]
+    situation: str = ""        # 四期 A29 统一卡片格式：情况、补充、推荐处理按钮、影响说明、预计分钟数
+    supplement: str = ""
+    action: str = ""
+    impact_text: str = ""
+    minutes: int = 0
 
 
 class KindOut(BaseModel):
@@ -53,6 +58,9 @@ class MyTasksOut(BaseModel):
     kinds: dict[str, KindOut]
     tasks: list[TaskOut]
     member_projects: int
+    pending: int = 0           # 待处理数
+    minutes: int = 0           # 预计分钟数合计
+    auto_done: int = 0         # 本周 AI 已自动办完多少件（只给计数）
 
 
 class ReturnIn(BaseModel):
@@ -73,10 +81,12 @@ def my_tasks(db: Session = Depends(get_db), user: User = Depends(current_user)) 
     tasks = [TaskOut(kind=t.kind, ref_id=t.ref_id, title=t.title, link=t.link, project_code=t.project_code,
                      impact=t.impact, uncertainty=t.uncertainty, score=t.score, blocked=t.blocked, folded=t.folded,
                      returnable=t.kind in mt.RETURNABLE and not t.blocked,
-                     fields=[FieldOut(**f) for f in t.fields]) for t in s["tasks"]]
+                     fields=[FieldOut(**f) for f in t.fields], situation=t.situation, supplement=t.supplement,
+                     action=t.action, impact_text=t.impact_text, minutes=t.minutes) for t in s["tasks"]]
     return MyTasksOut(quota=s["quota"], folded=s["folded"], weights=s["weights"],
                       kinds={k: KindOut(**v) for k, v in s["kinds"].items()}, tasks=tasks,
-                      member_projects=s["member_projects"])
+                      member_projects=s["member_projects"], pending=s["pending"], minutes=s["minutes"],
+                      auto_done=s["auto_done"])
 
 
 @router.post("/return", response_model=ReturnOut, status_code=202)

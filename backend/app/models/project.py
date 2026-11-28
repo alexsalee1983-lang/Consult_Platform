@@ -100,7 +100,7 @@ class ProjectDeletion(Base):
     """项目资料删除申请与删除记录（M4 ②）。完成后就是可交给客户的删除记录：只记编号、日期、计数、确认人和回流情况。
 
     kind：expiry 到期（平台规则发起，requested_by="platform"）/ early 客户书面要求提前删除（项目经理发起）。
-    status：pending 待项目负责人确认 / confirmed 已确认、删除执行中 / done 已删除 / cancelled 已撤销。
+    status：pending 待咨询业务负责人确认 / confirmed 已确认、删除执行中 / done 已删除 / cancelled 已撤销。
     flowback：done 已回流（flowback_refs 为投料编号）/ none 无可回流内容 / client_refused 客户不同意回流。
     """
 

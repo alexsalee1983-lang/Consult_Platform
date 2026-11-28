@@ -35,19 +35,27 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B", None),             (404, 404, 403, 403, 403)),
     # 项目全景（四期 A25①）：项目成员可看，非成员 404
     (("GET", "/api/projects/BANK-A/panorama", None),    (200, 404, 403, 403, 403)),
-    # 项目总览（方案 A）：只给项目负责人；顾问 403（负责人 200 在 test_portfolio 里测）
+    # Agent 运行情况（四期 A29）：全景多出“Agent 运行”行，成员可看，非成员 404；
+    # 知识侧运行记录只给知识管理员（可重跑）、咨询业务负责人（只读），跨项目运行状态只给咨询业务负责人，
+    # 顾问 403（各角色 200 / 403 在 test_agent_activity 里测）
+    (("GET", "/api/projects/BANK-A/panorama?runs=1", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/panorama?runs=1", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/agent-activity/knowledge", None),    (403, 403, 403, 403, 403)),
+    (("POST", "/api/agent-activity/knowledge/jobs/999999/retry", None), (403, 403, 403, 403, 403)),
+    (("GET", "/api/agent-activity/projects", None),     (403, 403, 403, 403, 403)),
+    # 项目总览（方案 A）：只给咨询业务负责人；顾问 403（负责人 200 在 test_portfolio 里测）
     (("GET", "/api/portfolio", None),                   (403, 403, 403, 403, 403)),
-    # 指标看板（三期 F2）：只给项目负责人（负责人 200 在 test_indicators 里测）
+    # 指标看板（三期 F2）：只给咨询业务负责人（负责人 200 在 test_indicators 里测）
     (("GET", "/api/indicators", None),                  (403, 403, 403, 403, 403)),
     (("GET", "/api/indicators/drift", None),            (403, 403, 403, 403, 403)),
-    # AI 质量事件台账（四期 F3）：台账只给项目负责人；登记挂 BANK-A 须是成员（非成员 404）；
+    # AI 质量事件台账（四期 F3）：台账只给咨询业务负责人；登记挂 BANK-A 须是成员（非成员 404）；
     # 他人事件详情和处置 404（负责人、项目经理、登记人在 test_quality_incidents 里测）
     (("GET", "/api/quality-incidents", None),           (403, 403, 403, 403, 403)),
     (("POST", "/api/quality-incidents", {"category": "bogus", "ref_kind": "run", "ref_id": "1", "project": "BANK-A"}),
      (422, 422, 403, 403, 403)),
     (("GET", "/api/quality-incidents/999999", None),    (404, 404, 403, 403, 403)),
     (("POST", "/api/quality-incidents/999999/events", {"step": "assess"}), (404, 404, 403, 403, 403)),
-    # Agent md 版本库与撤销回滚（四期 F3②e）：项目负责人、系统管理员（负责人 200 在 test_agent_md_rollback 里测）
+    # Agent md 版本库与撤销回滚（四期 F3②e）：咨询业务负责人、系统管理员（负责人 200 在 test_agent_md_rollback 里测）
     (("GET", "/api/agent-md/report-writer/versions", None), (403, 403, 200, 403, 403)),
     (("GET", "/api/agent-md/report-writer/versions/000000000000", None), (403, 403, 404, 403, 403)),
     (("POST", "/api/agent-md/report-writer/unpin", {"reason": "权限矩阵"}), (403, 403, 404, 403, 403)),
@@ -77,7 +85,7 @@ MATRIX = [
     (("PUT", "/api/expert-bench/profile", {"products": ["SOC"], "industries": []}),
                                                         (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
-    # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
+    # 网页立项（二期 A3）：要咨询业务负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
     (("POST", "/api/projects", {"code": "QA-MTX", "tier": "standard", "product": "SOC", "industry": "其他"}),
                                                         (403, 403, 403, 403, 403)),
@@ -87,7 +95,7 @@ MATRIX = [
     (("GET", "/api/projects/BANK-A/closeout", None),    (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/BANK-A/terminate", {"reason": ""}), (422, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/acceptance", {"accepted_on": "2026-01-01"}), (404, 404, 403, 403, 403)),
-    # 删除（M4 ②）：确认队列只给项目负责人（矩阵里没有这个角色，负责人的 200 在 test_deletion 里测）；
+    # 删除（M4 ②）：确认队列只给咨询业务负责人（矩阵里没有这个角色，负责人的 200 在 test_deletion 里测）；
     # member 是 BANK-A 项目经理：收到日期写在将来 → 422（不在 BANK-A 留下申请）；非成员 404
     (("GET", "/api/deletions", None),                   (403, 403, 403, 403, 403)),
     (("GET", "/api/deletions/999999", None),            (403, 403, 403, 403, 403)),
@@ -184,7 +192,7 @@ MATRIX = [
     (("GET", "/api/projects/GRID-B/deliverables/D2/export", None), (404, 404, 403, 403, 403)),
     # 改稿差异转候选（三期 F4）：开关默认关，成员也 404；非成员 404、非业务角色 403（开关打开的行为在 test_revision_mining）
     (("POST", "/api/projects/BANK-A/deliverables/D7/revision-candidates", None), (404, 404, 403, 403, 403)),
-    # 改稿与驳回特征汇总（四期 F4②）：只给项目负责人、知识管理员，顾问 403（负责人与开关行为在 test_revision_features）
+    # 改稿与驳回特征汇总（四期 F4②）：只给咨询业务负责人、知识管理员，顾问 403（负责人与开关行为在 test_revision_features）
     (("GET", "/api/revision-features/summary", None), (403, 403, 403, 403, 403)),
     (("GET", "/api/revision-features/summary?project=BANK-A", None), (403, 403, 403, 403, 403)),
     # 经验萃取问题（四期 F4③）：只给知识专家，其他角色 403（专家与开关行为在 test_extraction_trigger）
@@ -237,7 +245,7 @@ MATRIX = [
      (404, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/deliverables/D2/reviews/1/waivers", {"issue": 0, "reason": "理由"}),
      (404, 404, 403, 403, 403)),
-    # 交付链运行（M3 ④）：成员可看；发起在 test_runs 里测（这里发起会在 BANK-A 留下排队的运行）
+    # 交付链运行（M3 ④）：成员可看；发起、取消只给项目经理（A29，成员 403 在 test_agent_activity 里测）；发起在 test_runs 里测（这里发起会在 BANK-A 留下排队的运行）
     (("GET", "/api/projects/BANK-A/runs", None),        (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/chain", None),       (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/runs/999999", None), (404, 404, 403, 403, 403)),
@@ -284,7 +292,7 @@ MATRIX = [
     (("POST", "/api/kb/sources/alarms/999999/resolve", None), (403, 403, 403, 403, 403)),
     (("GET", "/api/kb/meta", None),                     (200, 200, 403, 403, 403)),
     (("GET", "/api/kb/stats", None),                    (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
-    (("GET", "/api/kb/readiness", None),                (403, 403, 403, 403, 403)),   # F2②：知识专家、知识管理员、项目负责人
+    (("GET", "/api/kb/readiness", None),                (403, 403, 403, 403, 403)),   # F2②：知识专家、知识管理员、咨询业务负责人
     (("GET", "/api/kb/review-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/recheck-queue", None),             (403, 403, 403, 403, 403)),   # 只限知识专家、知识管理员
     (("GET", "/api/kb/practice-queue", None),           (403, 403, 403, 403, 403)),   # 公司做法确认队列（三期 B17），同上

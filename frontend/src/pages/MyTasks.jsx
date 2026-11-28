@@ -7,7 +7,10 @@ import { filterChips, splitTasks, toggleFilter } from "../tasks/view.js";
 
 // 我的任务（三期 B17②；四期试用反馈 11-25 并入原工作台）：平台唯一的待办入口。
 // 各类待办合一，按影响 × 不确定度排好；超出每日额度的折叠；拿不准的字段标黄；可退回由 Agent 重写；
-// 顶部按类型筛选；按规则须由别人处理的放在底部折叠区，写明须谁处理
+// 顶部按类型筛选。
+// 四期 A29（《平台规划刷新设计》3.2）：知识侧待办也在这里；别人的卡直接隐藏，不置灰；卡片统一格式：
+// 标题、情况 / 补充两栏、推荐按键在前、影响说明、预计分钟；顶部写待处理数、预计分钟与每日额度、本周 AI 已自动办完
+
 function Fields({ fields }) {
   if (!fields?.length) return null;
   return (
@@ -39,24 +42,27 @@ function TaskRow({ t, kindName, onReturned }) {
     }
   };
   return (
-    <li style={t.blocked ? { opacity: 0.55 } : undefined}>
+    <li aria-label="任务卡">
       <div className="sb">
         <span>
           <span className="chip c-n">{kindName}</span>{" "}
           {t.project_code && <span className="mono sub">{t.project_code} · </span>}{t.title}
           {t.uncertainty > 0 && <> <span className="chip c-a">存疑</span></>}
         </span>
-        <span className="row" style={{ gap: 6 }}>
-          <span className="sub mono" title="影响 × 不确定度">影响 {t.impact} · 分 {t.score}</span>
-          {t.blocked ? <span className="sub">{t.blocked}</span> : (
-            <>
-              {t.returnable && <button className="btn sm" onClick={() => setOpen((v) => !v)}>退回</button>}
-              <Link className="btn sm" to={t.link}>去处理</Link>
-            </>
-          )}
-        </span>
+        <span className="sub mono" title="预计用时；影响 × 不确定度">约 {t.minutes} 分钟 · 分 {t.score}</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 4 }}>
+        <div><div className="cap">情况</div><div className="sub">{t.situation || "—"}</div></div>
+        <div><div className="cap">补充</div><div className="sub">{t.supplement || "—"}</div></div>
       </div>
       <Fields fields={t.fields} />
+      <div className="sb" style={{ marginTop: 6 }}>
+        <span className="sub">{t.impact_text}</span>
+        <span className="row" style={{ gap: 6 }}>
+          <Link className="btnp sm" to={t.link}>{t.action || "去处理"}</Link>
+          {t.returnable && <button className="btn sm" onClick={() => setOpen((v) => !v)}>退回</button>}
+        </span>
+      </div>
       {open && (
         <div className="row" style={{ gap: 6, marginTop: 6 }}>
           <input className="inp" style={{ flex: 1 }} maxLength={200} placeholder="退回意见（交 Agent 重写，勿写客户原文）"
@@ -74,14 +80,13 @@ export default function MyTasks() {
   const [d, setD] = useState(null);
   const [error, setError] = useState(null);
   const [showFolded, setShowFolded] = useState(false);
-  const [showBlocked, setShowBlocked] = useState(false);
   const [filter, setFilter] = useState("");
   const load = useCallback(() => { api.myTasks().then(setD).catch((e) => setError(e.message)); }, []);
   useEffect(load, [load]);
   if (error) return <section className="pnl pad err" role="alert">{error}</section>;
   if (!d) return <section className="pnl pad sub">加载中…</section>;
   const name = (k) => d.kinds[k]?.name || k;
-  const { today, later, blocked } = splitTasks(d.tasks, filter);
+  const { today, later } = splitTasks(d.tasks, filter);
   const roles = (user?.roles || []).map((r) => ROLE_NAMES[r] || r).join("、");
   const list = (rows) => (
     <ul className="lst">{rows.map((t) => <TaskRow key={`${t.kind}-${t.ref_id}`} t={t} kindName={name(t.kind)} onReturned={load} />)}</ul>
@@ -89,6 +94,11 @@ export default function MyTasks() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <TopBar cap={roles ? `${roles} · 按影响 × 不确定度排序` : "按影响 × 不确定度排序"} title="我的任务" />
+      <div className="row" aria-label="任务概况" style={{ gap: 16, flexWrap: "wrap" }}>
+        <span>待处理 <b className="mono">{d.pending}</b> 项</span>
+        <span>预计 <b className="mono">{d.minutes}</b> 分钟 · 每日额度 <span className="mono">{d.quota}</span> 项</span>
+        <span>本周 AI 已自动办完 <b className="mono" style={{ color: "var(--ok)" }}>{d.auto_done}</b> 项</span>
+      </div>
       <div className="row" role="group" aria-label="按类型筛选" style={{ gap: 6, flexWrap: "wrap" }}>
         {filterChips(d.kinds).map((c) => (
           <button key={c.key} type="button" className={filter === c.key ? "btnp sm" : "btn sm"} aria-pressed={filter === c.key}
@@ -116,14 +126,6 @@ export default function MyTasks() {
           <div className="sb"><h2 className="h2">超出今日额度 <span className="sub mono">{later.length}</span></h2>
             <button className="btn sm" onClick={() => setShowFolded((v) => !v)}>{showFolded ? "收起" : "展开"}</button></div>
           {showFolded && list(later)}
-        </section>
-      )}
-      {blocked.length > 0 && (
-        <section className="pnl pad" aria-label="须由别人处理">
-          <div className="sb"><h2 className="h2">须由别人处理 <span className="sub mono">{blocked.length}</span></h2>
-            <span className="row" style={{ gap: 6 }}><span className="sub">按规则你不能处理，每项写明须谁处理</span>
-              <button className="btn sm" onClick={() => setShowBlocked((v) => !v)}>{showBlocked ? "收起" : "展开"}</button></span></div>
-          {showBlocked && list(blocked)}
         </section>
       )}
     </div>

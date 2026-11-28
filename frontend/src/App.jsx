@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useParams, useSearchParams } from "react-router";
 import { api } from "./api.js";
 import { HomeRedirect, PASSWORD_PATH, RequireAuditor, RequireAuth, RequireBusiness, RequireKnowledge, RequireLead, RequireSysAdmin } from "./auth.jsx";
+import { AgentBar, AgentViewProvider } from "./components/AgentActivity.jsx";
 import { Loading } from "./components/common.jsx";
 import Sidebar from "./components/Sidebar.jsx";
+import AdvisorDrawer from "./components/AdvisorDrawer.jsx";
 import Audit from "./pages/Audit.jsx";
 import Chat from "./pages/Chat.jsx";
 import Deletions from "./pages/Deletions.jsx";
@@ -35,10 +37,12 @@ function Shell() {
   const { pathname } = useLocation();
   return (
     <RequireAuth>
-      <div className={pathname.startsWith("/project/") ? "layout narrow" : "layout"}>
-        <Sidebar />
-        <main className="content"><Outlet /></main>
-      </div>
+      <AgentViewProvider>
+        <div className={pathname.startsWith("/project/") ? "layout narrow" : "layout"}>
+          <Sidebar />
+          <main className="content"><AgentBar /><Outlet /></main>
+        </div>
+      </AgentViewProvider>
     </RequireAuth>
   );
 }
@@ -85,6 +89,12 @@ function DeliverableHome() {
   return <Navigate to={`/project/${encodeURIComponent(code)}/deliverables/${target}`} replace />;
 }
 
+// 四期 A41：顾问对话抽屉挂在驾驶舱外层，各页共用，切页不换会话
+function WithAdvisor() {
+  const { code } = useParams();
+  return <><ProjectLayout /><AdvisorDrawer code={code} /></>;
+}
+
 function ChatPage() {
   const { code } = useParams();
   return <Chat code={code} />;
@@ -101,7 +111,7 @@ export default function App() {
           <Route path="/workbench" element={<Navigate to="/my-tasks" replace />} />
           <Route path="/my-tasks" element={<MyTasks />} />
           <Route path="/projects" element={<Projects />} />
-          <Route path="/project/:code" element={<ProjectLayout />}>
+          <Route path="/project/:code" element={<WithAdvisor />}>
             <Route index element={<OverviewPage />} />
             <Route path="input" element={<Input />} />
             <Route path="requirements" element={<Requirements />} />

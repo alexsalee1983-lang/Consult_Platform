@@ -9,7 +9,7 @@ SOC 的步骤（《Agent组开发项目方案》第五节，配置在 products/s
   ⑥ policy      制度起草 Agent：读目标运营模型和 D3 → 写 D6 制度文件包
   ⑦ design_doc  报告与汇报 Agent：读目标运营模型和差距分析 → 写 D5 设计方案
   ⑦ roadmap     报告与汇报 Agent：同上 → 写 D7 实施路线图
-  ⑦ briefing    报告与汇报 Agent：读 D4、D5、D7 → 写 D8 高层汇报
+  ⑦ briefing    报告与汇报 Agent：读 D4、D5、D7 → 写 D8 高层汇报（四期 A39：先给发现表与 D5 / D7 要点，见 briefing.py）
   没有 doc.generate 授权的 Agent（依据与差距分析、方案设计）产出存运行记录，按 inputs 的 run:<key> 交给后续步骤。
   输入按配置 inputs 拼（_step_inputs）：第一项是主输入，没有内容本步失败。
 
@@ -49,7 +49,7 @@ from ..models import AgentRun, AgentRunStep, Confirmation, Project, ProjectMembe
 from ..products import config
 from ..services import config_registry, gateway, guard, injection, jobs, runtime_config, usage
 from . import cards as cards_svc
-from . import assessment, configs, findings
+from . import assessment, briefing, configs, findings
 from . import customizations, deliverables
 
 JOB_KIND = "agent_run.step"
@@ -435,6 +435,8 @@ def _step_inputs(db: Session, project: Project, run: AgentRun, step: Step) -> tu
     joined = "\n\n".join(blocks)
     if len(blocks) > 1:
         joined = joined[:INPUT_CHARS * max(2, len(blocks))]
+    if step.deliverable == briefing.DELIVERABLE and (pts := briefing.points(db, project)):
+        joined = f"{pts}\n\n{joined}"        # 四期 A39：D8 先给真源要点，全文仍作背景
     return joined, f"{step.query} {head[:200]}"
 
 

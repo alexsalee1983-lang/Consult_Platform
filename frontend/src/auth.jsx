@@ -46,7 +46,7 @@ export function useAuth() {
 
 // 与后端 app/core/permissions.py 一致
 export const ROLE_NAMES = {
-  consultant: "顾问", project_lead: "项目负责人", knowledge_expert: "知识专家",
+  consultant: "顾问", project_lead: "咨询业务负责人", knowledge_expert: "知识专家",
   knowledge_admin: "知识管理员", sys_admin: "系统管理员", security_auditor: "安全审计员",
 };
 const BUSINESS_ROLES = ["consultant", "project_lead", "knowledge_expert", "knowledge_admin"];
@@ -95,13 +95,13 @@ export function RequireKnowledge({ children }) {
   );
 }
 
-// 项目负责人：确认项目资料删除（M4 ②）
+// 咨询业务负责人：确认项目资料删除（M4 ②）
 export function RequireLead({ children }) {
   const { user } = useAuth();
   if (hasRole(user, "project_lead")) return children;
   return (
     <section className="pnl pad" aria-label="无权限">
-      <h1 className="h1">只有项目负责人能使用这个页面</h1>
+      <h1 className="h1">只有咨询业务负责人能使用这个页面</h1>
       <div className="sub" style={{ fontSize: 13 }}>项目经理在项目驾驶舱的“验收与保留期”里发起客户要求的提前删除。</div>
     </section>
   );

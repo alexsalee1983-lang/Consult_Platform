@@ -1,6 +1,6 @@
-"""项目总览（负责人 11-15 定方案 A）：项目负责人看全部项目的元数据，不必是成员。
+"""项目总览（负责人 11-15 定方案 A）：咨询业务负责人看全部项目的元数据，不必是成员。
 
-GET /api/portfolio   只给项目负责人（其他角色 403）。每个项目只返回代号、产品、行业、档位、阶段、周次、项目经理、
+GET /api/portfolio   只给咨询业务负责人（其他角色 403）。每个项目只返回代号、产品、行业、档位、阶段、周次、项目经理、
                      成员数、交付件状态计数、保留期与删除状态、本人是否成员；不返回资料、纪要、交付件标题和正文、
                      确认卡、对话。进入驾驶舱仍按成员判断（非成员 404），见 app/core/permissions.py 规则 6。
 """
@@ -43,7 +43,7 @@ class PortfolioItem(BaseModel):
 @router.get("/portfolio", response_model=list[PortfolioItem])
 def portfolio(db: Session = Depends(get_db), user: User = Depends(current_user)):
     if PROJECT_LEAD not in roles_of(db, user.id):
-        raise HTTPException(403, "项目总览只给项目负责人")
+        raise HTTPException(403, "项目总览只给咨询业务负责人")
     projects = db.scalars(select(Project).options(selectinload(Project.deliverables)).order_by(Project.code)).all()
     members = db.execute(select(ProjectMember.project_id, ProjectMember.user_id, ProjectMember.project_role, User.display_name,
                                 User.username).join(User, User.id == ProjectMember.user_id)).all()
