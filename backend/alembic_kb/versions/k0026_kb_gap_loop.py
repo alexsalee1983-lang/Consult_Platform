@@ -8,7 +8,7 @@ kb_gaps 新列：
 plan 新增取值 unavailable，字段长度不变。
 
 Revision ID: k0026_kb_gap_loop
-Revises: k0022_kb_gap_manual
+Revises: k0023_kb_expert_assign
 Create Date: 2026-11-27
 """
 from collections.abc import Sequence
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0026_kb_gap_loop"
-down_revision: str | None = "k0022_kb_gap_manual"
+down_revision: str | None = "k0023_kb_expert_assign"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
