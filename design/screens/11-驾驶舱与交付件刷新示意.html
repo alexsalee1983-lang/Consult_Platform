@@ -80,36 +80,98 @@ textarea.inp{min-height:54px;resize:vertical}
 .seg{display:inline-flex;border:1px solid var(--ln2);border-radius:7px;overflow:hidden}.seg a{padding:3px 12px;color:var(--tx3)}.seg a.on{background:var(--s3);color:var(--tx)}
 .lv{font-size:12px;padding:6px 9px;border-radius:6px;margin-bottom:6px;background:var(--s2);border:1px solid var(--ln)}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid var(--cyan);color:var(--tx);padding:9px 18px;border-radius:8px;display:none;z-index:9;max-width:720px}
+
+/* ===== 最终形态：左栏 + 全景动图 ===== */
+.rail{width:56px;background:var(--obs);border-right:1px solid var(--ln);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px;position:sticky;top:0;height:100vh;flex-shrink:0}
+.rail .lg{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--amber),var(--crim));color:var(--obs);font-weight:800;display:grid;place-items:center;margin-bottom:10px}
+.rail a{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;color:var(--tx3);font-size:11px;line-height:1.1;text-align:center}
+.rail a.on,.rail a:hover{background:var(--s3);color:var(--tx)}
+.side{width:224px;height:100vh;overflow:auto}
+.pcard{background:var(--s2);border:1px solid var(--ln);border-radius:10px;padding:10px;margin-bottom:10px;display:flex;gap:10px;align-items:center}
+@property --v{syntax:'<number>';inherits:false;initial-value:0}
+.ring{--v:0;width:42px;height:42px;border-radius:50%;background:conic-gradient(var(--amber) calc(var(--v)*1%),var(--s3) 0);display:grid;place-items:center;flex-shrink:0;transition:--v 1.4s ease-out}
+.ring i{width:32px;height:32px;border-radius:50%;background:var(--s2);display:grid;place-items:center;font-style:normal;font-size:11px;color:var(--tx)}
+.chain{position:relative;margin:2px 0 4px 4px}
+.chain:before{content:"";position:absolute;left:11px;top:14px;bottom:14px;width:2px;background:linear-gradient(var(--ok) 0 30%,var(--amber) 30% 46%,var(--ln2) 46%)}
+.chain .it{padding-left:28px;position:relative}
+.chain .it:before{content:"";position:absolute;left:6px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--s1);border:2px solid var(--ln2)}
+.chain .it.s-ok:before{background:var(--ok);border-color:var(--ok)}
+.chain .it.s-cur:before{background:var(--amber);border-color:var(--amber);box-shadow:0 0 0 4px var(--amber-d)}
+.sub2{margin:0 0 4px 28px;border-left:1px solid var(--ln);padding-left:8px}
+.sub2 a{display:flex;justify-content:space-between;font-size:12px;padding:3px 6px;border-radius:5px;color:var(--tx3)}
+.sub2 a:hover,.sub2 a.on{color:var(--tx);background:var(--s3)}
+.sd{width:7px;height:7px;border-radius:50%;display:inline-block;margin-top:7px;background:var(--ln2)}.sd.d-ok{background:var(--ok)}.sd.d-am{background:var(--amber)}
+.hero{display:flex;align-items:center;gap:18px;background:radial-gradient(1200px 200px at 0 0,var(--amber-d),transparent),var(--s1);border:1px solid var(--ln);border-radius:14px;padding:16px 20px;margin-bottom:14px}
+.hero .big{font-size:26px;font-weight:800;letter-spacing:.02em}
+.ring.lgr{width:74px;height:74px}.ring.lgr i{width:60px;height:60px;font-size:15px;font-weight:700;background:var(--s1)}
+.pill{border-radius:20px;padding:3px 12px;font-weight:700;font-size:12.5px}
+.metro{position:relative;display:grid;grid-template-columns:repeat(5,1fr);margin:6px 0 4px;padding-top:6px}
+.metro .trk{position:absolute;left:10%;right:10%;top:24px;height:4px;background:var(--ln2);border-radius:2px;overflow:hidden}
+.metro .done{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ok);animation:grow 1.2s .2s ease-out forwards}
+.metro .flow{position:absolute;left:25%;top:0;bottom:0;width:25%;background:repeating-linear-gradient(90deg,var(--amber) 0 10px,transparent 10px 18px);background-size:36px 4px;opacity:0;animation:fade .3s 1.4s forwards,flow 1s 1.4s linear infinite}
+@keyframes grow{to{width:25%}}@keyframes fade{to{opacity:.9}}@keyframes flow{to{background-position:36px 0}}
+.stn{text-align:center;position:relative;cursor:pointer}
+.stn .nd{width:40px;height:40px;margin:0 auto 6px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:var(--s2);border:2px solid var(--ln2);color:var(--tx3);position:relative;z-index:1}
+.stn.ok .nd{background:var(--ok);border-color:var(--ok);color:var(--obs)}
+.stn.cur .nd{background:var(--amber);border-color:var(--amber);color:var(--obs)}
+.stn.cur .nd:after{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid var(--amber);animation:pulse 1.8s ease-out infinite}
+@keyframes pulse{from{transform:scale(.8);opacity:.9}to{transform:scale(1.5);opacity:0}}
+.stn b{display:block}.stn small{color:var(--tx3);font-size:11.5px}
+.stn.cur b{color:var(--amber)}
+.blk{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.bt{background:var(--s2);border:1px solid var(--ln);border-radius:10px;padding:10px 12px;opacity:0;transform:translateY(8px);animation:up .5s forwards}
+.bt:nth-child(1){animation-delay:1.5s}.bt:nth-child(2){animation-delay:1.65s}.bt:nth-child(3){animation-delay:1.8s}
+@keyframes up{to{opacity:1;transform:none}}
+.bar{height:6px;background:var(--s3);border-radius:3px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;width:0;border-radius:3px;animation:bw 1.2s 1.9s ease-out forwards}
+@keyframes bw{to{width:var(--w)}}
+.who{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--tx2)}
+.av{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;font-weight:700;color:var(--obs)}
+.todo{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;border:1px solid var(--ln);background:var(--s2);margin-bottom:6px}
+.todo .k{width:64px;flex-shrink:0;text-align:center}.todo .x{flex:1}
+.flowv{display:grid;grid-template-columns:1fr 34px 1.25fr 34px 1fr;align-items:stretch}
+.flowv .ar{display:grid;place-items:center;color:var(--amber);font-size:20px}
+.qa{background:var(--s2);border:1px solid var(--ln);border-radius:8px;padding:10px 12px;margin-top:8px}
+.qa .op{display:block;padding:4px 8px;margin-top:4px;border:1px solid var(--ln);border-radius:6px;color:var(--tx2)}
+.qa .op.rec{border-color:var(--amber);color:var(--tx)}
+.src{font-size:11px;color:var(--tx3)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.metro .done{width:25%}.metro .flow,.bt{opacity:1;transform:none}.bar i{width:var(--w)}}
 </style></head><body>
 
+<div class="rail"><div class="lg">安</div><a title="工作台">工作<br>台</a><a class="on" title="我的项目">项目</a><a title="知识中心">知识</a><a title="健康看板">健康</a></div>
 <div class="side">
-  <div class="logo">安全咨询平台</div>
-  <div class="proj">BANK-A · SOC 运营体系设计 · <span style="color:var(--cyan)">标准档</span></div>
-  <div class="grp">先看这里</div>
-  <a class="it on" data-p="arch">整体逻辑图</a>
-  <a class="it" data-p="todo">待负责人定 <span class="n">4</span></a>
-  <div class="grp">项目（六页）</div>
-  <a class="it" data-p="pan">全景 · 关口时间线 <span class="n">4</span></a>
-  <a class="it" data-p="in">输入 · 按来源</a>
-  <a class="it" data-p="req">需求 · 定制项与决定 <span class="n">2</span></a>
-  <a class="it" data-p="an">分析 · 事实与发现</a>
-  <a class="it" data-p="out">输出 · 输出包</a>
-  <a class="it" data-p="set">设置</a>
-  <div class="grp">交付件页</div>
-  <a class="it" data-p="d1">D1 启动包（程序模板）</a>
-  <a class="it" data-p="d4">D4 差距分析（审稿改稿）</a>
-  <div class="mut" style="font-size:11px;padding:2px 8px">D2、D3、D5～D8 同 D4 结构</div>
-  <div class="grp">其他</div>
+  <div class="pcard"><div class="ring" id="ring1"><i>3/12</i></div><div><div style="color:var(--tx);font-weight:700">BANK-A</div><div style="font-size:11.5px">SOC 运营体系设计</div><span class="chip c-cy" style="font-size:11px;margin-top:2px">标准档</span></div></div>
+  <a class="it on" data-p="pan"><span>◎ 全景</span><span class="n">5</span></a>
+  <div class="grp">交付链</div>
+  <div class="chain">
+    <a class="it s-ok" data-p="in"><span>输入</span><span class="n">3</span></a>
+    <a class="it s-cur" data-p="req"><span>需求</span><span class="n">2</span></a>
+    <a class="it" data-p="an"><span>分析</span></a>
+    <a class="it" data-p="out"><span>输出</span></a>
+  </div>
+  <div class="sub2">
+    <a data-p="d1"><span>D1 启动包</span><i class="sd d-ok"></i></a>
+    <a data-t="D2 调研包：结构同 D4"><span>D2 调研包</span><i class="sd d-ok"></i></a>
+    <a data-t="D3 事实清单：结构同 D4"><span>D3 事实清单</span><i class="sd d-am"></i></a>
+    <a data-p="d4"><span>D4 差距分析</span><i class="sd"></i></a>
+    <a data-t="D5～D8：结构同 D4"><span>D5～D8</span><i class="sd"></i></a>
+  </div>
+  <div class="grp">现场</div>
+  <a class="it" data-p="fa"><span>调研助手</span><span class="mut" style="font-size:11px">今天 14:00</span></a>
+  <a class="it" data-p="set"><span>设置</span></a>
+  <div class="grp" style="margin-top:22px">示意说明（产品里没有）</div>
+  <a class="it" data-p="arch">整体逻辑图</a>
+  <a class="it" data-p="clar">澄清题怎么生成</a>
   <a class="it" data-p="srv">调研包怎么生成</a>
-  <a class="it" data-p="fa">调研助手（现场全屏）</a>
   <a class="it" data-p="retro">结项复盘</a>
-  <div class="grp" style="margin-top:20px">虚拟数据 · 按钮只弹提示</div>
+  <a class="it" data-p="todo">待负责人定</a>
+  <div class="mut" style="font-size:11px;padding:8px">虚拟数据 · 按钮只弹提示</div>
 </div>
 
 <div class="main">
 
 <!-- ============ 整体逻辑图 ============ -->
-<div class="page on" id="p-arch">
+<div class="page" id="p-arch">
   <div class="crumb">示意 11 · 2026-11-28 · 对应 docs/交付链输入输出方案.md v0.3（整体刷新）</div>
   <h1>整体逻辑：人提供信息和决定，机器负责成文，人审稿改稿</h1>
   <div class="sub">颜色：<span class="chip c-am">人</span> <span class="chip c-cy">程序</span> <span class="chip c-vi">大模型（经网关）</span> <span class="chip c-ok">公司知识</span></div>
@@ -171,42 +233,40 @@ textarea.inp{min-height:54px;resize:vertical}
 </div>
 
 <!-- ============ 全景 ============ -->
-<div class="page" id="p-pan">
-  <div class="top"><div><div class="crumb">BANK-A / 全景</div><h1>全景 · 第 3 周 · 调研阶段</h1></div>
-    <div style="margin-left:auto" class="row"><span class="seg"><a class="on" data-t="显示全部待办">全部</a><a data-t="只看项目经理的待办：3 项">只看我的</a></span><span class="chip c-ok">进度预测：按期</span><span class="chip">本周自动完成 37 项 ▸</span><a class="btn2 sm" data-t="Agent 运行情况默认隐藏，点开只读（11-27 已定）">查看 Agent 运行情况</a></div></div>
-  <div class="note">全景只回答两件事：<b>现在在哪个关口</b>、<b>缺什么输入、卡在谁手里</b>。每个阶段同一结构：输入到齐 → 平台处理 → 人确认 → 产出 → 客户确认 → 过关口。标签：<span class="who">橙 = 卡在我方角色</span><span class="who cu">青 = 卡在客户</span></div>
-  <div class="tl">
-    <div class="stg done"><div class="hd"><span>1 启动</span><span class="chip c-ok">已过关口</span></div>
-      <div class="step"><i class="dot d-ok"></i>输入：合同要点卡已核对、授权已签</div><div class="step"><i class="dot d-ok"></i>产出：D1 输出包</div><div class="step"><i class="dot d-ok"></i>客户：范围已确认</div></div>
-    <div class="stg cur"><div class="hd"><span>2 调研</span><span class="chip c-am">进行中</span></div>
-      <div class="step"><i class="dot d-ok"></i>输入：D2 已签，6 份调研包已发布</div>
-      <div class="step"><i class="dot d-cr"></i>客户：自评包 4/6 交回 · <b style="color:var(--crim)">运维组逾期 2 天</b><span class="who cu">客户 · 运维组对接人</span></div>
-      <div class="step"><i class="dot d-am"></i>现场：访谈 3/6 · 矛盾待定案 2<span class="who">顾问 A</span></div>
-      <div class="step"><i class="dot d-cy"></i>平台：答案池 214 题，自动确认 82%</div>
-      <div class="step"><i class="dot"></i>产出：D3 输出包（待答案池入齐）</div><div class="step"><i class="dot"></i>签署：D3<span class="who">签署人</span></div>
-      <div class="gate">过关口还差：<span class="chip c-cr">自评 2 份</span> <span class="chip c-am">访谈 3 场</span> <span class="chip">D3 签署</span></div></div>
-    <div class="stg"><div class="hd"><span>3 分析</span><span class="chip">未开始</span></div>
-      <div class="step"><i class="dot"></i>输入：已确认事实</div><div class="step"><i class="dot"></i>人：低置信发现确认</div><div class="step"><i class="dot"></i>产出：D4 输出包</div><div class="step"><i class="dot"></i>客户：D4 意见</div></div>
-    <div class="stg"><div class="hd"><span>4 设计</span><span class="chip">未开始</span></div>
-      <div class="step"><i class="dot d-am"></i>可提前填：客户约束（编制、预算）<span class="who">项目经理</span></div><div class="step"><i class="dot"></i>人：方案取舍卡</div><div class="step"><i class="dot"></i>产出：D5 / D6 / D7</div></div>
-    <div class="stg"><div class="hd"><span>5 验收</span><span class="chip">未开始</span></div>
-      <div class="step"><i class="dot"></i>产出：D8</div><div class="step"><i class="dot"></i>对照合同验收 9 条</div><div class="step"><i class="dot"></i>结项复盘</div></div>
+<div class="page on" id="p-pan">
+  <div class="hero">
+    <div class="ring lgr" id="ring2"><i>25%</i></div>
+    <div style="flex:1"><div class="mut" style="font-size:12px">BANK-A · SOC 运营体系设计</div>
+      <div class="big">第 3 周 · 调研阶段</div>
+      <div class="t2">过关口 2 还差 <b style="color:var(--amber)">3 件事</b>，预计 12-18 过关</div></div>
+    <span class="pill" style="background:var(--ok-d);color:var(--ok)">● 按期</span>
   </div>
-  <div class="g2" style="margin-top:12px">
-    <div class="card"><div class="sb"><h2>待我处理 · 项目经理</h2><span class="mut">只显示人要做的</span></div>
-      <table><tr><td><span class="chip c-cy">今天现场</span></td><td>14:00 网络组访谈（顾问 A）· 预填 9 题待快速确认、议程 6 题</td><td><a class="btn sm" data-go="fa">进入调研助手</a></td></tr>
-      <tr><td><span class="chip c-cr">催办</span></td><td>运维组自评包逾期 2 天，已自动提醒 2 次 · 建议电话联系对接人</td><td><a class="btn2 sm" data-t="打开抽屉：催办话术、改截止日">处理</a></td></tr>
-      <tr><td><span class="chip c-am">确认卡</span></td><td>“夜间值班”两个来源矛盾：资料写 7×24，安全组口述 5×8 · 已放进下周二现场议程</td><td><a class="btn2 sm" data-t="打开矛盾卡：两来源原文、建议定案方式">看</a></td></tr>
-      <tr><td><span class="chip c-am">设计输入</span></td><td>提前补客户约束：安全团队编制上限、明年预算区间（D5、D7 要用）</td><td><a class="btn2 sm" data-go="in">去填</a></td></tr>
-      <tr><td><span class="chip c-vi">变更单</span></td><td>客户临时要求加“数据安全分类分级”内容，超出合同范围 · 影响 D4、D5，工期约 +8 天</td><td><a class="btn2 sm" data-go="req">看</a></td></tr></table>
-      <div class="mut" style="margin-top:6px">确认卡、补资料卡、审阅清单、签署、变更单都汇总在这里，不用到各页去找。</div></div>
-    <div class="card"><h2>项目定制项（贯穿全程）</h2>
-      <div class="strip"><span class="chip c-am">客户书面 · 统一称“安全运营中心”，不用 SOC</span><span class="chip c-am">客户书面 · D5 增加《外包管理》一章</span><span class="chip c-cy">对话 · D4 偏监管视角</span><span class="chip c-cy">合同 · 不包含等保测评</span></div>
-      <div class="mut" style="margin-top:8px">定制项在“需求”页管理；输出包刷新时逐条核对。<a style="color:var(--cyan)" data-go="req">去需求页 ▸</a></div></div>
+  <div class="card" style="padding:14px 10px 12px">
+    <div class="metro"><div class="trk"><div class="done"></div><div class="flow"></div></div>
+      <div class="stn ok" data-go="in"><div class="nd">✓</div><b>启动</b><small>12-08 已过</small></div>
+      <div class="stn cur" data-go="in"><div class="nd">2</div><b>调研</b><small>进行中 · 12-18</small></div>
+      <div class="stn" data-go="an"><div class="nd">3</div><b>分析</b><small>01-08</small></div>
+      <div class="stn" data-go="out"><div class="nd">4</div><b>设计</b><small>02-19</small></div>
+      <div class="stn" data-go="out"><div class="nd">5</div><b>验收</b><small>03-31</small></div>
+    </div>
   </div>
+  <h2 style="margin:16px 0 8px">过关口 2 还差</h2>
+  <div class="blk">
+    <div class="bt"><div class="sb"><b>客户自评</b><span class="chip c-cr">逾期 2 天</span></div>
+      <div class="bar"><i style="--w:67%;background:var(--amber)"></i></div><div class="sb"><span class="mut">4 / 6 份</span><span class="who"><span class="av" style="background:var(--crim)">客</span>运维组对接人</span></div></div>
+    <div class="bt"><div class="sb"><b>现场访谈</b><span class="chip c-am">今天 14:00</span></div>
+      <div class="bar"><i style="--w:50%;background:var(--cyan)"></i></div><div class="sb"><span class="mut">3 / 6 场</span><span class="who"><span class="av" style="background:var(--cyan)">A</span>顾问 A</span></div></div>
+    <div class="bt"><div class="sb"><b>D3 事实清单签署</b><span class="chip">等前两项</span></div>
+      <div class="bar"><i style="--w:0%"></i></div><div class="sb"><span class="mut">未开始</span><span class="who"><span class="av" style="background:var(--vio)">签</span>D3 签署人</span></div></div>
+  </div>
+  <div class="sb" style="margin:18px 0 8px"><h2 style="margin:0">待我处理</h2><span class="mut">项目经理 · 只列要人做的事</span></div>
+  <div class="todo"><span class="chip c-cr k">催办</span><div class="x">运维组自评包逾期 2 天，已自动提醒 2 次 <span class="mut">· 建议电话联系对接人</span></div><a class="btn sm" data-t="打开联系人与提醒记录">处理</a></div>
+  <div class="todo"><span class="chip c-am k">澄清</span><div class="x">合同有 3 处没写清，澄清清单已出好 <span class="mut">· 带去周四沟通会</span></div><a class="btn2 sm" data-go="in">看清单</a></div>
+  <div class="todo"><span class="chip c-am k">确认卡</span><div class="x">“夜间值班”两个来源矛盾：资料写 7×24，安全组口述 5×8 <span class="mut">· 已放进下周二议程</span></div><a class="btn2 sm" data-t="打开确认卡">看</a></div>
+  <div class="todo"><span class="chip c-vi k">变更单</span><div class="x">客户要求加“数据安全分类分级”，超出合同 <span class="mut">· 影响 D4、D5，工期约 +8 天</span></div><a class="btn2 sm" data-go="req">看</a></div>
+  <div class="todo"><span class="chip c-cy k">可提前</span><div class="x">补客户约束：安全团队编制上限、明年预算区间 <span class="mut">· D5、D7 用</span></div><a class="btn2 sm" data-go="in">去填</a></div>
 </div>
 
-<!-- ============ 输入 ============ -->
 <div class="page" id="p-in">
   <div class="crumb">BANK-A / 输入</div><h1>输入 · 按来源</h1>
   <div class="sub">所有输入物都在这里，按来源分组；每份输入标出“驱动什么”。交付件页里不再放输入表单。</div>
@@ -225,20 +285,18 @@ textarea.inp{min-height:54px;resize:vertical}
     <tr><td>双方角色</td><td>甲方对接人 1、受访部门 5 个；乙方项目经理、顾问 2</td><td><span class="chip c-ok">已核对</span></td><td>成员、D2 受访角色</td></tr>
     <tr><td>授权与同意</td><td>附件三 ✓ 11-02；附件一（标准档）✓ 11-02；经验积累：同意</td><td><span class="chip c-ok">已核对</span></td><td>关口 1 进入条件、结项沉淀许可</td></tr></table>
     <div class="mut" style="margin-top:4px">字段状态：已核对 / 合同未写明 / 待与客户澄清 / 合同外新增。要点卡只反映合同本身，补充协议签后才出新版本；客户需求的细化与变化去“需求”页。</div>
-    <div class="g2" style="margin-top:12px">
-      <div class="card"><div class="sb"><h3>要点卡体检</h3><span class="mut">程序规则 · 核对时自动跑</span></div>
-        <div class="lv"><span class="chip c-ok">通过</span> 资质边界：未出现测评、认证结论类字样（出现即阻断保存）</div>
-        <div class="lv"><span class="chip c-am">提示</span> 验收标准第 7 条“路线图科学合理”无法逐条对照 → 建议改为“措施四要素齐全、与差距一一映射”</div>
-        <div class="lv"><span class="chip c-am">提示</span> 第 3 个付款节点未绑定验收节点</div>
-        <div class="lv"><span class="chip c-am">提示</span> 周期 12 周，同产品黄金样例平均 14 周 → 调研阶段排期偏紧</div>
-        <div class="lv"><span class="chip c-ok">通过</span> 交付件清单与产品默认组件一致</div>
-        <div class="lv"><span class="chip c-ok">通过</span> 档位信号：城商行，标准档合理</div>
-        <div class="lv"><span class="chip c-ok">通过</span> 保留期 180 天与已签保密协议不冲突</div></div>
-      <div class="card"><div class="sb"><h3>需求澄清清单</h3><span class="chip c-am">2 题待澄清</span></div>
-        <div class="mut">“合同未写明 / 待澄清”的字段自动出题，选项取自同产品黄金样例；拿去开启动会或沟通会，结论写进 D1 范围确认单，客户签字后固定。</div>
-        <div class="card2" style="margin-top:8px"><b>1. 制度编写交付几份？</b><div class="t2">A. 3 份核心制度（监测、响应、值班）· 黄金样例常见　B. 5 份（另加外包管理、指标考核）　C. 按差距分析结果定，上限 6 份</div><div class="mut">售前纪要：客户提到“外包管不住”→ 倾向 B</div></div>
-        <div class="card2" style="margin-top:6px"><b>2. 验收标准第 7 条怎么改？</b><div class="t2">A. 措施四要素齐全、与差距一一映射　B. 经客户安全委员会评审通过</div></div>
-        <div class="row" style="margin-top:8px"><a class="btn2 sm" data-t="导出 Word 版澄清清单，带推荐选项">导出澄清清单</a><a class="btn2 sm" data-t="导入会议纪要：Agent 拆成事实 / 决定 / 要求，回显确认">导入会议纪要</a></div></div>
+    <div class="card" style="margin-top:12px"><div class="sb"><h3>需求澄清清单</h3><span><span class="chip c-am">3 题待客户回答</span> <a class="btn2 sm" data-go="clar">怎么生成的</a></span></div>
+      <div class="mut">合同没写清的地方自动出题，带推荐选项，拿去和客户开会；会后导入纪要自动回填。</div>
+      <div class="qa"><b>1. 制度编写交付几份？</b> <span class="src">来源：合同未写明 · 影响 D1、D6、工期</span>
+        <span class="op rec">A. 3 份核心制度（监测、响应、值班）<span class="chip c-am" style="font-size:11px">推荐</span> <span class="mut">同产品 4 个样例中 3 个这样做；售前纪要里客户说过“先把值班管起来”</span></span>
+        <span class="op">B. 5 份（另加外包管理、指标考核）</span><span class="op">C. 按差距分析结果定，上限 6 份</span></div>
+      <div class="qa"><b>2. 验收标准第 7 条“路线图科学合理”怎么落到可核对？</b> <span class="src">来源：验收标准无法逐条对照 · 影响 D7、D8</span>
+        <span class="op rec">A. 每项措施四要素齐全（目标、责任、时间、资源），并与差距一一对应 <span class="chip c-am" style="font-size:11px">推荐</span></span>
+        <span class="op">B. 经客户安全委员会评审通过</span></div>
+      <div class="qa"><b>3. 第 3 笔付款对应哪个交付节点？</b> <span class="src">来源：付款未绑定验收 · 影响关口日期</span>
+        <span class="op rec">A. D5 设计方案签收 <span class="chip c-am" style="font-size:11px">推荐</span></span><span class="op">B. D6 制度包签收</span></div>
+      <div class="row" style="margin-top:10px"><a class="btn sm" data-t="导出 Word 版澄清清单（含推荐选项），可直接当会议议程">导出澄清清单</a><a class="btn2 sm" data-t="导入会议纪要：Agent 按题抽答案，只有冲突和没答到的才给你确认">导入会议纪要</a><a class="btn2 sm" data-t="开会时也可以直接在这里勾选">会上直接勾选</a></div>
+      <div class="mut" style="margin-top:6px;font-size:11.5px">其余自动检查已通过，不显示。</div>
     </div>
   </div>
 
@@ -436,6 +494,41 @@ textarea.inp{min-height:54px;resize:vertical}
 </div>
 
 <!-- ============ 调研包 ============ -->
+<div class="page" id="p-clar">
+  <div class="crumb">示意说明</div><h1>澄清题怎么生成</h1>
+  <div class="sub">客户不登录平台，澄清只能走“出题 → 开会 → 导入纪要”。人只做两件事：会上问；会后确认有冲突的答案。</div>
+  <div class="flowv">
+    <div class="card"><h3>① 输入</h3>
+      <div class="lv"><span class="dot d-cy"></span><b>合同要点卡</b>：标“合同未写明 / 待澄清”的字段</div>
+      <div class="lv"><span class="dot d-cy"></span><b>要点卡规则检查的提示项</b>：验收不可核对、付款未绑定验收、工期偏离样例</div>
+      <div class="lv"><span class="dot d-cy"></span><b>售前材料</b>：建议书、需求沟通纪要里的客户原话与痛点</div>
+      <div class="lv"><span class="dot d-cy"></span><b>同产品黄金样例</b>：别的项目这一项怎么定的</div>
+      <div class="lv"><span class="dot d-cy"></span><b>产品默认组件</b>：交付件清单、默认份数与工期</div></div>
+    <div class="ar">➜</div>
+    <div class="card"><h3>② 平台怎么做 <span class="mut" style="font-weight:400">程序规则 + 交付项目经理 Agent</span></h3>
+      <div class="lv"><b>找缺口</b>（程序规则）：逐字段比对，列出要问的点；规则查过没问题的不出题</div>
+      <div class="lv"><b>出题</b>（Agent）：每个缺口一道单选题，2～3 个选项取自黄金样例，标推荐和理由（引样例条数、售前原话）</div>
+      <div class="lv"><b>标影响</b>：写清影响哪个交付件、哪个关口；按影响大小排序，合并重复问题</div>
+      <div class="lv"><b>过检查</b>：机密级检测；资质边界用语（不出现测评、认证结论）</div></div>
+    <div class="ar">➜</div>
+    <div class="card"><h3>③ 输出</h3>
+      <div class="lv"><span class="dot d-am"></span><b>澄清清单</b>：Word 一页，可直接当启动会或沟通会议程</div>
+      <div class="lv"><span class="dot d-am"></span>全景“待我处理”出现一条</div></div>
+  </div>
+  <div class="arrow" style="margin:10px 0">⬇ 会后</div>
+  <div class="flowv">
+    <div class="card"><h3>④ 回收</h3><div class="lv">导入会议纪要，或会上直接勾选</div><div class="lv mut">纪要先过机密级检测，原文按档位保留期处理</div></div>
+    <div class="ar">➜</div>
+    <div class="card"><h3>⑤ Agent 对题抽答案</h3>
+      <div class="lv"><span class="chip c-ok">自动回填</span> 纪要里答案明确、与其他来源不冲突</div>
+      <div class="lv"><span class="chip c-am">确认卡</span> 答案含糊，或与合同、售前材料矛盾 → 只这几条给项目经理确认</div>
+      <div class="lv"><span class="chip">没答到</span> 留在清单，下次会继续带；到关口仍没有，按推荐选项起草并标“按默认写法”</div>
+      <div class="lv"><span class="chip c-vi">超出合同</span> 客户新提的要求 → 自动起草变更单</div></div>
+    <div class="ar">➜</div>
+    <div class="card"><h3>⑥ 固定</h3><div class="lv">结论写进 <b>D1 范围确认单</b>，客户签字后固定</div><div class="lv">进“需求”页成为定制项或决定；要点卡不改（只反映合同）</div></div>
+  </div>
+</div>
+
 <div class="page" id="p-srv">
   <div class="crumb">BANK-A / 输出 / D2 调研包 · 怎么生成</div><h1>调研包怎么生成</h1>
   <div class="sub">在“输出”页 D2 由平台生成（程序模板 + 选题预填）；输入页只放回收物（资料、自评答卷、现场答卷）；调研助手只用于现场，不出题。</div>
@@ -512,12 +605,15 @@ textarea.inp{min-height:54px;resize:vertical}
   <input class="inp" placeholder="说要做什么…" style="margin-top:8px"></div>
 <div class="toast" id="toast"></div>
 <script>
-function show(p){const it=document.querySelector('.side .it[data-p="'+p+'"]');const c=document.getElementById('ctx');if(c&&it)c.textContent=it.childNodes[0].textContent.trim();document.querySelectorAll('.page').forEach(e=>e.classList.toggle('on',e.id==='p-'+p));document.querySelectorAll('.side .it').forEach(e=>e.classList.toggle('on',e.dataset.p===p));window.scrollTo(0,0)}
-document.querySelectorAll('.side .it').forEach(e=>e.onclick=()=>show(e.dataset.p));
+function show(p){const it=document.querySelector('.side .it[data-p="'+p+'"]');const c=document.getElementById('ctx');if(c&&it)c.textContent=it.childNodes[0].textContent.trim();document.querySelectorAll('.page').forEach(e=>e.classList.toggle('on',e.id==='p-'+p));document.querySelectorAll('.side [data-p]').forEach(e=>e.classList.toggle('on',e.dataset.p===p));if(p==='pan')anim();window.scrollTo(0,0)}
+document.querySelectorAll('.side [data-p]').forEach(e=>e.onclick=()=>show(e.dataset.p));
 document.querySelectorAll('[data-go]').forEach(e=>e.onclick=ev=>{ev.stopPropagation();show(e.dataset.go)});
 document.querySelectorAll('.tabs a[data-tb]').forEach(a=>a.onclick=()=>{const bar=a.parentElement;bar.querySelectorAll('a').forEach(x=>{x.classList.toggle('on',x===a);const p=document.getElementById(x.dataset.tb);if(p)p.classList.toggle('on',x===a)})});
-let tm;document.querySelectorAll('[data-t]').forEach(e=>e.onclick=ev=>{ev.stopPropagation();const t=document.getElementById('toast');t.textContent=e.dataset.t;t.style.display='block';clearTimeout(tm);tm=setTimeout(()=>t.style.display='none',3200)});
-document.querySelectorAll('.stg').forEach(s=>s.onclick=()=>show('in'));
+let tm;function bindT(e){e.onclick=ev=>{ev.stopPropagation();const t=document.getElementById('toast');t.textContent=e.dataset.t;t.style.display='block';clearTimeout(tm);tm=setTimeout(()=>t.style.display='none',3200)}}document.querySelectorAll('[data-t]').forEach(bindT);
+function ring(el,v){el.style.setProperty('--v',0);requestAnimationFrame(()=>requestAnimationFrame(()=>el.style.setProperty('--v',v)))}
+function anim(){const pg=document.getElementById('p-pan');const c=pg.cloneNode(true);pg.replaceWith(c);c.querySelectorAll('[data-go]').forEach(e=>e.onclick=ev=>{ev.stopPropagation();show(e.dataset.go)});c.querySelectorAll('[data-t]').forEach(bindT);ring(document.getElementById('ring2'),25)}
+ring(document.getElementById('ring1'),25);ring(document.getElementById('ring2'),25);
+
 document.getElementById('fab').onclick=()=>document.getElementById('drw').classList.add('on');document.getElementById('drwx').onclick=()=>document.getElementById('drw').classList.remove('on');
 if(location.hash)show(location.hash.slice(1));
 </script>
