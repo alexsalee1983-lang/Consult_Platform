@@ -90,7 +90,6 @@ _QUALIF = re.compile(r"(?:测评|认证|密评)结论"
 # 否定或设问（“不能出具认证结论”“能否通过等保测评由测评机构判定”）只管到本分句：逗号、冒号、句号处截止（#207）。
 _NEGATION = re.compile(r"(?:不构成|不出具|不作为|并非|不代表|不是|不得|不涉及|不含|不提供|不能|无法|不可|不宜|不应|不会"
                        r"|不等同|不等于|不替代|不代替|能否|是否|可否)[^。；;，,：:\n]{0,10}$")
-_ENUM_TAIL = re.compile(r"[、或和及与][^。；;，,：:\n]{0,20}")     # 紧跟上一个否定命中的并列项
 _STATS = re.compile(r"阻断\s*(\d+)\s*项.{0,10}?重要\s*(\d+)\s*项.{0,10}?建议\s*(\d+)\s*项")
 
 INSTRUCTIONS = (
@@ -332,17 +331,9 @@ def _issue(severity: str, location: str, dimension: str, problem: str, suggestio
 
 
 def qualification_matches(text: str) -> list[str]:
-    """命中的测评 / 认证结论用语原文（排除前面紧跟否定或设问的；否定并列项“不出具 A、B 或 C”整串算否定）。"""
-    out: list[str] = []
-    prev_end, prev_neg = -1, False
-    for m in _QUALIF.finditer(text):
-        neg = bool(_NEGATION.search(text[max(0, m.start() - 20):m.start()]))
-        if not neg and prev_neg:
-            neg = bool(_ENUM_TAIL.fullmatch(text[prev_end:m.start()]))
-        if not neg:
-            out.append(m.group(0))
-        prev_end, prev_neg = m.end(), neg
-    return out
+    """命中的测评 / 认证结论用语原文（排除前面紧跟否定或设问的）。"""
+    return [m.group(0) for m in _QUALIF.finditer(text)
+            if not _NEGATION.search(text[max(0, m.start() - 20):m.start()])]
 
 
 def qualification_hits(text: str) -> int:

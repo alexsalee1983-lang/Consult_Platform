@@ -178,11 +178,3 @@ def test_repo_assembly_samples_keys_exist():
     n, issues, _ = evalgate.run(ROOT / "knowledge" / "eval" / "assembly_samples.yaml",
                                 entries=[ROOT / "knowledge" / "samples"])
     assert n == 1 and issues == [], "\n".join(map(str, issues))
-
-
-def test_negation_covers_enumeration() -> None:
-    """A31⑨ 合 main 后：D1 固定免责句“不出具 A 结论、B 结论或认证结论”整串都算否定；断句后的不算。"""
-    from app.project.quality import qualification_matches
-    fixed = "本项目提供差距分析、符合性初判与整改建议，不出具等级保护测评结论、商用密码应用安全性评估结论或认证结论。"
-    assert qualification_matches(fixed) == []
-    assert qualification_matches("不出具测评结论，认证结论已出具。") == ["认证结论"]
