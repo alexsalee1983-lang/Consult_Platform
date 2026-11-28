@@ -122,6 +122,20 @@ export const api = {
   // 网页立项（二期 A3）：可选的产品和模块；项目负责人立项
   catalogProducts: () => request("/api/catalog/products"),
   createProject: (body) => request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
+  // 立项与合同要点卡、授权台账、先行启动（四期 A32）
+  intake: (code) => request(`/api/projects/${encodeURIComponent(code)}/intake`),
+  uploadBasis: (code, file, basisKind) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("basis_kind", basisKind);
+    return request(`/api/projects/${encodeURIComponent(code)}/intake/basis`, { method: "POST", body: fd });
+  },
+  saveContractCard: (code, fields, checked) => request(`/api/projects/${encodeURIComponent(code)}/intake/card`,
+    { method: "PUT", body: JSON.stringify({ fields, checked }) }),
+  recordAuthorization: (code, body) => request(`/api/projects/${encodeURIComponent(code)}/intake/authorizations`,
+    { method: "POST", body: JSON.stringify(body) }),
+  approveEarlyStart: (code) => request(`/api/projects/${encodeURIComponent(code)}/early-start/approve`, { method: "POST" }),
+  earlyStarts: () => request("/api/early-starts"),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   assessment: (code) => request(`/api/projects/${encodeURIComponent(code)}/assessment`),
   panorama: (code) => request(`/api/projects/${encodeURIComponent(code)}/panorama`),   // 四期 A25① 全景

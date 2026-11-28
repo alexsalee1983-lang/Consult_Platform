@@ -10,6 +10,7 @@ import { Loading, TopBar } from "../components/common.jsx";
 import { groupCards } from "../components/CardEvidence.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Evidence from "../components/Evidence.jsx";
+import Intake from "../components/Intake.jsx";
 import Members from "../components/Members.jsx";
 import Retention from "../components/Retention.jsx";
 import RunPanel from "../components/RunPanel.jsx";
@@ -73,6 +74,8 @@ const head = (p, title) => <TopBar cap={`${p.code} · ${p.industry} · 阶段 ${
 
 export function InputPage({ code }) {
   const { p, error, load } = useProject(code);
+  const [params] = useSearchParams();
+  const step = params.get("new") ? 2 : 0;          // 新建项目三步：第 1 步在立项弹窗，第 2、3 步在这里
   const [evs, setEvs] = useState(null);
   const loadEvs = useCallback(() => { api.evidences(code).then(setEvs).catch(() => setEvs([])); }, [code]);
   useEffect(loadEvs, [loadEvs]);
@@ -81,6 +84,7 @@ export function InputPage({ code }) {
   return (
     <>
       {head(p, "输入")}
+      <Intake code={p.code} step={step} />
       <section className="pnl pad" aria-label="调研">
         <div className="sb"><h2 className="h2">调研</h2><LocateLink code={p.code} node="client:evidence" /></div>
         <div className="sub">按受访角色生成调研包、现场填答与回传在调研助手里做（全屏，现场用）。</div>

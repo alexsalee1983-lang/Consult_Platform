@@ -11,11 +11,34 @@ export default function Portfolio() {
   const [rows, setRows] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => { api.portfolio().then(setRows).catch((e) => setError(e.message)); }, []);
+  const [early, setEarly] = useState([]);       // 四期 A32：先行启动待确认 / 合同超期未签
+  const loadEarly = () => api.earlyStarts().then(setEarly).catch(() => setEarly([]));
+  useEffect(() => { loadEarly(); }, []);
+  const approve = async (code) => {
+    try { await api.approveEarlyStart(code); } catch (e) { setError(e.message); }
+    loadEarly();
+  };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <TopBar cap="项目负责人" title="项目总览" />
       <div className="sub">全部项目的进度、交付件状态、保留期和删除情况（只有元数据）。项目内容只对项目成员开放；需要查看时请项目经理把你加入项目。</div>
       {error && <div className="err" role="alert">{error}</div>}
+      {early.length > 0 && (
+        <section className="pnl pad" aria-label="先行启动">
+          <h2 className="h2">先行启动（合同未签）</h2>
+          <div className="sub">不签合同就投入人力是商务风险，须由部门负责人确认；授权签署前项目不收客户资料。</div>
+          <ul className="lst">
+            {early.map((x) => (
+              <li key={x.code} className="sb">
+                <span><span className="mono">{x.code}</span> · {x.service} · 项目经理 {x.manager || "未指定"} · 第 {x.days} 天
+                  {x.overdue && <span className="chip c-r" style={{ marginLeft: 6 }}>已满 {x.escalate_days} 天未签合同</span>}</span>
+                {x.approved ? <span className="chip c-g">已确认</span>
+                  : <button className="btn sm" onClick={() => approve(x.code)}>确认先行启动</button>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {!rows && !error && <section className="pnl pad sub">加载中…</section>}
       {rows && !rows.length && <section className="pnl pad sub">还没有项目。</section>}
       {rows && rows.length > 0 && (

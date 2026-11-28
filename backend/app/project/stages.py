@@ -41,7 +41,7 @@ from ..models import AuditLog, Confirmation, Deliverable, Project, User
 from ..products import config as product_config
 from ..schemas import PHASES
 from ..services import quality_incidents
-from . import autoflow, configs
+from . import autoflow, configs, intake
 from . import deliverables as dsvc
 from . import export as export_svc
 from . import export_pptx
@@ -100,6 +100,8 @@ def _done(items: list[Deliverable]) -> bool:
 def target(db: Session, p: Project, groups: dict[int, list[Deliverable]] | None = None) -> int:
     groups = groups if groups is not None else _by_phase(db, p)
     k = max(p.phase, 0)
+    if k == 0 and intake.gate1_missing(db, p):       # 四期 A32：关口 1 进入条件（要点卡、授权台账）未齐不出“启动”
+        return p.phase
     while k < LAST and _done(groups[k]):
         k += 1
     return max(k, p.phase)

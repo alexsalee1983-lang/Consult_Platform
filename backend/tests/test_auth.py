@@ -17,6 +17,12 @@ from .conftest import TEST_PASSWORD, TEST_USER, login, totp_code
 PROTECTED = [
     ("GET", "/api/projects"),
     ("GET", "/api/portfolio"),
+    ("GET", "/api/projects/BANK-A/intake"),                       # 四期 A32 立项与合同要点卡
+    ("POST", "/api/projects/BANK-A/intake/basis"),
+    ("PUT", "/api/projects/BANK-A/intake/card"),
+    ("POST", "/api/projects/BANK-A/intake/authorizations"),
+    ("POST", "/api/projects/BANK-A/early-start/approve"),
+    ("GET", "/api/early-starts"),
     ("GET", "/api/indicators"),
     ("GET", "/api/indicators/drift"),
     ("GET", "/api/projects/BANK-A/automation"),

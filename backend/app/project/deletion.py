@@ -283,6 +283,8 @@ def purge(db: Session, p: Project) -> dict:
     drop(RevisionFeature, RevisionFeature.project_id == pid)   # 四期 F4② 特征（不含正文）
     counts["sign_offs"] = drop(SignOff, SignOff.project_id == pid)
     counts["quality_reviews"] = drop(QualityReview, QualityReview.project_id == pid)
+    from . import intake
+    counts["contract_cards"] = intake.delete_for_project(db, pid)     # 四期 A32 合同要点卡
     counts["customizations"] = customizations.delete_for_project(db, pid)   # 四期 A30，引用确认卡，先删
     counts["confirmations"] = drop(Confirmation, Confirmation.project_id == pid)
     judgment.delete_for_project(db, pid)

@@ -219,6 +219,14 @@ MATRIX = [
     (("POST", "/api/projects/GRID-B/deliverables/D2/client-feedback", {"items": [{"text": "意见"}]}),
      (404, 404, 403, 403, 403)),
     (("GET", "/api/deliverables/batch-sign", None), (200, 200, 403, 403, 403)),
+    # 立项与合同要点卡（四期 A32）：成员可看，非成员 404；写只给项目经理（403 在 test_intake 里测）；
+    # 先行启动确认与待确认清单只给项目负责人（顾问一律 403，不暴露项目是否存在）
+    (("GET", "/api/projects/BANK-A/intake", None), (200, 404, 403, 403, 403)),
+    (("PUT", "/api/projects/GRID-B/intake/card", {"fields": {}}), (404, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/intake/authorizations", {"kind": "x", "signed_on": "2026-11-01"}),
+     (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/BANK-A/early-start/approve", None), (403, 403, 403, 403, 403)),
+    (("GET", "/api/early-starts", None), (403, 403, 403, 403, 403)),
     # 项目定制项（四期 A30）：成员可看可提，非成员和别的项目的定制项 404；结构类审批只给项目经理，在 test_customizations 里测
     (("GET", "/api/projects/BANK-A/customizations", None), (200, 404, 403, 403, 403)),
     (("POST", "/api/projects/GRID-B/customizations", {"source": "chat", "text": "D4 表格加编号列"}),

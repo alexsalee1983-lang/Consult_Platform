@@ -73,6 +73,10 @@ def accept(db: Session, user: User, p: Project, accepted_on: date, months: int,
         raise RetentionError(403, "只有本项目的项目经理能登记验收")
     if p.deleted_at is not None:
         raise RetentionError(409, "项目资料已删除")
+    from . import intake
+    why = intake.contract_block(db, p)               # 四期 A32：先行启动合同未签不能结项
+    if why:
+        raise RetentionError(409, why)
     if accepted_on > (today or date.today()):
         raise RetentionError(422, "验收日不能晚于今天")
     if not 0 <= months <= MAX_MONTHS:

@@ -304,6 +304,10 @@ def upload_cards(db: Session, user: User, project: Project, cards: list[CardIn])
     """整批上传摘要卡：任何一张不过检查，整批不保存。"""
     action = "project.summary_card"
     _require_strict(db, user, project, action)
+    from . import intake
+    why = intake.data_refusal(db, project)        # 四期 A32：附件二未签不得导入摘要卡
+    if why:
+        raise CardError(422, why)
     if not cards:
         raise CardError(422, "没有摘要卡")
     if len(cards) > MAX_CARDS:

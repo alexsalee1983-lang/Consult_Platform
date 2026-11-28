@@ -230,6 +230,10 @@ def import_answers(db: Session, user: User, project: Project, sp: SelfEvalPack, 
     """extras：表外内容（Excel 多出的题、认不出的回答等），和备注一起过 guard、列出给顾问，不入池。"""
     if project.tier == "strict":
         raise SurveyError(422, "严格档的客户自评在现场工具里导入，平台只收摘要卡")
+    from . import intake
+    why = intake.data_refusal(db, project)        # 四期 A32 授权不先行
+    if why:
+        raise SurveyError(422, why)
     if sp.status == "imported":
         raise SurveyError(409, "这份自评包已导入；要重导先撤销本次导入")
     if sp.status == "superseded":
