@@ -10,6 +10,8 @@ GET  /api/projects/{code}/knowledge-updates                             引用�
 GET  /api/projects/{code}/deliverables/{dcode}/export                   导出 Word（各章当前版本，套模板；规则见 app/project/export.py）
      ?format=pptx 导出 PowerPoint（二期 A9，规则见 app/project/export_pptx.py）
      挂本交付件、未关闭且已“冻结导出”的质量事件存在时 409（四期 F3②）
+GET  /api/projects/{code}/outputs                                        输出页：按阶段的 D1～D8 输出包组件清单、结项复盘组件（四期 A33）
+GET  /api/projects/{code}/outputs/export?stage=                         阶段包一键导出（zip，各件沿用单件导出规则；规则见 app/project/outputs.py）
 POST /api/projects/{code}/deliverables/{dcode}/form/import              上传合同（multipart：file），后台 Agent 抽取表单要点（四期 A28②，202）
 GET  /api/projects/{code}/deliverables/{dcode}/form/import              最近一次合同导入的状态与抽取结果（回填表单，顾问核对后提交）
 
@@ -36,6 +38,7 @@ from ..project import export as export_svc
 from ..project import export_pptx
 from ..project import form_import
 from ..project import outward
+from ..project import outputs as outputs_svc
 from ..project import forms as forms_svc
 from ..project import kb_impact, loops
 from ..products import config as product_config
@@ -301,10 +304,8 @@ def errata(code: str, dcode: str, db: Session = Depends(get_db), user: User = De
     return loops.errata_page(db, p, d)
 
 
-@router.get("/{code}/deliverables/{dcode}/export")
-def export_deliverable(code: str, dcode: str, format: str = Query(default="docx", pattern="^(docx|pptx)$"),
-                       db: Session = Depends(get_db), user: User = Depends(current_user)):
-    p, d = _load(db, code, dcode, user)
+def _export_file(db: Session, user: User, p, d: Deliverable, format: str):
+    """单件导出（含质量事件冻结与对外硬规则检查）；不通过抛 HTTPException。阶段包逐件复用。"""
     frozen = quality_incidents.export_frozen(db, p.code, d.code)
     if frozen is not None:                           # 四期 F3②：质量事件遏制“冻结导出”
         audit.record(db, actor=user.username, action="deliverable.export", result="blocked", project_code=p.code,
@@ -318,9 +319,51 @@ def export_deliverable(code: str, dcode: str, format: str = Query(default="docx"
         raise HTTPException(422, f"{d.code} 正文命中对外硬规则（{'、'.join(hits)}），改正后再导出")
     mod = export_pptx if format == "pptx" else export_svc
     try:
-        r = mod.export_deliverable(db, user, p, d)
+        return mod.export_deliverable(db, user, p, d)
     except export_svc.ExportError as e:
         raise HTTPException(e.status, e.detail) from e
+
+
+@router.get("/{code}/deliverables/{dcode}/export")
+def export_deliverable(code: str, dcode: str, format: str = Query(default="docx", pattern="^(docx|pptx)$"),
+                       db: Session = Depends(get_db), user: User = Depends(current_user)):
+    p, d = _load(db, code, dcode, user)
+    r = _export_file(db, user, p, d, format)
+    mod = export_pptx if format == "pptx" else export_svc
     return Response(r.data, media_type=mod.MIME, headers={
         "Content-Disposition": f"attachment; filename=\"{p.code}-{d.code}.{format}\"; filename*=UTF-8''{quote(r.filename)}",
         "X-Export-Id": r.export_id, "Cache-Control": "no-store"})
+
+
+@router.get("/{code}/outputs")
+def outputs(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    """四期 A33：输出页（D1～D8 输出包组件清单按阶段分组、已签署标记、结项复盘组件）。"""
+    return outputs_svc.packs(project_for_member(db, code, user))
+
+
+@router.get("/{code}/outputs/export")
+def export_stage(code: str, stage: str = Query(min_length=1, max_length=20),
+                 db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """四期 A33：阶段包一键导出（zip）。阶段不存在 404；没有一件能导出 409。"""
+    p = project_for_member(db, code, user)
+    codes = outputs_svc.stage_codes(p, stage)
+    if not codes:
+        raise HTTPException(404, f"没有“{stage}”阶段的交付件")
+
+    def one(dcode: str, fmt: str):
+        d = next(x for x in p.deliverables if x.code == dcode)
+        try:
+            r = _export_file(db, user, p, d, fmt)
+        except HTTPException as e:
+            return str(e.detail)
+        return r.filename, r.data
+
+    data, meta = outputs_svc.stage_zip(p, stage, codes, one)
+    if not meta["exported"]:
+        raise HTTPException(409, f"“{stage}”阶段还没有能导出的交付件（见各交付件页）")
+    audit.record(db, actor=user.username, action="outputs.stage_export", result="allowed", project_code=p.code, **meta)
+    db.commit()
+    name = f"{p.code}-{stage}阶段包.zip"
+    return Response(data, media_type="application/zip", headers={
+        "Content-Disposition": f"attachment; filename=\"{p.code}-stage.zip\"; filename*=UTF-8''{quote(name)}",
+        "Cache-Control": "no-store"})

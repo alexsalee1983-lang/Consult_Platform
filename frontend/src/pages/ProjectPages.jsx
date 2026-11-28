@@ -176,33 +176,79 @@ export function RequirementsPage({ code }) {
   );
 }
 
+const FORMAT = { docx: "Word", pptx: "PPT", xlsx: "Excel", platform: "平台内" };
+
+// 四期 A33：输出页按阶段列 D1～D8 输出包（组件清单来自产品配置），已签署的给只读查看；每个阶段一键导出阶段包（未签署带“草稿”水印）。
+function Components({ items }) {
+  return (
+    <div className="row" style={{ flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+      {items.map((x) => (
+        <span key={x.id} className="chip" title={`${x.id}${x.client_signs ? " · 客户签字" : ""}${x.default ? "" : " · 可选"}`}>
+          {x.name} · {FORMAT[x.format] || x.format}{x.default ? "" : "（可选）"}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function OutputPage({ code }) {
   const { p, error, load } = useProject(code);
+  const [out, setOut] = useState(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => { api.outputs(code).then(setOut).catch(() => setOut({ stages: [], closeout: [] })); }, [code]);
   const { on: agentView } = useAgentView();   // 交付链运行面板属 Agent 运行情况，默认隐藏；非项目经理只读（四期 A29）
   const [canManage, setCanManage] = useState(false);
   useEffect(() => {
     if (agentView) api.panorama(code, true).then((d) => setCanManage(Boolean(d.can_manage_runs))).catch(() => {});
   }, [code, agentView]);
   if (!p) return <Loading error={error} />;
+  const status = Object.fromEntries(p.deliverables.map((d) => [d.code, d.status]));
+  const stages = out?.stages?.length ? out.stages
+    : [{ stage: "", deliverables: p.deliverables.map((d) => ({ ...d, components: [], signed: d.status === "signed" })) }];
+  const exportStage = (stage) => {
+    setMsg("");
+    api.exportStage(p.code, stage).then((r) => setMsg(`已导出 ${r.name}`)).catch((e) => setMsg(e.message || "导出失败"));
+  };
   return (
     <>
       {head(p, "输出")}
       <div className="grid-main">
         <section className="pnl pad" aria-label="交付件">
-          <h2 className="h2">交付件</h2>
-          <ul className="lst">
-            {p.deliverables.map((d) => {
-              const st = DELIV_STATUS[d.status] || DELIV_STATUS.not_started;
-              return (
-                <li key={d.code} className="sb">
-                  <Link to={`${base(p.code)}/deliverables/${d.code}`} style={{ color: "var(--tx)", textDecoration: "none" }}>
-                    <span className="mono sub" style={{ marginRight: 8 }}>{d.code}</span>{d.title}
-                  </Link>
-                  <span className="row"><span className={`chip ${st.cls}`}>{st.label}</span><LocateLink code={p.code} node={`deliv:${d.code}`} /></span>
-                </li>
-              );
-            })}
-          </ul>
+          <h2 className="h2">输出包</h2>
+          {msg && <div className="sub" role="status">{msg}</div>}
+          {stages.map((st) => (
+            <Fragment key={st.stage || "all"}>
+              {st.stage && (
+                <div className="sb" style={{ marginTop: 12 }}>
+                  <h3 className="h2">{st.stage}</h3>
+                  <button type="button" className="btn" onClick={() => exportStage(st.stage)}>导出阶段包</button>
+                </div>
+              )}
+              <ul className="lst">
+                {st.deliverables.map((d) => {
+                  const s = DELIV_STATUS[status[d.code] ?? d.status] || DELIV_STATUS.not_started;
+                  return (
+                    <li key={d.code}>
+                      <div className="sb">
+                        <Link to={`${base(p.code)}/deliverables/${d.code}`} style={{ color: "var(--tx)", textDecoration: "none" }}>
+                          <span className="mono sub" style={{ marginRight: 8 }}>{d.code}</span>{d.title}
+                          {d.signed && <span className="sub" style={{ marginLeft: 8 }}>只读查看</span>}
+                        </Link>
+                        <span className="row"><span className={`chip ${s.cls}`}>{s.label}</span><LocateLink code={p.code} node={`deliv:${d.code}`} /></span>
+                      </div>
+                      {d.components?.length > 0 && <Components items={d.components} />}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Fragment>
+          ))}
+          {out?.closeout?.length > 0 && (
+            <>
+              <h3 className="h2" style={{ marginTop: 12 }}>结项复盘</h3>
+              <Components items={out.closeout} />
+            </>
+          )}
         </section>
         {agentView && <RunPanel code={p.code} strict={p.tier === "strict"} onChange={load} canManage={canManage} />}
       </div>

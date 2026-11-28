@@ -395,6 +395,9 @@ export const api = {
   batchSign: (items) => request("/api/deliverables/batch-sign", { method: "POST", body: JSON.stringify({ items }) }),
   exportWord: (code, dcode) => download(`${dpath(code, dcode)}/export`),
   exportPpt: (code, dcode) => download(`${dpath(code, dcode)}/export?format=pptx`),   // 二期 A9
+  // 四期 A33：输出页（按阶段的输出包组件清单）与阶段包一键导出（zip）
+  outputs: (code) => request(`/api/projects/${encodeURIComponent(code)}/outputs`),
+  exportStage: (code, stage) => download(`/api/projects/${encodeURIComponent(code)}/outputs/export?stage=${encodeURIComponent(stage)}`),
   // 四期 A32：Word 回传、编辑器知识侧栏、确认卡证据并排
   wordReturn: (code, dcode, file) => {
     const fd = new FormData();
