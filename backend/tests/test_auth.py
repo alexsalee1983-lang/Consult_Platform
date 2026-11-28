@@ -103,6 +103,8 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/survey/agenda"),
     ("GET", "/api/projects/BANK-A/deliverables/D4"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/errata"),       # 四期 A31②
+    ("GET", "/api/projects/BANK-A/outputs"),                       # 四期 A33
+    ("GET", "/api/projects/BANK-A/outputs/export?stage=启动"),
     ("GET", "/api/projects/BANK-A/knowledge-updates"),
     ("GET", "/api/projects/BANK-A/assessment"),
     ("GET", "/api/projects/BANK-A/confirmations"),

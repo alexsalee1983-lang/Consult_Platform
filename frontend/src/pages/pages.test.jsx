@@ -196,6 +196,26 @@ test("输出页：列出交付件，每条有“⌖ 全景”回到对应节点"
   expect(c.querySelector('a[href="/project/BANK-A?focus=deliv%3AD1"]')?.textContent).toBe("⌖ 全景");
 });
 
+test("输出页（A33）：按阶段列输出包组件，已签署给只读查看，阶段包一键导出", async () => {
+  stub.project = async () => PROJECT;
+  stub.outputs = async () => ({
+    stages: [{ stage: "启动", deliverables: [{ code: "D1", title: "现状差距分析", status: "signed", signed: true,
+      components: [{ id: "D1-C01", name: "范围确认单", format: "docx", default: true, client_signs: true },
+        { id: "D1-C09", name: "外包方案", format: "pptx", default: false }] }] }],
+    closeout: [{ id: "R-C01", name: "项目复盘", format: "docx", default: true }],
+  });
+  stub.exportStage = vi.fn(async () => ({ name: "BANK-A-启动阶段包.zip" }));
+  const c = await render(<OutputPage code="BANK-A" />);
+  const sec = c.querySelector('section[aria-label="交付件"]');
+  expect(sec.textContent).toContain("范围确认单 · Word");
+  expect(sec.textContent).toContain("外包方案 · PPT（可选）");
+  expect(sec.textContent).toContain("只读查看");
+  expect(sec.textContent).toContain("项目复盘");
+  await act(async () => [...sec.querySelectorAll("button")].find((b) => b.textContent === "导出阶段包").click());
+  expect(stub.exportStage).toHaveBeenCalledWith("BANK-A", "启动");
+  expect(sec.textContent).toContain("已导出 BANK-A-启动阶段包.zip");
+});
+
 test("抽屉：✕ 关闭，“查看全部”跳子页面", async () => {
   const onClose = vi.fn();
   const c = await render(<Drawer title="证据缺口" onClose={onClose} more={{ to: "/project/BANK-A/input", label: "查看全部" }}><p>BANK-A 机房</p></Drawer>);
