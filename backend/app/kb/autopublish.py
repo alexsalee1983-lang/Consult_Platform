@@ -17,10 +17,15 @@ python -m app.cli kb-source-publish <清单.csv> --dir <资料目录> --as <知�
 - 清单改了标题：条目编号由标题算出，标题一改就成了新编号；若这份的条款正文与库里另一份公开资料的现行条款逐条相同，
   判为改名，整份跳过并提示（把标题改回原样，或先下线旧条目），不重复入库。
 - 与现行版本相同的跳过；已有未完成的草稿或待审版本时，内容和原件一致的接着处理，不一致的提示先处理它。
+- 来源信息补全后重跑（四期 A46）：上一轮核验没过（如原网址为空）转人工的在审版本会挡住新版。
+  kb-source-publish --supersede-pending 先列出（默认 dry-run）再作废（--yes）：只作废同一来源文件切条生成、
+  在审且没有任何人工审核记录的版本（状态退回、原因“来源信息补全后重跑”），再按新清单重跑；
+  已发布、已驳回、有人工审核记录的一律不动并按来源分列。审计 kb.source_supersede 只记计数和原件哈希。
 - 审计只记编号、版本、规则、计数和抽检结论，不记正文和意见。
 """
 from __future__ import annotations
 
+import hashlib
 import math
 import secrets
 from dataclasses import dataclass, field
@@ -41,6 +46,8 @@ PLATFORM = "platform"
 AGENT = "agent"                    # 知识审核 Agent 自动发布（二期 B11，app/kb/agent_review.py）
 RECENT_SAMPLES = 20
 SAMPLE_DECISIONS = {"pass": "approve", "fail": "reject"}
+SUPERSEDE_REASON = "来源信息补全后重跑"
+AUTO_REVIEWERS = ("platform", "agent:")      # 平台核验、合规自动关、迁移核验（platform:*）和 Agent（agent:*）
 
 
 @dataclass
@@ -235,6 +242,68 @@ def run(db: Session, user: User, manifest: Path, src_dir: Path) -> PublishReport
                  published=len(published), manual=sum(d.manual for d in report.docs), sampled=len(report.sampled),
                  suspended=bool(report.suspended))
     return report
+
+
+@dataclass
+class SupersedeOutcome:
+    file: str
+    title: str
+    superseded: int = 0       # 将作废（dry-run）/ 已作废
+    skip_published: int = 0   # 现行版本已发布（含自动发布、候选），不动
+    skip_human: int = 0       # 在审但有人工审核记录，不动
+    other: int = 0            # 库里没有、已驳回、草稿、与新清单内容一致（重跑时接着处理）
+    message: str = ""
+
+
+def human_touched(v: KbVersion) -> bool:
+    """版本上有人工审核记录（内容、合规、抽检、复查等任何人签的意见）。"""
+    return any(not r.reviewer.startswith(AUTO_REVIEWERS) for r in v.reviews)
+
+
+def supersede_pending(db: Session, user: User, manifest: Path, src_dir: Path, apply: bool) -> list[SupersedeOutcome]:
+    """四期 A46：作废同一来源文件切条生成、在审且无人工动作、与新清单内容不一致的旧版；apply=False 只统计。"""
+    rv.require_knowledge(db, user)
+    docs, _ = sources.read_manifest(manifest.read_bytes())
+    outs: list[SupersedeOutcome] = []
+    hashes: list[str] = []
+    for d in docs:
+        out = SupersedeOutcome(file=d.file, title=d.title)
+        outs.append(out)
+        f = src_dir / d.file
+        if not f.is_file():
+            out.message = "文件不存在"
+            continue
+        data = f.read_bytes()
+        try:
+            entries, _, _ = sources.split_doc(d, data)
+        except parse.ParseError as e:
+            out.message = str(e)
+            continue
+        hashes.append(hashlib.sha256(data).hexdigest())
+        for e in entries:
+            item = db.scalar(select(KbItem).where(KbItem.import_key == e.key))
+            latest = item.versions[-1] if item is not None and item.versions else None
+            if latest is None or latest.status in ("draft", "rejected", "retired"):
+                out.other += 1
+            elif latest.status != "in_review":
+                out.skip_published += 1
+            elif human_touched(latest):
+                out.skip_human += 1
+            elif importer.same(latest, e):
+                out.other += 1
+            else:
+                out.superseded += 1
+                if apply:
+                    db.add(KbReview(version_id=latest.id, reviewer=PLATFORM, review_role=PLATFORM,
+                                    decision="reject", comment=SUPERSEDE_REASON))
+                    latest.status = "rejected"
+        if apply:
+            db.commit()
+    if apply:
+        audit.record(db, actor=user.username, action="kb.source_supersede", result="allowed", docs=len(outs),
+                     superseded=sum(o.superseded for o in outs), skip_published=sum(o.skip_published for o in outs),
+                     skip_human=sum(o.skip_human for o in outs), sources=hashes)
+    return outs
 
 
 def sample_queue(db: Session) -> list[KbVersion]:

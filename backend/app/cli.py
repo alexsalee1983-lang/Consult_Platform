@@ -1119,6 +1119,18 @@ def kb_source_publish(args: argparse.Namespace) -> int:
         user = _knowledge_user(db, args.as_user)
         if user is None:
             return 1
+        if getattr(args, "supersede_pending", False):           # 四期 A46：先作废未动过的在审旧版
+            apply = bool(getattr(args, "yes", False))
+            outs = autopublish.supersede_pending(db, user, manifest, src, apply=apply)
+            verb = "已作废" if apply else "将作废"
+            for o in outs:
+                print(f"{o.title}：{verb} {o.superseded}，跳过已发布 {o.skip_published}，跳过人工动过 {o.skip_human}，"
+                      f"其他 {o.other}" + (f"；{o.message}" if o.message else ""))
+            print(f"合计：{verb} {sum(o.superseded for o in outs)}，跳过已发布 {sum(o.skip_published for o in outs)}，"
+                  f"跳过人工动过 {sum(o.skip_human for o in outs)}")
+            if not apply:
+                print("dry-run：未改库；确认后加 --yes 作废并按新清单重跑")
+                return 0
         r = autopublish.run(db, user, manifest, src)
     if r.suspended:
         print(f"自动发布已暂停（{r.suspended}），本批全部转人工审核")
@@ -1478,6 +1490,9 @@ def main(argv: list[str] | None = None) -> int:
     ksp.add_argument("--dir", required=True, help="下载文件所在目录")
     ksp.add_argument("--as", dest="as_user", required=True, help="导入人（知识专家或知识管理员）")
     ksp.add_argument("--report", default="", help="核验记录写成 JSON 文件")
+    ksp.add_argument("--supersede-pending", action="store_true",
+                     help="先作废同一来源切条生成、在审且无人工审核记录的旧版（来源信息补全后重跑）；默认只列出不改库")
+    ksp.add_argument("--yes", action="store_true", help="与 --supersede-pending 合用：真正作废并接着重跑")
     ksp.set_defaults(func=kb_source_publish)
     kas = sub.add_parser("kb-acquire-sources", help="知识源清单：来源确认队列的缺口经网关交 kb-builder 列清单，程序核对不编造网址")
     kas.add_argument("--out", required=True, help="清单 JSON 文件")
