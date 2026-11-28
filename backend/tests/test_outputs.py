@@ -66,7 +66,7 @@ def test_stage_export_zip_drafts_and_skips(proj):
     doc = Document(io.BytesIO(z.read(docx_name)))
     assert "草稿" in "".join(p.text for p in doc.sections[0].header.paragraphs)              # 未签草稿水印沿用单件导出
     manifest = z.read("清单.txt").decode("utf-8")
-    assert "D1" in manifest and "D-" not in manifest
+    assert "导出 D1（docx）" in manifest and "范围为" not in manifest
     with SessionLocal() as db:
         a = db.scalars(select(AuditLog).where(AuditLog.action == "outputs.stage_export",
                                               AuditLog.project_code == code)).all()
