@@ -92,7 +92,7 @@ def _handle_signal(signum, frame) -> None:  # noqa: ARG001
 
 
 def _scan_due() -> None:
-    """平台规则：为保留期已到期的项目发起删除申请，等项目负责人确认（可重复执行，多个 worker 同时跑也不会重复发起）。"""
+    """平台规则：为保留期已到期的项目发起删除申请，等咨询业务负责人确认（可重复执行，多个 worker 同时跑也不会重复发起）。"""
     try:
         with SessionLocal() as db:
             made = deletion.scan_due(db)

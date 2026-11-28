@@ -9,7 +9,7 @@ const INDUSTRIES = ["银行/金融", "电力", "制造", "政府", "其他"];
 const ORG_TYPES = [["central_soe", "央企"], ["local_soe", "地方国企"], ["private", "民营企业"], ["foreign", "外资企业"],
   ["government", "政府机关"], ["institution", "事业单位"], ["other", "其他"]];
 
-// 网页立项（二期 A3）：项目负责人选产品、勾模块、定档、指定首位项目经理（默认本人）。规则见 app/project/configs.py
+// 网页立项（二期 A3）：咨询业务负责人选产品、勾模块、定档、指定首位项目经理（默认本人）。规则见 app/project/configs.py
 export default function NewProject({ onClose }) {
   const { user } = useAuth();
   const nav = useNavigate();

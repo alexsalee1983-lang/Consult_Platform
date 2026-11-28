@@ -5,7 +5,7 @@ import { TopBar } from "../components/common.jsx";
 
 const DSTAT = [["signed", "已签署"], ["review", "待签署"], ["drafting", "编写中"], ["not_started", "未开始"]];
 
-// 项目负责人项目总览（决策记录 2026-11-15 方案 A）：只看全部项目的元数据，不看证据、交付件正文和对话；
+// 咨询业务负责人项目总览（决策记录 2026-11-15 方案 A）：只看全部项目的元数据，不看证据、交付件正文和对话；
 // 只有本人是成员的项目可以进入驾驶舱
 export default function Portfolio() {
   const [rows, setRows] = useState(null);
@@ -13,7 +13,7 @@ export default function Portfolio() {
   useEffect(() => { api.portfolio().then(setRows).catch((e) => setError(e.message)); }, []);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <TopBar cap="项目负责人" title="项目总览" />
+      <TopBar cap="咨询业务负责人" title="项目总览" />
       <div className="sub">全部项目的进度、交付件状态、保留期和删除情况（只有元数据）。项目内容只对项目成员开放；需要查看时请项目经理把你加入项目。</div>
       {error && <div className="err" role="alert">{error}</div>}
       {!rows && !error && <section className="pnl pad sub">加载中…</section>}

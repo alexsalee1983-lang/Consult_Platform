@@ -3,11 +3,11 @@
 - 登记：任何业务角色（程序也可调 register()）；挂项目时必须是项目成员。只记描述的长度和摘要哈希。
 - 分级 P1 / P2 / P3 与遏制时限（从登记起算）：P1 4 小时；P2 1 个工作日（跳过周六日）；P3 常规修复不设时限。
 - 八步处置只追加：分级可重做（以最后一次为准），复盘即关闭，关闭后不再追加（409）。
-- 处置人：项目负责人，或事件所属项目的项目经理；查看：再加登记人；其他人 404。
+- 处置人：咨询业务负责人，或事件所属项目的项目经理；查看：再加登记人；其他人 404。
 - 遏制联动：冻结导出见 export_frozen()；下线条目（只用于挂知识条目的事件）当场把条目下线（同知识库“下线条目”，
   审计 kb.retire），处置人须同时是知识管理员（不扩大下线权限），条目已下线时只记步骤；
   回滚 Agent 版本（四期 F3②e）当场把该 Agent 切到 md 版本库里的已合入版本（app/services/agent_md.py），
-  处置人须是项目负责人（系统管理员与其他角色互斥，不能兼任处置人），撤销见 /api/agent-md/{代号}/unpin。
+  处置人须是咨询业务负责人（系统管理员与其他角色互斥，不能兼任处置人），撤销见 /api/agent-md/{代号}/unpin。
 """
 from __future__ import annotations
 
@@ -225,7 +225,7 @@ def _rollback_agent(db: Session, user: User, inc: QualityIncident, agent: str, v
     from . import agent_md
 
     if PROJECT_LEAD not in roles_of(db, user.id):
-        raise IncidentError(403, "回滚 Agent 版本须由项目负责人处置")
+        raise IncidentError(403, "回滚 Agent 版本须由咨询业务负责人处置")
     try:
         agent_md.pin(db, user.username, agent, version, inc.id)
     except agent_md.MdError as e:
@@ -291,7 +291,7 @@ def register_signed_basis(db: Session, doc_id: str, source: str = "kb.basis",
 
 def impact(db: Session, user: User, v: View) -> list[dict]:
     """影响面反查：挂交付件时就是它自己；挂知识条目时列出当前正文引用了该条目的交付件（含别名，见 kb_impact）。
-    项目负责人看全部；其他人只看自己是成员的项目（非成员项目不出现，免得泄露项目代号）。"""
+    咨询业务负责人看全部；其他人只看自己是成员的项目（非成员项目不出现，免得泄露项目代号）。"""
     from ..models import Deliverable
     from ..project import kb_impact
 

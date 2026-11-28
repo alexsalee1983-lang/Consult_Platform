@@ -19,7 +19,7 @@ create-project 立项（一期没有网页立项）：项目代号只用客户�
 retention-report 列出已验收项目的保留期和到期状态（只有代号和日期，不含客户内容），供负责人跟踪到期删除。
 loadtest-accounts 只在开发、测试环境建压测账号（凭据写文件，见 loadtest/README.md）。
 deletion-scan 立即为已到期项目发起删除申请（worker 每小时自动做）；deletion-report 列出删除申请和删除记录。
-删除本身只能由项目负责人在网页上确认（规则见 app/project/deletion.py），命令行不提供直接删除。
+删除本身只能由咨询业务负责人在网页上确认（规则见 app/project/deletion.py），命令行不提供直接删除。
 安全审计员由单独任命，只能用 grant-role / revoke-role 在服务器上授予或撤销，任何网页接口都做不到。
 口令交互输入，不出现在命令行参数和 shell 历史里。TOTP 密钥只显示一次，请当面交给用户录入认证器。
 所有操作写入审计日志（操作人记为 cli）。
@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import json
 import os
 import re
 import sys
@@ -191,7 +192,7 @@ def add_member(args: argparse.Namespace) -> int:
             print(f"用户 {args.username} 已停用", file=sys.stderr)
             return 1
         if not roles_of(db, user.id) & BUSINESS_ROLES:
-            print("只有持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户能加入项目", file=sys.stderr)
+            print("只有持业务角色（顾问、咨询业务负责人、知识专家、知识管理员）的用户能加入项目", file=sys.stderr)
             return 1
         m = membership(db, project.id, user.id)
         if m is not None and m.project_role == args.role:
@@ -387,6 +388,44 @@ def kb_grade_scan(args: argparse.Namespace) -> int:
     for key, label in (("up", "升级"), ("down", "降级"), ("capped", "按封顶压回"), ("recheck", "标待复查")):
         items = getattr(r, key)
         print(f"{label}{head} {len(items)} 条" + ("：" + "、".join(items[:50]) if items else ""))
+    return 0
+
+
+def kb_review_backfill(args: argparse.Namespace) -> int:
+    """积压补跑自动审核（四期 A45，负责人 2026-11-28“执行吧”）：B43 上线前已在审的公开资料版本，按提交时的
+    同一分流补跑一次——交知识审核 Agent 的排 kb.agent_review（后台执行，命令里不调模型），其余按程序规则跑
+    合规自动关；已有 Agent 审核或合规记录、已在队列里的跳过（幂等）。抽检、暂停规则照旧；审计只记计数。"""
+    from .kb import agent_review, compliance_auto
+    from .models import Job, KbVersion
+
+    with SessionLocal() as db:
+        queued = {json.loads(j.payload).get("version_id") for j in db.scalars(
+            select(Job).where(Job.kind == "kb.agent_review", Job.status.in_(("queued", "running"))))}
+        to_agent: list[KbVersion] = []
+        to_rules: list[KbVersion] = []
+        for v in db.scalars(select(KbVersion).where(KbVersion.status == "in_review", KbVersion.source_type == "public")
+                            .order_by(KbVersion.id)):
+            if get_settings().kb_agent_auto_publish and agent_review.eligible(v):
+                if v.id not in queued and not any(r.review_role == agent_review.ROLE for r in v.reviews):
+                    to_agent.append(v)
+            elif compliance_auto.applicable(v) and not any(
+                    r.review_role in (compliance_auto.ROLE, compliance_auto.FLAG_ROLE) for r in v.reviews):
+                to_rules.append(v)
+        if args.limit:
+            to_agent, to_rules = to_agent[:args.limit], to_rules[:max(args.limit - len(to_agent), 0)]
+        if args.dry_run:
+            print(f"待补跑：交知识审核 Agent {len(to_agent)} 条、合规自动关 {len(to_rules)} 条（只统计，未写库）")
+            return 0
+        for v in to_agent:
+            agent_review.enqueue(db, v, created_by="cli")
+        passed = flagged = 0
+        for v in to_rules:
+            exc = compliance_auto.run(db, v)
+            passed, flagged = passed + (exc == []), flagged + bool(exc)
+            db.commit()
+        audit.record(db, actor="cli", action="kb.review_backfill", result="allowed", agent_queued=len(to_agent),
+                     compliance_passed=passed, compliance_exceptions=flagged)
+    print(f"已排知识审核 Agent {len(to_agent)} 条；合规自动关通过 {passed} 条、例外留知识管理员 {flagged} 条")
     return 0
 
 
@@ -1511,6 +1550,11 @@ def main(argv: list[str] | None = None) -> int:
     kar.add_argument("--limit", type=int, default=None, help="最多排几条")
     kar.add_argument("--dry-run", action="store_true", help="只按规则预判类别打印计数，不排队")
     kar.set_defaults(func=kb_agent_review_rerun)
+    kbf = sub.add_parser("kb-review-backfill",
+                         help="积压补跑自动审核：B43 前已在审的公开资料补排知识审核 Agent 或补跑合规自动关（幂等）")
+    kbf.add_argument("--limit", type=int, default=None, help="最多处理几条")
+    kbf.add_argument("--dry-run", action="store_true", help="只打印分类计数，不写库")
+    kbf.set_defaults(func=kb_review_backfill)
     kcp = sub.add_parser("kb-candidate-promote",
                          help="候选影子期晋级：满 KB_CANDIDATE_DAYS 天且抽检没判不通过的候选转为已发布，抽检不通过的退回人工（worker 每天自动执行）")
     kcp.add_argument("--dry-run", action="store_true", help="只列出会晋级、退回的候选，不改动")
