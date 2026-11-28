@@ -252,7 +252,7 @@ def test_d1_kickoff_pptx_and_milestone_writeback(proj):
                                                       AuditLog.action == "project.plan_writeback")))
     assert len(logs) == 1 and "启动包" not in str(logs[0].detail)          # 审计不记正文
     r = c.get(f"{_base(code, 'D1')}/export?format=pptx")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     titles = [s.shapes.title.text for s in Presentation(io.BytesIO(r.content)).slides if s.shapes.title]
     for t in ("项目概况", "范围确认", "工作分解与里程碑", "组织与沟通", "启动会议程与下一步"):
         assert any(t in x for x in titles), t
