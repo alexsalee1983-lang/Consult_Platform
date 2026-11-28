@@ -378,9 +378,24 @@ export const api = {
   clientFeedback: (code, dcode, items) =>   // items: [{section: 章号或 null, text}]
     request(`${dpath(code, dcode)}/client-feedback`, { method: "POST", body: JSON.stringify({ items }) }),
   batchCandidates: () => request("/api/deliverables/batch-sign"),
+  // 四期 A30 项目定制项：对话入口 {source: "chat", text}；编辑器入口 {source: "editor", text, deliverable, section}
+  customizations: (code) => request(`/api/projects/${encodeURIComponent(code)}/customizations`),
+  createCustomization: (code, body) =>
+    request(`/api/projects/${encodeURIComponent(code)}/customizations`, { method: "POST", body: JSON.stringify(body) }),
+  withdrawCustomization: (code, id) =>
+    request(`/api/projects/${encodeURIComponent(code)}/customizations/${id}/withdraw`, { method: "POST" }),
   batchSign: (items) => request("/api/deliverables/batch-sign", { method: "POST", body: JSON.stringify({ items }) }),
   exportWord: (code, dcode) => download(`${dpath(code, dcode)}/export`),
   exportPpt: (code, dcode) => download(`${dpath(code, dcode)}/export?format=pptx`),   // 二期 A9
+  // 四期 A32：Word 回传、编辑器知识侧栏、确认卡证据并排
+  wordReturn: (code, dcode, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return request(`${dpath(code, dcode)}/word-return`, { method: "POST", body: fd });
+  },
+  kbSuggest: (code, dcode, seq, q) =>
+    request(`${dpath(code, dcode)}/sections/${seq}/kb-suggest${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  cardEvidence: (code) => request(`/api/projects/${encodeURIComponent(code)}/confirmations/evidence`),
   verifyAudit: (expectHead) =>
     request(`/api/audit/verify${expectHead ? `?expect_head=${encodeURIComponent(expectHead)}` : ""}`),
 };

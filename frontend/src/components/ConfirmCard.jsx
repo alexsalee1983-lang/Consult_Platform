@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { api, KIND_CLS } from "../api.js";
+import EvidencePair from "./CardEvidence.jsx";
 
 // 一张确认卡：Agent 给出的选项、推荐和理由、影响；顾问选一个选项或写意见（规则见 app/project/confirmations.py）。
 // 处理过的卡不能再处理；交付链在等这张卡时，卡都处理完会自动继续。
-export default function ConfirmCard({ c, onDone, showProject = false }) {
+// evidence（四期 A32②，可选）：卡里引用的两处证据原文片段，并排显示
+export default function ConfirmCard({ c, onDone, showProject = false, evidence = null }) {
   const [writing, setWriting] = useState(false);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -43,6 +45,7 @@ export default function ConfirmCard({ c, onDone, showProject = false }) {
       )}
       {c.reason && <div className="sub">理由：{c.reason}</div>}
       {c.impact && <div className="sub">影响：{c.impact}</div>}
+      <EvidencePair items={evidence} />
       {error && <div className="err" role="alert">{error}</div>}
       {writing ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
