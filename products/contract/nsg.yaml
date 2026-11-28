@@ -1,0 +1,56 @@
+# 四期 C23：网络安全治理规划 澄清题选项与工期对照（草稿，expert_review: pending，2026-11-28）
+# 选项取自同产品黄金样例（资料仓 Consult_Knowledge drafts/golden/nsg，golden 为 golden_id），样例本身待专家认可；
+# 样例为虚拟客户，只借结构与常见取舍，不照抄数字。规则与通用题见 checks.yaml。
+product: NSG
+weeks: {typical: 14, min: 10, source: 公司标准写法初值；黄金样例暂无整项目工期，专家复核时补}
+deliverables_min: [D1, D2, D3, D4, D5, D6, D7, D8]
+questions:
+- id: NSG-Q01
+  field: in_scope
+  ask: 规划覆盖到哪一级单位？
+  affects: [D4, D5]
+  gate: 启动
+  options:
+  - {text: 集团总部加主要生产单位, recommended: true, reason: 样例治理架构按总部统筹、生产单位落实设计, golden: [NSG-G02]}
+  - {text: 集团总部与全部下属单位, golden: [NSG-G02]}
+  - {text: 仅集团总部}
+- id: NSG-Q02
+  field: milestones
+  ask: 规划期按几年设计？
+  affects: [D5, D7]
+  gate: 设计
+  options:
+  - {text: 三年规划，按年度分阶段, recommended: true, reason: 样例重点任务与路线图按年度展开，与预算周期对齐, golden: [NSG-G03, NSG-G07]}
+  - {text: 五年规划，前三年细化, golden: [NSG-G03]}
+- id: NSG-Q03
+  field: deliverables
+  ask: D6 治理制度包含哪几份文件？
+  affects: [D6]
+  gate: 设计
+  options:
+  - {text: 网络安全工作责任制与考核问责制度 2 份, recommended: true, reason: 样例治理制度以责任落实与考核为核心, golden: [NSG-G04, NSG-G05]}
+  - {text: 以上 2 份再加总体管理办法, golden: [NSG-G04]}
+- id: NSG-Q04
+  field: client_requirements
+  ask: D7 项目清单是否给出投入量级？
+  affects: [D7, D8]
+  gate: 设计
+  options:
+  - {text: 给出量级区间，不做详细预算, recommended: true, reason: 样例按项目列量级与优先级，供立项参考, golden: [NSG-G06]}
+  - {text: 只列项目与优先级，不给投入}
+- id: NSG-Q05
+  field: goal
+  ask: 规划首要回应的驱动因素是什么？
+  affects: [D4, D5]
+  gate: 启动
+  options:
+  - {text: 主要差距与监管要求并重, recommended: true, reason: 样例主要差距章节与愿景目标逐项对应, golden: [NSG-G01, NSG-G02]}
+  - {text: 支撑数字化转型新业务}
+- id: NSG-Q06
+  field: acceptance
+  ask: 高层汇报需要管理层决策哪些事项？
+  affects: [D8]
+  gate: 验收
+  options:
+  - {text: 治理架构、重点任务优先级与年度投入, recommended: true, reason: 样例高层汇报把待决事项单列, golden: [NSG-G07]}
+  - {text: 只汇报规划内容，不列决策事项}

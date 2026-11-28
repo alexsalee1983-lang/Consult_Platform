@@ -1,0 +1,55 @@
+# 四期 C23：ISO 27001 信息安全管理体系建设 澄清题选项与工期对照（草稿，expert_review: pending，2026-11-28）
+# 选项取自同产品黄金样例（资料仓 Consult_Knowledge drafts/golden/iso，golden 为 golden_id），样例本身待专家认可；
+# 样例为虚拟客户，只借结构与常见取舍，不照抄数字。平台只做认证准备，不出具认证结论。规则与通用题见 checks.yaml。
+product: ISO
+weeks: {typical: 16, min: 12, source: 公司标准写法初值；样例认证准备路线图总周期约 9 个月含试运行，本项目工期专家复核时补}
+deliverables_min: [D1, D2, D3, D4, D5, D6, D7, D8]
+questions:
+- id: ISO-Q01
+  field: in_scope
+  ask: 管理体系覆盖范围按哪种方式划定？
+  affects: [D4, D5, D6]
+  gate: 启动
+  options:
+  - {text: 先覆盖一个核心业务及其支撑部门，后续扩展, recommended: true, reason: 样例路线图先小范围建立再扩展，试运行记录更充分, golden: [ISO-G08]}
+  - {text: 全公司全部业务与场所, golden: [ISO-G08]}
+- id: ISO-Q02
+  field: out_of_scope
+  ask: 认证审核与认证机构对接是否在范围内？
+  affects: [D7, D8]
+  gate: 启动
+  options:
+  - {text: 不在范围，只做认证准备与内审辅导, recommended: true, reason: 样例路线图把外部审核列为客户事项，顾问只做准备辅导, golden: [ISO-G08]}
+  - {text: 协助客户准备外审材料与答疑，不代为申请, golden: [ISO-G08]}
+- id: ISO-Q03
+  field: deliverables
+  ask: D6 体系文件做到哪一层？
+  affects: [D6]
+  gate: 设计
+  options:
+  - {text: 方针与必备程序（风险评估与处置、内审、管理评审）, recommended: true, reason: 样例覆盖标准要求的必备文件化信息, golden: [ISO-G04, ISO-G05, ISO-G06, ISO-G07]}
+  - {text: 必备程序再加附录 A 适用控制的作业指导书, golden: [ISO-G03]}
+- id: ISO-Q04
+  field: client_requirements
+  ask: 风险评估采用哪种方法？
+  affects: [D5]
+  gate: 设计
+  options:
+  - {text: 按资产与场景识别风险，可能性乘影响定级, recommended: true, reason: 样例准则写清分级口径与可接受风险阈值, golden: [ISO-G02]}
+  - {text: 沿用客户现有风险评估方法，只补齐缺项, golden: [ISO-G02, ISO-G05]}
+- id: ISO-Q05
+  field: milestones
+  ask: 体系试运行安排多长时间？
+  affects: [D7]
+  gate: 设计
+  options:
+  - {text: 不少于 3 个月，以记录充分为准, recommended: true, reason: 样例试运行满三个月后再做内审与管理评审, golden: [ISO-G08]}
+  - {text: 由客户按外审排期自定}
+- id: ISO-Q06
+  field: acceptance
+  ask: 适用性声明按什么口径验收？
+  affects: [D5]
+  gate: 验收
+  options:
+  - {text: 附录 A 控制逐项列出适用与否及理由, recommended: true, reason: 样例逐项给出理由，可逐条对照, golden: [ISO-G03]}
+  - {text: 只列适用控制，不适用项统一说明}
