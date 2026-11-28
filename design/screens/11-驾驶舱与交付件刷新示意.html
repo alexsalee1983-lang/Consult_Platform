@@ -136,11 +136,18 @@ textarea.inp{min-height:54px;resize:vertical}
 .qa .op.rec{border-color:var(--amber);color:var(--tx)}
 .src{font-size:11px;color:var(--tx3)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.metro .done{width:25%}.metro .flow,.bt{opacity:1;transform:none}.bar i{width:var(--w)}}
+
+.mode{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.mode .card{cursor:pointer}.mode .sel{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
+.drop{border:1.5px dashed var(--ln2);border-radius:10px;padding:18px;text-align:center;color:var(--tx2);background:var(--s1)}
+.steps{display:flex;gap:8px;margin-bottom:12px}.steps span{flex:1;text-align:center;padding:6px;border-radius:6px;background:var(--s2);color:var(--tx3);font-size:12px}.steps .on{background:var(--amber-d);color:var(--amber)}
+.banner{display:flex;align-items:center;gap:10px;border:1px solid var(--vio);background:var(--vio-d);border-radius:10px;padding:8px 12px;margin-bottom:12px}
 </style></head><body>
 
 <div class="rail"><div class="lg">安</div><a title="工作台">工作<br>台</a><a class="on" title="我的项目">项目</a><a title="知识中心">知识</a><a title="健康看板">健康</a></div>
 <div class="side">
   <div class="pcard"><div class="ring" id="ring1"><i>3/12</i></div><div><div style="color:var(--tx);font-weight:700">BANK-A</div><div style="font-size:11.5px">SOC 运营体系设计</div><span class="chip c-cy" style="font-size:11px;margin-top:2px">标准档</span></div></div>
+  <a class="it" data-p="new"><span>＋ 新建项目</span></a>
   <a class="it on" data-p="pan"><span>◎ 全景</span><span class="n">5</span></a>
   <div class="grp">交付链</div>
   <div class="chain">
@@ -233,6 +240,29 @@ textarea.inp{min-height:54px;resize:vertical}
 </div>
 
 <!-- ============ 全景 ============ -->
+<div class="page" id="p-new">
+  <div class="crumb">我的项目 / 新建项目</div><h1>新建项目</h1>
+  <div class="steps"><span class="on">① 上传依据</span><span>② 核对要点卡</span><span>③ 授权与成员</span></div>
+  <div class="mode" id="mode">
+    <div class="card sel" data-m="a"><h3>合同已签 · 正常立项</h3><div class="t2">上传合同 → Agent 抽要点卡 → 核对保存。合同原文抽完即删。</div></div>
+    <div class="card" data-m="b"><h3>合同未签 · 先行启动</h3><div class="t2">上传中标通知书、委托函、建议书或客户确认范围的邮件，生成临时要点卡；部门负责人确认后启动。</div></div>
+  </div>
+  <div id="ma"><div class="drop">拖入合同（PDF / Word）· 严格档不上传，<a style="color:var(--cyan)" data-t="切换为手填要点卡">改为手填</a></div></div>
+  <div id="mb" style="display:none">
+    <div class="drop">拖入立项依据（至少一份）：中标通知书 / 委托函 / 建议书 / 售前纪要 / 客户邮件</div>
+    <div class="card" style="margin-top:10px">
+      <div class="lv"><span class="chip c-vi">待合同确认</span> 临时要点卡每个字段标出处，合同到达后逐字段比对：一致的自动转正，变化的出确认卡，超出合同的起草变更单</div>
+      <div class="lv"><span class="chip c-cr">授权不先行</span> 附件一、附件三签署前客户资料一律拒收，只能做准备：D1 草稿、调研包、排期与受访名单</div>
+      <div class="lv"><span class="chip c-am">提醒</span> 全景常驻“先行启动第 N 天”；满 30 天未签升级提醒部门负责人</div>
+      <div class="lv"><span class="chip">不可越过</span> 合同未签不能出 D8 验收、不能结项</div>
+      <div class="row" style="margin-top:8px"><span class="t2">确认人：</span><span class="who"><span class="av" style="background:var(--vio)">部</span>部门负责人</span></div>
+    </div>
+  </div>
+  <div class="row" style="margin-top:12px"><a class="btn" data-t="Agent 抽取要点卡中…（下一步核对）">下一步</a></div>
+  <h2 style="margin:22px 0 8px">先行启动时，全景顶部长这样</h2>
+  <div class="banner"><span class="chip c-vi">先行启动</span><div style="flex:1">第 12 天 · 合同未签 · 授权已签（可正常调研）<span class="mut"> · 满 30 天自动提醒部门负责人</span></div><a class="btn2 sm" data-t="上传合同：与临时要点卡逐字段比对">上传合同</a></div>
+</div>
+
 <div class="page on" id="p-pan">
   <div class="hero">
     <div class="ring lgr" id="ring2"><i>25%</i></div>
@@ -615,6 +645,7 @@ function anim(){const pg=document.getElementById('p-pan');const c=pg.cloneNode(t
 ring(document.getElementById('ring1'),25);ring(document.getElementById('ring2'),25);
 
 document.getElementById('fab').onclick=()=>document.getElementById('drw').classList.add('on');document.getElementById('drwx').onclick=()=>document.getElementById('drw').classList.remove('on');
-if(location.hash)show(location.hash.slice(1));
+document.querySelectorAll('#mode .card').forEach(c=>c.onclick=()=>{document.querySelectorAll('#mode .card').forEach(x=>x.classList.toggle('sel',x===c));document.getElementById('ma').style.display=c.dataset.m==='a'?'':'none';document.getElementById('mb').style.display=c.dataset.m==='b'?'':'none'});
+if(location.hash){const q=location.hash.slice(1).split('-');show(q[0]);if(q[1]==='b')document.querySelector('#mode [data-m=b]').click()}
 </script>
 </body></html>
