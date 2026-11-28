@@ -318,7 +318,7 @@ def page_links(data: bytes, page_url: str, whitelist: tuple[str, ...]) -> tuple[
     return out, listing
 
 
-_TITLE = re.compile(r"<(h1|title)[^>]*>(.*?)</\s*>", re.I | re.S)
+_TITLE = re.compile(r"<(h1|title)\b[^>]*>(.*?)</\1\s*>", re.I | re.S)
 
 
 def page_title(data: bytes) -> str:
