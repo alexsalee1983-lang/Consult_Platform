@@ -1,5 +1,6 @@
 """依据原文自动核验发布（二期 B10）：核验通过的平台自动发布并抽检，没通过的转人工；抽检问题率超标暂停。"""
 import hashlib
+import json
 import uuid
 
 import pytest
@@ -190,3 +191,53 @@ def test_overseas_official_hosts():
     assert not sources.is_official("https://legis-palop.org/x") and not sources.is_official("https://evilvbpl.vn/x")
     assert sources.is_official("https://ratchakitcha.soc.go.th/documents/1.pdf") and not sources.is_official("https://soc.go.th/x")
     assert "网页原件sha256" in sources.COLUMNS["sha256"]   # batch13 清单的列名
+
+
+def _remanifest(manifest, titles, url):
+    """同一批原件、同名清单，只改原网址（batch17：上一轮原网址为空，补网址后重跑）。"""
+    lines = manifest.read_text(encoding="utf-8").splitlines()
+    out = [lines[0]] + [",".join(c[:4] + [url] + c[5:]) for c in (x.split(",") for x in lines[1:])]
+    manifest.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def test_supersede_pending(tmp_path):
+    """四期 A46：补网址后重跑，只作废切条自动生成、无人工动作的在审旧版；已发布、人工动过的不动；幂等。"""
+    from app.models import KbReview
+
+    op, checker = _users()
+    manifest, src, titles = _batch(tmp_path, [("a.txt", LAW, {"url": ""}), ("b.txt", LAW, {"url": ""}),
+                                              ("c.txt", LAW, {})])
+    with SessionLocal() as db:
+        first = autopublish.run(db, db.merge(op), manifest, src)
+        assert [(d.published, d.manual) for d in first.docs] == [(0, 3), (0, 3), (3, 0)]
+        touched = _versions(db, titles["b.txt"])[0]                    # b 有一条人工审核意见
+        db.add(KbReview(version_id=touched.id, reviewer=checker.username, review_role="content",
+                        decision="approve", comment="核对过"))
+        db.commit()
+        _remanifest(manifest, titles, "https://www.example.gov.cn/1")
+        rerun = autopublish.run(db, db.merge(op), manifest, src)       # 不带 --supersede-pending：照旧跳过
+        assert rerun.docs[0].published == 0 and len(rerun.docs[0].skipped) == 3
+
+        dry = autopublish.supersede_pending(db, db.merge(op), manifest, src, apply=False)
+        assert [(o.superseded, o.skip_published, o.skip_human) for o in dry] == [(3, 0, 0), (2, 0, 1), (0, 3, 0)]
+        assert {v.status for v in _versions(db, titles["a.txt"])} == {"in_review"}      # dry-run 不改库
+
+        done = autopublish.supersede_pending(db, db.merge(op), manifest, src, apply=True)
+        assert [o.superseded for o in done] == [3, 2, 0]
+        a = _versions(db, titles["a.txt"])
+        assert {v.status for v in a} == {"rejected"}
+        assert a[0].reviews[-1].comment == autopublish.SUPERSEDE_REASON
+        assert touched.status == "in_review"
+        assert {v.status for v in _versions(db, titles["c.txt"])} == {"published"}    # 已发布的不作废
+        log = db.scalars(select(AuditLog).where(AuditLog.action == "kb.source_supersede")
+                         .order_by(AuditLog.id.desc())).first()
+        detail = json.loads(log.detail)
+        assert detail["superseded"] == 5 and detail["skip_human"] == 1 and len(detail["sources"]) == 3
+        assert titles["a.txt"] not in str(log.detail) and "制定本条例" not in str(log.detail)
+
+        again = autopublish.run(db, db.merge(op), manifest, src)       # 作废后新版自动发布
+        assert [(d.published, d.manual) for d in again.docs[:2]] == [(3, 0), (2, 0)]
+        assert [v.status for v in _versions(db, titles["a.txt"])] == ["rejected"] * 3 + ["published"] * 3
+        twice = autopublish.supersede_pending(db, db.merge(op), manifest, src, apply=True)   # 幂等
+        assert [o.superseded for o in twice] == [0, 0, 0]
+        assert [o.skip_published for o in twice] == [3, 2, 3] and twice[1].skip_human == 1
