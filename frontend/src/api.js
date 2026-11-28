@@ -248,6 +248,15 @@ export const api = {
     request(`/api/expert-bench/cards/${versionId}/answer`, { method: "POST", body: JSON.stringify(body) }),
   benchDeidPreview: (texts) =>
     request("/api/expert-bench/deid-preview", { method: "POST", body: JSON.stringify({ texts }) }),
+  // 四期 B44：对照审核、修改后认可、分组成批认可、专家档案
+  benchCompare: (versionId) => request(`/api/expert-bench/compare/${versionId}`),
+  benchRevise: (versionId, body) =>
+    request(`/api/expert-bench/cards/${versionId}/revise`, { method: "POST", body: JSON.stringify(body) }),
+  benchGroups: () => request("/api/expert-bench/groups"),
+  benchBatchApprove: (body) =>
+    request("/api/expert-bench/batch-approve", { method: "POST", body: JSON.stringify(body) }),
+  benchProfile: () => request("/api/expert-bench/profile"),
+  benchSaveProfile: (body) => request("/api/expert-bench/profile", { method: "PUT", body: JSON.stringify(body) }),
   returnTask: (kind, ref_id, reason) =>
     request("/api/my-tasks/return", { method: "POST", body: JSON.stringify({ kind, ref_id, reason }) }),
   deletion: (id) => request(`/api/deletions/${id}`),
