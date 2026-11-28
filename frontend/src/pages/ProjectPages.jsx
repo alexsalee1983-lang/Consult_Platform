@@ -1,34 +1,35 @@
-// 项目内五个导航页（四期 A25②，见 docs/驾驶舱改版方案.md 第二、六节）：全景 | 输入 | 分析 | 输出 | 设置。
-// 各页复用已有面板组件，只挪位置；条目上的“⌖ 全景”回全景并高亮对应节点（节点 id 与 GET .../panorama 一致）。
-// 调研助手全屏单开（现场用），交付件页挂在“输出”下。
+// 项目内各页（四期 A37，docs/交付链输入输出方案.md 8.1）：项目栏（左）+ 页面（右）。项目栏放全景、“输入 → 需求 → 分析 → 输出”
+// 竖向交付链、D1～D8、调研助手、设置，取代 A25② 的横向五导航；各页复用已有面板组件。
+// 条目上的“⌖ 全景”回全景并带 focus（节点 id 与 GET .../panorama 一致）。调研助手全屏单开（现场用），交付件页挂在“输出”下。
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "react-router";
+import { Link, Outlet, useLocation, useParams, useSearchParams } from "react-router";
 import { api, DELIV_STATUS } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import Assessment from "../components/Assessment.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import { groupCards } from "../components/CardEvidence.jsx";
+import Closeout from "../components/Closeout.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Evidence from "../components/Evidence.jsx";
 import Members from "../components/Members.jsx";
+import ProjectRail from "../components/ProjectRail.jsx";
 import Retention from "../components/Retention.jsx";
 import RunPanel from "../components/RunPanel.jsx";
 import StrictCards from "../components/StrictCards.jsx";
 import Survey from "../components/Survey.jsx";
+import { useAgentView } from "../components/AgentActivity.jsx";
 
 const base = (code) => `/project/${encodeURIComponent(code)}`;
-export const NAV = [["", "全景"], ["input", "输入"], ["analysis", "分析"], ["output", "输出"], ["settings", "设置"]];
 
 export function LocateLink({ code, node }) {
   return <Link className="locate" to={`${base(code)}?focus=${encodeURIComponent(node)}`} title="回全景并高亮这个节点">⌖ 全景</Link>;
 }
 
-// 项目内导航条：交付件页（/deliverables/Dx）算在“输出”下，并显示 项目 / 输出 / Dx
+// 项目栏 + 页面；交付件页（/deliverables/Dx）面包屑显示 项目 / 输出 / Dx
 export function ProjectLayout() {
   const { code } = useParams();
   const { pathname } = useLocation();
   const dcode = pathname.match(/\/deliverables\/([^/]+)/)?.[1];
-  const inOutput = pathname.includes("/deliverables");
   // 负责人 11-28：立项后第一件事是配人。项目经理进项目时若项目里只有他一人，各页顶部都提示（谁立的项都一样）
   const { user } = useAuth();
   const [alone, setAlone] = useState(false);
@@ -42,22 +43,18 @@ export function ProjectLayout() {
   }, [code, user?.username]);
   const onSettings = pathname.endsWith("/settings");
   return (
-    <>
-      <nav className="tabs" aria-label="项目导航">
-        {NAV.map(([seg, label]) => (
-          <NavLink key={label} to={seg ? `${base(code)}/${seg}` : base(code)} end={!seg}
-            className={({ isActive }) => (isActive || (seg === "output" && inOutput) ? "on" : undefined)}>{label}</NavLink>
-        ))}
-        <Link to={`${base(code)}/survey`} style={{ marginLeft: "auto" }} title="现场用，全屏打开">调研助手 ⤢</Link>
-      </nav>
-      {alone && !onSettings && (
-        <div className="note-amber" role="status" aria-label="待配项目成员">
-          这个项目还没有其他成员，<Link to={`${base(code)}/settings?new=1`}>先去设置里勾选项目成员</Link>，再开始启动包。
-        </div>
-      )}
-      {dcode && <div className="sub">{code} / <Link to={`${base(code)}/output`}>输出</Link> / {decodeURIComponent(dcode)}</div>}
-      <Outlet />
-    </>
+    <div className="proj-layout">
+      <ProjectRail code={code} />
+      <div className="content">
+        {alone && !onSettings && (
+          <div className="note-amber" role="status" aria-label="待配项目成员">
+            这个项目还没有其他成员，<Link to={`${base(code)}/settings?new=1`}>先去设置里勾选项目成员</Link>，再开始启动包。
+          </div>
+        )}
+        {dcode && <div className="sub">{code} / <Link to={`${base(code)}/output`}>输出</Link> / {decodeURIComponent(dcode)}</div>}
+        <Outlet />
+      </div>
+    </div>
   );
 }
 
@@ -127,8 +124,65 @@ export function AnalysisPage({ code }) {
   );
 }
 
+// 需求页（A37 新增）：客户和项目组“要什么、定了什么”。每条标来源与生效状态；所有入口进来的要求先回显确认再生效。
+// 定制项沿用 A30 接口；修订指令、决定记录、变更单随 A33～A36 接口接入，先占位。
+const CUST_CLS = { active: "c-g", pending_pm: "c-a", proposed: "c-a", unacceptable: "c-r" };
+const REQ_TABS = [["cust", "定制项"], ["rev", "修订指令"], ["dec", "决定记录"], ["chg", "变更单"]];
+
+export function RequirementsPage({ code }) {
+  const { p, error } = useProject(code);
+  const [cust, setCust] = useState(null);
+  const [tab, setTab] = useState("cust");
+  useEffect(() => { api.customizations(code).then((d) => setCust(d.items)).catch(() => setCust([])); }, [code]);
+  if (!p) return <Loading error={error} />;
+  const n = { cust: cust ? cust.length : "—", rev: 0, dec: 0, chg: 0 };
+  return (
+    <>
+      {head(p, "需求")}
+      <div className="sub">客户和项目组“要什么、定了什么”都在这里；每条标来源和生效状态，所有入口进来的要求先回显确认再生效。</div>
+      <nav className="tabs" aria-label="需求分类">
+        {REQ_TABS.map(([k, t]) => (
+          <button key={k} type="button" className={tab === k ? "on" : undefined} aria-pressed={tab === k} onClick={() => setTab(k)}>
+            {t} <span className="mono">{n[k]}</span>
+          </button>
+        ))}
+      </nav>
+      {tab === "cust" ? (
+        <section className="pnl pad" aria-label="定制项">
+          <table className="tbl">
+            <thead><tr><th>定制项</th><th>入口</th><th>类型</th><th>状态</th><th>交付件</th></tr></thead>
+            <tbody>
+              {(cust || []).map((i) => (
+                <tr key={i.id}>
+                  <td><span className="mono sub">{i.code}</span> {i.text}{i.reason && <div className="sub">{i.reason}</div>}</td>
+                  <td>{i.source_name}</td>
+                  <td>{i.kind_name}</td>
+                  <td><span className={`chip ${CUST_CLS[i.status] || "c-n"}`}>{i.superseded ? "已被覆盖" : i.status_name}</span></td>
+                  <td>{i.deliverable ? `${i.deliverable}${i.section ? ` 第 ${i.section} 章` : ""}` : "全部"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {cust && cust.length === 0 && <div className="sub">还没有定制项。客户要求可在 D1 客户要求栏、顾问对话或改稿时提出。</div>}
+        </section>
+      ) : (
+        <section className="pnl pad" aria-label={REQ_TABS.find(([k]) => k === tab)[1]}>
+          <div className="sub">暂无。{{ rev: "签署人退回、客户意见、上游变更、顾问对话四条回路的修订指令将汇到这里。",
+            dec: "合同要点卡、签署与项目经理确认的决定将记在这里。",
+            chg: "超出合同范围的需求将生成变更单，由项目经理确认。" }[tab]}</div>
+        </section>
+      )}
+    </>
+  );
+}
+
 export function OutputPage({ code }) {
   const { p, error, load } = useProject(code);
+  const { on: agentView } = useAgentView();   // 交付链运行面板属 Agent 运行情况，默认隐藏；非项目经理只读（四期 A29）
+  const [canManage, setCanManage] = useState(false);
+  useEffect(() => {
+    if (agentView) api.panorama(code, true).then((d) => setCanManage(Boolean(d.can_manage_runs))).catch(() => {});
+  }, [code, agentView]);
   if (!p) return <Loading error={error} />;
   return (
     <>
@@ -150,7 +204,7 @@ export function OutputPage({ code }) {
             })}
           </ul>
         </section>
-        <RunPanel code={p.code} strict={p.tier === "strict"} onChange={load} />
+        {agentView && <RunPanel code={p.code} strict={p.tier === "strict"} onChange={load} canManage={canManage} />}
       </div>
     </>
   );
@@ -170,6 +224,7 @@ export function SettingsPage({ code }) {
       )}
       <Members code={p.code} />
       <Retention p={p} onChange={load} />
+      <Closeout p={p} onChange={load} />
     </>
   );
 }

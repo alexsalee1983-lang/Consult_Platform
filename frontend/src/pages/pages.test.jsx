@@ -18,9 +18,9 @@ const { default: Login } = await import("./Login.jsx");
 const { Toc } = await import("./Deliverable.jsx");
 const { default: Projects } = await import("./Projects.jsx");
 const { default: Overview } = await import("./Overview.jsx");
-const { OutputPage, ProjectLayout, SettingsPage } = await import("./ProjectPages.jsx");
+const { OutputPage, ProjectLayout, RequirementsPage, SettingsPage } = await import("./ProjectPages.jsx");
 const { default: Drawer } = await import("../components/Drawer.jsx");
-const { todos } = await import("../components/Panorama.jsx");
+const { todos } = await import("../cockpit/view.js");
 const { default: Members } = await import("../components/Members.jsx");
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -88,100 +88,106 @@ test("待办按影响排序：卡住下游越多越靠前，同影响确认卡�
   expect(todos(PANO).map((t) => [t.id, t.impact])).toEqual([["card:7", 3], ["card:8", 2], ["sign:D1", 0]]);
 });
 
-test("A29 全景：视图只有“要我做的 / 全部”，默认要我做的；没有回放、没有“自动完成”折叠行、没有 AI 泳道", async () => {
+test("全景三块：顶部一行（进度环、第 N 周 · 阶段、还差几件、按期）→ 关口进度线 → 过关口还差 + 待我处理；泳道图与行动条已取消", async () => {
   stubOverview();
   const c = await render(<Overview code="BANK-A" />);
   expect(c.querySelector("h1").textContent).toBe("项目驾驶舱 · 安全运营中心建设");
   expect(c.textContent).toContain("当前为外部测试模型");
-  expect(c.textContent).toContain("最先：组织与人员矛盾");
-  const views = [...c.querySelectorAll("button[aria-pressed]")].map((b) => b.textContent);
-  expect(views).toEqual(["要我做的", "全部"]);
-  expect([...c.querySelectorAll("button[aria-pressed=true]")].map((b) => b.textContent)).toEqual(["要我做的"]);
-  expect(c.textContent).not.toContain("回放");
-  expect(c.textContent).not.toContain("本周自动完成");
-  expect(c.textContent).not.toContain("AI·平台");
-  expect(c.textContent).not.toContain("交付链");                     // 默认隐藏 Agent：没有“交付链”按钮
-  expect(c.querySelector('g[data-node="deliv:D4"]').textContent).toContain("处理中");   // AI 在写：灰字处理中
+  const hero = c.querySelector('section[aria-label="项目进度"]');
+  expect(hero.textContent).toContain("第 3 周 · 调研阶段");
+  expect(hero.textContent).toContain("过关口 2「调研」还差 1 件事");
+  expect(hero.querySelector(".ring").getAttribute("aria-label")).toBe("已签署 0 / 1");
+  expect(hero.textContent).toContain("按期");
+  expect(hero.nextElementSibling.getAttribute("aria-label")).toBe("关口进度线");
+  const stns = [...c.querySelectorAll(".metro .stn")];
+  expect(stns.map((s) => s.querySelector("b").textContent)).toEqual(["启动", "调研", "分析"]);
+  expect(stns.map((s) => s.className)).toEqual(["stn ok", "stn cur", "stn"]);
+  const left = c.querySelector('section[aria-label="过关口还差"]');
+  expect(left.querySelector("h2").textContent).toBe("过关口 2 还差");
+  expect([...left.querySelectorAll(".bt")].map((b) => b.textContent)).toEqual(["D1 现状差距分析起草中卡在：顾问"]);
+  expect(c.querySelector("svg")).toBeNull();
+  expect(c.querySelector('section[aria-label="行动条"]')).toBeNull();
+  expect(c.textContent).not.toContain("自动完成");
 });
 
-test("A29 全景：已完成阶段折叠，点一下原位展开；已签署交付件点开是只读面板", async () => {
-  stubOverview();
-  stub.deliverable = async () => ({ code: "D0", title: "项目启动", status: "signed", revision: 2, sections: [], totals: { knowledge_updates: 0 } });
-  stub.signoff = async () => ({ history: [{ id: 1, action: "sign", revision: 2, actor: "经理甲", created_at: "2026-11-20T02:00:00Z" }] });
-  const c = await render(<Overview code="BANK-A" />);
-  expect(c.querySelector('g[data-node="deliv:D0"]')).toBeNull();
-  const fold = c.querySelector('g[data-fold="c0:consultant"]');
-  expect(fold).toBeTruthy();
-  await act(async () => fold.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-  const d0 = c.querySelector('g[data-node="deliv:D0"]');
-  expect(d0).toBeTruthy();
-  await act(async () => d0.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-  const panel = document.querySelector('[aria-label="已完成交付件"]');
-  expect(panel.textContent).toContain("经理甲");
-  expect(panel.textContent).toContain("已签署的不能直接改");
-  const labels = [...panel.querySelectorAll("a, button")].map((b) => b.textContent);
-  for (const t of ["查看", "下载", "版本历史", "发起勘误"]) expect(labels).toContain(t);
-});
-
-test("全景：按设计稿 07 行动条五张卡、“下一步”加宽高亮，其余概况进标题下标签，全景图紧跟其后", async () => {
+test("待我处理：一行一件事按影响排，“只看我的”只留本人泳道", async () => {
   stubOverview();
   const c = await render(<Overview code="BANK-A" />);
-  expect(c.querySelectorAll(".kpis").length).toBe(0);
-  const act = c.querySelector('section[aria-label="行动条"]');
-  expect(act.classList.contains("act")).toBe(true);
-  expect(act.querySelectorAll(".act-card").length).toBe(5);
-  expect(act.firstElementChild.classList.contains("act-next")).toBe(true);
-  expect(c.querySelector('[aria-label="项目概况"]').textContent).toContain("已签署");
-  expect(act.nextElementSibling.textContent).toContain("要我做的");
+  const box = c.querySelector('section[aria-label="待我处理"]');
+  const rows = () => [...box.querySelectorAll("li.todo")].map((li) => li.textContent.replace(/影响.*/, ""));
+  expect(rows()).toEqual(["确认卡组织与人员矛盾", "确认卡证据缺口 · 机房", "签署签署 D1"]);
+  await act(async () => [...box.querySelectorAll("button")].find((b) => b.textContent === "只看我的").click());
+  expect(rows()).toEqual(["确认卡组织与人员矛盾", "确认卡证据缺口 · 机房"]);
 });
 
-test("全景动效钩子：节点按状态带类名（卡住、AI 在做会呼吸），交付件卡带签署进度条", async () => {
-  stubOverview();
-  const c = await render(<Overview code="BANK-A" />);
-  expect(c.querySelectorAll("g.pn-blk").length).toBeGreaterThan(0);
-  const deliv = [...c.querySelectorAll(".act-card")].find((e) => e.textContent.includes("交付件"));
-  expect(deliv.querySelector(".bar > i")).toBeTruthy();
-});
-
-test("全景：项目只有项目经理一人时，“下一步”提示先添加成员并链到设置页", async () => {
+test("全景：项目只有项目经理一人时，顶部提示先添加成员并链到设置页", async () => {
   stubOverview();
   stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
   const c = await render(<Overview code="BANK-A" />);
-  const next = c.querySelector(".act-next");
-  expect(next.textContent).toContain("先添加项目成员");
-  expect(next.querySelector('a[href="/project/BANK-A/settings"]')).toBeTruthy();
+  const hero = c.querySelector('section[aria-label="项目进度"]');
+  expect(hero.querySelector('a[href="/project/BANK-A/settings"]')?.textContent).toContain("先添加项目成员");
 });
 
-test("全景抽屉：待你处理按影响排，点确认卡就地打开，Esc 关闭", async () => {
+test("确认卡在抽屉里就地办：点“处理”打开，Esc 关闭；⌖ 带 focus=card 直接打开", async () => {
   stubOverview();
-  const c = await render(<Overview code="BANK-A" />);
-  await act(async () => c.querySelector('section[aria-label="行动条"] button').click());
-  const dlg = c.querySelector('dialog[aria-label="待你处理 · 按影响排序"]');
-  expect([...dlg.querySelectorAll("li")].map((li) => li.textContent.replace(/影响.*/, ""))).toEqual(
-    ["确认卡组织与人员矛盾", "确认卡证据缺口 · 机房", "签署签署 D1"]);
-  await act(async () => dlg.querySelector("li button").click());
+  let c = await render(<Overview code="BANK-A" />);
+  await act(async () => c.querySelector('section[aria-label="待我处理"] li.todo button').click());
   expect(c.querySelector('dialog[aria-label="确认卡"]')?.textContent).toContain("组织与人员矛盾");
   expect(c.querySelector('dialog a[href="/project/BANK-A/analysis"]')).toBeTruthy();
   await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
   expect(c.querySelector("dialog")).toBeNull();
-});
-
-test("⌖ 全景定位：带 focus 时切到全部视图并高亮对应节点", async () => {
+  act(() => root.unmount()); el.remove();
   stubOverview();
-  const c = await render(<Overview code="BANK-A" focus="deliv:D4" />);
-  expect([...c.querySelectorAll("button[aria-pressed=true]")].map((b) => b.textContent)).toEqual(["全部"]);
-  expect(c.querySelector("g.flash")?.getAttribute("data-node")).toBe("deliv:D4");
+  c = await render(<Overview code="BANK-A" focus="card:7" />);
+  expect(c.querySelector('dialog[aria-label="确认卡"]')).toBeTruthy();
 });
 
-test("项目导航：五个导航页，交付件页算在“输出”下", async () => {
+test("⌖ 全景定位：focus 为交付件时高亮“过关口还差”里对应的卡", async () => {
+  stubOverview();
+  const c = await render(<Overview code="BANK-A" focus="deliv:D1" />);
+  expect(c.querySelector(".bt.flash")?.getAttribute("data-node")).toBe("deliv:D1");
+});
+
+test("项目栏：项目卡 + 新建项目 + 全景 + 输入→需求→分析→输出竖向交付链 + D1～D8 + 调研助手 + 设置；交付件页算在“输出”下", async () => {
+  stub.project = async () => PROJECT;
+  stub.panorama = async () => PANO;
+  stub.customizations = async () => ({ items: [{ id: 1, status: "pending_pm" }], needs_update: {} });
   const c = await render(
     <Routes><Route path="/project/:code" element={<ProjectLayout />}><Route path="deliverables/:dcode" element={<p>交付件页</p>} /></Route></Routes>,
-    "/project/BANK-A/deliverables/D2");
-  const tabs = [...c.querySelectorAll('nav[aria-label="项目导航"] a')];
-  expect(tabs.map((a) => a.textContent)).toEqual(["全景", "输入", "分析", "输出", "设置", "调研助手 ⤢"]);
-  expect(tabs.find((a) => a.className === "on")?.textContent).toBe("输出");
-  expect(c.textContent).toContain("BANK-A / 输出 / D2");
+    "/project/BANK-A/deliverables/D1");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  const rail = c.querySelector('nav[aria-label="项目导航"]');
+  expect(rail.querySelector(".pcard").textContent).toContain("BANK-A");
+  expect(rail.querySelector('a[href="/projects?new=1"]').textContent).toBe("＋ 新建项目");
+  expect(rail.querySelector('a[href="/project/BANK-A"]').textContent).toBe("◎ 全景3");
+  const chain = [...rail.querySelectorAll('[aria-label="交付链"] a')];
+  expect(chain.map((a) => a.textContent)).toEqual(["输入", "需求1", "分析", "输出"]);
+  expect(chain.map((a) => a.dataset.state)).toEqual(["cur", "todo", "todo", "todo"]);
+  expect(chain.find((a) => a.classList.contains("on"))?.textContent).toBe("输出");
+  const d1 = rail.querySelector('[aria-label="交付件"] a[href="/project/BANK-A/deliverables/D1"]');
+  expect(d1.querySelector(".sd-cur")).toBeTruthy();
+  expect(rail.querySelector('a[href="/project/BANK-A/survey"]').textContent).toContain("调研助手");
+  expect(rail.querySelector('a[href="/project/BANK-A/settings"]')).toBeTruthy();
+  expect(c.textContent).toContain("BANK-A / 输出 / D1");
   expect(c.textContent).toContain("交付件页");
+  expect(c.querySelector("nav.tabs")).toBeNull();
+});
+
+test("需求页：定制项列来源与生效状态，另有修订指令、决定记录、变更单三类", async () => {
+  stub.project = async () => PROJECT;
+  stub.customizations = async () => ({ needs_update: {}, items: [
+    { id: 3, code: "C-3", text: "统一称“安全运营中心”", source_name: "合同", kind_name: "口径", status: "active", status_name: "生效", deliverable: null },
+    { id: 4, code: "C-4", text: "出具等保测评结论", source_name: "顾问对话", kind_name: "口径", status: "unacceptable", status_name: "不可接受", reason: "资质边界", deliverable: null }] });
+  const c = await render(<RequirementsPage code="BANK-A" />);
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect([...c.querySelectorAll('nav[aria-label="需求分类"] button')].map((b) => b.textContent.replace(/\s.*$/, "")))
+    .toEqual(["定制项", "修订指令", "决定记录", "变更单"]);
+  const rows = [...c.querySelectorAll('section[aria-label="定制项"] tbody tr')];
+  expect(rows.length).toBe(2);
+  expect(rows[1].textContent).toContain("资质边界");
+  expect(rows[1].querySelector(".chip.c-r").textContent).toBe("不可接受");
+  await act(async () => [...c.querySelectorAll('nav[aria-label="需求分类"] button')][3].click());
+  expect(c.querySelector('section[aria-label="变更单"]').textContent).toContain("超出合同范围");
 });
 
 test("输出页：列出交付件，每条有“⌖ 全景”回到对应节点", async () => {

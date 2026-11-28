@@ -117,7 +117,7 @@ export default function Sidebar() {
             <path d="M8.5 12l2.5 2.5 4.5-5" strokeLinecap="round" />
           </svg>
         </div>
-        <div style={{ lineHeight: 1.2 }}>
+        <div className="logo-t" style={{ lineHeight: 1.2 }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>安全咨询专家平台</div>
           <div style={{ fontSize: 10, letterSpacing: ".16em", color: "var(--tx3)" }}>ADVISORY · 内部</div>
         </div>
@@ -125,15 +125,15 @@ export default function Sidebar() {
 
       <nav className="nav" aria-label="交付导航">
         {items.map((it) => (it.group ? <div key={it.group} className="cap nav-group">{it.group}</div> :
-          <NavLink key={it.label} to={it.to} end={it.end} className={({ isActive }) => (isActive ? "on" : undefined)}>
+          <NavLink key={it.label} to={it.to} end={it.end} title={it.label} className={({ isActive }) => (isActive ? "on" : undefined)}>
             <Icon name={it.icon} />
-            {it.label}
+            <span className="lbl">{it.label}</span>
             {it.badge > 0 && <span className="chip c-a" style={{ marginLeft: "auto" }}>{it.badge}</span>}
           </NavLink>
         ))}
       </nav>
 
-      <section className="pad" style={{ padding: 12, borderRadius: 8, background: "var(--s2)", border: "1px solid var(--ln)", gap: 6 }}>
+      <section className="pad sys" style={{ padding: 12, borderRadius: 8, background: "var(--s2)", border: "1px solid var(--ln)", gap: 6 }}>
         <div className="sb">
           <span className="cap">系统状态</span>
           <span className={`chip ${ok ? "c-g" : health ? "c-r" : "c-n"}`}>{health ? (ok ? "正常" : "异常") : "检查中"}</span>
@@ -149,7 +149,7 @@ export default function Sidebar() {
 
       <div className="row" style={{ marginTop: "auto", gap: 10, paddingTop: 10, borderTop: "1px solid var(--ln)" }}>
         <div aria-hidden="true" style={{ flex: "none", width: 30, height: 30, borderRadius: "50%", background: "var(--s3)", border: "1px solid var(--ln2)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "var(--amber)" }}>{name.slice(0, 1)}</div>
-        <div style={{ lineHeight: 1.3, minWidth: 0, flex: 1 }}>
+        <div className="who" style={{ lineHeight: 1.3, minWidth: 0, flex: 1 }}>
           <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
           <div className="sub">{(user?.roles || []).map((r) => ROLE_NAMES[r] || r).join("、") || user?.username}</div>
         </div>
