@@ -4,6 +4,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "react-router";
 import { api, DELIV_STATUS } from "../api.js";
+import { useAuth } from "../auth.jsx";
 import Assessment from "../components/Assessment.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
@@ -27,6 +28,18 @@ export function ProjectLayout() {
   const { pathname } = useLocation();
   const dcode = pathname.match(/\/deliverables\/([^/]+)/)?.[1];
   const inOutput = pathname.includes("/deliverables");
+  // 负责人 11-28：立项后第一件事是配人。项目经理进项目时若项目里只有他一人，各页顶部都提示（谁立的项都一样）
+  const { user } = useAuth();
+  const [alone, setAlone] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setAlone(false);
+    api.members(code).then((ms) => {
+      if (live) setAlone(ms.length === 1 && ms[0].username === user?.username && ms[0].project_role === "manager");
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [code, user?.username]);
+  const onSettings = pathname.endsWith("/settings");
   return (
     <>
       <nav className="tabs" aria-label="项目导航">
@@ -36,6 +49,11 @@ export function ProjectLayout() {
         ))}
         <Link to={`${base(code)}/survey`} style={{ marginLeft: "auto" }} title="现场用，全屏打开">调研助手 ⤢</Link>
       </nav>
+      {alone && !onSettings && (
+        <div className="note-amber" role="status" aria-label="待配项目成员">
+          这个项目还没有其他成员，<Link to={`${base(code)}/settings?new=1`}>先去设置里勾选项目成员</Link>，再开始启动包。
+        </div>
+      )}
       {dcode && <div className="sub">{code} / <Link to={`${base(code)}/output`}>输出</Link> / {decodeURIComponent(dcode)}</div>}
       <Outlet />
     </>

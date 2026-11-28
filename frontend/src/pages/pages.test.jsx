@@ -371,3 +371,32 @@ test("按表单成稿：带着合同文件打开时，一打开就开始抽取�
   expect(sent).toEqual(["合同.docx"]);
   expect(el.querySelector("textarea").value).toBe("建立 BANK-A 安全运营体系");
 });
+
+const LAYOUT = (path) => render(<Routes><Route path="/project/:code" element={<ProjectLayout />}>
+  <Route index element={<p>驾驶舱</p>} /><Route path="settings" element={<p>设置</p>} /></Route></Routes>, path);
+
+test("配人提示：项目经理进项目时项目里只有他一人，顶部提示去设置加成员（项目经理是别人立的项也一样）", async () => {
+  stub.members = async () => [{ username: "u1", display_name: "经理甲", project_role: "manager" }];
+  const c = await LAYOUT("/project/BANK-A");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  const tip = c.querySelector('[aria-label="待配项目成员"]');
+  expect(tip?.textContent).toContain("还没有其他成员");
+  expect(tip.querySelector('a[href="/project/BANK-A/settings?new=1"]')).toBeTruthy();
+});
+
+test("配人提示：已有其他成员、不是项目经理、或已在设置页时都不出", async () => {
+  stub.members = async () => [{ username: "u1", project_role: "manager" }, { username: "u2", project_role: "member" }];
+  let c = await LAYOUT("/project/BANK-A");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.querySelector('[aria-label="待配项目成员"]')).toBeNull();
+  act(() => root.unmount()); el.remove();
+  stub.members = async () => [{ username: "u9", project_role: "manager" }];
+  c = await LAYOUT("/project/BANK-A");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.querySelector('[aria-label="待配项目成员"]')).toBeNull();
+  act(() => root.unmount()); el.remove();
+  stub.members = async () => [{ username: "u1", project_role: "manager" }];
+  c = await LAYOUT("/project/BANK-A/settings");
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  expect(c.querySelector('[aria-label="待配项目成员"]')).toBeNull();
+});
