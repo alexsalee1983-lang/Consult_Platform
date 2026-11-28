@@ -74,7 +74,7 @@ groups:
         expr: max(cp_deletions_overdue{job="backend"}) > 0
         for: 1h
         labels: {severity: critical}
-        annotations: {summary: "有项目删除申请过了应完成日期还没完成，运行 python -m app.cli deletion-report 查看，提醒项目负责人确认（对客户的承诺）"}
+        annotations: {summary: "有项目删除申请过了应完成日期还没完成，运行 python -m app.cli deletion-report 查看，提醒咨询业务负责人确认（对客户的承诺）"}
       - alert: 备份超过26小时
         expr: time() - max(cp_backup_last_success_timestamp_seconds{job="backend"}) > 93600
         for: 30m

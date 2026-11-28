@@ -60,7 +60,7 @@ export default function Projects() {
       <TopBar cap={`交付 · ${projects.length} 个进行中项目`} title="我的项目">
         {hasRole(user, "project_lead")
           ? <button className="btnp" disabled={creating} onClick={() => setCreating(true)}>＋ 新建项目</button>
-          : <button className="btnp" disabled title="立项需要“项目负责人”角色">＋ 新建项目</button>}
+          : <button className="btnp" disabled title="立项需要“咨询业务负责人”角色">＋ 新建项目</button>}
       </TopBar>
       <div className="grid-main">
         <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>

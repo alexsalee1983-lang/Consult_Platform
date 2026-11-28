@@ -78,7 +78,7 @@ def _new_project(tier: str = "standard") -> str:
 @pytest.fixture()
 def proj():
     code = _new_project()
-    user = create_user(("consultant",), {code: "member"})
+    user = create_user(("consultant",), {code: "manager"})  # 四期 A29：发起、取消只给项目经理
     c = logged_in_client(app, user)
     yield code, c
     c.__exit__(None, None, None)
@@ -198,7 +198,7 @@ def test_resolved_question_is_not_asked_again_in_same_run(proj, model):
 
 def test_duplicate_start_and_cancel(model):
     code = _new_project()
-    user = create_user(("consultant",), {code: "member"})
+    user = create_user(("consultant",), {code: "manager"})  # 四期 A29：发起、取消只给项目经理
     with logged_in_client(app, user) as c:
         rid = c.post(f"/api/projects/{code}/runs").json()["id"]
         assert c.post(f"/api/projects/{code}/runs").status_code == 409            # 已有未结束的运行

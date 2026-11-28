@@ -5,6 +5,7 @@ import { Loading, TopBar } from "../components/common.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Drawer from "../components/Drawer.jsx";
 import { gates, mine, progress, remaining, todos } from "../cockpit/view.js";
+import { useAgentView } from "../components/AgentActivity.jsx";
 
 // 全景（四期 A37，docs/交付链输入输出方案.md 8.1“全景三块”）：首屏只回答“在哪个关口、还差什么、卡在谁”。
 // ① 顶部一行：进度环、第 N 周 · 阶段、过关口还差几件、按期 / 预警；② 关口进度线（按产品配置，点关口跳对应页）；
@@ -27,12 +28,13 @@ export default function Overview({ code, focus }) {
   const [onlyMine, setOnlyMine] = useState(false);
   const [drawer, setDrawer] = useState(focus?.startsWith("card:") ? `drawer:${focus}` : null);   // "drawer:card:{id}"
   const navigate = useNavigate();
+  const { on: agentView } = useAgentView();            // 右上角“查看 Agent 运行情况”（四期 A29）
   const load = useCallback(() => {
     setError(null);
     api.project(code).then(setP).catch(setError);
-    api.panorama(code).then(setPano).catch(() => setPano(null));
+    api.panorama(code, agentView).then(setPano).catch(() => setPano(null));
     api.members(code).then(setMembers).catch(() => setMembers(null));
-  }, [code]);
+  }, [code, agentView]);
   useEffect(load, [load]);
   const close = useCallback(() => setDrawer(null), []);
 
@@ -132,3 +134,4 @@ export default function Overview({ code, focus }) {
     </>
   );
 }
+

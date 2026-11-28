@@ -7,6 +7,8 @@ GET  /api/projects/{code}/runs/{rid}           某次运行：状态、每步记
 POST /api/projects/{code}/runs/{rid}/cancel    取消未结束的运行
 
 严格档 422；已有未结束的运行 409；Agent 未就绪 409。规则见 app/project/runs.py。
+四期 A29（《平台规划刷新设计》2.2）：发起（重跑）、取消（暂停）只给项目经理，项目成员只读（403）；
+自动推进（app/project/autoflow.py）照旧由平台发起，不经这里。
 """
 from datetime import datetime
 
@@ -17,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from ..core.auth import current_user
 from ..core.db import get_db
-from ..core.permissions import project_for_member, require_business
+from ..core.permissions import PROJECT_MANAGER, membership, project_for_member, require_business
 from ..models import Agent, AgentRun, Project, User
 from ..products import config
 from ..project import runs as svc
@@ -83,9 +85,16 @@ def _run(db: Session, code: str, rid: int, user: User) -> tuple:
     return project, run
 
 
+def _require_manager(db: Session, project: Project, user: User) -> None:
+    m = membership(db, project.id, user.id)
+    if m is None or m.project_role != PROJECT_MANAGER:
+        raise HTTPException(403, "只有项目经理能重跑或暂停交付链，项目成员只读")
+
+
 @router.post("/{code}/runs", response_model=RunOut, status_code=202)
 def start(code: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     project = project_for_member(db, code, user)
+    _require_manager(db, project, user)
     try:
         run = svc.start(db, user, project)
     except svc.RunError as e:
@@ -129,6 +138,7 @@ def get_run(code: str, rid: int, db: Session = Depends(get_db), user: User = Dep
 @router.post("/{code}/runs/{rid}/cancel", response_model=RunOut)
 def cancel(code: str, rid: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     project, run = _run(db, code, rid, user)
+    _require_manager(db, project, user)
     try:
         run = svc.cancel(db, user, project, run)
     except svc.RunError as e:

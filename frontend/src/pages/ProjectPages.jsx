@@ -18,6 +18,7 @@ import Retention from "../components/Retention.jsx";
 import RunPanel from "../components/RunPanel.jsx";
 import StrictCards from "../components/StrictCards.jsx";
 import Survey from "../components/Survey.jsx";
+import { useAgentView } from "../components/AgentActivity.jsx";
 
 const base = (code) => `/project/${encodeURIComponent(code)}`;
 
@@ -181,6 +182,11 @@ export function RequirementsPage({ code }) {
 
 export function OutputPage({ code }) {
   const { p, error, load } = useProject(code);
+  const { on: agentView } = useAgentView();   // 交付链运行面板属 Agent 运行情况，默认隐藏；非项目经理只读（四期 A29）
+  const [canManage, setCanManage] = useState(false);
+  useEffect(() => {
+    if (agentView) api.panorama(code, true).then((d) => setCanManage(Boolean(d.can_manage_runs))).catch(() => {});
+  }, [code, agentView]);
   if (!p) return <Loading error={error} />;
   return (
     <>
@@ -202,7 +208,7 @@ export function OutputPage({ code }) {
             })}
           </ul>
         </section>
-        <RunPanel code={p.code} strict={p.tier === "strict"} onChange={load} />
+        {agentView && <RunPanel code={p.code} strict={p.tier === "strict"} onChange={load} canManage={canManage} />}
       </div>
     </>
   );

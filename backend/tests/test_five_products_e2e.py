@@ -1,7 +1,7 @@
 """二期 v2.0 验收（docs/二期开发计划.md 第五节）：5 个核心产品（SOC、ISO、DSM、NSG、IRE）各立一个虚拟客户项目，
 用模拟模型从 D1 跑到 D8，全部签署。CI 可复跑，不连真实模型。
 
-每个产品：项目负责人按产品快照立项（勾模块，SOC、ISO、NSG 勾等保 DJBH）→ 项目经理录入虚拟客户纪要和现场观察 →
+每个产品：咨询业务负责人按产品快照立项（勾模块，SOC、ISO、NSG 勾等保 DJBH）→ 项目经理录入虚拟客户纪要和现场观察 →
 发起交付链（第 3～7 步，写 D3～D8；第 4 步模型发一张“方案取舍”卡，按推荐选项处理后继续）→ 自动推进（AUTO_FLOW 打开）
 交付链写完立即评审，D6、D8 门禁通过自动提交，D3、D4、D5、D7（L2）停在起草中 → 项目经理手写 D1、D2 并评审（自动提交）→
 在 D4 里故意写入通用层、产品层、模块层的禁用语，评审三层都判阻断且不能驳回，改回后通过 → 项目经理提交 L2 交付件并签署全部 8 份。
@@ -175,7 +175,7 @@ def model_on(monkeypatch):
 
 @pytest.mark.parametrize(("product", "modules", "client", "material"), CASES, ids=[c[0] for c in CASES])
 def test_product_d1_to_d8(product: str, modules: list[str], client: str, material: str | None, model_on) -> None:
-    # 立项：项目负责人按产品快照立项、勾模块，项目经理是顾问
+    # 立项：咨询业务负责人按产品快照立项、勾模块，项目经理是顾问
     lead = logged_in_client(app, create_user((PROJECT_LEAD,)))
     mgr_user = create_user((CONSULTANT,))
     mgr = logged_in_client(app, mgr_user)

@@ -4,7 +4,7 @@
 某项目的卡（open 待处理 / resolved 已处理 / all）；POST /api/confirmations/{id}/resolve 处理（选选项或写意见），
 规则见 app/project/confirmations.py。
 
-立项（二期 A3）：GET /api/catalog/products 可选的产品和模块；POST /api/projects 项目负责人立项（选产品、勾模块、
+立项（二期 A3）：GET /api/catalog/products 可选的产品和模块；POST /api/projects 咨询业务负责人立项（选产品、勾模块、
 定档、指定首位项目经理），规则见 app/project/configs.py。项目列表和详情带 product、modules、product_version。
 
 保留期（M4 ①）：POST /api/projects/{code}/acceptance 项目经理登记验收日和保留月数；项目列表和详情带
@@ -117,10 +117,10 @@ def catalog_products(user: User = Depends(current_user)) -> list[dict]:
 
 @router.post("/projects", response_model=ProjectOut, status_code=201)
 def create_project(body: ProjectIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    """项目负责人立项；首位项目经理默认是立项人本人。"""
+    """咨询业务负责人立项；首位项目经理默认是立项人本人。"""
     if PROJECT_LEAD not in roles_of(db, user.id):
         audit.record(db, actor=user.username, action="project.create", result="denied", reason="not_lead")
-        raise HTTPException(403, "立项需要“项目负责人”角色")
+        raise HTTPException(403, "立项需要“咨询业务负责人”角色")
     name = body.manager.strip() or user.username
     manager = db.scalar(select(User).where(User.username == name))
     try:
@@ -253,7 +253,7 @@ def put_member(code: str, username: str, body: MemberIn, db: Session = Depends(g
     if target is None or not target.is_active:
         raise HTTPException(404, "用户不存在或已停用")
     if not roles_of(db, target.id) & BUSINESS_ROLES:
-        raise HTTPException(422, "只有持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户能加入项目")
+        raise HTTPException(422, "只有持业务角色（顾问、咨询业务负责人、知识专家、知识管理员）的用户能加入项目")
     m = membership(db, p.id, target.id)
     if m is not None and m.project_role == PROJECT_MANAGER and body.project_role != PROJECT_MANAGER \
             and _managers(db, p) == 1:

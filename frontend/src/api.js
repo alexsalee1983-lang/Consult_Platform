@@ -120,7 +120,7 @@ export const api = {
   me: () => request("/api/auth/me", { skipAuthRedirect: true }),
   health: () => request("/api/health"),
   projects: () => request("/api/projects"),
-  // 网页立项（二期 A3）：可选的产品和模块；项目负责人立项
+  // 网页立项（二期 A3）：可选的产品和模块；咨询业务负责人立项
   catalogProducts: () => request("/api/catalog/products"),
   createProject: (body) => request("/api/projects", { method: "POST", body: JSON.stringify(body) }),
   // 立项与合同要点卡、授权台账、先行启动（四期 A32）
@@ -139,7 +139,11 @@ export const api = {
   earlyStarts: () => request("/api/early-starts"),
   project: (code) => request(`/api/projects/${encodeURIComponent(code)}`),
   assessment: (code) => request(`/api/projects/${encodeURIComponent(code)}/assessment`),
-  panorama: (code) => request(`/api/projects/${encodeURIComponent(code)}/panorama`),   // 四期 A25① 全景
+  panorama: (code, runs = false) =>   // 四期 A25① 全景；A29 runs = 打开“查看 Agent 运行情况”，多出“Agent 运行”一行
+    request(`/api/projects/${encodeURIComponent(code)}/panorama${runs ? "?runs=1" : ""}`),
+  agentKnowledge: () => request("/api/agent-activity/knowledge"),   // A29 知识侧运行记录
+  agentRetry: (id) => request(`/api/agent-activity/knowledge/jobs/${id}/retry`, { method: "POST" }),
+  agentProjects: () => request("/api/agent-activity/projects"),     // A29 跨项目运行状态（咨询业务负责人）
   confirmations: () => request("/api/confirmations"),
   // 处理确认卡：选一个选项（choice）或写意见（resolution），或两者都有
   resolve: (id, { choice = "", resolution = "" }) =>
@@ -239,7 +243,7 @@ export const api = {
     request(`/api/projects/${encodeURIComponent(code)}/survey/selfeval/${encodeURIComponent(s)}/import`, { method: "DELETE" }),
   withdrawCard: (code, card) =>
     request(`/api/projects/${encodeURIComponent(code)}/summary-cards/${encodeURIComponent(card)}/withdraw`, { method: "POST" }),
-  // 项目资料删除（M4 ②）：项目经理发起提前删除、标记客户不同意回流；项目负责人确认
+  // 项目资料删除（M4 ②）：项目经理发起提前删除、标记客户不同意回流；咨询业务负责人确认
   closeout: (code) => request(`/api/projects/${encodeURIComponent(code)}/closeout`),
   terminateProject: (code, reason) =>
     request(`/api/projects/${encodeURIComponent(code)}/terminate`, { method: "POST", body: JSON.stringify({ reason }) }),

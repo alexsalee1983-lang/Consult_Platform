@@ -128,7 +128,7 @@ def create(db: Session, *, actor: str, code: str, tier: str, manager: User | Non
     if db.scalar(select(Project.id).where(Project.code == code)) is not None:
         raise CreateError(409, f"项目 {code} 已存在（代号不复用，已删除的项目也占用代号）")
     if manager is None or not manager.is_active or not roles_of(db, manager.id) & BUSINESS_ROLES:
-        raise CreateError(422, "项目经理必须是启用状态、持业务角色（顾问、项目负责人、知识专家、知识管理员）的用户")
+        raise CreateError(422, "项目经理必须是启用状态、持业务角色（顾问、咨询业务负责人、知识专家、知识管理员）的用户")
     try:
         snap = config.compose_codes(product.strip().upper(), [m.strip().upper() for m in modules], industry)
     except config.CatalogError as e:

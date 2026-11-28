@@ -13,7 +13,7 @@ const ORG_TYPES = [["central_soe", "央企"], ["local_soe", "地方国企"], ["p
 const BASIS_EARLY = [["award", "中标通知书"], ["letter", "委托函"], ["proposal", "建议书"], ["presales", "售前沟通纪要"],
   ["email", "客户确认范围的邮件"], ["contract", "合同"]];
 
-// 网页立项（二期 A3）：项目负责人选产品、勾模块、定档、指定首位项目经理（默认本人）。规则见 app/project/configs.py
+// 网页立项（二期 A3）：咨询业务负责人选产品、勾模块、定档、指定首位项目经理（默认本人）。规则见 app/project/configs.py
 export default function NewProject({ onClose }) {
   const { user } = useAuth();
   const nav = useNavigate();

@@ -229,3 +229,57 @@ inputs:
     domains: [组织与人员, 合规与风险管理, 安全技术体系, 安全运营, 数据安全, 供应链与第三方]
     max_questions: 35
     due_days: 5
+# 四期 C22（草稿，待产品专家复核）：输出包组件清单默认值，输出页、阶段包导出与改稿（A33、A35）读取，
+# 自检 backend/tests/test_product_outputs.py。组件按黄金样例与 docs/交付链输入输出方案.md 第六节起草；
+# 定制项可增减组件（default: false 为可选组件），增删须项目经理确认。严格档输出一律占位符，沿用摘要卡约定。
+# kind：data 数据表 / doc 文稿 / deck 汇报 / form 客户用表单；gen：program 程序 / model 模型 / mixed 程序校验渲染 + 模型；
+# truth：结构化真源（D8 与按组件改稿从此同步）；per：persona 每受访角色一份、document 每份文件一份。
+outputs:
+  D1:
+  - {id: D1-C01, name: 范围确认单, kind: doc, format: docx, gen: program, to: [客户], default: true, client_signs: true}
+  - {id: D1-C02, name: 工作计划与里程碑（表 + 甘特）, kind: data, format: xlsx, gen: program, to: [客户, 项目组], default: true}
+  - {id: D1-C03, name: 启动会 PPT, kind: deck, format: pptx, gen: program, to: [客户, 项目组], default: true}
+  - {id: D1-C04, name: 项目定制项清单, kind: data, format: platform, gen: program, to: [项目组], default: true}
+  - {id: D1-C05, name: 资料需求初单, kind: form, format: xlsx, gen: program, to: [客户], default: true}
+  - {id: D1-C06, name: 前提与风险清单, kind: data, format: xlsx, gen: program, to: [项目组], default: true}
+  D2:
+  - {id: D2-C01, name: 访谈提纲, kind: doc, format: docx, gen: program, to: [客户, 项目组], default: true, per: persona}
+  - {id: D2-C02, name: 资料清单, kind: form, format: xlsx, gen: program, to: [客户], default: true}
+  - {id: D2-C03, name: 客户自评包, kind: form, format: xlsx, gen: program, to: [客户], default: true}
+  - {id: D2-C04, name: 现场议程, kind: doc, format: docx, gen: program, to: [客户], default: true}
+  - {id: D2-C05, name: 访谈排期, kind: data, format: xlsx, gen: program, to: [客户, 项目组], default: true}
+  D3:
+  - {id: D3-C01, name: 事实清单表（带证据编号）, kind: data, format: xlsx, gen: mixed, to: [项目组], default: true, truth: true}
+  - {id: D3-C02, name: 证据缺口与补证请求, kind: form, format: xlsx, gen: program, to: [客户, 项目组], default: true}
+  - {id: D3-C03, name: 敏感表态剔除记录, kind: data, format: xlsx, gen: program, to: [项目组], default: true}
+  - {id: D3-C04, name: 事实清单文稿, kind: doc, format: docx, gen: mixed, to: [项目组], default: true}
+  D4:
+  - {id: D4-C01, name: 发现表, kind: data, format: xlsx, gen: mixed, to: [客户, 项目组], default: true, truth: true}
+  - {id: D4-C02, name: 成熟度初判, kind: data, format: xlsx, gen: program, to: [客户], default: true}
+  - {id: D4-C03, name: 差距热力图, kind: data, format: xlsx, gen: program, to: [客户, 管理层], default: true}
+  - {id: D4-C04, name: 现状评估报告, kind: doc, format: docx, gen: mixed, to: [客户], default: true}
+  - {id: D4-C05, name: 分析汇报 PPT, kind: deck, format: pptx, gen: mixed, to: [客户], default: true}
+  D5:
+  - {id: D5-C01, name: 重点任务清单, kind: data, format: xlsx, gen: model, to: [客户], default: true, truth: true}
+  - {id: D5-C02, name: 愿景目标与指标表, kind: data, format: xlsx, gen: model, to: [客户, 管理层], default: true}
+  - {id: D5-C03, name: 安全治理架构, kind: deck, format: pptx, gen: model, to: [客户, 管理层], default: true}
+  - {id: D5-C04, name: 网络安全规划文本, kind: doc, format: docx, gen: mixed, to: [客户], default: true}
+  D6:
+  - {id: D6-C01, name: 制度文件, kind: doc, format: docx, gen: mixed, to: [客户], default: true, per: document}
+  - {id: D6-C02, name: 配套表单, kind: form, format: xlsx, gen: program, to: [客户], default: true}
+  - {id: D6-C03, name: 新旧制度对照, kind: data, format: xlsx, gen: program, to: [客户, 项目组], default: true}
+  - {id: D6-C04, name: 制度与差距映射, kind: data, format: xlsx, gen: program, to: [客户, 项目组], default: true}
+  D7:
+  - {id: D7-C01, name: 建设项目清单, kind: data, format: xlsx, gen: mixed, to: [客户, 项目组], default: true, truth: true}
+  - {id: D7-C02, name: 短中长期路线图（甘特）, kind: data, format: xlsx, gen: program, to: [客户, 管理层], default: true}
+  - {id: D7-C03, name: 资源估算, kind: data, format: xlsx, gen: mixed, to: [客户, 项目组], default: true}
+  - {id: D7-C04, name: 措施与差距映射, kind: data, format: xlsx, gen: program, to: [客户, 项目组], default: true}
+  - {id: D7-C05, name: 投入量级估算, kind: data, format: xlsx, gen: mixed, to: [客户, 管理层], default: true}
+  - {id: D7-C06, name: 实施路线图报告, kind: doc, format: docx, gen: mixed, to: [客户], default: true}
+  D8:
+  - {id: D8-C01, name: 高层汇报 PPT, kind: deck, format: pptx, gen: mixed, to: [管理层], default: true}
+  - {id: D8-C02, name: 一页纸摘要, kind: doc, format: docx, gen: mixed, to: [管理层], default: true}
+  - {id: D8-C03, name: 预判问答, kind: doc, format: docx, gen: model, to: [项目组], default: true}
+  closeout:
+  - {id: R-C01, name: 项目复盘, kind: doc, format: docx, gen: program, to: [项目组], default: true}
+  - {id: R-C02, name: 经验沉淀候选包, kind: data, format: platform, gen: program, to: [知识中心], default: true}
