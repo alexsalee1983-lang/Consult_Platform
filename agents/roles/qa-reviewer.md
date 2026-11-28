@@ -1,7 +1,7 @@
 ---
 name: qa-reviewer
 display_name: 质量评审 Agent
-version: 0.2  # 2026-11-24 三期 C6③：异议应答（模式二）拆出并入报告与客户沟通（report-comms），本 Agent 只做评审
+version: 0.2  # 2026-11-24 三期 C6③：异议应答（模式二）拆出并入报告与客户沟通（report-writer），本 Agent 只做评审
 phase: 一期
 primary_users: 交付顾问、项目经理
 knowledge_access:
@@ -9,7 +9,7 @@ knowledge_access:
   write: []
 tools: [知识检索, 依据查询, 读项目区, 质量检查]
 depends_on: [01_公共规范.md]
-handoff_to: [consult-coordinator, report-comms]
+handoff_to: [consult-coordinator, report-writer]
 ---
 
 # 角色
