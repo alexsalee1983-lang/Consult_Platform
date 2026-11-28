@@ -1,0 +1,205 @@
+# 四期 C23：合同要点卡字段、要点卡体检规则与通用澄清题（草稿，expert_review: pending，2026-11-28）
+# 方案：docs/交付链输入输出方案.md 4.1；字段说明：docs/接口约定.md 第二节；自检：backend/tests/test_contract_checks.py
+# 用法（A40）：程序按 checks 逐条检查要点卡，通过的不显示（只留一行“其余自动检查已通过”）；
+#   action: block   命中即阻断保存（只有资质边界一条）
+#   action: clarify 需要客户回答：转成澄清题（题干 question，选项由交付项目经理 Agent 从产品文件与黄金样例里取）
+#   action: pm      只需项目经理知道：进“待我处理”，不出题
+# 字段状态为“合同未写明 / 待澄清”的字段：先找产品文件 questions 里同 field 的题，没有再用本文件 questions 的通用题。
+# 澄清题出题后再过一遍 guard 机密级检测与 K-01 资质边界用语（方案 4.1“检查”一步）。
+# 严格档不上传合同，项目经理手填要点卡，规则照样检查；输出一律占位符。
+
+status: [已核对, 合同未写明, 待澄清, 合同外新增]
+
+# 要点卡字段（方案 4.1 表）；d1 为 D1 启动包表单（products/forms/D1.yaml）对应字段，A32 立项核对后回填 D1
+fields:
+- {key: goal, label: 项目目标, d1: goal, required: true}
+- {key: in_scope, label: 本次范围, d1: in_scope, required: true}
+- {key: out_of_scope, label: 不包含项, d1: out_of_scope, required: true}
+- {key: deliverables, label: 交付件清单, d1: deliverables, required: true}
+- {key: acceptance, label: 验收标准, d1: acceptance, required: true}
+- {key: period, label: 周期与起止日期, d1: period, required: true}
+- {key: milestones, label: 里程碑, d1: milestones}
+- {key: payment, label: 付款节点, required: true, pm_only: true}
+- {key: tier, label: 数据处理档位, required: true}
+- {key: retention, label: 保留期、返还与销毁, required: true}
+- {key: kb_consent, label: 是否参与经验积累, required: true}
+- {key: authorizations, label: 授权与同意（附件一 / 二 / 三签署状态）, required: true, pm_only: true}
+- {key: client_requirements, label: 客户书面要求, d1: client_requirements}
+- {key: confidentiality, label: 保密条款, required: true, pm_only: true}
+- {key: roles, label: 双方角色与对接人, d1: roles, required: true}
+- {key: survey_scope, label: 调研对象与方式, d1: interviewees}
+- {key: industry, label: 客户行业与单位性质}
+
+checks:
+- id: K-01
+  name: 资质边界用语
+  fields: ["*"]
+  action: block
+  match: 等保测评结论|等级测评结论|测评结论|密评结论|认证结论|合规结论|(出具|给出).{0,6}(测评|认证)报告|(保证|确保|协助客户)?通过(等保|密评|认证)
+  message: 要点卡出现测评、密评或认证结论类说法，平台不出具此类结论
+  fix: 改为“差距分析”“符合性初判”“整改建议”口径后才能保存；如合同原文如此，项目经理与商务确认后另签补充说明
+- id: K-02
+  name: 验收标准能否逐条对照
+  fields: [acceptance]
+  action: clarify
+  match: 满意|认可为准|达到(行业)?(先进|领先|一流)|基本完成|完整|全面|充分|有效|显著
+  message: 验收标准含不可量化的说法，验收阶段无法逐条对照
+  question: 合同中“{原文}”的验收标准，按以下哪种方式逐条对照？
+- id: K-03
+  name: 付款节点与验收节点绑定
+  fields: [payment, milestones]
+  action: pm
+  message: 付款节点没有对应的交付件签署或验收节点，验收阶段容易争议
+  fix: 商务侧确认；需改合同的走补充协议
+- id: K-04
+  name: 周期短于同产品样例工期
+  fields: [period]
+  action: pm
+  params: {compare: weeks.min}
+  message: 合同周期短于本产品样例的最短工期（产品文件 weeks.min），排期偏紧
+  fix: 在 D1 前提与风险清单写明压缩点（如访谈并行、制度份数减少），或与客户澄清分期交付
+- id: K-05
+  name: 交付件清单与产品默认组件一致
+  fields: [deliverables]
+  action: clarify
+  params: {compare: deliverables_min}
+  message: 合同交付件清单缺少本产品必备交付件，或多出产品外的交付件
+  question: 合同交付件清单与本产品默认组成不一致，缺少或多出的部分怎么处理？
+- id: K-06
+  name: 档位信号
+  fields: [tier, industry]
+  action: clarify
+  match: 国有大行|国有商业银行|政策性银行|生产控制大区|调度|涉密|敏感单位|党政机关
+  params: {when_tier: standard}
+  message: 客户属国有大行、电力生产控制区、政府涉密或敏感单位，合同却写标准档
+  question: 本项目资料能否离开客户现场（决定数据处理档位与附件一或附件二）？
+- id: K-07
+  name: 保留期、返还与销毁与保密协议冲突
+  fields: [retention, confidentiality]
+  action: pm
+  message: 合同保留期、返还或销毁条款与已签保密协议不一致，或超出平台告知模板承诺
+  fix: 以 docs/客户数据告知模板与合同条款.md 为准，商务与法务确认后再保存
+- id: K-08
+  name: 字段未写明或待澄清
+  fields: ["*"]
+  action: clarify
+  message: 合同未写明此项，按产品与通用澄清题出题；到关口仍无答案的按推荐项起草并标“按默认写法”
+  question: 合同未写明“{字段}”，按以下哪种方式确定？
+
+# 通用澄清题：产品文件没有同字段题时用；选项为公司标准写法，不引用单产品样例
+questions:
+- id: Q-01
+  field: goal
+  ask: 本项目的首要目标是什么？
+  affects: [D1, D5, D8]
+  gate: 启动
+  options:
+  - {text: 摸清现状并给出整改优先级, recommended: true, reason: 范围最清楚，后续设计与路线图可按发现排序}
+  - {text: 满足近期监管检查要求}
+  - {text: 支撑下一年度预算与建设立项}
+- id: Q-02
+  field: in_scope
+  ask: 本次评估覆盖哪些组织单元？
+  affects: [D2, D3, D4]
+  gate: 启动
+  options:
+  - {text: 总部本部，分支机构抽样 1～2 家, recommended: true, reason: 兼顾代表性与工期，抽样口径写进 D1}
+  - {text: 仅总部本部}
+  - {text: 总部与全部分支机构}
+- id: Q-03
+  field: out_of_scope
+  ask: 以下哪些工作明确不在本次范围内？
+  affects: [D1, D5]
+  gate: 启动
+  options:
+  - {text: 测评、渗透测试、设备采购与部署均不含, recommended: true, reason: 平台只做差距分析与整改建议，提前写明避免验收争议}
+  - {text: 不含设备采购与部署，含一次技术检查}
+- id: Q-04
+  field: deliverables
+  ask: 交付件按什么形式提交？
+  affects: [D4, D5, D6, D8]
+  gate: 启动
+  options:
+  - {text: 电子版 Word / Excel / PPT，各一份终稿, recommended: true, reason: 与输出包组件一致，改稿与签署最省事}
+  - {text: 电子版加纸质盖章版各一份}
+- id: Q-05
+  field: acceptance
+  ask: 交付件按什么标准验收？
+  affects: [D4, D5, D6, D7, D8]
+  gate: 验收
+  options:
+  - {text: 按 D1 交付件清单逐项提交，客户书面签收即验收, recommended: true, reason: 可逐条对照，不依赖主观评价}
+  - {text: 召开评审会，评审意见处理完毕后签收}
+  - {text: 客户 10 个工作日内未提书面意见视为通过}
+- id: Q-06
+  field: period
+  ask: 项目起止日期与中间节点按哪种方式确定？
+  affects: [D1, D2]
+  gate: 启动
+  options:
+  - {text: 以启动会日期起算，按产品默认阶段排期, recommended: true, reason: 阶段周数由平台按产品默认比例生成，客户只需确认启动日}
+  - {text: 按合同签订日起算，截止日固定}
+- id: Q-07
+  field: tier
+  ask: 本项目资料能否在客户书面同意后带离现场？
+  affects: [D1, D2, D3]
+  gate: 启动
+  options:
+  - {text: 可以，按标准档签附件一, recommended: true, reason: 一般企业默认；资料仍先过机密级检测}
+  - {text: 不能，按严格档签附件二，平台只收去标识摘要卡}
+- id: Q-08
+  field: retention
+  ask: 项目资料在结项后保留多久？
+  affects: [D8]
+  gate: 验收
+  options:
+  - {text: 按告知模板默认保留期，到期自动删除, recommended: true, reason: 与客户数据告知模板一致，平台可兑现}
+  - {text: 结项验收后立即删除，只留交付件}
+- id: Q-09
+  field: kb_consent
+  ask: 客户是否同意项目经验去标识后进入公司知识库？
+  affects: [D8]
+  gate: 验收
+  options:
+  - {text: 同意，结项复盘时先预览去标识结果再提交, recommended: true, reason: 客户可在预览后撤回，承诺可兑现}
+  - {text: 不参与经验积累}
+- id: Q-10
+  field: roles
+  ask: 客户方由谁作为项目对接人与范围确认签字人？
+  affects: [D1, D2]
+  gate: 启动
+  options:
+  - {text: 信息科技或安全部门负责人对接并签字, recommended: true, reason: 能协调访谈与资料，范围确认一人负责}
+  - {text: 分管领导签字，部门联系人日常对接}
+- id: Q-11
+  field: client_requirements
+  ask: 客户对交付件格式、口径或章节有无书面要求？
+  affects: [D4, D5, D6]
+  gate: 启动
+  options:
+  - {text: 无特殊要求，按公司标准模板, recommended: true, reason: 模板已带固定段与资质边界口径}
+  - {text: 有，客户提供模板或口径说明，逐条转为项目定制项}
+- id: Q-12
+  field: survey_scope
+  ask: 调研以哪种方式为主？
+  affects: [D2, D3]
+  gate: 调研
+  options:
+  - {text: 资料审阅加关键岗位访谈，必要时现场观察, recommended: true, reason: 证据来源多元，事实可交叉核对}
+  - {text: 以客户自评问卷为主，访谈补充}
+- id: Q-13
+  field: industry
+  ask: 客户所属行业与单位性质按哪类登记？
+  affects: [D1, D4]
+  gate: 启动
+  options:
+  - {text: 按营业执照与监管归属登记, recommended: true, reason: 决定行业依据与档位信号}
+  - {text: 按集团母公司所属行业登记}
+- id: Q-14
+  field: milestones
+  ask: 中间节点按哪种方式设置？
+  affects: [D1, D7]
+  gate: 启动
+  options:
+  - {text: 每个关口一个里程碑（启动、调研、分析、设计、验收）, recommended: true, reason: 与平台关口一致，进度预测可自动计算}
+  - {text: 只设中期汇报与终验两个节点}
