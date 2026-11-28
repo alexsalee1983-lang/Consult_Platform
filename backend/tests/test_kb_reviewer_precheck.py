@@ -17,7 +17,7 @@ def _md() -> str:
 
 def test_md_has_two_review_modes_and_three_blocking_classes():
     text = _md()
-    assert "version: 0.3" in text
+    assert "version: 0.4" in text   # 四期 B43 升到 0.4.0（收录标准与判定）
     for word in ("起草预审", "专家输入", "审核方式"):
         assert word in text, word
     # 专家输入只拦三类：红线、资质用语、引用不存在

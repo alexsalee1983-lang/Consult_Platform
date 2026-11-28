@@ -3,7 +3,7 @@
 已有的、有现行版本的条目都经过审核发布，回填为“可用”；未经专家认可的 AI 基线由每日分级扫描压回“候选”。
 
 Revision ID: k0025_kb_item_grade
-Revises: k0022_kb_gap_manual
+Revises: k0023_kb_expert_assign
 Create Date: 2026-11-27
 """
 from collections.abc import Sequence
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "k0025_kb_item_grade"
-down_revision: str | None = "k0022_kb_gap_manual"
+down_revision: str | None = "k0023_kb_expert_assign"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
