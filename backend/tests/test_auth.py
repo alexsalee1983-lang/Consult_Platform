@@ -123,6 +123,9 @@ PROTECTED = [
     ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("PUT", "/api/projects/BANK-A/deliverables/D4/sections/1"),
     ("POST", "/api/projects/BANK-A/deliverables/D4/sections/1/assist"),   # 三期 A15 写稿助手
+    ("GET", "/api/projects/BANK-A/deliverables/D4/sections/1/kb-suggest"),   # 四期 A32 知识侧栏
+    ("POST", "/api/projects/BANK-A/deliverables/D4/word-return"),   # 四期 A32 Word 回传
+    ("GET", "/api/projects/BANK-A/confirmations/evidence"),   # 四期 A32 确认卡证据并排
     ("GET", "/api/projects/BANK-A/deliverables/D4/export"),
     ("GET", "/api/projects/BANK-A/deliverables/D4/export?format=pptx"),
     ("GET", "/api/projects/BANK-A/stages"),
