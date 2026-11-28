@@ -191,6 +191,8 @@ PROTECTED = [
     ("POST", "/api/kb/sources/confirm-queue/decide"),
     ("GET", "/api/kb/sources/manual-queue"),
     ("POST", "/api/kb/sources/manual-queue/1/upload"),
+    ("GET", "/api/kb/sources/alarms"),
+    ("POST", "/api/kb/sources/alarms/1/resolve"),
     ("GET", "/api/kb/intake"),
     ("GET", "/api/kb/intake/1"),
     ("GET", "/api/kb/intake/1/deid"),

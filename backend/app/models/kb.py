@@ -425,8 +425,16 @@ class KbGap(KbBase):
     due: Mapped[date | None] = mapped_column(Date, nullable=True)
     authority: Mapped[int] = mapped_column(Integer, default=3)
     status: Mapped[str] = mapped_column(String(12), default="open", index=True)
-    plan: Mapped[str] = mapped_column(String(12), default="")  # direct / confirm / deferred / waiting / confirmed / manual / uploaded
+    plan: Mapped[str] = mapped_column(String(12), default="")  # direct / confirm / deferred / waiting / confirmed / manual / uploaded / unavailable
     manual_reason: Mapped[str] = mapped_column(String(16), default="")          # 需人工下载的原因类别（k0022）
+    # 四期 B41（k0026）：缺什么、取正文网址与来路、失败次数、来源推荐次数
+    need: Mapped[str] = mapped_column(String(8), default="")                    # 法规 / 标准 / 样例 / 条目
+    source_url: Mapped[str] = mapped_column(String(500), default="")            # 要取的正文网址（缺口键是编号时下发包用它）
+    source_via: Mapped[str] = mapped_column(String(8), default="")              # agent 来源推荐 / listing 栏目页解析
+    attempts: Mapped[int] = mapped_column(Integer, default=0)                   # 获取失败次数，满 3 次标暂无可用来源
+    unavailable_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rec_total: Mapped[int] = mapped_column(Integer, default=0)                  # 来源推荐次数（含被程序校验丢弃的）
+    rec_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     score: Mapped[float] = mapped_column(Float, default=0.0)
     planned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     close_reason: Mapped[str] = mapped_column(String(16), default="")
@@ -434,3 +442,24 @@ class KbGap(KbBase):
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KbAlarm(KbBase):
+    """入库报警卡（四期 B41，知识区迁移 k0026）：一批采集回传导入后入库数为 0 或正文率低于门槛，推给知识管理员。
+
+    同一类未处理的报警合成一张（count 加一）；只存批次哈希前缀和计数，不存文件名、网址和正文。
+    下一批正常入库时平台自动关闭（resolved_by=platform），知识管理员也可手动标已处理。规则只在 app/kb/gap_loop.py。
+    """
+
+    __tablename__ = "kb_alarms"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))                               # zero_intake / low_body
+    status: Mapped[str] = mapped_column(String(12), default="open", index=True)  # open / resolved
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    batches: Mapped[list] = mapped_column(JSON, default=list)                   # 批次哈希前缀（最多 20 个）
+    counts: Mapped[dict] = mapped_column(JSON, default=dict)                    # 最近一批：files / body / listing / stored
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    resolved_by: Mapped[str] = mapped_column(String(64), default="")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

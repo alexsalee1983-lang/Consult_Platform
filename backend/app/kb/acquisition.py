@@ -237,6 +237,10 @@ def check_dispatch(pkg: dict[str, Any], whitelist: tuple[str, ...]) -> list[str]
 class ReturnReport:
     count: int = 0
     manual: int = 0                          # 采集机取不到、转需人工下载的缺口数（import_return 填）
+    unavailable: int = 0                     # 失败满 3 次、标暂无可用来源的缺口数（四期 B41）
+    listing: list[str] = field(default_factory=list)   # 栏目页文件名（不入库，不进审计）
+    next_round: int = 0                      # 从栏目页解析出、登记进下一轮下发包的正文网址数
+    body: int = 0                            # 非栏目页里解析出正文的文件数（正文率的分子，四期 B41）
     problems: list[str] = field(default_factory=list)
 
     @property
