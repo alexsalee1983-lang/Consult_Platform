@@ -14,6 +14,10 @@
   通过才关缺口（collected）并交 kb-source-publish；审计只记数量和问题类别，不记文件名。
 - mark_manual / manual_queue（四期 B25）：采集机取不到的网址（回传 manifest 的 failed）转“需人工下载”（plan manual，
   记原因类别）；资料仓 backlog 的老条目用 kb-gap-manual 登记。人工上传原件的处理在 app/kb/gap_manual.py。
+- 四期 B41：缺口键是编号时，source_url 记要取的正文网址（来源推荐 Agent 或栏目页解析给出），计划、下发、回传都按
+  target()（source_url 优先，否则 gap_key）；获取失败（采集机取不到、人工上传核对不过）计 attempts，满 MAX_ATTEMPTS 次
+  标“暂无可用来源”（plan unavailable），每月自动再试（app/kb/gap_loop.py retry_unavailable）。
+  回传批次里的栏目页由 gap_loop.expand_listings 解析出白名单内的正文链接，登记为下一轮直接采集的缺口，栏目页本身不入库。
 不存原文：gap_key 是编号或网址，events 只是事件编号（acquisition.EVENT_REF 校验）。
 """
 from __future__ import annotations
@@ -41,7 +45,9 @@ DEFAULT_CAP = 20
 CONFIRMED = "confirmed"          # 来源确认已通过、等来源转正式
 MANUAL = "manual"                # 需人工下载：采集机取不到，等人上传原件
 UPLOADED = "uploaded"            # 原件已上传、后台核对入库中
-HELD = (MANUAL, UPLOADED)        # 每周计划不再重排这两类
+UNAVAILABLE = "unavailable"      # 暂无可用来源：获取失败满 MAX_ATTEMPTS 次，每月自动再试（四期 B41）
+HELD = (MANUAL, UPLOADED, UNAVAILABLE)   # 每周计划不再重排这几类
+MAX_ATTEMPTS = 3
 DECISIONS = ("approve", "reject")
 
 
@@ -85,6 +91,17 @@ def record(db: Session, signals: list[acq.Signal]) -> list[KbGap]:
     return rows
 
 
+def target(row: KbGap) -> str:
+    """要去取的网址：来源推荐或栏目页解析给的正文网址优先，否则缺口键本身（四期 B41）。"""
+    return row.source_url or row.gap_key
+
+
+def _open_by_url(db: Session, url: str) -> list[KbGap]:
+    return list(db.scalars(select(KbGap).where(KbGap.status == "open",
+                                               (KbGap.gap_key == url) | (KbGap.source_url == url))
+                           .order_by(KbGap.id)))
+
+
 def whitelist(db: Session) -> tuple[str, ...]:
     return tuple(db.scalars(select(KbSource.url).where(KbSource.status == "active").order_by(KbSource.url)))
 
@@ -94,8 +111,10 @@ def run_week(db: Session, today: date, *, thresholds: dict[str, int] | None = No
     wl = whitelist(db)
     rows = list(db.scalars(select(KbGap).where(KbGap.status == "open").order_by(KbGap.id)))
     # 来源确认过的缺口不再回队列：来源转正式（进白名单）后直接采集，之前一直等着
-    held = [r for r in rows if r.plan == CONFIRMED and not acq.in_whitelist(r.gap_key, wl)]
-    promoted = {r.gap_key for r in rows if r.plan == CONFIRMED and acq.in_whitelist(r.gap_key, wl)}
+    held = [r for r in rows if r.plan == CONFIRMED and not acq.in_whitelist(target(r), wl)]
+    # 来源转正式后的确认缺口、带白名单内正文网址的缺口（B41 来源推荐 / 栏目页解析）直接采集
+    promoted = {r.gap_key for r in rows if r.plan not in HELD and (r.plan == CONFIRMED or r.source_url)
+                and acq.in_whitelist(target(r), wl)}
     manual = [r for r in rows if r.plan in HELD]
     rows = [r for r in rows if r not in held and r.plan not in HELD]
     gaps = {r.gap_key: acq.Gap(key=r.gap_key, kinds=dict(r.kinds or {}), events=list(r.events or []),
@@ -193,8 +212,12 @@ def decide_confirm(db: Session, user: User, gap_ids: list[int], decision: str,
 def dispatch_package(db: Session, rule: dict[str, Any] | None = None, *, actor: str = "cli") -> dict[str, Any]:
     """本周计划为 direct（白名单内外部变化）的未关闭缺口出下发包；白名单外的 build_dispatch 直接拒绝。"""
     wl = whitelist(db)
-    urls = [k for k in db.scalars(select(KbGap.gap_key).where(KbGap.status == "open", KbGap.plan == "direct")
-                                  .order_by(KbGap.score.desc(), KbGap.id)) if acq.in_whitelist(k, wl)]
+    urls: list[str] = []
+    for r in db.scalars(select(KbGap).where(KbGap.status == "open", KbGap.plan == "direct")
+                        .order_by(KbGap.score.desc(), KbGap.id)):
+        u = target(r)
+        if acq.in_whitelist(u, wl) and u not in urls:
+            urls.append(u)
     pkg = acq.build_dispatch(urls, wl, rule)
     audit.record(db, actor=actor, action="kb.gap.dispatch", result="allowed", tasks=len(pkg["tasks"]))
     return pkg
@@ -212,23 +235,49 @@ def import_return(db: Session, batch: Path, *, actor: str = "cli") -> tuple[acq.
         return report, 0
     manifest = json.loads((batch / acq.RETURN_MANIFEST).read_text(encoding="utf-8"))
     rows = manifest["files"]
+    from . import gap_loop                      # 四期 B41：栏目页两级取正文（避免循环导入）
+
+    wl = whitelist(db)
+    listing, report.body = gap_loop.classify(batch, rows, wl)
     closed = 0
-    for url in sorted({str(r["url"]) for r in rows}):
-        try:
-            close(db, url, "collected", actor=actor)
+    for url in sorted({str(r["url"]) for r in rows}):          # 栏目页本身也算采到了（正文链接转下一轮）
+        for g in _open_by_url(db, url):
+            close(db, g.gap_key, "collected", actor=actor)
             closed += 1
-        except LookupError:
-            pass
     failed = manifest.get("failed") if isinstance(manifest, dict) else None
     for f in failed if isinstance(failed, list) else []:
         url = str(f.get("url", "")) if isinstance(f, dict) else ""
-        row = db.scalar(select(KbGap).where(KbGap.gap_key == url, KbGap.status == "open")) if url else None
-        if row is not None and row.plan not in HELD:
-            mark_manual(db, url, acq.manual_reason(str(f.get("reason", ""))), actor=actor)
-            report.manual += 1
-    extra = {"manual": report.manual} if report.manual else {}
+        for row in _open_by_url(db, url) if url else []:
+            if row.plan in HELD:
+                continue
+            reason = acq.manual_reason(str(f.get("reason", "")))
+            if note_failure(db, row, actor=actor) == UNAVAILABLE:
+                report.unavailable += 1
+            else:
+                mark_manual(db, row.gap_key, reason, actor=actor)
+                report.manual += 1
+    report.listing = sorted(listing)
+    report.next_round = gap_loop.expand_listings(db, batch, rows, listing, wl, actor=actor)
+    extra = {k: v for k, v in (("manual", report.manual), ("unavailable", report.unavailable),
+                               ("listing", len(report.listing)), ("next_round", report.next_round)) if v}
     audit.record(db, actor=actor, action="kb.gap.return", result="allowed", files=report.count, closed=closed, **extra)
     return report, closed
+
+
+def note_failure(db: Session, row: KbGap, *, actor: str = "platform") -> str:
+    """获取失败一次（四期 B41）：attempts 加一，满 MAX_ATTEMPTS 次标暂无可用来源；返回缺口的新 plan（未满时不改）。
+    来源推荐给的网址失败了就清掉，下次重新推荐。"""
+    row.attempts = (row.attempts or 0) + 1
+    if row.source_via == "agent":
+        row.source_url = ""
+    row.updated_at = utcnow()
+    if row.attempts >= MAX_ATTEMPTS:
+        row.plan, row.unavailable_at = UNAVAILABLE, row.updated_at
+    db.commit()
+    if row.plan == UNAVAILABLE:
+        audit.record(db, actor=actor, action="kb.gap.unavailable", result="allowed", gap_id=row.id,
+                     attempts=row.attempts)
+    return row.plan
 
 
 def mark_manual(db: Session, key: str, reason: str, *, create: bool = False, event_ref: str = "",
@@ -259,6 +308,7 @@ def manual_queue(db: Session) -> list[dict[str, Any]]:
         is_url = urlsplit(r.gap_key).scheme in ("http", "https")
         out.append({"id": r.id, "gap_key": r.gap_key, "plan": r.plan, "reason": r.manual_reason,
                     "reason_label": acq.MANUAL_REASONS.get(r.manual_reason, ""), "is_url": is_url,
+                    "need": r.need, "attempts": r.attempts, "unavailable": r.plan == UNAVAILABLE,
                     "in_whitelist": is_url and acq.in_whitelist(r.gap_key, wl), "impact": r.impact,
                     "authority": r.authority, "score": r.score, "opened_at": r.opened_at, "updated_at": r.updated_at})
     return out
@@ -268,7 +318,7 @@ def manual_queue(db: Session) -> list[dict[str, Any]]:
 PUBLISH_COLUMNS = ["文件名", "名称", "发布机关", "原网址", "现行状态", "获取方式", "sha256"]
 
 
-def publish_manifest(db: Session, batch: Path) -> tuple[str, list[str]]:
+def publish_manifest(db: Session, batch: Path, skip: frozenset[str] | set[str] = frozenset()) -> tuple[str, list[str]]:
     """回传批次 → 下载清单 CSV（供 kb-source-publish）：名称、发布机关取来源登记表里网址前缀最长匹配的正式来源。
 
     找不到登记来源的文件不进清单，返回文件名列表，由人登记来源后再导；现行状态先记“现行”，生命周期由 B26 跟踪。
@@ -283,13 +333,20 @@ def publish_manifest(db: Session, batch: Path) -> tuple[str, list[str]]:
     w.writeheader()
     unmatched: list[str] = []
     for r in rows:
+        if str(r.get("file", "")) in skip:             # 栏目页（B41）不入库，只用来出下一轮下发包
+            continue
         url = str(r.get("url", ""))
         hits = [s for s in srcs if acq.in_whitelist(url, (s.url,))]
         if not hits:
             unmatched.append(str(r.get("file", "")))
             continue
         s = max(hits, key=lambda x: len(x.url))
-        w.writerow({"文件名": r["file"], "名称": s.name, "发布机关": s.publisher, "原网址": url,
+        title = ""
+        if str(r["file"]).lower().endswith((".html", ".htm", ".shtml")):    # 网页正文用页面标题（B41，免得同源各页同名）
+            from . import gap_loop
+
+            title = gap_loop.page_title((batch / str(r["file"])).read_bytes())
+        w.writerow({"文件名": r["file"], "名称": title or s.name, "发布机关": s.publisher, "原网址": url,
                     "现行状态": "现行", "获取方式": "已下载", "sha256": str(r.get("sha256", "")).lower()})
     return out.getvalue(), unmatched
 
@@ -320,6 +377,11 @@ def _job(payload: dict, ctx: jobs.JobContext | None) -> None:
     from ..core.db import SessionLocal
 
     today = date.fromisoformat(payload["today"]) if payload.get("today") else utcnow().date()
+    from . import gap_loop
+
     with SessionLocal() as db:
+        gap_loop.feed(db, today)                # 四期 B41：就绪度缺格、引用缺失、法规换版、依据到期 → 缺口；已补齐的关闭
+        gap_loop.retry_unavailable(db, today)   # 暂无可用来源满一个月再试
         patrol(db, today)
         run_week(db, today, cap=int(payload.get("cap", DEFAULT_CAP)))
+        gap_loop.recommend_week(db)             # 来源推荐 Agent（经网关；没接模型或命中率低于门槛时不调）

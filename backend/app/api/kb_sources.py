@@ -20,8 +20,8 @@ from sqlalchemy.orm import Session
 
 from ..core.auth import current_user
 from ..core.db import get_db
-from ..core.permissions import require_business
-from ..kb import gap_manual, gap_pool
+from ..core.permissions import KNOWLEDGE_ADMIN, require_business, roles_of
+from ..kb import gap_loop, gap_manual, gap_pool
 from ..kb import review as rv
 from ..kb import source_registry as reg
 from ..models import KbSource, User
@@ -118,6 +118,25 @@ def confirm_decide(body: DecideIn, db: Session = Depends(get_db),
 def manual_queue(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
     _staff(db, user)
     return gap_pool.manual_queue(db)
+
+
+@router.get("/alarms")
+def alarms(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict[str, Any]]:
+    """入库报警卡（四期 B41⑥）：未处理的，只有计数和批次哈希前缀。"""
+    _staff(db, user)
+    return gap_loop.alarms(db)
+
+
+@router.post("/alarms/{alarm_id}/resolve")
+def alarm_resolve(alarm_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, Any]:
+    _staff(db, user)
+    if KNOWLEDGE_ADMIN not in roles_of(db, user.id):
+        raise HTTPException(403, "只有知识管理员能处理入库报警")
+    try:
+        a = gap_loop.resolve_alarm(db, alarm_id, user.username)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from None
+    return {"id": a.id, "status": a.status}
 
 
 @router.post("/manual-queue/{gap_id}/upload", status_code=202)
