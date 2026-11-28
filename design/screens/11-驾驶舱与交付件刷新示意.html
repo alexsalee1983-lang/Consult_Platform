@@ -45,8 +45,8 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}th{color:var(--tx3);f
 .stg.cur{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
 .stg.done{opacity:.72}
 .stg .hd{display:flex;justify-content:space-between;font-weight:700;margin-bottom:6px}
-.step{display:flex;gap:6px;align-items:flex-start;padding:3px 0;font-size:12.5px;color:var(--tx2)}
-.dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0;background:var(--ln2)}
+.step{display:block;padding:3px 0 3px 14px;text-indent:-14px;font-size:12.5px;color:var(--tx2)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--ln2)}
 .d-ok{background:var(--ok)}.d-am{background:var(--amber)}.d-cr{background:var(--crim)}.d-cy{background:var(--cyan)}
 .gate{margin-top:8px;border-top:1px dashed var(--ln2);padding-top:6px;font-size:12px}
 .strip{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -74,6 +74,11 @@ textarea.inp{min-height:54px;resize:vertical}
 .pk{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .cmp{font-size:12px;border-radius:5px;padding:2px 8px;background:var(--s3);color:var(--tx2)}
 .cmp.d{color:var(--cyan)}.cmp.w{color:var(--tx)}.cmp.p{color:var(--amber)}.cmp.x{color:var(--ok)}
+.who{font-size:11px;border-radius:4px;padding:0 6px;margin-left:6px;background:var(--s3);color:var(--amber);white-space:nowrap}.who.cu{color:var(--cyan)}
+.drw{position:fixed;right:0;top:0;bottom:0;width:360px;background:var(--s1);border-left:1px solid var(--ln2);padding:14px 16px;display:none;z-index:8;overflow:auto}.drw.on{display:block}
+.fab{position:fixed;right:22px;bottom:22px;z-index:7;background:var(--s3);border:1px solid var(--amber);color:var(--amber);border-radius:20px;padding:7px 16px;cursor:pointer;font-weight:700}
+.seg{display:inline-flex;border:1px solid var(--ln2);border-radius:7px;overflow:hidden}.seg a{padding:3px 12px;color:var(--tx3)}.seg a.on{background:var(--s3);color:var(--tx)}
+.lv{font-size:12px;padding:6px 9px;border-radius:6px;margin-bottom:6px;background:var(--s2);border:1px solid var(--ln)}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid var(--cyan);color:var(--tx);padding:9px 18px;border-radius:8px;display:none;z-index:9;max-width:720px}
 </style></head><body>
 
@@ -83,17 +88,20 @@ textarea.inp{min-height:54px;resize:vertical}
   <div class="grp">先看这里</div>
   <a class="it on" data-p="arch">整体逻辑图</a>
   <a class="it" data-p="todo">待负责人定 <span class="n">4</span></a>
-  <div class="grp">项目（五个导航）</div>
-  <a class="it" data-p="pan">全景 · 关口时间线 <span class="n">3</span></a>
+  <div class="grp">项目（六页）</div>
+  <a class="it" data-p="pan">全景 · 关口时间线 <span class="n">4</span></a>
   <a class="it" data-p="in">输入 · 按来源</a>
-  <a class="it" data-p="an">分析 · 中间真源</a>
+  <a class="it" data-p="req">需求 · 定制项与决定 <span class="n">2</span></a>
+  <a class="it" data-p="an">分析 · 事实与发现</a>
   <a class="it" data-p="out">输出 · 输出包</a>
   <a class="it" data-p="set">设置</a>
   <div class="grp">交付件页</div>
   <a class="it" data-p="d1">D1 启动包（程序模板）</a>
   <a class="it" data-p="d4">D4 差距分析（审稿改稿）</a>
+  <div class="mut" style="font-size:11px;padding:2px 8px">D2、D3、D5～D8 同 D4 结构</div>
   <div class="grp">其他</div>
   <a class="it" data-p="srv">调研包怎么生成</a>
+  <a class="it" data-p="fa">调研助手（现场全屏）</a>
   <a class="it" data-p="retro">结项复盘</a>
   <div class="grp" style="margin-top:20px">虚拟数据 · 按钮只弹提示</div>
 </div>
@@ -102,7 +110,7 @@ textarea.inp{min-height:54px;resize:vertical}
 
 <!-- ============ 整体逻辑图 ============ -->
 <div class="page on" id="p-arch">
-  <div class="crumb">示意 11 · 2026-11-28 · 对应 docs/交付链输入输出方案.md v0.3</div><div class="mut">v0.3 已定、本示意未重画：新增“需求”页（定制项、决定记录、变更单）；全景节点“卡在谁手里”标签与“只看我的”；顾问对话改为右侧抽屉；要点卡体检与需求澄清清单。</div>
+  <div class="crumb">示意 11 · 2026-11-28 · 对应 docs/交付链输入输出方案.md v0.3（整体刷新）</div>
   <h1>整体逻辑：人提供信息和决定，机器负责成文，人审稿改稿</h1>
   <div class="sub">颜色：<span class="chip c-am">人</span> <span class="chip c-cy">程序</span> <span class="chip c-vi">大模型（经网关）</span> <span class="chip c-ok">公司知识</span></div>
 
@@ -111,7 +119,7 @@ textarea.inp{min-height:54px;resize:vertical}
     <span class="mut">每张输入卡 = 必填 / 选填 / 其他信息与要求 + 参考样例</span></div></div>
   <div class="arrow">↓ “其他信息 / 要求”由 Agent 拆成 事实 / 决定 / 要求，回显确认后生效</div>
   <div class="layer"><div class="lname">② 需求层<small>平台归类，人确认</small></div><div class="lbody">
-    <span class="box b-p">事实库（答案池 → 事实确认）</span><span class="box b-p">决定记录（范围、取舍、确认卡结果）</span><span class="box b-p">项目定制项（长期生效）</span><span class="box b-p">修订指令（一次性）</span>
+    <span class="box b-p">项目定制项（长期生效）</span><span class="box b-p">修订指令（一次性）</span><span class="box b-p">决定记录（范围、取舍、确认卡结果）</span><span class="box b-h">变更单（合同外需求）</span><span class="mut">→ 在“需求”页；事实与发现在“分析”页</span>
     <span class="mut">优先级：红线与资质 ＞ 客户书面 ＞ 定制项 ＞ 行业 ＞ 公司做法与黄金样例 ＞ 默认大纲</span></div></div>
   <div class="arrow">↓ 叠加</div>
   <div class="layer"><div class="lname">③ 基线层<small>公司知识中心</small></div><div class="lbody">
@@ -131,7 +139,7 @@ textarea.inp{min-height:54px;resize:vertical}
   <h2 style="margin-top:16px">主链与关口（上游变，下游标“需更新”）</h2>
   <div class="tl">
     <div class="card"><h3>关口 1 · 启动</h3><div class="t2">合同要点卡 → 立项设置 + D1 + 定制项</div><div class="mut">进：要点卡已核对、授权已签</div><div class="mut">出：D1 已签、客户确认范围</div></div>
-    <div class="card"><h3>关口 2 · 调研</h3><div class="t2">D1 范围 + 评估项 + D2 角色 + 客户资料 → 调研包 → 自评 → 现场 → 答案池 → D3</div><div class="mut">出：D3 已签</div></div>
+    <div class="card"><h3>关口 2 · 调研</h3><div class="t2">D1 范围 + 评估项 + D2 角色 + 客户资料 → 调研包 → 自评 → 现场 → 答案池 → D3</div><div class="mut">进：D1 范围、D2 角色、调研包已发布</div><div class="mut">出：答案池入齐、D3 已签</div></div>
     <div class="card"><h3>关口 3 · 分析</h3><div class="t2">事实 + 依据 → 发现表 → D4 → 客户意见 → v1.1</div><div class="mut">出：D4 已签、意见处理完</div></div>
     <div class="card"><h3>关口 4 · 设计</h3><div class="t2">发现 + 取舍卡 + 客户约束 → D5 / D6 / D7</div><div class="mut">出：D5～D7 已签、客户审阅完</div></div>
     <div class="card"><h3>关口 5 · 验收</h3><div class="t2">D4 / D5 / D7 → D8 → 对照合同验收标准 → 结项复盘 → 结项</div><div class="mut">出：复盘已提交 → 保留期到期删除</div></div>
@@ -145,43 +153,56 @@ textarea.inp{min-height:54px;resize:vertical}
   <table><tr><th style="width:36px">#</th><th>事项</th><th>建议</th><th>示意在哪看</th></tr>
   <tr><td>1</td><td>合同要点卡前移到立项，作为项目基础数据全程保留；合同原文抽取后删除；严格档手填</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="in">输入 · 合同要点卡</a></td></tr>
   <tr><td>2</td><td>售前材料（建议书、需求沟通纪要）作为选填输入</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="in">输入 · 选填材料</a></td></tr>
-  <tr><td>3</td><td>驾驶舱每页一类东西：全景改关口时间线，分析加决定记录与定制项（影响 11-25 改版方案、A29～A31 界面）</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="pan">全景</a>、<a style="color:var(--cyan)" data-go="an">分析</a></td></tr>
+  <tr><td>3</td><td>驾驶舱按六页重排：全景、输入、需求、分析、输出、设置（影响 11-25 改版方案、A29～A31 界面）</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="pan">全景</a>、<a style="color:var(--cyan)" data-go="req">需求</a>、<a style="color:var(--cyan)" data-go="an">分析</a></td></tr>
   <tr><td>4</td><td>结项复盘作为结项前置条件；可一键“本项目无可沉淀”写理由，计入跳过率</td><td><span class="chip c-am">是</span></td><td><a style="color:var(--cyan)" data-go="retro">结项复盘</a></td></tr>
   </table>
   <h2 style="margin-top:16px">已定（11-28）</h2>
   <div class="card2">D1、D2 走程序模板 · 人参与改稿，改稿助手提效 · 输出包组件清单在产品配置定默认、定制项可增减、增删须项目经理确认 · 复盘放进驾驶舱</div>
+  <table style="margin-top:8px"><tr><th>已定（11-28 后续两轮“同意”）</th><th>示意在哪看</th></tr>
+  <tr><td>授权台账；关口 1 进入条件加“附件已签”</td><td><a style="color:var(--cyan)" data-go="in">输入 · 合同要点卡</a></td></tr>
+  <tr><td>D2 调研包只放输出页；输入页只放回收物</td><td><a style="color:var(--cyan)" data-go="out">输出</a>、<a style="color:var(--cyan)" data-go="srv">调研包怎么生成</a></td></tr>
+  <tr><td>要点卡字段状态、体检、需求澄清清单；合同外需求走变更单</td><td><a style="color:var(--cyan)" data-go="in">输入 · 合同要点卡</a>、<a style="color:var(--cyan)" data-go="req">需求 · 变更单</a></td></tr>
+  <tr><td>新增“需求”页；分析页放事实、发现、证据缺口、待定矛盾；“证据”与“依据”分开叫</td><td><a style="color:var(--cyan)" data-go="req">需求</a>、<a style="color:var(--cyan)" data-go="an">分析</a></td></tr>
+  <tr><td>全景节点标“卡在谁手里”，加“只看我的”</td><td><a style="color:var(--cyan)" data-go="pan">全景</a></td></tr>
+  <tr><td>顾问入口收敛：对话改右侧抽屉（右下角“对话”），“待我处理”汇总待办</td><td>任一页右下角</td></tr>
+  <tr><td>调研助手三个入口：输出页 D2、全景当天待办、我的项目</td><td><a style="color:var(--cyan)" data-go="fa">调研助手</a></td></tr>
+  <tr><td>导出与草稿水印；结项两步提交，结项与复盘分开</td><td><a style="color:var(--cyan)" data-go="d4">D4</a>、<a style="color:var(--cyan)" data-go="retro">结项复盘</a>、<a style="color:var(--cyan)" data-go="set">设置</a></td></tr>
+  <tr><td>客户批注 Word 导入、签字凭证只存状态、暂停 / 终止、人员变动交接</td><td><a style="color:var(--cyan)" data-go="req">需求 · 修订指令</a>、<a style="color:var(--cyan)" data-go="d1">D1</a>、<a style="color:var(--cyan)" data-go="set">设置</a></td></tr></table>
 </div>
 
 <!-- ============ 全景 ============ -->
 <div class="page" id="p-pan">
   <div class="top"><div><div class="crumb">BANK-A / 全景</div><h1>全景 · 第 3 周 · 调研阶段</h1></div>
-    <div style="margin-left:auto" class="row"><span class="chip c-ok">进度预测：按期</span><span class="chip">本周自动完成 37 项 ▸</span><a class="btn2 sm" data-t="Agent 运行情况默认隐藏，点开只读（11-27 已定）">查看 Agent 运行情况</a></div></div>
-  <div class="note">全景只回答两件事：<b>现在在哪个关口</b>、<b>缺什么输入、卡在谁手里</b>。每个阶段同一结构：输入到齐 → 平台处理 → 人确认 → 产出 → 客户确认 → 过关口。</div>
+    <div style="margin-left:auto" class="row"><span class="seg"><a class="on" data-t="显示全部待办">全部</a><a data-t="只看项目经理的待办：3 项">只看我的</a></span><span class="chip c-ok">进度预测：按期</span><span class="chip">本周自动完成 37 项 ▸</span><a class="btn2 sm" data-t="Agent 运行情况默认隐藏，点开只读（11-27 已定）">查看 Agent 运行情况</a></div></div>
+  <div class="note">全景只回答两件事：<b>现在在哪个关口</b>、<b>缺什么输入、卡在谁手里</b>。每个阶段同一结构：输入到齐 → 平台处理 → 人确认 → 产出 → 客户确认 → 过关口。标签：<span class="who">橙 = 卡在我方角色</span><span class="who cu">青 = 卡在客户</span></div>
   <div class="tl">
     <div class="stg done"><div class="hd"><span>1 启动</span><span class="chip c-ok">已过关口</span></div>
       <div class="step"><i class="dot d-ok"></i>输入：合同要点卡已核对、授权已签</div><div class="step"><i class="dot d-ok"></i>产出：D1 输出包</div><div class="step"><i class="dot d-ok"></i>客户：范围已确认</div></div>
     <div class="stg cur"><div class="hd"><span>2 调研</span><span class="chip c-am">进行中</span></div>
       <div class="step"><i class="dot d-ok"></i>输入：D2 已签，6 份调研包已发布</div>
-      <div class="step"><i class="dot d-cr"></i>客户：自评包 4/6 交回 · <b style="color:var(--crim)">运维组逾期 2 天</b></div>
-      <div class="step"><i class="dot d-am"></i>现场：访谈 3/6 · 矛盾待定案 2</div>
+      <div class="step"><i class="dot d-cr"></i>客户：自评包 4/6 交回 · <b style="color:var(--crim)">运维组逾期 2 天</b><span class="who cu">客户 · 运维组对接人</span></div>
+      <div class="step"><i class="dot d-am"></i>现场：访谈 3/6 · 矛盾待定案 2<span class="who">顾问 A</span></div>
       <div class="step"><i class="dot d-cy"></i>平台：答案池 214 题，自动确认 82%</div>
-      <div class="step"><i class="dot"></i>产出：D3 输出包（待答案池入齐）</div>
+      <div class="step"><i class="dot"></i>产出：D3 输出包（待答案池入齐）</div><div class="step"><i class="dot"></i>签署：D3<span class="who">签署人</span></div>
       <div class="gate">过关口还差：<span class="chip c-cr">自评 2 份</span> <span class="chip c-am">访谈 3 场</span> <span class="chip">D3 签署</span></div></div>
     <div class="stg"><div class="hd"><span>3 分析</span><span class="chip">未开始</span></div>
       <div class="step"><i class="dot"></i>输入：已确认事实</div><div class="step"><i class="dot"></i>人：低置信发现确认</div><div class="step"><i class="dot"></i>产出：D4 输出包</div><div class="step"><i class="dot"></i>客户：D4 意见</div></div>
     <div class="stg"><div class="hd"><span>4 设计</span><span class="chip">未开始</span></div>
-      <div class="step"><i class="dot d-am"></i>可提前填：客户约束（编制、预算）</div><div class="step"><i class="dot"></i>人：方案取舍卡</div><div class="step"><i class="dot"></i>产出：D5 / D6 / D7</div></div>
+      <div class="step"><i class="dot d-am"></i>可提前填：客户约束（编制、预算）<span class="who">项目经理</span></div><div class="step"><i class="dot"></i>人：方案取舍卡</div><div class="step"><i class="dot"></i>产出：D5 / D6 / D7</div></div>
     <div class="stg"><div class="hd"><span>5 验收</span><span class="chip">未开始</span></div>
       <div class="step"><i class="dot"></i>产出：D8</div><div class="step"><i class="dot"></i>对照合同验收 9 条</div><div class="step"><i class="dot"></i>结项复盘</div></div>
   </div>
   <div class="g2" style="margin-top:12px">
     <div class="card"><div class="sb"><h2>待我处理 · 项目经理</h2><span class="mut">只显示人要做的</span></div>
-      <table><tr><td><span class="chip c-cr">催办</span></td><td>运维组自评包逾期 2 天，已自动提醒 2 次 · 建议电话联系对接人</td><td><a class="btn2 sm" data-t="打开抽屉：催办话术、改截止日">处理</a></td></tr>
+      <table><tr><td><span class="chip c-cy">今天现场</span></td><td>14:00 网络组访谈（顾问 A）· 预填 9 题待快速确认、议程 6 题</td><td><a class="btn sm" data-go="fa">进入调研助手</a></td></tr>
+      <tr><td><span class="chip c-cr">催办</span></td><td>运维组自评包逾期 2 天，已自动提醒 2 次 · 建议电话联系对接人</td><td><a class="btn2 sm" data-t="打开抽屉：催办话术、改截止日">处理</a></td></tr>
       <tr><td><span class="chip c-am">确认卡</span></td><td>“夜间值班”两个来源矛盾：资料写 7×24，安全组口述 5×8 · 已放进下周二现场议程</td><td><a class="btn2 sm" data-t="打开矛盾卡：两来源原文、建议定案方式">看</a></td></tr>
-      <tr><td><span class="chip c-am">设计输入</span></td><td>提前补客户约束：安全团队编制上限、明年预算区间（D5、D7 要用）</td><td><a class="btn2 sm" data-go="in">去填</a></td></tr></table></div>
+      <tr><td><span class="chip c-am">设计输入</span></td><td>提前补客户约束：安全团队编制上限、明年预算区间（D5、D7 要用）</td><td><a class="btn2 sm" data-go="in">去填</a></td></tr>
+      <tr><td><span class="chip c-vi">变更单</span></td><td>客户临时要求加“数据安全分类分级”内容，超出合同范围 · 影响 D4、D5，工期约 +8 天</td><td><a class="btn2 sm" data-go="req">看</a></td></tr></table>
+      <div class="mut" style="margin-top:6px">确认卡、补资料卡、审阅清单、签署、变更单都汇总在这里，不用到各页去找。</div></div>
     <div class="card"><h2>项目定制项（贯穿全程）</h2>
       <div class="strip"><span class="chip c-am">客户书面 · 统一称“安全运营中心”，不用 SOC</span><span class="chip c-am">客户书面 · D5 增加《外包管理》一章</span><span class="chip c-cy">对话 · D4 偏监管视角</span><span class="chip c-cy">合同 · 不包含等保测评</span></div>
-      <div class="mut" style="margin-top:8px">定制项全部在“分析 · 定制项”里管理；输出包刷新时逐条核对。</div></div>
+      <div class="mut" style="margin-top:8px">定制项在“需求”页管理；输出包刷新时逐条核对。<a style="color:var(--cyan)" data-go="req">去需求页 ▸</a></div></div>
   </div>
 </div>
 
@@ -195,14 +216,30 @@ textarea.inp{min-height:54px;resize:vertical}
     <div class="note">立项时上传合同 → Agent 抽要点 → 项目经理核对保存。合同原文抽取后删除，要点卡全程保留。严格档不上传合同，手填此卡。</div>
     <table><tr><th>要点</th><th>内容（抽取 / 核对）</th><th>状态</th><th>驱动</th></tr>
     <tr><td>目标</td><td>建立覆盖监测、分析、响应和值班的安全运营体系，形成制度与 12 个月路线图</td><td><span class="chip c-ok">已核对</span></td><td>D1、D8 结论</td></tr>
-    <tr><td>范围</td><td>现状评估；运营组织与流程设计；制度编写；实施路线图</td><td><span class="chip c-ok">已核对</span></td><td>D1、调研范围、全程范围检查</td></tr>
+    <tr><td>范围</td><td>现状评估；运营组织与流程设计；制度编写（份数未写）；实施路线图</td><td><span class="chip c-am">合同未写明 · 制度份数</span></td><td>D1、调研范围、全程范围检查</td></tr>
     <tr><td>不包含项</td><td>等级保护测评；设备采购与部署；渗透测试</td><td><span class="chip c-ok">已核对</span></td><td>定制项（越线标“不可接受”）</td></tr>
-    <tr><td>交付件与验收标准</td><td>D1～D8，共 9 条验收标准（如“D6 四件套齐全并经客户书面确认”）</td><td><span class="chip c-ok">已核对</span></td><td>输出包组件、门禁、验收逐条对照</td></tr>
+    <tr><td>交付件与验收标准</td><td>D1～D8，共 9 条验收标准（如“D6 四件套齐全并经客户书面确认”）；第 7 条“路线图科学合理”无法逐条对照</td><td><span class="chip c-am">待澄清 1 条</span></td><td>输出包组件、门禁、验收逐条对照</td></tr>
     <tr><td>周期与里程碑</td><td>2027-01-05 至 2027-03-31；4 个付款节点</td><td><span class="chip c-ok">已核对</span></td><td>关口日期、进度预测</td></tr>
     <tr><td>数据处理档位</td><td>标准档（附件一）· 保留期 180 天 · 参与经验积累</td><td><span class="chip c-ok">已核对</span></td><td>立项设置、删除计划、复盘入口</td></tr>
     <tr><td>客户书面要求</td><td>统一称“安全运营中心”；D5 增加《外包管理》一章</td><td><span class="chip c-am">2 条已转定制项</span></td><td>定制项</td></tr>
     <tr><td>双方角色</td><td>甲方对接人 1、受访部门 5 个；乙方项目经理、顾问 2</td><td><span class="chip c-ok">已核对</span></td><td>成员、D2 受访角色</td></tr>
     <tr><td>授权与同意</td><td>附件三 ✓ 11-02；附件一（标准档）✓ 11-02；经验积累：同意</td><td><span class="chip c-ok">已核对</span></td><td>关口 1 进入条件、结项沉淀许可</td></tr></table>
+    <div class="mut" style="margin-top:4px">字段状态：已核对 / 合同未写明 / 待与客户澄清 / 合同外新增。要点卡只反映合同本身，补充协议签后才出新版本；客户需求的细化与变化去“需求”页。</div>
+    <div class="g2" style="margin-top:12px">
+      <div class="card"><div class="sb"><h3>要点卡体检</h3><span class="mut">程序规则 · 核对时自动跑</span></div>
+        <div class="lv"><span class="chip c-ok">通过</span> 资质边界：未出现测评、认证结论类字样（出现即阻断保存）</div>
+        <div class="lv"><span class="chip c-am">提示</span> 验收标准第 7 条“路线图科学合理”无法逐条对照 → 建议改为“措施四要素齐全、与差距一一映射”</div>
+        <div class="lv"><span class="chip c-am">提示</span> 第 3 个付款节点未绑定验收节点</div>
+        <div class="lv"><span class="chip c-am">提示</span> 周期 12 周，同产品黄金样例平均 14 周 → 调研阶段排期偏紧</div>
+        <div class="lv"><span class="chip c-ok">通过</span> 交付件清单与产品默认组件一致</div>
+        <div class="lv"><span class="chip c-ok">通过</span> 档位信号：城商行，标准档合理</div>
+        <div class="lv"><span class="chip c-ok">通过</span> 保留期 180 天与已签保密协议不冲突</div></div>
+      <div class="card"><div class="sb"><h3>需求澄清清单</h3><span class="chip c-am">2 题待澄清</span></div>
+        <div class="mut">“合同未写明 / 待澄清”的字段自动出题，选项取自同产品黄金样例；拿去开启动会或沟通会，结论写进 D1 范围确认单，客户签字后固定。</div>
+        <div class="card2" style="margin-top:8px"><b>1. 制度编写交付几份？</b><div class="t2">A. 3 份核心制度（监测、响应、值班）· 黄金样例常见　B. 5 份（另加外包管理、指标考核）　C. 按差距分析结果定，上限 6 份</div><div class="mut">售前纪要：客户提到“外包管不住”→ 倾向 B</div></div>
+        <div class="card2" style="margin-top:6px"><b>2. 验收标准第 7 条怎么改？</b><div class="t2">A. 措施四要素齐全、与差距一一映射　B. 经客户安全委员会评审通过</div></div>
+        <div class="row" style="margin-top:8px"><a class="btn2 sm" data-t="导出 Word 版澄清清单，带推荐选项">导出澄清清单</a><a class="btn2 sm" data-t="导入会议纪要：Agent 拆成事实 / 决定 / 要求，回显确认">导入会议纪要</a></div></div>
+    </div>
   </div>
 
   <div class="tp" id="in-cu">
@@ -223,7 +260,7 @@ textarea.inp{min-height:54px;resize:vertical}
     <tr><td>安全运维组</td><td><span class="chip c-ok">已发布</span> 38 题</td><td>11</td><td><span class="chip c-cr">逾期 2 天</span></td><td>下周二</td><td>—</td></tr>
     <tr><td>网络组</td><td><span class="chip c-ok">已发布</span> 30 题</td><td>9</td><td><span class="chip c-ok">已交回</span></td><td><span class="chip c-ok">已访谈</span></td><td><span class="chip c-ok">已入池</span></td></tr>
     <tr><td>应用开发</td><td><span class="chip c-ok">已发布</span> 26 题</td><td>6</td><td><span class="chip c-am">未到截止</span></td><td>下周三</td><td>—</td></tr></table>
-    <div class="row" style="margin-top:10px"><a class="btn2" data-go="srv">调研包在输出页 D2 ▸</a><a class="btn2" data-t="打开调研助手（全屏，现场用）">调研助手</a></div>
+    <div class="row" style="margin-top:10px"><a class="btn2" data-go="out">调研包在输出页 D2 ▸</a><a class="btn2" data-go="fa">调研助手</a></div>
   </div>
 
   <div class="tp" id="in-cs">
@@ -249,25 +286,54 @@ textarea.inp{min-height:54px;resize:vertical}
   </div>
 </div>
 
-<!-- ============ 分析 ============ -->
-<div class="page" id="p-an">
-  <div class="crumb">BANK-A / 分析</div><h1>分析 · 中间真源</h1>
-  <div class="sub">交付件里的每个数字、每条结论都从这里来。这里一改，引用它的交付件自动标“需更新”。</div>
-  <div class="tabs"><a class="on" data-tb="an-f">事实 <span class="mono">214</span></a><a data-tb="an-g">发现 <span class="mono">—</span></a><a data-tb="an-d">决定记录 <span class="mono">6</span></a><a data-tb="an-c">定制项 <span class="mono">4</span></a></div>
-  <div class="tp on" id="an-f"><table><tr><th>编号</th><th>事实</th><th>来源</th><th>状态</th></tr>
-    <tr><td class="mono">F-031</td><td>安全告警分散在 4 个平台，无统一工单</td><td><span class="chip c-ok">现场证据</span> <span class="chip c-ok">客户资料</span></td><td><span class="chip c-ok">自动确认</span></td></tr>
-    <tr><td class="mono">F-047</td><td>夜间值班模式</td><td>资料 7×24 · 口述 5×8</td><td><span class="chip c-cr">矛盾 · 现场议程</span></td></tr>
-    <tr><td class="mono">F-052</td><td>现有安全团队 5 人，其中外包 1 人</td><td><span class="chip">客户自评</span></td><td><span class="chip c-am">单一低可信 · 待确认</span></td></tr></table></div>
-  <div class="tp" id="an-g"><div class="card2 mut">分析阶段开始后出现：发现表（依据、证据、影响、优先级），自动确认 + 低置信人确认。</div></div>
-  <div class="tp" id="an-d"><table><tr><th>决定</th><th>来源</th><th>影响</th></tr>
-    <tr><td>范围不含等保测评、设备采购、渗透测试</td><td>合同要点卡</td><td>全部</td></tr>
-    <tr><td>受访 6 个角色，信息中心主任只做 30 分钟高层访谈</td><td>D2 签署</td><td>调研包</td></tr>
-    <tr><td>夜间值班先外包，次年评估自建</td><td>输入卡 · 其他信息（项目经理确认）</td><td>D5、D7</td></tr></table></div>
-  <div class="tp" id="an-c"><table><tr><th>定制项</th><th>入口</th><th>类型</th><th>状态</th><th>核对</th></tr>
+<!-- ============ 需求 ============ -->
+<div class="page" id="p-req">
+  <div class="crumb">BANK-A / 需求</div><h1>需求 · 定制项与决定</h1>
+  <div class="sub">客户和项目组“要什么、定了什么”都在这里。每条标来源（合同 / 客户书面 / 会议纪要 / 对话 / 改稿）和生效状态；所有入口进来的要求先回显确认再生效。</div>
+  <div class="tabs"><a class="on" data-tb="rq-c">定制项 <span class="mono">4</span></a><a data-tb="rq-i">修订指令 <span class="mono">3</span></a><a data-tb="rq-d">决定记录 <span class="mono">6</span></a><a data-tb="rq-x">变更单 <span class="mono">1</span></a></div>
+  <div class="tp on" id="rq-c"><table><tr><th>定制项</th><th>入口</th><th>类型</th><th>状态</th><th>核对</th></tr>
     <tr><td>统一称“安全运营中心”，不用 SOC</td><td>合同 · 客户书面</td><td>口径</td><td><span class="chip c-ok">生效</span></td><td>D1 ✓ D2 ✓</td></tr>
     <tr><td>D5 增加《外包管理》一章</td><td>合同 · 客户书面</td><td>结构</td><td><span class="chip c-ok">项目经理已确认</span></td><td>D5 待生成</td></tr>
     <tr><td>D4 偏监管视角</td><td>顾问对话</td><td>口径</td><td><span class="chip c-ok">生效</span></td><td>D4 待生成</td></tr>
     <tr><td>出具等保测评结论</td><td>顾问对话</td><td>—</td><td><span class="chip c-cr">不可接受 · 资质边界</span></td><td>—</td></tr></table></div>
+  <div class="tp" id="rq-d"><table><tr><th>决定</th><th>来源</th><th>影响</th></tr>
+    <tr><td>范围不含等保测评、设备采购、渗透测试</td><td>合同要点卡</td><td>全部</td></tr>
+    <tr><td>受访 6 个角色，信息中心主任只做 30 分钟高层访谈</td><td>D2 签署</td><td>调研包</td></tr>
+    <tr><td>夜间值班先外包，次年评估自建</td><td>输入卡 · 其他信息（项目经理确认）</td><td>D5、D7</td></tr></table></div>
+  <div class="tp" id="rq-i"><div class="note">四条回路统一进这个队列：签署人退回、客户意见、上游变更、顾问对话。处理后只刷新受影响的部分，再过门禁。</div>
+    <table><tr><th>指令</th><th>来源</th><th>影响</th><th>状态</th></tr>
+    <tr><td>3.2 节补充告警平台整合建议</td><td>客户意见 · 导入批注 Word（11 条已拆到章节）</td><td>D4 3.2</td><td><span class="chip c-am">待顾问处理</span></td></tr>
+    <tr><td>F-047 定案为 5×8</td><td>上游变更（现场定案）</td><td>D3、D4 3.1 / 3.2、热力图</td><td><span class="chip c-ok">已刷新</span></td></tr>
+    <tr><td>第 5 章建议补验收标准</td><td>签署人退回</td><td>D4 5.1</td><td><span class="chip c-am">待顾问处理</span></td></tr></table>
+    <div class="row" style="margin-top:8px"><a class="btn2" data-t="导入客户批注过的 Word：按批注自动拆条、对到章节，进本队列">导入客户批注 Word</a></div></div>
+  <div class="tp" id="rq-x"><div class="note">超出合同范围的需求标“合同外”，生成变更单评估影响，项目经理确认；涉及商务的走补充协议，协议签后才转为定制项并更新合同要点卡版本。</div>
+    <div class="card"><div class="sb"><h3>变更单 C-01 · 增加“数据安全分类分级”内容</h3><span class="chip c-vi">合同外</span></div>
+      <table><tr><td>来源</td><td>启动会后客户口头提出（会议纪要导入，已拆为“要求”）</td></tr>
+      <tr><td>影响交付件</td><td>D4 新增一章评估项、D5 新增分级流程；D2 调研包加 12 题</td></tr>
+      <tr><td>工期 / 工作量</td><td>约 +8 天 · 顾问约 6 人天</td></tr>
+      <tr><td>体检</td><td>不涉及资质边界；超出合同范围 → 需补充协议</td></tr></table>
+      <div class="row" style="margin-top:8px"><a class="btn sm" data-t="项目经理确认：提示走补充协议；协议签后转定制项、合同要点卡出 v2">确认，走补充协议</a><a class="btn2 sm" data-t="按范围内细化处理（不改合同），转为定制项">按范围内细化</a><a class="btn2 sm" data-t="记入决定记录：本期不做">本期不做</a></div></div></div>
+</div>
+
+<!-- ============ 分析 ============ -->
+<div class="page" id="p-an">
+  <div class="crumb">BANK-A / 分析</div><h1>分析 · 事实与发现</h1>
+  <div class="sub">交付件里的每个数字、每条结论都从这里来。这里一改，引用它的交付件自动标“需更新”。叫法：<span class="chip c-ok">证据</span> = 客户侧（资料、自评、访谈、现场）· <span class="chip c-cy">依据</span> = 规范侧（法规标准、公司做法、行业包）。</div>
+  <div class="tabs"><a class="on" data-tb="an-f">事实 <span class="mono">214</span></a><a data-tb="an-g">发现 <span class="mono">—</span></a><a data-tb="an-gap">证据缺口 <span class="mono">5</span></a><a data-tb="an-ct">待定矛盾 <span class="mono">2</span></a></div>
+  <div class="tp on" id="an-f"><table><tr><th>编号</th><th>事实</th><th>证据</th><th>状态</th></tr>
+    <tr><td class="mono">F-031</td><td>安全告警分散在 4 个平台，无统一工单</td><td><span class="chip c-ok">现场证据</span> <span class="chip c-ok">客户资料</span></td><td><span class="chip c-ok">自动确认</span></td></tr>
+    <tr><td class="mono">F-047</td><td>夜间值班模式</td><td>资料 7×24 · 口述 5×8</td><td><span class="chip c-cr">矛盾 · 现场议程</span></td></tr>
+    <tr><td class="mono">F-052</td><td>现有安全团队 5 人，其中外包 1 人</td><td><span class="chip">客户自评</span></td><td><span class="chip c-am">单一低可信 · 待确认</span></td></tr></table></div>
+  <div class="tp" id="an-g"><div class="card2 mut">分析阶段开始后出现。发现 = 事实（证据）对照依据得出的差距，带影响、优先级；自动确认 + 低置信人确认。样式示例：</div>
+    <table style="margin-top:6px"><tr><th>编号</th><th>发现</th><th>证据</th><th>依据</th><th>影响 / 优先级</th></tr>
+    <tr><td class="mono">G-07</td><td>夜间无持续监测安排</td><td><span class="chip c-ok">F-047</span></td><td><span class="chip c-cy">K-0412 持续监测要求</span></td><td>高 / P1</td></tr></table></div>
+  <div class="tp" id="an-gap"><table><tr><th>缺口</th><th>影响的评估项</th><th>补证方式</th><th>状态</th></tr>
+    <tr><td>近 3 个月告警处置记录</td><td>响应时效</td><td>补资料卡（客户）</td><td><span class="chip c-am">已发补证请求</span></td></tr>
+    <tr><td>值班排班表</td><td>夜间值班</td><td>现场查看</td><td><span class="chip">下周二现场</span></td></tr></table></div>
+  <div class="tp" id="an-ct"><table><tr><th>事实</th><th>来源 A</th><th>来源 B</th><th>定案方式</th></tr>
+    <tr><td class="mono">F-047 夜间值班</td><td>资料：7×24</td><td>安全组口述：5×8</td><td>已进下周二现场议程（顾问 A）</td></tr>
+    <tr><td class="mono">F-061 告警平台数</td><td>自评：3 个</td><td>资料：4 个</td><td>网络组访谈议程（今天）</td></tr></table></div>
+
 </div>
 
 <!-- ============ 输出 ============ -->
@@ -276,9 +342,9 @@ textarea.inp{min-height:54px;resize:vertical}
   <div class="sub">组件清单取自产品配置（按黄金样例定默认），定制项可增减（增删须项目经理确认）。图例：<span class="cmp d">数据表</span> <span class="cmp w">文稿</span> <span class="cmp p">汇报</span> <span class="cmp x">客户用表单</span></div>
   <div class="g4">
     <div class="card"><div class="sb"><h3>D1 启动包</h3><span class="chip c-ok">已签</span></div><div class="mut">程序模板</div><div class="pk"><span class="cmp w">范围确认单</span><span class="cmp d">计划与里程碑</span><span class="cmp p">启动会 PPT</span><span class="cmp d">定制项清单</span><span class="cmp x">资料需求初单</span><span class="cmp d">前提与风险</span></div><div class="row" style="margin-top:8px"><a class="btn2 sm" data-go="d1">打开</a></div></div>
-    <div class="card"><div class="sb"><h3>D2 调研包</h3><span class="chip c-ok">已签</span></div><div class="mut">程序模板 + 选题预填</div><div class="pk"><span class="cmp w">每角色访谈提纲 ×6</span><span class="cmp x">资料清单</span><span class="cmp x">客户自评包</span><span class="cmp w">现场议程</span><span class="cmp d">访谈排期</span></div><div class="row" style="margin-top:8px"><a class="btn2" data-go="srv">怎么生成 ▸</a></div></div>
+    <div class="card"><div class="sb"><h3>D2 调研包</h3><span class="chip c-ok">已签</span></div><div class="mut">程序模板 + 选题预填</div><div class="pk"><span class="cmp w">每角色访谈提纲 ×6</span><span class="cmp x">资料清单</span><span class="cmp x">客户自评包</span><span class="cmp w">现场议程</span><span class="cmp d">访谈排期</span></div><div class="row" style="margin-top:8px"><a class="btn2 sm" data-go="srv">怎么生成 ▸</a><a class="btn2 sm" data-go="fa">调研助手</a></div></div>
     <div class="card"><div class="sb"><h3>D3 事实清单</h3><span class="chip c-am">待答案池入齐</span></div><div class="mut">程序为主 + 模型抽取</div><div class="pk"><span class="cmp d">事实清单表</span><span class="cmp x">补证请求</span><span class="cmp d">敏感表态剔除记录</span><span class="cmp w">D3 文稿</span></div></div>
-    <div class="card"><div class="sb"><h3>D4 差距分析</h3><span class="chip">未开始</span></div><div class="mut">规则打分 + 模型分析</div><div class="pk"><span class="cmp d">发现表</span><span class="cmp d">成熟度初判</span><span class="cmp d">差距热力图</span><span class="cmp w">D4 报告</span><span class="cmp p">分析汇报 PPT</span></div><div class="row" style="margin-top:8px"><a class="btn2 sm" data-go="d4">看审稿示意</a></div></div>
+    <div class="card"><div class="sb"><h3>D4 差距分析</h3><span class="chip c-am">示意 · 第 2 版审稿</span></div><div class="mut">规则打分 + 模型分析</div><div class="pk"><span class="cmp d">发现表</span><span class="cmp d">成熟度初判</span><span class="cmp d">差距热力图</span><span class="cmp w">D4 报告</span><span class="cmp p">分析汇报 PPT</span></div><div class="row" style="margin-top:8px"><a class="btn2 sm" data-go="d4">看审稿示意</a></div></div>
     <div class="card"><div class="sb"><h3>D5 设计方案</h3><span class="chip">未开始</span></div><div class="mut">模型出结构化方案 + 程序校验</div><div class="pk"><span class="cmp d">目标运营模型</span><span class="cmp d">人员测算（带算式）</span><span class="cmp d">流程清单</span><span class="cmp d">告警分级表</span><span class="cmp d">指标体系</span><span class="cmp w">D5 报告</span><span class="cmp w" style="outline:1px dashed var(--amber)">+ 外包管理（定制）</span></div></div>
     <div class="card"><div class="sb"><h3>D6 制度包</h3><span class="chip">未开始</span></div><div class="mut">程序套公文骨架 + 模型起草条款</div><div class="pk"><span class="cmp w">制度文件 ×3</span><span class="cmp x">配套表单</span><span class="cmp d">新旧对照</span><span class="cmp d">制度与差距映射</span></div></div>
     <div class="card"><div class="sb"><h3>D7 路线图</h3><span class="chip">未开始</span></div><div class="mut">模型设计 + 程序校验四要素</div><div class="pk"><span class="cmp d">措施清单</span><span class="cmp d">三段路线图（甘特）</span><span class="cmp d">资源估算</span><span class="cmp d">措施与差距映射</span></div></div>
@@ -293,7 +359,15 @@ textarea.inp{min-height:54px;resize:vertical}
   <div class="crumb">BANK-A / 设置</div><h1>设置</h1>
   <div class="g3"><div class="card"><h3>成员与写签分工</h3><div class="t2">项目经理 1 · 顾问 2 · 每个交付件的起草人、审核人、签署人</div></div>
   <div class="card"><h3>档位与保留期</h3><div class="t2">标准档 · 保留期 180 天 · 参与经验积累<br><span class="mut">取自合同要点卡，改动须项目经理确认并留痕</span></div></div>
-  <div class="card"><h3>结项与删除</h3><div class="t2">结项前置：结项复盘已提交（或写理由跳过）<br>保留期到期删除：双人确认</div></div></div>
+  <div class="card"><h3>结项与删除</h3><div class="t2">结项前置：结项复盘已提交（或写理由跳过）<br>保留期到期删除：双人确认，出具删除证明</div>
+    <div class="card2" style="margin-top:8px"><div class="mut">结项核对清单</div>
+      <div class="step"><i class="dot d-ok"></i>D1～D8 已签</div><div class="step"><i class="dot d-am"></i>合同验收标准 8/9 条通过</div><div class="step"><i class="dot d-ok"></i>客户确认凭证齐（只存状态与日期）</div><div class="step"><i class="dot d-am"></i>修订指令未处理 2 条</div><div class="step"><i class="dot"></i>结项复盘：未提交</div></div>
+    <div class="row" style="margin-top:8px"><a class="btn" data-t="核对清单未全部通过，暂不能结项">结项</a></div></div></div>
+  <div class="g2" style="margin-top:12px">
+    <div class="card"><h3>项目状态</h3><div class="t2">进行中</div>
+      <div class="row" style="margin-top:8px"><a class="btn2 sm" data-t="暂停：冻结关口与提醒，写原因">暂停项目</a><a class="btn2 sm" data-t="终止或提前结项：写原因 → 结项复盘（可跳过）→ 生成删除计划">终止 / 提前结项</a></div></div>
+    <div class="card"><h3>人员变动</h3><div class="t2">换人时自动生成交接摘要（未完成待办、未签交付件），并重新校验写签分离（起草人不能签自己起草的交付件）</div>
+      <div class="row" style="margin-top:8px"><a class="btn2 sm" data-t="选择离开的成员和接手人，生成交接摘要">换人交接</a></div></div></div>
 </div>
 
 <!-- ============ D1 ============ -->
@@ -315,14 +389,15 @@ textarea.inp{min-height:54px;resize:vertical}
       <tr><td>项目定制项清单</td><td>平台数据</td><td>后续所有交付件</td></tr>
       <tr><td>资料需求初单</td><td>Excel</td><td>客户</td></tr>
       <tr><td>前提与风险清单</td><td>表</td><td>项目组</td></tr></table>
-      <div class="warn">合同要点改了 → D1 标“需更新”，程序重新成稿；已签的走勘误。</div></div>
+      <div class="warn">合同要点改了 → D1 标“需更新”，程序重新成稿；已签的走勘误。</div>
+      <div class="card2"><div class="sb"><b>客户签字凭证</b><span class="chip c-ok">范围确认单 · 已签 11-12</span></div><div class="mut">签字页回传只记“已签”、日期、页数和摘要哈希，不存正文；过机密级检测。</div><div class="row" style="margin-top:6px"><a class="btn2 sm" data-t="上传签字页：只记录状态，不保存正文">上传签字页</a></div></div></div>
   </div>
 </div>
 
 <!-- ============ D4 审稿改稿 ============ -->
 <div class="page" id="p-d4">
   <div class="top"><div><div class="crumb">BANK-A / 输出 / D4 差距分析 · 第 2 版 · 评审与修订</div><h1>D4 差距分析报告</h1><div class="mut">D2、D3、D5～D8 与结项复盘的交付件页同此结构</div><div class="row" style="margin:6px 0 10px"><a class="btn2" data-t="下载 Word（未签署带“草稿”水印）">导出 Word</a><a class="btn2" data-t="下载 PPT（未签署带“草稿”水印）">导出 PPT</a><a class="btn2" data-t="下载 Excel（未签署带“草稿”水印）">导出 Excel</a></div></div>
-    <div style="margin-left:auto" class="row"><span class="chip c-am">草稿 · 待顾问审核</span><span class="chip c-cy">标准档</span><a class="btn2 sm" data-t="本次变化摘要：上一版后事实 F-047 定案为 5×8，第 3.2 节、热力图同步更新；新增定制项“偏监管视角”影响 4 处">本次变化摘要</a><a class="btn2 sm" data-t="差异说明：相对黄金样例（城商行 SOC）增 1 节（监管检查意见对照，来自定制项）、删 0、第 4 章因客户无 SOAR 缩短">相对黄金样例差异</a></div></div>
+    <div style="margin-left:auto" class="row"><span class="chip c-am">草稿 · 待顾问审核</span><span class="chip c-cy">标准档</span><a class="btn2 sm" data-t="本次变化摘要：上一版后事实 F-047 定案为 5×8，第 3.2 节、热力图同步更新；新增定制项“偏监管视角”影响 4 处">本次变化摘要</a><a class="btn2 sm" data-t="导入客户批注过的 Word：按批注拆条、对到章节，进需求页修订指令">导入客户批注</a><a class="btn2 sm" data-t="差异说明：相对黄金样例（城商行 SOC）增 1 节（监管检查意见对照，来自定制项）、删 0、第 4 章因客户无 SOAR 缩短">相对黄金样例差异</a></div></div>
   <div class="dl">
     <div class="card"><div class="sb"><h3>审阅清单 · 按风险排序</h3><span class="mono mut">7</span></div>
       <div class="rv" data-t="跳到第 3.2 节第 2 段"><span class="chip c-cr">无来源</span> 3.2 “行业平均响应时长 30 分钟”</div>
@@ -382,6 +457,28 @@ textarea.inp{min-height:54px;resize:vertical}
   </div>
 </div>
 
+<!-- ============ 调研助手 ============ -->
+<div class="page" id="p-fa">
+  <div class="top"><div><div class="crumb">BANK-A / 调研助手（现场全屏，不进导航）· 入口：输出页 D2、全景“今天现场”、我的项目</div><h1>网络组访谈 · 14:00～15:30 · 顾问 A</h1></div>
+    <div style="margin-left:auto" class="row"><span class="chip c-cy">本场 9 题快速确认 · 6 题议程</span><a class="btn" data-t="答案回传答案池；新矛盾自动生成确认卡">回传答卷</a></div></div>
+  <div class="note">调研助手不出题：用 D2 的访谈提纲、自评后生成的现场议程和资料预填答案。资料、自评答过的这里只做快速确认，不重复问客户。</div>
+  <div class="g3">
+    <div class="card"><h3>① 快速确认（约 10 分钟）</h3>
+      <div class="lv">边界防火墙由网络组统一管理 <span class="mut">· 资料预填 E-007</span><div class="row" style="margin-top:4px"><a class="btn2 sm" data-t="已确认">对</a><a class="btn2 sm" data-t="记为待修正，展开补记">不对</a></div></div>
+      <div class="lv">网络设备日志接入 SIEM 比例约 60% <span class="mut">· 客户自评</span><div class="row" style="margin-top:4px"><a class="btn2 sm" data-t="已确认">对</a><a class="btn2 sm" data-t="记为待修正">不对</a></div></div>
+      <div class="mut">还有 7 题 ▸</div></div>
+    <div class="card"><h3>② 议程（矛盾、不清楚、开放题）</h3>
+      <div class="lv"><span class="chip c-cr">矛盾</span> 告警平台数：自评 3 个 vs 资料 4 个</div>
+      <div class="lv"><span class="chip c-am">不清楚</span> 夜间网络告警由谁接收</div>
+      <div class="lv"><span class="chip">开放</span> 网络组对统一工单平台的顾虑</div>
+      <textarea class="inp" placeholder="记录要点（只记角色，不记姓名；不录口令、IP 规划等机密级内容）"></textarea></div>
+    <div class="card"><h3>③ 补问建议</h3>
+      <div class="lv">刚记录“夜间告警发到值班手机”→ 建议追问：有无升级时限？谁兜底？</div>
+      <div class="lv">“4 个平台”定案后 → 建议追问：哪个平台计划下线？</div>
+      <div class="mut" style="margin-top:6px">离线使用与现场工具形态待定。</div></div>
+  </div>
+</div>
+
 <!-- ============ 结项复盘 ============ -->
 <div class="page" id="p-retro">
   <div class="crumb">BANK-A / 输出 / 结项复盘（验收阶段，D8 签署后、结项前）</div><h1>结项复盘</h1>
@@ -406,14 +503,22 @@ textarea.inp{min-height:54px;resize:vertical}
 </div>
 
 </div>
+<a class="fab" id="fab">对话</a>
+<div class="drw" id="drw"><div class="sb"><h3>对话 · BANK-A</h3><a class="btn2 sm" id="drwx">收起</a></div>
+  <div class="mut" style="margin:4px 0 8px">当前页上下文：<b id="ctx" style="color:var(--cyan)">整体逻辑图</b> · 同一项目同一会话</div>
+  <div class="chat me">D5 里人员测算按 8 人上限算</div>
+  <div class="chat">归类：<span class="chip c-cy">事实</span> 编制上限 8 人（与输入卡一致）· <span class="chip c-am">要求</span> 测算以 8 人为上限 → 修订指令，影响 D5 人员测算表<div class="row" style="margin-top:6px"><a class="btn sm" data-t="已进需求页 · 修订指令">确认</a><a class="btn2 sm" data-t="可改归类">改归类</a></div></div>
+  <div class="mut">要求统一进“需求”页的修订指令 / 定制项，回显确认后生效。不进项目的问答用独立的顾问对话屏。</div>
+  <input class="inp" placeholder="说要做什么…" style="margin-top:8px"></div>
 <div class="toast" id="toast"></div>
 <script>
-function show(p){document.querySelectorAll('.page').forEach(e=>e.classList.toggle('on',e.id==='p-'+p));document.querySelectorAll('.side .it').forEach(e=>e.classList.toggle('on',e.dataset.p===p));window.scrollTo(0,0)}
+function show(p){const it=document.querySelector('.side .it[data-p="'+p+'"]');const c=document.getElementById('ctx');if(c&&it)c.textContent=it.childNodes[0].textContent.trim();document.querySelectorAll('.page').forEach(e=>e.classList.toggle('on',e.id==='p-'+p));document.querySelectorAll('.side .it').forEach(e=>e.classList.toggle('on',e.dataset.p===p));window.scrollTo(0,0)}
 document.querySelectorAll('.side .it').forEach(e=>e.onclick=()=>show(e.dataset.p));
 document.querySelectorAll('[data-go]').forEach(e=>e.onclick=ev=>{ev.stopPropagation();show(e.dataset.go)});
 document.querySelectorAll('.tabs a[data-tb]').forEach(a=>a.onclick=()=>{const bar=a.parentElement;bar.querySelectorAll('a').forEach(x=>{x.classList.toggle('on',x===a);const p=document.getElementById(x.dataset.tb);if(p)p.classList.toggle('on',x===a)})});
 let tm;document.querySelectorAll('[data-t]').forEach(e=>e.onclick=ev=>{ev.stopPropagation();const t=document.getElementById('toast');t.textContent=e.dataset.t;t.style.display='block';clearTimeout(tm);tm=setTimeout(()=>t.style.display='none',3200)});
 document.querySelectorAll('.stg').forEach(s=>s.onclick=()=>show('in'));
+document.getElementById('fab').onclick=()=>document.getElementById('drw').classList.add('on');document.getElementById('drwx').onclick=()=>document.getElementById('drw').classList.remove('on');
 if(location.hash)show(location.hash.slice(1));
 </script>
 </body></html>
