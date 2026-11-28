@@ -65,6 +65,16 @@ MATRIX = [
                                                         (403, 403, 403, 403, 403)),
     (("POST", "/api/expert-bench/deid-preview", {"texts": {"how": "示范"}}),
                                                         (403, 403, 403, 403, 403)),
+    # 四期 B44：对照审核、修改后认可、分组成批认可、专家档案，同样只给知识专家（200 在 test_kb_expert_ux 里测）
+    (("GET", "/api/expert-bench/compare/999999", None), (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/cards/999999/revise", {"body": "## 做法\n\n示范"}),
+                                                        (403, 403, 403, 403, 403)),
+    (("GET", "/api/expert-bench/groups", None),         (403, 403, 403, 403, 403)),
+    (("POST", "/api/expert-bench/batch-approve", {"version_ids": [999999]}),
+                                                        (403, 403, 403, 403, 403)),
+    (("GET", "/api/expert-bench/profile", None),        (403, 403, 403, 403, 403)),
+    (("PUT", "/api/expert-bench/profile", {"products": ["SOC"], "industries": []}),
+                                                        (403, 403, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/members", None),     (200, 404, 403, 403, 403)),
     # 网页立项（二期 A3）：要项目负责人角色，顾问（含项目经理）403
     (("GET", "/api/catalog/products", None),            (200, 200, 403, 403, 403)),
@@ -157,6 +167,13 @@ MATRIX = [
     (("PUT", "/api/projects/BANK-A/deliverables/D7/sections/1", SECTION), (201, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1", None), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/diff?a=1&b=1", None), (200, 404, 403, 403, 403)),
+    # 四期 A32 顾问便利性：Word 回传（成员无文件 422）、知识侧栏、确认卡证据并排；非成员 404
+    (("POST", "/api/projects/BANK-A/deliverables/D7/word-return", None), (422, 404, 403, 403, 403)),
+    (("POST", "/api/projects/GRID-B/deliverables/D2/word-return", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/deliverables/D7/sections/1/kb-suggest", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/deliverables/D2/sections/1/kb-suggest", None), (404, 404, 403, 403, 403)),
+    (("GET", "/api/projects/BANK-A/confirmations/evidence", None), (200, 404, 403, 403, 403)),
+    (("GET", "/api/projects/GRID-B/confirmations/evidence", None), (404, 404, 403, 403, 403)),
     # 三期 A15 写稿助手：项目成员可用（演示模式流式返回），非成员 404
     (("POST", "/api/projects/BANK-A/deliverables/D7/sections/1/assist", {"prompt": "这一章怎么写？"}), (200, 404, 403, 403, 403)),
     (("GET", "/api/projects/BANK-A/deliverables/D7/export", None), (200, 404, 403, 403, 403)),

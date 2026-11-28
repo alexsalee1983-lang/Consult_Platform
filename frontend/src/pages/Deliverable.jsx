@@ -4,6 +4,7 @@ import { api, CONCLUSION_CLS, DELIV_STATUS, SEVERITY_CLS, TIER } from "../api.js
 import { useAuth } from "../auth.jsx";
 import { Loading, TopBar } from "../components/common.jsx";
 import AssistPanel from "../components/AssistPanel.jsx";
+import KbSidebar from "../components/KbSidebar.jsx";
 import ConfirmCard from "../components/ConfirmCard.jsx";
 import Customizations from "../components/Customizations.jsx";
 import DocBody from "../components/DocBody.jsx";
@@ -275,8 +276,11 @@ function Section({ code, dcode, seq, editable, onSaved, signed, sections = [] })
               <button className="btn" disabled={busy} onClick={() => setEdit(null)}>取消</button>
             </div>
           </div>
-          <AssistPanel code={code} dcode={dcode} seq={seq} getContext={() => bodyRef.current}
-            getRange={selectionRange} onInsert={insertReply} onReplace={replaceReply} request={askReq} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+            <AssistPanel code={code} dcode={dcode} seq={seq} getContext={() => bodyRef.current}
+              getRange={selectionRange} onInsert={insertReply} onReplace={replaceReply} request={askReq} />
+            <KbSidebar code={code} dcode={dcode} seq={seq} onInsert={insertReply} />
+          </div>
           </div>
         ) : s.version ? (
           <DocBody body={s.body} unresolved={unresolved} />
@@ -518,6 +522,8 @@ export default function Deliverable({ code, dcode }) {
   const [notice, setNotice] = useState("");
   const [form, setForm] = useState(null);        // A14②：D1、D2 表单定义，没有表单为 null
   const [formOpen, setFormOpen] = useState(false);
+  const [wr, setWr] = useState(null);            // A32①：Word 回传结果
+  const wrInput = useRef(null);
 
   const loadForm = useCallback(() => {
     api.deliverableForm(code, dcode).then(setForm).catch(() => setForm(null));
@@ -566,6 +572,25 @@ export default function Deliverable({ code, dcode }) {
     }
   }
 
+  // 四期 A32①：回传改好的 Word（只收本平台导出的，按导出编号核对）；改过的章新建版本、留修订痕迹并重新评审
+  async function returnWord(file) {
+    if (!file) return;
+    setExporting(true);
+    setNotice("");
+    setWr(null);
+    try {
+      const r = await api.wordReturn(code, dcode, file);
+      setWr(r);
+      setNotice(`已回传（导出编号 ${r.export_id}）：${r.changed.length} 章有改动，已各建新版本`);
+      await load();
+    } catch (e) {
+      setNotice(`回传失败：${e.message}`);
+    } finally {
+      setExporting(false);
+      if (wrInput.current) wrInput.current.value = "";
+    }
+  }
+
   if (!p || !d || !so) return <Loading error={error} />;
   const tier = TIER[p.tier] || TIER.standard;
   const strict = p.tier === "strict";
@@ -587,9 +612,28 @@ export default function Deliverable({ code, dcode }) {
         {editable && form?.writable && !formOpen && <button className="btnp" onClick={() => setFormOpen(true)}>按表单成稿</button>}
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportWord)}>{exporting ? "导出中…" : "导出 Word"}</button>
         <button className="btn" disabled={exporting || !d.sections.length} onClick={() => exportFile(api.exportPpt)}>导出 PPT</button>
+        {editable && !strict && d.sections.length > 0 && (
+          <>
+            <button className="btn" disabled={exporting} title="上传在 Word 里改好的本平台导出文件" onClick={() => wrInput.current?.click()}>回传 Word</button>
+            <input ref={wrInput} type="file" hidden accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              aria-label="回传 Word 文件" onChange={(e) => returnWord(e.target.files?.[0])} />
+          </>
+        )}
       </TopBar>
       <ModeBar mode={mode} />
-      {notice && <div className={notice.startsWith("导出失败") ? "err" : "sub"} role="status">{notice}</div>}
+      {notice && <div className={/^(导出|回传)失败/.test(notice) ? "err" : "sub"} role="status">{notice}</div>}
+      {wr && (
+        <section className="pnl pad" aria-label="Word 回传修订痕迹">
+          <div className="sb"><span className="cap">Word 回传 · 修订痕迹</span><button className="btn sm" onClick={() => setWr(null)}>收起</button></div>
+          <div className="sub">{wr.review ? "改动的章节已重新发起质量评审。" : wr.review_note}{wr.missing.length ? ` Word 里没找到第 ${wr.missing.join("、")} 章，未改动。` : ""}</div>
+          {wr.changed.map((x) => (
+            <div key={x.seq} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="mono sub">第 {x.seq} 章 {x.title}：v{x.from_version} → v{x.version}</div>
+              <Diff lines={x.diff} />
+            </div>
+          ))}
+        </section>
+      )}
       {error && <div className="err">{error.message}</div>}
       {d.totals.knowledge_updates > 0 && (
         <div className="note-amber" role="status">
