@@ -71,7 +71,7 @@ def test_get_form_and_submit_d1(proj):
     body = c.get(f"{_base(code, 'D1')}/sections/2").json()["body"]
     assert "- 现状评估\n- 运营体系设计" in body and "- 等保测评" in body
     assert "前提与依赖" not in body                                    # 没填的段落整段去掉
-    assert body.endswith("不出具等级保护测评结论、商用密码应用安全性评估结论或认证结论。")
+    assert body.endswith("不出具认证结论、等级保护测评结论或商用密码应用安全性评估结论。")
     # 负责人 11-28：成稿格式统一——小节编号连续（没填的小节不占号）、列表和表格前有引导句、不用加粗伪标题
     assert body.startswith("# 2.1 服务范围\n\n本项目服务范围包括：\n\n- 现状评估")
     assert "# 2.2 不包含事项\n\n以下事项不在本项目范围内：" in body and "# 2.3 服务性质说明\n\n本项目提供差距分析" in body
@@ -163,7 +163,7 @@ def test_d1_ten_chapters_fixed_paragraphs():
     assert "摘要卡" in data.fixed_by_tier["strict"] and "6 个月" in data.fixed_by_tier["standard"]
     for s in f.sections:                                              # 资质边界：不出现结论性用语
         for text in (s.fixed, *s.fixed_by_tier.values()):
-            assert "测评结论" not in text.replace("不出具等级保护测评结论", "")
+            assert "测评结论" not in text.replace("等级保护测评结论", "")
 
 
 def test_bad_definition_rejected():
@@ -252,7 +252,7 @@ def test_d1_kickoff_pptx_and_milestone_writeback(proj):
                                                       AuditLog.action == "project.plan_writeback")))
     assert len(logs) == 1 and "启动包" not in str(logs[0].detail)          # 审计不记正文
     r = c.get(f"{_base(code, 'D1')}/export?format=pptx")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     titles = [s.shapes.title.text for s in Presentation(io.BytesIO(r.content)).slides if s.shapes.title]
     for t in ("项目概况", "范围确认", "工作分解与里程碑", "组织与沟通", "启动会议程与下一步"):
         assert any(t in x for x in titles), t

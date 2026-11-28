@@ -40,6 +40,7 @@ SOURCES = {"d1": "D1 客户要求栏", "chat": "顾问对话", "editor": "编辑
 LAYERS = ("红线与资质", "客户书面要求", "项目定制项", "行业", "公司做法与黄金样例", "产品默认大纲")
 LAYER_OF = {"d1": 1, "chat": 2, "editor": 2}
 KIND_NAMES = {"form": "形式类", "wording": "口径类", "structure": "结构类"}
+UPSTREAM = "定制项变更"
 STATUS_NAMES = {"proposed": "待顾问确认", "pending_pm": "待项目经理确认", "active": "已生效", "used": "已用（一次性）",
                 "unacceptable": "不可接受", "rejected": "未采纳", "withdrawn": "已撤回"}
 EFFECTIVE = ("active",)
@@ -176,6 +177,12 @@ def _activate(item: Customization, username: str) -> None:
     item.status, item.decided_by, item.changed_at = "active", username, utcnow()
 
 
+def _upstream(db: Session, project: Project, item: Customization) -> None:
+    """四期 A31⑫：定制项生效或生效后撤回按上游变更处理，已写正文的适用章标“需更新”。"""
+    from . import loops
+    loops.on_upstream_change(db, project, UPSTREAM, [(item.deliverable_code or None, item.section_seq)])
+
+
 def _record(db: Session, user: User, project: Project, action: str, item: Customization) -> None:
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  customization=item.id, source=item.source, kind=item.kind, status=item.status,
@@ -280,6 +287,7 @@ def on_card_resolved(db: Session, user: User, c: Confirmation) -> Customization 
         _card(db, user, project, item, PM_KIND)
     else:
         _activate(item, user.username)
+        _upstream(db, project, item)
     _record(db, user, project, "customization.decide", item)
     db.commit()
     return item
@@ -290,6 +298,7 @@ def withdraw(db: Session, user: User, project: Project, item: Customization) -> 
         raise CustomizationError(409, f"这条定制项{STATUS_NAMES[item.status]}，不能撤回")
     if item.status == "active":
         item.changed_at = utcnow()                  # 生效后撤回同样是上游变更
+        _upstream(db, project, item)
     if item.card_id:
         card = db.get(Confirmation, item.card_id)
         if card is not None and card.status == "open":

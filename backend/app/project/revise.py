@@ -29,8 +29,8 @@ from ..core.config import get_settings
 from ..core.db import SessionLocal
 from ..core.permissions import membership
 from ..models import Confirmation, Deliverable, Job, Project, SignOff, User
-from ..services import gateway, jobs
-from . import confirmations, deliverables, kb_impact, quality, review_issues
+from ..services import gateway, injection, jobs
+from . import confirmations, deliverables, kb_impact, loops, quality, review_issues
 
 JOB_KIND = "deliverable.revise"
 AGENT = "report-writer"
@@ -192,7 +192,8 @@ def _rewrite(db: Session, user: User, project: Project, d: Deliverable, seq: int
     todo = "\n".join(f"- {x}" for x in items)
     message = f"{INSTRUCTIONS}\n\n# 修改清单\n{todo}\n\n# 第 {seq} 章 {s.title}（当前 v{s.current_version}）\n\n{v.body if v else ''}"
     res = call.call(db, AGENT, message, actor=user.username, doc=doc, project=project,
-                    system=runtime.system_prompt(doc, card, kb_block), level=doc.level)
+                    system=runtime.system_prompt(doc, card, injection.as_data("检索到的知识库内容", kb_block)),
+                    level=doc.level)
     if res.completion.demo:
         raise RevisionError(503, "未配置大模型，不能自动修订")
     return _FENCE.sub("", res.completion.text.strip()).strip()
@@ -212,7 +213,13 @@ def run(db: Session, user: User, project: Project, d: Deliverable, feedback_ids:
         for seq, items in sorted(plan.items()):
             if deliverables.get_section(d, seq) is None:
                 continue
+            base = deliverables.require_section(d, seq).current_version
             body = _rewrite(db, user, project, d, seq, items)
+            db.refresh(d)
+            s = deliverables.require_section(d, seq)
+            if loops.human_edits_since(s, base):          # 四期 A31④：修订期间顾问手改过，不覆盖，发冲突卡
+                loops.conflict_card(db, project, d, s, base, body, user.username, "一键修订")
+                continue
             try:
                 deliverables.write_section(db, user, project, d, seq, body, agent_code=AGENT,
                                            note=f"一键修订第 {rnd} 轮：{len(items)} 条")

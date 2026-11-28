@@ -145,6 +145,7 @@ def upload_document(db: Session, user: User, project: Project, filename: str, da
     db.commit()
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  evidence=ev.code, ext=_ext(filename), size=len(data), sha256=sha[:16], job_id=job_id)
+    _screen(db, user, project, ev, doc.full_text())
     return UploadResult(ev, d, job_id)
 
 
@@ -169,7 +170,22 @@ def add_note(db: Session, user: User, project: Project, kind: str, title: str, c
         char_count=len(content), created_by=user.username))
     audit.record(db, actor=user.username, action=action, result="allowed", project_code=project.code,
                  evidence=ev.code, kind=kind, chars=len(content))
+    _screen(db, user, project, ev, f"{title}\n{content}")
     return ev
+
+
+def _screen(db: Session, user: User, project: Project, ev: Evidence, text: str) -> None:
+    """四期 A31①：资料里有写给 AI 的指令时发“注入命中确认”卡，顾问确认前不交给 Agent。"""
+    from . import loops
+
+    loops.screen_evidence(db, user, project, ev.code, text)
+    db.commit()
+
+
+def quarantined_codes(db: Session, project: Project) -> set[str]:
+    from . import loops
+
+    return loops.quarantined_codes(db, project)
 
 
 NOTE_FILE_MAX = 2 * 1024 * 1024
@@ -375,6 +391,9 @@ def summary(ev: Evidence) -> dict:
             **({"note": DELETED_NOTE} if ev.deleted_at else {})}
 
 
+QUARANTINE_NOTE = "疑似夹带写给 AI 的指令，顾问确认前不使用"
+
+
 def read_for_agent(db: Session, project: Project, code: str = "", offset: int = 0,
                    limit: int = READ_CHARS) -> dict:
     """工具 project.evidence 的实现：不带 code 返回证据清单；带 code 返回该证据正文（分段）。"""
@@ -390,6 +409,8 @@ def read_for_agent(db: Session, project: Project, code: str = "", offset: int = 
         return {**summary(ev), "text": "", "error": f"{ev.code} {LOCAL_ONLY_NOTE}"}
     if ev.deleted_at is not None:
         return {**summary(ev), "text": "", "error": f"{ev.code} {DELETED_NOTE}"}
+    if ev.code in quarantined_codes(db, project):          # 四期 A31①：注入命中、顾问还没确认按普通资料用
+        return {**summary(ev), "text": "", "error": f"{ev.code} {QUARANTINE_NOTE}"}
     text = full_text(ev)
     if text is None:
         return {**summary(ev), "text": "", "note": "文档还在解析，稍后再取"}

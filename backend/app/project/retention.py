@@ -53,7 +53,7 @@ class Status:
 
 
 def status(p: Project, today: date | None = None) -> Status:
-    if p.accepted_on is None or p.deletion_due_on is None:
+    if (p.accepted_on is None and p.terminated_on is None) or p.deletion_due_on is None:
         return Status(ACTIVE, None)
     left = (p.deletion_due_on - (today or date.today())).days
     if left <= 0:
